@@ -132,14 +132,14 @@ export function NewModelDialog({
       footer={
         <>
           {blender && !blender.ok && (
-            <span className="flex min-w-0 flex-1 items-center gap-2 text-xs text-warning">
-              <span className="truncate" title={blender.why}>
+            <span className="bl:flex bl:min-w-0 bl:flex-1 bl:items-center bl:gap-2 bl:text-xs bl:text-warning">
+              <span className="bl:truncate" title={blender.why}>
                 {t('没找到 Blender：{why}', { why: blender.why || t('还没设置路径') })}
               </span>
               <Button
                 variant="link"
                 tone="warning"
-                className="shrink-0"
+                className="bl:shrink-0"
                 onClick={() => {
                   onOpenChange(false)
                   openSettings('plugins')
@@ -149,25 +149,25 @@ export function NewModelDialog({
               </Button>
             </span>
           )}
-          <Button variant="secondary" className="ml-auto" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button variant="secondary" className="bl:ml-auto" onClick={() => onOpenChange(false)} disabled={busy}>
             {t('取消')}
           </Button>
           <Button onClick={() => void create()} disabled={!can}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
+            {busy ? <Loader2 className="bl:h-4 bl:w-4 bl:animate-spin" /> : <Box className="bl:h-3.5 bl:w-3.5" />}
             {t('开始建模')}
           </Button>
         </>
       }
     >
-      <p className="text-xs leading-relaxed text-subtle">
+      <p className="bl:text-xs bl:leading-relaxed bl:text-subtle">
         {t(
           '模型设计在选定的项目目录里开一个对话（不列进 Agent 模式），后台启动 Blender，Agent 用它建模并在对话里汇报进度。',
         )}
       </p>
       {/* 不用 Field：它是一个 <label>，里面放了分段切换、目录选择好几个控件，读屏名会串成一长串 */}
-      <section aria-label={t('项目')} className="flex min-w-0 flex-col gap-1.5">
-        <span className="text-xs text-muted">{t('项目')}</span>
-        <div className="flex flex-col gap-3">
+      <section aria-label={t('项目')} className="bl:flex bl:min-w-0 bl:flex-col bl:gap-1.5">
+        <span className="bl:text-xs bl:text-muted">{t('项目')}</span>
+        <div className="bl:flex bl:flex-col bl:gap-3">
           <Segmented
             fill
             size="sm"
@@ -200,7 +200,7 @@ export function NewModelDialog({
                 }}
               />
               {sameDir ? (
-                <p className="text-xs text-subtle">
+                <p className="bl:text-xs bl:text-subtle">
                   {t('这个文件夹已经是项目「{name}」，直接用它。', { name: sameDir.name })}
                 </p>
               ) : (
@@ -218,7 +218,7 @@ export function NewModelDialog({
                 )
               )}
               {dirInfo && !dirInfo.exists && dir.trim() && (
-                <p className="-mt-1 text-xs text-subtle">{t('开始建模时会新建这个文件夹')}</p>
+                <p className="bl:-mt-1 bl:text-xs bl:text-subtle">{t('开始建模时会新建这个文件夹')}</p>
               )}
             </>
           )}
@@ -239,7 +239,7 @@ export function NewModelDialog({
             }
           }}
           placeholder={t('例如：低多边形风格的宝箱，带开合的盖子，导出 GLB')}
-          className="text-body"
+          className="bl:text-body"
         />
       </Field>
     </Modal>

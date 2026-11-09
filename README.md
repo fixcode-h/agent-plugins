@@ -18,6 +18,7 @@
 
 接口的类型在 `sdk/`（面板 `server/plugins/sdk.ts`、`web/src/plugins/sdk.ts` 的副本）。网页部分和面板共用 React：
 构建时把 `react` 系的 import 换成面板放在 `globalThis.__agentPanel` 上的那一份；样式只出用到的 Tailwind 工具类，颜色用面板的主题变量（`sdk/theme.css`）。
+类名要带插件自己的前缀（Blender 插件是 `bl:`，写成 `bl:flex`、`bl:md:flex-row`）：插件样式表在面板之后加载，不带前缀的同名类会盖掉面板的响应式类，把面板的布局弄乱。
 
 ## 开发
 

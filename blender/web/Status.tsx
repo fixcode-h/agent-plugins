@@ -39,40 +39,44 @@ export function Status({
       ]
     : []
   return (
-    <section aria-label={t('运行状态')} className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="text-footnote text-subtle">{t('运行状态')}</span>
-        <IconButton icon={RefreshCw} label={t('刷新')} size="2xs" className="ml-auto" onClick={reload} />
+    <section aria-label={t('运行状态')} className="bl:flex bl:flex-col bl:gap-2">
+      <div className="bl:flex bl:items-center bl:gap-2">
+        <span className="bl:text-footnote bl:text-subtle">{t('运行状态')}</span>
+        <IconButton icon={RefreshCw} label={t('刷新')} size="2xs" className="bl:ml-auto" onClick={reload} />
       </div>
-      {s?.error && <p className="text-footnote text-danger">{s.error}</p>}
-      {!s && <p className="text-footnote text-subtle">{t('检测中…')}</p>}
-      <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-card">
+      {s?.error && <p className="bl:text-footnote bl:text-danger">{s.error}</p>}
+      {!s && <p className="bl:text-footnote bl:text-subtle">{t('检测中…')}</p>}
+      <ul className="bl:flex bl:flex-col bl:divide-y bl:divide-line bl:rounded-xl bl:border bl:border-line bl:bg-card">
         {rows.map((r) => (
-          <li key={r.title} className="flex items-start gap-3 px-3.5 py-2.5">
-            <div className="min-w-0 flex-1">
-              <div className="text-body text-fg">{r.title}</div>
+          <li key={r.title} className="bl:flex bl:items-start bl:gap-3 bl:px-3.5 bl:py-2.5">
+            <div className="bl:min-w-0 bl:flex-1">
+              <div className="bl:text-body bl:text-fg">{r.title}</div>
               {r.desc && (
-                <div className={cn('mt-0.5 text-footnote break-all', r.bad ? 'text-danger' : 'text-subtle')}>
+                <div
+                  className={cn('bl:mt-0.5 bl:text-footnote bl:break-all', r.bad ? 'bl:text-danger' : 'bl:text-subtle')}
+                >
                   {r.desc}
                 </div>
               )}
             </div>
-            <span className={cn('shrink-0 text-body', r.bad ? 'text-subtle' : 'font-medium text-fg')}>{r.value}</span>
+            <span className={cn('bl:shrink-0 bl:text-body', r.bad ? 'bl:text-subtle' : 'bl:font-medium bl:text-fg')}>
+              {r.value}
+            </span>
           </li>
         ))}
-        <li className="flex items-start gap-3 px-3.5 py-2.5">
-          <div className="min-w-0 flex-1">
-            <div className="text-body text-fg">{t('Blender 扩展')}</div>
-            <div className="mt-0.5 text-footnote text-subtle">
+        <li className="bl:flex bl:items-start bl:gap-3 bl:px-3.5 bl:py-2.5">
+          <div className="bl:min-w-0 bl:flex-1">
+            <div className="bl:text-body bl:text-fg">{t('Blender 扩展')}</div>
+            <div className="bl:mt-0.5 bl:text-footnote bl:text-subtle">
               {t('在 Blender 的「偏好设置 → 获取扩展 → 从磁盘安装」装上，再在 N 面板「DSH Blender Bridge」里点连接')}
             </div>
           </div>
           <a
             href={api.url('/addon.zip')}
             download="dsh_blender_bridge.zip"
-            className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-body text-accent-text hover:bg-hover"
+            className="bl:flex bl:shrink-0 bl:items-center bl:gap-1.5 bl:rounded-md bl:px-2 bl:py-1 bl:text-body bl:text-accent-text bl:hover:bg-hover"
           >
-            <Download className="h-3.5 w-3.5" />
+            <Download className="bl:h-3.5 bl:w-3.5" />
             {t('下载')}
           </a>
         </li>

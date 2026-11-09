@@ -186,16 +186,16 @@ export function ModelPreview({ taskId, running }: { taskId: string; running: boo
   const noGl = !!host.current && !viewer.current
   const problem = error || loadError || meta?.exportError
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-[1.875rem] shrink-0 items-center gap-1.5 border-b pr-2.5 pl-4 text-footnote text-subtle">
-        <Box className="h-[0.8125rem] w-[0.8125rem] shrink-0" strokeWidth={2.2} />
-        <span className="min-w-0 truncate">
+    <div className="bl:flex bl:min-h-0 bl:flex-1 bl:flex-col">
+      <div className="bl:flex bl:h-[1.875rem] bl:shrink-0 bl:items-center bl:gap-1.5 bl:border-b bl:pr-2.5 bl:pl-4 bl:text-footnote bl:text-subtle">
+        <Box className="bl:h-[0.8125rem] bl:w-[0.8125rem] bl:shrink-0" strokeWidth={2.2} />
+        <span className="bl:min-w-0 bl:truncate">
           {version
             ? t('第 {n} 版 · {count} 个物体', { n: version, count: meta?.objects.length ?? 0 })
             : t('还没有模型')}
         </span>
-        {loading && <Loader2 className="h-3 w-3 shrink-0 animate-spin" />}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {loading && <Loader2 className="bl:h-3 bl:w-3 bl:shrink-0 bl:animate-spin" />}
+        <div className="bl:ml-auto bl:flex bl:shrink-0 bl:items-center bl:gap-0.5">
           <IconButton icon={Maximize} label={t('对准模型')} size="2xs" disabled={!version} onClick={refit} />
           {version > 0 && (
             <a
@@ -203,36 +203,49 @@ export function ModelPreview({ taskId, running }: { taskId: string; running: boo
               download="scene.glb"
               aria-label={t('下载 glb')}
               title={t('下载 glb')}
-              className="grid h-6 w-6 place-items-center rounded-md text-muted hover:bg-sel hover:text-fg"
+              className="bl:grid bl:h-6 bl:w-6 bl:place-items-center bl:rounded-md bl:text-muted bl:hover:bg-sel bl:hover:text-fg"
             >
-              <Download className="h-3 w-3" />
+              <Download className="bl:h-3 bl:w-3" />
             </a>
           )}
         </div>
       </div>
-      <div className="relative min-h-[240px] flex-1">
-        <div ref={host} aria-label={t('模型预览')} className={cn('absolute inset-0', !version && 'invisible')} />
+      <div className="bl:relative bl:min-h-[240px] bl:flex-1">
+        <div
+          ref={host}
+          aria-label={t('模型预览')}
+          className={cn('bl:absolute bl:inset-0', !version && 'bl:invisible')}
+        />
         {!version && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
-            <Box className="h-6 w-6 text-subtle" strokeWidth={1.9} />
-            <p className="text-body leading-relaxed text-subtle">
+          <div className="bl:absolute bl:inset-0 bl:flex bl:flex-col bl:items-center bl:justify-center bl:gap-2 bl:px-6 bl:text-center">
+            <Box className="bl:h-6 bl:w-6 bl:text-subtle" strokeWidth={1.9} />
+            <p className="bl:text-body bl:leading-relaxed bl:text-subtle">
               {t('还没有模型。Agent 用 Blender 建模后，这里会实时显示，可以拖动旋转、滚轮缩放。')}
             </p>
           </div>
         )}
         {noGl && (
-          <p className="absolute inset-x-4 top-4 text-footnote text-warning">
+          <p className="bl:absolute bl:inset-x-4 bl:top-4 bl:text-footnote bl:text-warning">
             {t('浏览器不支持 WebGL，没法预览模型；可以下载 glb 用别的软件看。')}
           </p>
         )}
       </div>
-      {problem && <p className="shrink-0 border-t px-4 py-2 text-footnote leading-relaxed text-danger">{problem}</p>}
+      {problem && (
+        <p className="bl:shrink-0 bl:border-t bl:px-4 bl:py-2 bl:text-footnote bl:leading-relaxed bl:text-danger">
+          {problem}
+        </p>
+      )}
       {!!meta?.objects.length && (
-        <ul aria-label={t('场景里的物体')} className="max-h-[35%] shrink-0 overflow-y-auto border-t py-1">
+        <ul
+          aria-label={t('场景里的物体')}
+          className="bl:max-h-[35%] bl:shrink-0 bl:overflow-y-auto bl:border-t bl:py-1"
+        >
           {meta.objects.map((o) => (
-            <li key={o.name} className="flex items-center gap-2 px-4 py-1 text-footnote">
-              <span className={cn('min-w-0 flex-1 truncate', o.hidden && 'text-subtle line-through')}>{o.name}</span>
-              <span className="shrink-0 font-mono text-caption text-subtle">
+            <li key={o.name} className="bl:flex bl:items-center bl:gap-2 bl:px-4 bl:py-1 bl:text-footnote">
+              <span className={cn('bl:min-w-0 bl:flex-1 bl:truncate', o.hidden && 'bl:text-subtle bl:line-through')}>
+                {o.name}
+              </span>
+              <span className="bl:shrink-0 bl:font-mono bl:text-caption bl:text-subtle">
                 {o.type}
                 {o.faces !== undefined ? ` · ${t('{n} 面', { n: o.faces })}` : ''}
               </span>

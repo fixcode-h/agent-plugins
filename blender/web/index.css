@@ -1,8 +1,10 @@
 /*
  * 插件自己的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 bl:（写成 bl:flex、bl:md:flex-row）：插件的样式表在面板之后加载，同名的工具类（.flex-col）
+ * 会排在面板的响应式类（md:flex-row）后面把它盖掉，面板整页的布局跟着乱；加了前缀两边的类名不会重叠。
  * 主题变量是面板的（sdk/theme.css），颜色跟着面板的配色和深浅色走。
  */
-@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/theme.css' layer(theme) prefix(bl);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import '../../sdk/theme.css';
 
