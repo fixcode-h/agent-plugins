@@ -1,0 +1,51 @@
+# 推到 main：检查、构建所有插件，每个插件的包发到 Release（标签 <id>-v<版本>，附件 <id>-<版本>.zip）。
+# 同一个版本的 Release 已经有了就覆盖附件（修了构建脚本、没改版本号时）；要让用户收到升级，改 plugin.json 和 plugins.json 的版本号。
+# 拉取请求只检查和构建，不发布。
+name: 构建与发布
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 检查（类型、漏翻、插件目录）
+        run: npm run check
+      - name: 构建插件包
+        run: npm run build
+      - name: 冒烟测试（不需要 Blender）
+        run: node blender/scripts/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugins
+          path: dist/*.zip
+      - name: 发到 Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node -e "for (const b of require('./dist/built.json')) console.log(b.id, b.version, b.asset)" |
+          while read -r id version asset; do
+            tag="${id}-v${version}"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release upload "$tag" "dist/$asset" --clobber
+            else
+              prerelease=""
+              case "$version" in *-*) prerelease="--prerelease" ;; esac
+              gh release create "$tag" "dist/$asset" --target "$GITHUB_SHA" --title "$id $version" \
+                --notes "插件 $id $version。在 Agent 面板「设置 → 插件」的插件市场里安装，或下载 $asset 后选「从压缩包安装」。" $prerelease
+            fi
+          done

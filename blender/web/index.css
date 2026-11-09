@@ -1,0 +1,9 @@
+/*
+ * 插件自己的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 主题变量是面板的（sdk/theme.css），颜色跟着面板的配色和深浅色走。
+ */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';

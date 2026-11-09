@@ -1,0 +1,27 @@
+{
+  "name": "agent-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent 面板（fixcode-h/agent-panel）的插件仓库：每个子目录是一个插件的源码，构建出插件包发到 Release",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1",
+    "tailwindcss": "^4.3.5",
+    "three": "^0.187.0",
+    "typescript": "^7.0.2"
+  }
+}
