@@ -16,3 +16,11 @@
 // 5.8 起 FJsonObject::Values 的键从 FString 换成了 UE::FSharedString，不能隐式转 FString。
 // 两者的 operator* 都返回 const TCHAR*，按这个取键在各版本都能编过。
 #define AGENT_PANEL_JSON_KEY(Key) FString(*(Key))
+
+// 5.8 起 GetObjectsWithOuter 的 bool bIncludeNestedObjects 弃用，改收 EGetObjectsFlags（UObject/FindObjectFlags.h）
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
+#include "UObject/FindObjectFlags.h"
+#define AGENT_PANEL_OUTER_NESTED(bNested) ((bNested) ? EGetObjectsFlags::IncludeNestedObjects : EGetObjectsFlags::None)
+#else
+#define AGENT_PANEL_OUTER_NESTED(bNested) (bNested)
+#endif
