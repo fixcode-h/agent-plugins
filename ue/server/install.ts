@@ -147,6 +147,10 @@ function buildArgs(p: UeProject) {
   return { script, args: [target, plat, 'Development', `-Project=${p.uproject}`, '-WaitMutex', '-NoHotReload'] }
 }
 
+/** UBT 找不到 C++ 工具链时的报错（没装 VS 或没装 C++ 组件） */
+const NO_TOOLCHAIN =
+  /Unable to find valid .*toolchain|No valid Visual C\+\+ toolchain|Visual Studio \d+ must be installed|No Visual Studio installation/i
+
 /**
  * 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat。
  * 用 Build.bat 时先查这个引擎的编辑器开没开（procs.ts 写了为什么）：开着就不跑，作业带上 hint，网页给出处理方式；
@@ -162,6 +166,10 @@ export async function build(p: UeProject, force = false) {
         job.hint = { kind: 'live-coding', blockers: [] }
         for (const l of blockerLines([]).slice(1)) jobLog(job, l)
       }
+      // 纯蓝图项目也可能装好了 VS（日志里能看到「Using Visual Studio … toolchain」），
+      // 所以只在编译失败、且 UBT 说找不到 C++ 工具链时才提示装 VS，普通的编译报错不提示
+      if (!p.cpp && job.status === 'failed' && job.log.some((l) => NO_TOOLCHAIN.test(l)))
+        jobLog(job, t('纯蓝图项目：编译桥接插件需要本机装好 Visual Studio（含「使用 C++ 的游戏开发」）'))
     })
   if (p.buildCmd.trim()) {
     finish(
@@ -195,7 +203,6 @@ export async function build(p: UeProject, force = false) {
       return job
     }
   }
-  if (!p.cpp) jobLog(job, t('纯蓝图项目：编译桥接插件需要本机装好 Visual Studio（含「使用 C++ 的游戏开发」）'))
   finish(spawnJob(job, script, args, p.root))
   return job
 }
