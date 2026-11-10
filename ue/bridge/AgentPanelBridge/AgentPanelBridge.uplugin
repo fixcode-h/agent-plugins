@@ -1,0 +1,27 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Agent Panel Bridge",
+  "Description": "让 Agent 面板（本机网页控制台）连接这个 UE 进程：控制台、GM、读写对象属性、DataTable、日志。只监听 127.0.0.1，Shipping 不加载。",
+  "Category": "Developer Tools",
+  "CreatedBy": "fixcode-h",
+  "CreatedByURL": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
+  "EngineVersion": "5.4.0",
+  "CanContainContent": false,
+  "Installed": false,
+  "EnabledByDefault": true,
+  "Modules": [
+    {
+      "Name": "AgentPanelBridge",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "TargetConfigurationDenyList": ["Shipping"]
+    },
+    {
+      "Name": "AgentPanelBridgeEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+/*
+ * 插件自己的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 ue:（写成 ue:flex、ue:md:flex-row）：插件样式表在面板之后加载，不带前缀的同名类会盖掉面板的响应式类。
+ * 主题变量是面板的（sdk/theme.css），颜色跟着面板的配色和深浅色走。
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(ue);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';
