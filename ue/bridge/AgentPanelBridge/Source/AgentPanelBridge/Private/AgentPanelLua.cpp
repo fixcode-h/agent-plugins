@@ -222,7 +222,8 @@ namespace
 			}
 			MapKeys().Remove(L);
 		}
-		for (const TCHAR* Name : { TEXT("UnLua_ObjectMap"), TEXT("ObjectMap") })
+		static const TCHAR* const KnownNames[] = { TEXT("UnLua_ObjectMap"), TEXT("ObjectMap") };
+		for (const TCHAR* Name : KnownNames)
 		{
 			if (TryKey(Name))
 			{
@@ -902,9 +903,12 @@ namespace
 		}
 	}
 
+	/** 执行期间 print 往这里收；执行完置空。Lua 代码可能把 print 存起来以后再调，那时只写日志，不碰已经释放的数组 */
+	TArray<FString>* GPrintSink = nullptr;
+
 	int PrintFn(lua_State* L)
 	{
-		TArray<FString>* Lines = static_cast<TArray<FString>*>(lua_touserdata(L, lua_upvalueindex(1)));
+		TArray<FString>* Lines = GPrintSink;
 		const int N = lua_gettop(L);
 		FString Line;
 		for (int I = 1; I <= N; ++I)
@@ -918,7 +922,11 @@ namespace
 			Line += FromUtf8(S, Len);
 			lua_pop(L, 1);
 		}
-		if (Lines && Lines->Num() < 2000)
+		if (!Lines)
+		{
+			UE_LOG(LogTemp, Log, TEXT("%s"), *Line);
+		}
+		else if (Lines->Num() < 2000)
 		{
 			Lines->Add(Line.Left(4000));
 		}
@@ -1013,43 +1021,51 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		const FString Module = Str(A, TEXT("module"));
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 1000);
 		lua_State* L = C.L;
-		TArray<TSharedPtr<FJsonValue>> Items;
-		int32 Bound = 0;
-		bool bMore = false;
+		// 先把绑定对象的指针收出来再逐个处理：取模块名时 GetModuleName 可能跑进 Lua、往对象表里加东西，
+		// 遍历中改表 lua_next 的行为是未定义的
+		TArray<void*> Ptrs;
 		lua_pushnil(L);
 		while (lua_next(L, C.Map))
 		{
-			if (lua_type(L, -2) != LUA_TLIGHTUSERDATA || !lua_istable(L, -1))
+			if (lua_type(L, -2) == LUA_TLIGHTUSERDATA && lua_istable(L, -1))
 			{
-				lua_pop(L, 1);
+				Ptrs.Add(lua_touserdata(L, -2));
+			}
+			lua_pop(L, 1);
+		}
+		const int32 Bound = Ptrs.Num();
+		TArray<TSharedPtr<FJsonValue>> Items;
+		bool bMore = false;
+		for (void* P : Ptrs)
+		{
+			UObject* Obj = LiveObject(P);
+			if (!Obj || Obj->HasAnyFlags(RF_ClassDefaultObject) || (Cls && !Obj->IsA(Cls)) || !StartsWithNoCase(Obj->GetName(), Prefix) ||
+				(World && Obj->GetWorld() && Obj->GetWorld() != World))
+			{
 				continue;
 			}
-			++Bound;
-			UObject* Obj = LiveObject(lua_touserdata(L, -2));
-			const bool bPass = Obj && !Obj->HasAnyFlags(RF_ClassDefaultObject) && (!Cls || Obj->IsA(Cls)) &&
-				StartsWithNoCase(Obj->GetName(), Prefix) && (!World || !Obj->GetWorld() || Obj->GetWorld() == World);
-			if (bPass)
+			FString Mod = InterfaceModule(Obj);
+			if (Mod.IsEmpty())
 			{
-				FString Mod = InterfaceModule(Obj);
-				if (Mod.IsEmpty())
+				lua_rawgetp(L, C.Map, Obj);
+				if (lua_istable(L, -1))
 				{
 					Mod = C.ModuleOf(lua_gettop(L));
 				}
-				if (Module.IsEmpty() || Mod.Contains(Module, ESearchCase::IgnoreCase))
-				{
-					if (Items.Num() >= Limit)
-					{
-						bMore = true;
-					}
-					else
-					{
-						TSharedPtr<FJsonObject> O = Brief(Obj);
-						O->SetStringField(TEXT("module"), Mod);
-						Items.Add(MakeShared<FJsonValueObject>(O));
-					}
-				}
+				lua_pop(L, 1);
 			}
-			lua_pop(L, 1);
+			if (!Module.IsEmpty() && !Mod.Contains(Module, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			if (Items.Num() >= Limit)
+			{
+				bMore = true;
+				break;
+			}
+			TSharedPtr<FJsonObject> O = Brief(Obj);
+			O->SetStringField(TEXT("module"), Mod);
+			Items.Add(MakeShared<FJsonValueObject>(O));
 		}
 		Out->SetArrayField(TEXT("items"), Items);
 		Out->SetBoolField(TEXT("more"), bMore);
@@ -1221,8 +1237,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		lua_rawget(L, G);
 		const int OldPrint = lua_gettop(L);
 		lua_pushstring(L, "print");
-		lua_pushlightuserdata(L, &Printed);
-		lua_pushcclosure(L, PrintFn, 1);
+		lua_pushcfunction(L, PrintFn);
 		lua_rawset(L, G);
 		// 把 chunk 和 self 挪到栈顶调用
 		lua_pushvalue(L, OldPrint - 3);
@@ -1233,12 +1248,14 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		const int OldCount = lua_gethookcount(L);
 		const double Timeout = FMath::Clamp(Int(A, TEXT("timeoutMs"), 5000), 100, 60000) / 1000.0;
 		GDeadline = FPlatformTime::Seconds() + Timeout;
+		GPrintSink = &Printed;
 		lua_sethook(L, TimeoutHook, LUA_MASKCOUNT, 10000);
 		const uint64 LogBefore = FAgentPanelLog::Get().LastSeq();
 		const double Start = FPlatformTime::Seconds();
 		const int Status = lua_pcall(L, 1, LUA_MULTRET, Msgh);
 		const double Ms = (FPlatformTime::Seconds() - Start) * 1000.0;
 		lua_sethook(L, OldHook, OldMask, OldCount);
+		GPrintSink = nullptr;
 		lua_pushstring(L, "print");
 		lua_pushvalue(L, OldPrint);
 		lua_rawset(L, G);

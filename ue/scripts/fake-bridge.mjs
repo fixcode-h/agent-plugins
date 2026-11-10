@@ -12,12 +12,93 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     hero: { Health: 80, MaxHealth: 120, bInvincible: false },
     cvars: { 't.MaxFPS': '0' },
     calls: [],
+    // 假的 UnLua 环境：全局表和 GameInstance 的 Lua 实例表
+    lua: {
+      global: { GameSystemManager: { Count: 3, Name: 'gsm', Players: { 1: 'alice', 2: 'bob' } } },
+      inst: { Gold: 100, Ratio: 0.5, Bag: { Size: 20 } },
+      exec: [],
+    },
   }
   const log = (category, verbosity, text) => state.lines.push({ seq: ++state.seq, category, verbosity, text })
   log('LogInit', 'Display', 'fake bridge up')
   log('LogNet', 'Warning', 'connection timeout (client 2)')
   const HERO = '/Game/Maps/UEDPIE_0_Town.Town:PersistentLevel.BP_Hero_C_1'
+  const GI = '/Engine/Transient.GameEngine_0:BP_LuaGameInstance_C_0'
+  // 假桥接的 Lua：对象实例表 / 全局表按 keys 往下取（和真桥接一样数字键写成数字）
+  const luaRoot = (a) => {
+    if (!a.path) return state.lua.global
+    if (a.path !== GI) throw new Error(`${a.path} 还没进过 Lua`)
+    return state.lua.inst
+  }
+  const luaWalk = (v, keys) => {
+    for (const k of keys) {
+      if (typeof v !== 'object' || v === null) throw new Error('不是表')
+      v = v[k]
+    }
+    return v
+  }
+  const luaDesc = (v) =>
+    v === undefined || v === null
+      ? { t: 'nil' }
+      : typeof v === 'object'
+        ? { t: 'table', n: Object.keys(v).length }
+        : { t: typeof v, v, ...(Number.isInteger(v) ? { int: true } : {}) }
   const ops = {
+    'lua.objects': (a) => ({
+      items:
+        !a.module || 'Game.Core.GameInstance'.toLowerCase().includes(String(a.module).toLowerCase())
+          ? [
+              {
+                path: GI,
+                name: 'BP_LuaGameInstance_C_0',
+                class: 'BP_LuaGameInstance_C',
+                module: 'Game.Core.GameInstance',
+              },
+            ]
+          : [],
+      more: false,
+      bound: 1,
+    }),
+    'lua.get': (a) => {
+      const v = luaWalk(luaRoot(a), a.keys ?? [])
+      const out = { value: luaDesc(v) }
+      if (a.path)
+        out.object = {
+          path: GI,
+          name: 'BP_LuaGameInstance_C_0',
+          class: 'BP_LuaGameInstance_C',
+          module: 'Game.Core.GameInstance',
+          bound: true,
+        }
+      if (typeof v === 'object' && v !== null) {
+        const keys = Object.keys(v)
+        out.fields = keys.map((k) => ({
+          k,
+          kt: /^\d+$/.test(k) ? 'number' : 'string',
+          ...(/^\d+$/.test(k) ? { kn: Number(k) } : {}),
+          ...luaDesc(v[k]),
+        }))
+        out.total = keys.length
+        out.more = false
+        if (a.path && !(a.keys ?? []).length)
+          out.functions = [{ name: 'ReceiveBeginPlay', src: 'Game/Core/GameInstance.lua:12' }]
+      }
+      return out
+    },
+    'lua.set': (a) => {
+      const keys = a.keys ?? []
+      const parent = luaWalk(luaRoot(a), keys.slice(0, -1))
+      const k = keys[keys.length - 1]
+      const prev = parent[k] ?? null
+      if (typeof prev === 'object' && prev !== null) throw new Error('只能改数字、字符串、布尔或 nil 的字段')
+      parent[k] = a.value
+      return { prev, value: a.value, type: luaDesc(a.value).t }
+    },
+    'lua.exec': (a) => {
+      state.lua.exec.push(a.code)
+      if (/error\(/.test(a.code)) throw new Error('[string "AgentPanel"]:1: boom')
+      return { results: [{ t: 'number', v: 42, int: true }], output: ['hello'], ms: 0.3 }
+    },
     console: (a) => {
       state.calls.push(a.command)
       log('LogConsole', 'Log', `ran ${a.command}`)
@@ -131,6 +212,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         kind,
         pid: process.pid,
         log: path.join(root, 'Saved', 'Logs', 'Fake.log'),
+        lua: { available: true, version: 'Lua 5.4.6' },
         worlds: [
           { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
           { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },
@@ -169,6 +251,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   return {
     state,
     hero: HERO,
+    gi: GI,
     stop: () => {
       rmSync(card, { force: true })
       return new Promise((r) => server.close(r))

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { op, pget, ppost, show, useAction, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
+import { LuaTable } from './Lua.tsx'
 import { Badge, ErrorText, Note, SearchBox, Term, useTargetInfo } from './ui.tsx'
 
 export interface Prop {
@@ -28,6 +29,10 @@ interface Fn {
 /** 这次在网页上改过的值（对象路径 + 属性 → 原值），换分区也保留，高亮「原 80」 */
 const changed = new Map<string, unknown>()
 
+/** 和服务端 isRuntimePath 一样：关卡里的、PIE 的、临时包里的对象（资源没有 Lua 实例） */
+const isRuntimePath = (p: string) =>
+  !p.startsWith('/') || /:PersistentLevel|UEDPIE_|^\/Temp\/|^\/Engine\/Transient/i.test(p)
+
 const looksLikePath = (s: string) => /^\/(Game|Script|Engine|Temp)\/|:PersistentLevel\./.test(s)
 
 /**
@@ -49,7 +54,9 @@ export function Props({
   const { project, target, setTarget } = useUe()
   const { inst, world } = useTargetInfo()
   const { ui, cn, toast } = h()
-  const [tab, setTab] = useState<'props' | 'fns'>('props')
+  const [tab, setTab] = useState<'props' | 'fns' | 'lua'>('props')
+  // 装了 UnLua 的项目（桥接编进了 Lua 支持）：运行时对象多一个「Lua」页签看它的 Lua 实例表
+  const hasLua = !!inst?.lua && isRuntimePath(path)
   const [filter, setFilter] = useState('')
   const [onlyChanged, setOnlyChanged] = useState(false)
   const [open, setOpen] = useState<Record<string, boolean>>({})
@@ -139,6 +146,7 @@ export function Props({
             options={[
               { id: 'props', label: t('属性') },
               { id: 'fns', label: t('函数') },
+              ...(hasLua ? [{ id: 'lua' as const, label: 'Lua' }] : []),
             ]}
           />
           <ui.IconButton
@@ -154,7 +162,9 @@ export function Props({
           <Note tone="info">{readOnlyHint}</Note>
         </div>
       )}
-      {tab === 'fns' ? (
+      {tab === 'lua' && hasLua ? (
+        <LuaTable path={path} onOpen={onOpen} />
+      ) : tab === 'fns' ? (
         <Functions path={path} />
       ) : (
         <>

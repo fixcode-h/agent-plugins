@@ -5,12 +5,13 @@ import { readHistory } from './history.ts'
 import { build } from './install.ts'
 import { crashes } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
+import { parseLuaPath } from './luapath.ts'
 import { getProject } from './registry.ts'
 import type { Target } from './types.ts'
 import { clip, mcpText } from './util.ts'
 
 /**
- * 给 Agent 的 12 个工具（设计文档 5），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
+ * 给 Agent 的 13 个工具（设计文档 5；ue_lua 是 UnLua 项目用的），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
  * 每次调用按对话所在项目找登记；出错原样返回（面板硬规则：不悄悄重试）。结果先摘要、再细节，并限长。
  */
 const TARGET = {
@@ -28,6 +29,9 @@ type Handler = (a: Record<string, unknown>, ctx: OpCtx) => Promise<McpResult>
 function tool(name: string, description: string, properties: Record<string, unknown>, required: string[], fn: Handler) {
   return { name, description, properties, required, fn }
 }
+
+/** Lua 字段路径：没写返回 undefined（不走 Lua）；写了空串表示起点本身 */
+const luaKeys = (v: unknown) => (v === undefined || v === null ? undefined : parseLuaPath(String(v)))
 
 const DEFS = [
   tool(
@@ -96,10 +100,11 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；编辑器没开时自动用后台编辑器）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；编辑器没开时自动用后台编辑器）。',
     {
-      kind: { type: 'string', enum: ['actor', 'component', 'object', 'asset'] },
+      kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset'] },
       prefix: { type: 'string' },
+      module: { type: 'string' },
       class: { type: 'string' },
       path: { type: 'string' },
       limit: { type: 'number' },
@@ -110,6 +115,8 @@ const DEFS = [
       const limit = Number(a.limit) || 50
       if (a.kind === 'component') return out(await runOp(ctx, 'components', { path: a.path }))
       if (a.kind === 'object') return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit }))
+      if (a.kind === 'lua')
+        return out(await runOp(ctx, 'lua.objects', { class: a.class, prefix: a.prefix, module: a.module, limit }))
       if (a.kind === 'asset')
         return out(await runOp(ctx, 'assets', { class: a.class, prefix: a.prefix, path: a.path || '/Game', limit }))
       return out(await runOp(ctx, 'actors', { prefix: a.prefix, limit }))
@@ -117,30 +124,69 @@ const DEFS = [
   ),
   tool(
     'ue_get',
-    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。',
+    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
       filter: { type: 'string' },
+      lua: { type: 'string' },
+      offset: { type: 'number' },
+      limit: { type: 'number' },
       target: TARGET,
     },
-    ['path'],
-    async (a, ctx) =>
-      a.prop
+    [],
+    async (a, ctx) => {
+      const keys = luaKeys(a.lua)
+      if (keys)
+        return out(
+          await runOp(ctx, 'lua.get', {
+            path: a.path ?? '',
+            keys,
+            offset: Number(a.offset) || 0,
+            limit: Math.min(Number(a.limit) || 100, 500),
+          }),
+        )
+      if (!a.path) return mcpText('要给 path（对象路径），读 Lua 全局表时给 lua', true)
+      return a.prop
         ? out(await runOp(ctx, 'get', { path: a.path, prop: a.prop }))
-        : out(await runOp(ctx, 'props', { path: a.path, filter: a.filter ?? '', maxChars: 600 })),
+        : out(await runOp(ctx, 'props', { path: a.path, filter: a.filter ?? '', maxChars: 600 }))
+    },
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。',
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
+      lua: { type: 'string' },
       value: {},
       target: TARGET,
     },
-    ['path', 'prop', 'value'],
-    async (a, ctx) => out(await runOp(ctx, 'set', { path: a.path, prop: a.prop, value: a.value })),
+    ['value'],
+    async (a, ctx) => {
+      const keys = luaKeys(a.lua)
+      if (keys) {
+        if (!keys.length) return mcpText('lua 要写到具体字段，例如 Bag.Gold', true)
+        return out(await runOp(ctx, 'lua.set', { path: a.path ?? '', keys, value: a.value ?? null }))
+      }
+      if (!a.path || !a.prop) return mcpText('要给 path 和 prop（改 Lua 字段时给 lua）', true)
+      return out(await runOp(ctx, 'set', { path: a.path, prop: a.prop, value: a.value }))
+    },
+  ),
+  tool(
+    'ue_lua',
+    '在 UE 的 UnLua 环境里执行 Lua 代码（每次都会请用户确认）。code 是代码：单个表达式直接返回它的值（如 GameSystemManager:GetCount()），多条语句用 return 返回结果；print 的内容和执行期间的日志在 output 里。path 给了对象时代码里的 self 是它的 Lua 实例表。timeoutMs 超时中止（默认 5000，最多 60000）。只读字段优先用 ue_get，改简单字段用 ue_set（能撤回）。',
+    {
+      code: { type: 'string' },
+      path: { type: 'string' },
+      timeoutMs: { type: 'number' },
+      target: TARGET,
+    },
+    ['code'],
+    async (a, ctx) => {
+      const timeoutMs = Math.min(Math.max(Number(a.timeoutMs) || 5000, 100), 60000)
+      return out(await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs }, timeoutMs + 10000))
+    },
   ),
   tool(
     'ue_call',
