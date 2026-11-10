@@ -36,7 +36,7 @@ const ASSET_OPS = new Set([
   'asset.save',
   'asset.revert',
 ])
-const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call'])
+const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call', 'umg.tree'])
 
 function kindOf(op: string, args: Record<string, unknown>): Kind {
   switch (op) {

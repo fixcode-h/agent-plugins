@@ -2,13 +2,29 @@ import { useState } from 'react'
 import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
-import { Props } from '../Props.tsx'
+import { Inspect } from '../Inspect.tsx'
 import { Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
 
 interface Row {
   path: string
   name: string
   class: string
+  /** 桥接给的分类：instance（活着的实例）、asset（资源、默认值）、class（类本身）；旧桥接没有，按路径猜 */
+  kind?: 'instance' | 'asset' | 'class'
+}
+
+/** 搜索结果按「运行时实例 / 资源 / 类」分开：同名的蓝图资源、生成类、实例混在一起分不清该改哪个 */
+const KINDS = [
+  { id: 'instance', label: () => t('运行时实例'), hint: () => t('正在运行的真实对象，改了马上生效') },
+  { id: 'asset', label: () => t('资源'), hint: () => t('资源和默认值，改的是以后新建出来的对象，正在显示的不会变') },
+  { id: 'class', label: () => t('类'), hint: () => t('类本身，只能看') },
+] as const
+
+function kindOf(r: Row): 'instance' | 'asset' | 'class' {
+  if (r.kind) return r.kind
+  if (/Class$/.test(r.class)) return 'class'
+  if (/^\/(Engine\/Transient|Temp)\b|:PersistentLevel\.|UEDPIE_/.test(r.path)) return 'instance'
+  return 'asset'
 }
 
 /** 常用的运行时对象：点一下按类搜 */
@@ -118,32 +134,49 @@ export function Objects() {
                 </span>
               )}
             </form>
-            <ul className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-1.5">
-              {(found.data?.items ?? []).map((o) => (
-                <li key={o.path}>
-                  <button
-                    type="button"
-                    onClick={() => go('objects', o.path)}
-                    className={cn(
-                      'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
-                      sub === o.path && 'ue:bg-sel',
-                    )}
-                  >
-                    <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
-                    <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
-                      {o.class} · {o.path}
-                    </span>
-                  </button>
-                </li>
-              ))}
+            <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-1.5">
+              {KINDS.map((k) => {
+                const rows = (found.data?.items ?? []).filter((o) => kindOf(o) === k.id)
+                if (!rows.length) return null
+                return (
+                  <section key={k.id} className="ue:mb-2">
+                    <div
+                      className="ue:flex ue:items-baseline ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1"
+                      title={k.hint()}
+                    >
+                      <span className="ue:text-footnote ue:font-medium ue:text-muted">{k.label()}</span>
+                      <span className="ue:text-caption ue:text-subtle">{rows.length}</span>
+                    </div>
+                    <ul>
+                      {rows.map((o) => (
+                        <li key={o.path}>
+                          <button
+                            type="button"
+                            onClick={() => go('objects', o.path)}
+                            className={cn(
+                              'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
+                              sub === o.path && 'ue:bg-sel',
+                            )}
+                          >
+                            <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                            <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
+                              {o.class} · {o.path}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              })}
               {found.data && !found.data.items.length && (
-                <li className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</li>
+                <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</p>
               )}
-            </ul>
+            </div>
           </Card>
           <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
             {sub ? (
-              <Props key={sub} path={sub} onOpen={(p) => go(p.startsWith('/Game') ? 'assets' : 'objects', p)} />
+              <Inspect key={sub} path={sub} onOpen={(p) => go(p.startsWith('/Game') ? 'assets' : 'objects', p)} />
             ) : (
               <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">{t('选中对象后在这里看和改属性')}</p>
             )}
