@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
 
 interface Row {
@@ -55,6 +56,9 @@ export function Objects() {
   const [q, setQ] = useState<{ cls: string; prefix: string; lua: boolean; mod: string }>()
   // 装了 UnLua 的项目：可以只看绑了 Lua 模块的对象、按模块名搜（桥接遍历 UnLua 的对象表，不扫全部 UObject，空条件也能搜）
   const hasLua = !!inst?.lua
+  // 左边对象列表的宽度可拖；右边属性表至少留 360px
+  const pane = usePane('objects', '36%', 240)
+  const left = useRef<HTMLElement>(null)
   const found = useLoad(
     () =>
       q
@@ -87,8 +91,13 @@ export function Objects() {
           <ui.EmptyPanel>{t('UE 没在运行：运行时对象要在运行中的编辑器或游戏里找；资源在「资源」里看')}</ui.EmptyPanel>
         </div>
       ) : (
-        <div className="ue:grid ue:min-h-0 ue:flex-1 ue:gap-4 ue:overflow-auto ue:p-6 ue:lg:grid-cols-[minmax(280px,1fr)_minmax(360px,1.8fr)] ue:lg:overflow-hidden">
-          <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+        <div className={SPLIT_ROW}>
+          <Card
+            ref={left}
+            className={PANE_FIXED}
+            style={pane.style('calc(100% - 376px)')}
+            bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+          >
             <form
               className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3"
               onSubmit={(e) => {
@@ -201,7 +210,8 @@ export function Objects() {
               )}
             </div>
           </Card>
-          <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+          <SplitHandle pane={pane} paneRef={left} reserve={() => 376} />
+          <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
             {sub ? (
               <Inspect key={sub} path={sub} onOpen={(p) => go(p.startsWith('/Game') ? 'assets' : 'objects', p)} />
             ) : (

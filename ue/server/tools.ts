@@ -352,7 +352,12 @@ const DEFS = [
         case 'pie_status':
           return out(await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', { action: 'status' }))
         case 'build': {
-          const job = build(ctx.project)
+          const job = await build(ctx.project)
+          if (job.hint)
+            return mcpText(
+              `编译没开始：${job.log.join('\n')}\n请用户保存并关掉编辑器后再编译；只改了已加载模块的代码时可以改用 action=livecoding。`,
+              true,
+            )
           return out({ job: job.id, status: job.status })
         }
         case 'livecoding':
