@@ -1,12 +1,13 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；15 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；17 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
+// 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
 // 资源和蓝图：大纲、图表伪代码、搜节点；操作列表演练不留改动、正式修改能撤回、失败整批取消；另一个对话改同一个没保存的包会被拒绝；
 // 结构性操作按权限确认，删除每次确认；Python 默认关。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -79,7 +80,7 @@ try {
   )
   assert.match(runTools.hint, /ue_status/)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 15)
+  assert.equal(Object.keys(tools).length, 17)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
 
   const st = await call('ue_status', {})
@@ -266,9 +267,82 @@ try {
   assert.equal(job.status, 'failed', JSON.stringify(job))
   assert.equal(job.hint?.kind, 'live-coding', JSON.stringify(job))
 
+
+  // ---------- 性能和内存抓取（ue_perf / ue_capture） ----------
+  const permsBefore = (await api('GET', '/p/p1/state')).project.perms
+  await api('POST', '/p/p1/settings', { perms: { ...permsBefore, runtime: 'read' } })
+  const roPerf = await call('ue_perf', { action: 'start', kind: 'csv' })
+  assert.ok(roPerf.isError && /只读/.test(text(roPerf)), text(roPerf))
+  // 询问权限：按一次抓取确认一遍，卡片上写清种类和时长；之后的书签和停止不再逐条确认
+  await api('POST', '/p/p1/settings', { perms: { ...permsBefore, runtime: 'ask' } })
+  let perfAsked = 0
+  const started = await call(
+    'ue_perf',
+    { action: 'start', kind: 'csv', seconds: 20, label: '开背包' },
+    {
+      confirm: async (req) => {
+        perfAsked++
+        assert.match(req.detail, /最长 20 秒/)
+        return { allow: true, message: '' }
+      },
+    },
+  )
+  assert.ok(!started.isError, text(started))
+  assert.equal(perfAsked, 1)
+  assert.ok(bridge.state.calls.includes('CsvProfile Start'))
+  const again = await call('ue_perf', { action: 'start', kind: 'csv' }, yes)
+  assert.ok(again.isError && /已经有一个 CSV 抓取在进行/.test(text(again)), text(again))
+  assert.match(text(await call('ue_perf', { action: 'status' })), /开背包/)
+  const marked = await call('ue_perf', { action: 'mark', name: 'open bag' })
+  assert.ok(!marked.isError && bridge.state.calls.includes('CsvEvent open_bag'), text(marked))
+  const stopped = JSON.parse(text(await call('ue_perf', { action: 'stop' })))
+  assert.equal(stopped.capture.kind, 'csv', JSON.stringify(stopped))
+  assert.equal(stopped.marks[0].name, 'open_bag')
+  assert.match(text(await call('ue_perf', { action: 'stop' })), /没有正在进行的抓取/)
+
+  // 用起的名字代替 id 查
+  const csvSum = JSON.parse(text(await call('ue_capture', { action: 'summary', id: '开背包' })))
+  assert.equal(csvSum.capture.id, stopped.capture.id)
+  assert.equal(csvSum.summary.frames, 600)
+  assert.equal(csvSum.summary.hitches.count, 3)
+  const hitches = JSON.parse(text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches' })))
+  assert.ok(hitches.worst[0].spikes.some((s) => s.column === 'Slate/Tick'), JSON.stringify(hitches.worst[0]))
+  // from 可以写书签名（CSV 里的事件）
+  const afterBag = JSON.parse(
+    text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches', from: 'close_bag' })),
+  )
+  assert.equal(afterBag.count, 1)
+  const badWhat = await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'nope' })
+  assert.ok(badWhat.isError && /hitches、columns/.test(text(badWhat)), text(badWhat))
+
+  // 两份 memreport 对比：涨得最多的是背包控件
+  await api('POST', '/p/p1/settings', { perms: { ...permsBefore, runtime: 'write' } })
+  const m1 = JSON.parse(text(await call('ue_perf', { action: 'start', kind: 'memreport', label: '进背包前' })))
+  const m2 = JSON.parse(text(await call('ue_perf', { action: 'start', kind: 'memreport', label: '出背包后' })))
+  assert.notEqual(m1.capture.id, m2.capture.id)
+  const memDiff = JSON.parse(text(await call('ue_capture', { action: 'compare', id: '进背包前', other: '出背包后' })))
+  assert.equal(memDiff.diff.byCount[0].class, 'WBP_Bag_C')
+  assert.equal(memDiff.diff.byCount[0].countDelta, 40)
+  const mixed = await call('ue_capture', { action: 'compare', id: m1.capture.id, other: stopped.capture.id })
+  assert.ok(mixed.isError && /同一种/.test(text(mixed)), text(mixed))
+  const listed = JSON.parse(text(await call('ue_capture', { action: 'list' })))
+  assert.equal(listed.total, 3)
+
+  // 网页接口走同一套；删除在 Agent 这边每次都要确认，拒绝就不删
+  const webPerf = await api('GET', '/p/p1/perf')
+  assert.equal(webPerf.items.length, 3)
+  assert.equal(webPerf.active.length, 0)
+  const noDel = await call('ue_capture', { action: 'delete', id: m1.capture.id }, { confirm: async () => ({ allow: false, message: 'no' }) })
+  assert.ok(noDel.isError, text(noDel))
+  assert.ok(existsSync(m1.capture.file))
+  const del = await call('ue_capture', { action: 'delete', id: m1.capture.id }, yes)
+  assert.ok(!del.isError && !existsSync(m1.capture.file), text(del))
+  assert.match(text(await call('ue_capture', { action: 'help' })), /hitches/)
+  await api('POST', '/p/p1/settings', { perms: permsBefore })
+
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
-  console.log(`ue 冒烟测试通过：15 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：17 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()

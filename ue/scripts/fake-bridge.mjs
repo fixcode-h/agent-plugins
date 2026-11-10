@@ -3,6 +3,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
+import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
 
 export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const token = 'fake-token'
@@ -12,6 +13,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     hero: { Health: 80, MaxHealth: 120, bInvincible: false },
     cvars: { 't.MaxFPS': '0' },
     calls: [],
+    perf: { csv: false, n: 0, mem: 0 },
     // 假的 UnLua 环境：全局表和 GameInstance 的 Lua 实例表
     lua: {
       global: { GameSystemManager: { Count: 3, Name: 'gsm', Players: { 1: 'alice', 2: 'bob' } } },
@@ -113,6 +115,21 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     console: (a) => {
       state.calls.push(a.command)
       log('LogConsole', 'Log', `ran ${a.command}`)
+      // 性能抓取：和引擎一样把文件写进 Saved/Profiling，不在输出里说写到哪了（面板要自己找新文件）
+      const prof = path.join(root, 'Saved', 'Profiling')
+      if (/^csvprofile start/i.test(a.command)) state.perf.csv = true
+      if (/^csvprofile stop/i.test(a.command) && state.perf.csv) {
+        state.perf.csv = false
+        mkdirSync(path.join(prof, 'CSV'), { recursive: true })
+        writeFileSync(path.join(prof, 'CSV', `Profile(${++state.perf.n}).csv`), makeCsv())
+      }
+      if (/^memreport/i.test(a.command)) {
+        const dir = path.join(prof, 'MemReports', 'Fake-Windows-01.01-00.00.00')
+        mkdirSync(dir, { recursive: true })
+        // 第二份起背包控件多 40 个：模拟进出场景后没释放
+        const extra = state.perf.mem++ ? { WBP_Bag_C: 40 } : {}
+        writeFileSync(path.join(dir, `Town-${state.perf.mem}.memreport`), makeMemReport({ extra }))
+      }
       return { output: [`ran ${a.command}`], world: 'pie0' }
     },
     cvars: () => ({

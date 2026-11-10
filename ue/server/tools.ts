@@ -7,13 +7,14 @@ import { crashes } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { parseLuaPath } from './luapath.ts'
 import { getProject } from './registry.ts'
+import { PERF_DEFS } from './tools-perf.ts'
 import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
 
 /**
- * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
+ * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
  * 每次调用按对话所在项目找登记；出错原样返回（面板硬规则：不悄悄重试）。结果先摘要、再细节，并限长。
  */
 /** Lua 字段路径：没写返回 undefined（不走 Lua）；写了空串表示起点本身 */
@@ -413,6 +414,9 @@ const DEFS = [
   ),
   ...ASSET_TOOLS,
 ]
+
+// 性能和内存分析的工具在 tools-perf.ts（单独一个文件，免得和这里的改动挤在一起）
+DEFS.push(...PERF_DEFS)
 
 export const TOOL_NAMES = DEFS.map((d) => d.name)
 

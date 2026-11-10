@@ -1,11 +1,11 @@
 # UE 插件
 
-按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 15 个 `ue_*` 工具。
+按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 17 个 `ue_*` 工具。
 
 ## 组成
 
 - **面板插件**（`server/`、`web/`）：
-  - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Lua（UnLua 项目）、Actor、运行时对象、资源 / DataTable、监视、日志、操作记录、桥接与权限。
+  - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Lua（UnLua 项目）、Actor、运行时对象、资源 / DataTable、监视、性能、日志、操作记录、桥接与权限。
   - 添加项目的弹窗。
   - 对话右栏的「UE」页签。
   - Agent 工具。
@@ -27,6 +27,19 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - 只有「拿到 lua_State」和 UnLua 版本有关：`AgentPanelBridge.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
 
 设计见面板仓库的 UE 插件设计文档，面板侧的扩展点是插件接口 2（ADR 0059）。
+
+## 性能和内存分析
+
+抓取和分析分开：`ue_perf` 对着正在运行的 UE 抓，`ue_capture` 分析抓到的文件，UE 关了也能分析。网页「性能」分区是同一套功能。
+
+- 现在能抓两种：CSV Profiler 的帧数据（`CsvProfile Start / Stop`）和内存报告（`memreport -full`）。都走已有的控制台通道，桥接不用更新。
+- 文件由引擎写在 `<项目>/Saved/Profiling/` 下，面板不搬动；手动在 UE 里抓的、别人发来的（`ue_capture action=import`）也能分析。
+- 帧数据抓取有时长上限（默认 30 秒，最多 10 分钟），到时间自动停；面板重启后下次看状态时补停。
+- 分析结果先摘要再下钻，不把整份文件给 Agent：帧数据看关键指标、卡顿帧和当时涨得最多的列、按书签分段；内存报告看按类的对象表和各分段；两份同类的可以对比（查内存泄漏用两份内存报告）。
+- Agent 的权限：看和分析不用确认；发起抓取按「运行时」权限，询问时一次抓取确认一次；删除抓取文件每次确认。
+- 网页上每份抓取有「让 Agent 分析」，把抓取交给对话。
+- Unreal Insights 的 `.utrace` 现在只登记、不能分析；实时数值、GPU 分阶段耗时也还没有，等桥接后续版本。
+- 解析器按 UE 5.4 的文件格式写，测试数据是手写的样例（`scripts/perf-fixtures.mjs`），还没用真实项目的文件验证过。`node ue/scripts/perf-test.mjs` 跑解析器测试。
 
 ## 只认 Agent 模式里的项目
 
