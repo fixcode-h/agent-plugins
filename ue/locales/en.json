@@ -401,5 +401,17 @@
   "运行日志": "Log",
   "绑定 DataTable": "Bind DataTable",
   "DataTable 资源路径，例如 /Game/Data/DT_Items；留空取消绑定": "DataTable asset path, e.g. /Game/Data/DT_Items. Leave empty to unbind",
-  "确定": "OK"
+  "确定": "OK",
+  "控件树": "Widget tree",
+  "上一层": "Up one level",
+  "收起": "Collapse",
+  "展开": "Expand",
+  "层级太深或控件太多，后面的没列出": "Too deep or too many widgets; the rest is not listed",
+  "运行时实例": "Runtime instances",
+  "类": "Class",
+  "属性分类": "Property categories",
+  "这个属性不能改": "This property can't be edited",
+  "正在运行的真实对象，改了马上生效": "Live objects in the running game; changes take effect immediately",
+  "资源和默认值，改的是以后新建出来的对象，正在显示的不会变": "Assets and defaults; changes apply to objects created later, not to what is on screen now",
+  "类本身，只能看": "Classes themselves; view only"
 }
