@@ -7,6 +7,7 @@ import { build, install, uninstall } from './install.ts'
 import { getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
+import { perfRoute } from './perf-api.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
 import type { GmStore, InstallMode, Target, UeProject } from './types.ts'
@@ -167,8 +168,11 @@ export async function handle(req: Request): Promise<Response> {
         return json(await ensureBackground(project).then((c) => ({ pid: c.pid })))
       case 'POST editor':
         return json({ pid: launchEditor(project) })
-      default:
-        return json({ error: 'not found' }, 404)
+      default: {
+        // 性能和内存抓取的接口在 perf-api.ts
+        const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
+        return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)
+      }
     }
   } catch (e) {
     // 出错原样给网页显示（面板硬规则）

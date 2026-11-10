@@ -4,6 +4,7 @@ import {
   Cpu,
   Database,
   Eye,
+  Gauge,
   LayoutGrid,
   List,
   Plus,
@@ -30,6 +31,7 @@ import { Logs } from './sections/Logs.tsx'
 import { Lua } from './sections/Lua.tsx'
 import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
+import { Perf } from './sections/Perf.tsx'
 import { Watch } from './sections/Watch.tsx'
 import { SplitHandle, usePane } from './split.tsx'
 import { usePendingPie } from './launch.ts'
@@ -67,6 +69,7 @@ const SECTIONS: Section[] = [
   { id: 'objects', label: () => t('运行时对象'), icon: Cpu, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
   { id: 'watch', label: () => t('监视'), icon: Eye, group: () => t('观察'), View: Watch },
+  { id: 'perf', label: () => t('性能'), icon: Gauge, group: () => t('观察'), View: Perf },
   { id: 'logs', label: () => t('运行日志'), icon: List, group: () => t('观察'), View: Logs },
   { id: 'history', label: () => t('操作记录'), icon: Undo2, group: () => t('观察'), View: History },
   { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },

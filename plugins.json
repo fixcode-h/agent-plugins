@@ -13,11 +13,11 @@
     {
       "id": "ue",
       "name": "UE",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查和调数值。",
       "icon": "gamepad",
-      "tag": "ue-v0.1.5",
-      "asset": "ue-0.1.5.zip",
+      "tag": "ue-v0.1.6",
+      "asset": "ue-0.1.6.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
     }
   ]

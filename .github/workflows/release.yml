@@ -30,6 +30,8 @@ jobs:
         run: node blender/scripts/smoke.mjs
       - name: UE 冒烟测试（假的桥接，不需要 UE）
         run: node ue/scripts/smoke.mjs
+      - name: UE 性能抓取解析器测试（CSV、memreport）
+        run: node ue/scripts/perf-test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: plugins

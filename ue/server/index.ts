@@ -8,7 +8,7 @@ import { setCtx } from './util.ts'
 
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
- * 网页的 UE 管理页、添加项目和桥接安装走 fetch；Agent 的 12 个 ue_* 工具只挂给接入了 UE 的项目里的对话；
+ * 网页的 UE 管理页、添加项目和桥接安装走 fetch；Agent 的 ue_* 工具只挂给接入了 UE 的项目里的对话；
  * UE 端是项目里的 AgentPanelBridge 插件（包里 bridge/ 目录，安装时复制进项目）。
  */
 
@@ -20,6 +20,7 @@ const HINT = `## UE 工具
 - 先 ue_status 看有哪些进程和世界（编辑器、PIE 客户端 / 服务器），操作时用 target 选；同步属性要在服务器世界改。
 - 找对象：ue_find（Actor 按名字前缀）→ ue_get 读属性（属性路径 Stats.MaxHP、Items[2].Count）→ ue_set 改；ue_call 调函数，ue_gm 跑 GM，ue_console 执行命令。
 - 看现象：ue_log 取日志（记下 cursor 下次只取新的），ue_screenshot 截视口。
+- 卡顿、掉帧、内存高：ue_perf 抓帧数据（CSV Profiler）或内存报告，ue_capture 看摘要、下钻、对比；抓取文件不要直接读。
 - 改资源（DataTable、DataAsset）先在运行时验证；资源改动只是暂存，要 ue_asset save 才写回（会请用户确认）。
 - 工具报错原样告诉用户，不要绕过权限或换别的办法偷偷重试；运行时修改可以 ue_undo 撤回。`
 
