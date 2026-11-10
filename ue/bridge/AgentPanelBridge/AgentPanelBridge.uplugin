@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 4,
-  "VersionName": "1.2.0",
+  "Version": 5,
+  "VersionName": "1.2.1",
   "FriendlyName": "Agent Panel Bridge",
   "Description": "让 Agent 面板（本机网页控制台）连接这个 UE 进程：控制台、GM、读写对象属性、DataTable、资源和蓝图（图表读写、编译）、日志；装了 UnLua 时还能看改 Lua 实例和执行 Lua。只监听 127.0.0.1，Shipping 不加载。",
   "Category": "Developer Tools",

@@ -900,9 +900,10 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		A->TryGetNumberField(TEXT("since"), Since);
 		TSharedPtr<FJsonObject> R = FAgentPanelLog::Get().Tail((uint64)Since, FMath::Clamp(Int(A, TEXT("limit"), 300), 1, 5000),
 			Str(A, TEXT("category")), Str(A, TEXT("verbosity")), Str(A, TEXT("contains")));
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& P : R->Values)
+		// 5.8 起 Values 的键是 UE::FSharedString，不能绑成 TPair<FString, …>；*Key 在各版本都是 const TCHAR*
+		for (const auto& P : R->Values)
 		{
-			Out->SetField(P.Key, P.Value);
+			Out->SetField(FString(*P.Key), P.Value);
 		}
 		return true;
 	});
