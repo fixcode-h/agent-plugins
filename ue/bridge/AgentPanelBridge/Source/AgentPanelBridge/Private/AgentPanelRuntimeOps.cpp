@@ -5,6 +5,7 @@
 #include "AgentPanelGMLibrary.h"
 #include "AgentPanelLog.h"
 #include "AgentPanelLuaOps.h"
+#include "AgentPanelUmg.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
@@ -492,7 +493,13 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			return false;
 		}
 		Out->SetObjectField(TEXT("object"), Brief(Target));
-		Out->SetArrayField(TEXT("props"), ListProps(Target->GetClass(), Target, Str(A, TEXT("filter")), Int(A, TEXT("maxChars"), 2000)));
+		Out->SetStringField(TEXT("kind"), ObjectKind(Target));
+		Out->SetBoolField(TEXT("widget"), IsUmgWidget(Target));
+		if (Cast<UClass>(Target))
+		{
+			Out->SetStringField(TEXT("readOnlyWhy"), TEXT("这是类本身，不能改。改默认值打开它的资源，改运行中的表现选运行时实例"));
+		}
+		Out->SetArrayField(TEXT("props"), ListProps(Target->GetClass(), Target, Str(A, TEXT("filter")), Int(A, TEXT("maxChars"), 2000), Target));
 		return true;
 	});
 
@@ -520,34 +527,47 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		{
 			return false;
 		}
+		if (Cast<UClass>(Target))
+		{
+			Error = TEXT("这是类本身，不能改：改默认值打开它的资源，改运行中的表现选运行时实例");
+			return false;
+		}
 		FResolved R;
 		if (!ResolvePath(Target->GetClass(), Target, Target, Str(A, TEXT("prop")), R, Error))
 		{
+			return false;
+		}
+		if (!R.bEditable)
+		{
+			Error = FString::Printf(TEXT("不能改 %s"), *R.ReadOnlyWhy);
 			return false;
 		}
 		Out->SetField(TEXT("prev"), ToJson(R.Prop, R.Value, 0));
 		UObject* Owner = R.Owner ? R.Owner : Target;
 		// 资源（不在任何世界里、包不是临时的）：编辑器里按编辑器的方式改（可撤销、通知编辑器刷新、标脏）
 		const bool bAsset = !Owner->GetWorld() && !Owner->GetOutermost()->HasAnyPackageFlags(PKG_PlayInEditor) && Owner->GetOutermost() != GetTransientPackage();
-#if WITH_EDITOR
+		bool bOk = false;
 		if (bAsset)
 		{
+#if WITH_EDITOR
 			Owner->Modify();
 			Owner->PreEditChange(R.Prop);
-		}
 #endif
-		const bool bOk = FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error);
+			bOk = FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error);
 #if WITH_EDITOR
-		if (bAsset)
-		{
 			FPropertyChangedEvent Ev(R.Prop, EPropertyChangeType::ValueSet);
 			Owner->PostEditChangeProperty(Ev);
-		}
 #endif
-		if (bOk && bAsset)
+			if (bOk)
+			{
+				Owner->MarkPackageDirty();
+				DirtyPackages().Add(Owner->GetOutermost()->GetName());
+			}
+		}
+		else
 		{
-			Owner->MarkPackageDirty();
-			DirtyPackages().Add(Owner->GetOutermost()->GetName());
+			// 运行时对象：走属性的 setter，界面和逻辑才会跟着变（UMG 的 Visibility、颜色等只写内存不会刷新到屏幕上）
+			bOk = SetRuntimeValue(Owner, R, A->TryGetField(TEXT("value")), Error);
 		}
 		Out->SetField(TEXT("value"), ToJson(R.Prop, R.Value, 0));
 		Out->SetBoolField(TEXT("asset"), bAsset);
@@ -689,7 +709,9 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 				bMore = true;
 				return false;
 			}
-			Items.Add(Obj(Brief(O)));
+			TSharedPtr<FJsonObject> B = Brief(O);
+			B->SetStringField(TEXT("kind"), ObjectKind(O));
+			Items.Add(Obj(B));
 			return true;
 		};
 		if (!ClassName.IsEmpty())
@@ -904,4 +926,5 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 
 	// ---------- Lua（项目里有 UnLua 才编进来，见 AgentPanelLua.cpp） ----------
 	AgentPanelRegisterLuaOps(*this);
+	RegisterUmgOps(*this);
 }

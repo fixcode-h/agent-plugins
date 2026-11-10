@@ -124,7 +124,7 @@ const DEFS = [
   ),
   tool(
     'ue_get',
-    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
+    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -132,6 +132,7 @@ const DEFS = [
       lua: { type: 'string' },
       offset: { type: 'number' },
       limit: { type: 'number' },
+      tree: { type: 'boolean' },
       target: TARGET,
     },
     [],
@@ -147,6 +148,7 @@ const DEFS = [
           }),
         )
       if (!a.path) return mcpText('要给 path（对象路径），读 Lua 全局表时给 lua', true)
+      if (a.tree) return out(await runOp(ctx, 'umg.tree', { path: a.path }))
       return a.prop
         ? out(await runOp(ctx, 'get', { path: a.path, prop: a.prop }))
         : out(await runOp(ctx, 'props', { path: a.path, filter: a.filter ?? '', maxChars: 600 }))
