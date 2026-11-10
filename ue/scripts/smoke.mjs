@@ -1,7 +1,9 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；12 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；15 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
+// 资源和蓝图：大纲、图表伪代码、搜节点；操作列表演练不留改动、正式修改能撤回、失败整批取消；另一个对话改同一个没保存的包会被拒绝；
+// 结构性操作按权限确认，删除每次确认；Python 默认关。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -77,7 +79,7 @@ try {
   )
   assert.match(runTools.hint, /ue_status/)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 13)
+  assert.equal(Object.keys(tools).length, 15)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
 
   const st = await call('ue_status', {})
@@ -98,6 +100,71 @@ try {
   const undone = await call('ue_undo', { id: mine[0].id })
   assert.ok(!undone.isError, text(undone))
   assert.equal(bridge.state.hero.Health, 80)
+
+  // ----- 资源和蓝图 -----
+  const yes = { confirm: async () => ({ allow: true, message: '' }) }
+  assert.match(text(await call('ue_blueprint', { action: 'outline', path: bridge.bp })), /"MaxHP"/)
+  const pseudo = text(await call('ue_blueprint', { action: 'graph', path: bridge.bp }))
+  assert.match(pseudo, /Event ReceiveBeginPlay\(\) {2}#a1b2c3d4\n {2}HP = MaxHP/, pseudo)
+  assert.match(text(await call('ue_blueprint', { action: 'node_search', path: bridge.bp, query: 'print' })), /f00dfeed/)
+  assert.match(text(await call('ue_find', { kind: 'node', query: 'PrintString' })), /a1b2c3d4/)
+  assert.match(text(await call('ue_asset', { action: 'refs', path: bridge.bp })), /Maps\/Town/)
+  assert.match(text(await call('ue_asset', { action: 'help', class: 'Blueprint' })), /ue_blueprint edit/)
+
+  // 演练：不留改动、不进操作记录；正式修改：记录里能撤回
+  const addVar = [{ op: 'add_variable', name: 'Shield', type: 'float' }]
+  const dry = await call('ue_blueprint', { action: 'edit', path: bridge.bp, ops: addVar, dryRun: true })
+  assert.ok(!dry.isError && /"dryRun": true/.test(text(dry)), text(dry))
+  assert.equal(bridge.state.bp.vars.length, 1)
+  const histBefore = (await api('GET', '/p/p1/history')).items.length
+  const edited = await call('ue_blueprint', { action: 'edit', path: bridge.bp, ops: addVar })
+  assert.ok(!edited.isError, text(edited))
+  assert.equal(bridge.state.bp.vars.length, 2)
+  assert.equal((await api('GET', '/p/p1/history')).items.length, histBefore + 1)
+  // 一步失败整批取消
+  const failed = await call('ue_blueprint', {
+    action: 'edit',
+    path: bridge.bp,
+    ops: [{ op: 'add_variable', name: 'X', type: 'int' }, { op: 'explode' }],
+  })
+  assert.ok(failed.isError && /第 2 个操作/.test(text(failed)), text(failed))
+  assert.equal(bridge.state.bp.vars.length, 2)
+  // 另一个对话改同一个还没保存的蓝图：拒绝
+  const other = await tools.ue_blueprint.call(
+    { action: 'edit', path: bridge.bp, ops: addVar },
+    { taskId: 'other', callId: '1' },
+  )
+  assert.ok(other.isError && /另一个对话/.test(text(other)), text(other))
+  // 撤回
+  const bpUndo = JSON.parse(text(await call('ue_undo', {}))).find((i) => i.op === 'bp.edit' && i.undo)
+  assert.ok(bpUndo, '蓝图修改应该能撤回')
+  assert.ok(!(await call('ue_undo', { id: bpUndo.id })).isError)
+  assert.equal(bridge.state.bp.vars.length, 1)
+
+  // 结构性操作：默认每次问；没有确认卡片 → 报错；演练不用确认
+  assert.ok((await call('ue_asset', { action: 'create', path: '/Game/BP_New', parent: 'Actor' })).isError)
+  assert.ok(
+    !(await call('ue_asset', { action: 'create', path: '/Game/BP_New', parent: 'Actor', dryRun: true })).isError,
+  )
+  assert.ok(!(await call('ue_asset', { action: 'create', path: '/Game/BP_New', parent: 'Actor' }, yes)).isError)
+  assert.deepEqual(bridge.state.bp.created, ['/Game/BP_New'])
+  // 删除：权限设成「允许」也照样确认；有引用方时桥接拒绝，原样报出来
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'allow', python: false } })
+  assert.ok(
+    !(await call('ue_asset', { action: 'duplicate', path: bridge.bp, to: '/Game/BP_Copy', dryRun: true })).isError,
+  )
+  assert.ok((await call('ue_asset', { action: 'delete', path: '/Game/BP_New' })).isError)
+  const refBlocked = await call('ue_asset', { action: 'delete', path: bridge.bp }, yes)
+  assert.ok(refBlocked.isError && /还被 1 个资源引用/.test(text(refBlocked)), text(refBlocked))
+  assert.ok(!(await call('ue_asset', { action: 'delete', path: '/Game/BP_New' }, yes)).isError)
+  assert.deepEqual(bridge.state.bp.deleted, ['/Game/BP_New'])
+  // Python：默认关；打开后每次确认
+  const pyOff = await call('ue_python', { code: 'print(1)' }, yes)
+  assert.ok(pyOff.isError && /执行 Python/.test(text(pyOff)), text(pyOff))
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: true } })
+  assert.ok((await call('ue_python', { code: 'print(1)' })).isError)
+  const py = await call('ue_python', { code: 'print(1)' }, yes)
+  assert.ok(!py.isError && bridge.state.calls.some((c) => /^py ".*run-\d+\.py"$/.test(c)), text(py))
 
   // 危险命令：没有确认卡片 → 报错；拒绝 → 不执行；允许 → 执行
   assert.ok((await call('ue_console', { command: 'quit' })).isError)
@@ -201,7 +268,7 @@ try {
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
-  console.log(`ue 冒烟测试通过：13 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：15 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()

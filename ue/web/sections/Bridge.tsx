@@ -136,7 +136,7 @@ export function Bridge() {
                 ]}
               />
             </ui.Field>
-            <ui.Field label={t('资源')} hint={t('DataTable、DataAsset、蓝图默认值')}>
+            <ui.Field label={t('资源')} hint={t('改 DataTable、DataAsset、蓝图的默认值、成员和图表')}>
               <ui.Select
                 value={form.perms.asset}
                 onChange={(e: { target: { value: string } }) =>
@@ -146,6 +146,36 @@ export function Bridge() {
                   { value: 'ask', label: t('可改，保存前问我') },
                   { value: 'save', label: t('直接保存') },
                   { value: 'read', label: t('只读') },
+                ]}
+              />
+            </ui.Field>
+            <ui.Field label={t('结构性操作')} hint={t('新建、复制、改名和移动资源；删除每次都问你')}>
+              <ui.Select
+                value={form.perms.struct}
+                onChange={(e: { target: { value: string } }) =>
+                  void saveSettings({
+                    perms: { ...form.perms, struct: e.target.value as UeProject['perms']['struct'] },
+                  })
+                }
+                options={[
+                  { value: 'ask', label: t('每次问我') },
+                  { value: 'allow', label: t('允许') },
+                  { value: 'read', label: t('不允许') },
+                ]}
+              />
+            </ui.Field>
+            <ui.Field
+              label={t('执行 Python')}
+              hint={t('兜底用：在编辑器里跑任意脚本，没有撤回；开了也每次问你，项目要启用 Python 插件')}
+            >
+              <ui.Select
+                value={form.perms.python ? 'on' : 'off'}
+                onChange={(e: { target: { value: string } }) =>
+                  void saveSettings({ perms: { ...form.perms, python: e.target.value === 'on' } })
+                }
+                options={[
+                  { value: 'off', label: t('不允许') },
+                  { value: 'on', label: t('允许，每次问我') },
                 ]}
               />
             </ui.Field>

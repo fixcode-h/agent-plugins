@@ -23,8 +23,11 @@ namespace AgentPanel
 	/** 不区分大小写的前缀匹配（Actor、对象、资源名的搜索都按前缀，用户 2026-11-10 定） */
 	AGENTPANELBRIDGE_API bool StartsWithNoCase(const FString& S, const FString& Prefix);
 
-	/** 按路径找对象：完整对象路径；找不到时按资源加载（编辑器、后台编辑器里能读没打开的资源）；蓝图资源换成它的类默认对象 */
-	AGENTPANELBRIDGE_API UObject* FindObjectByPath(const FString& Path, bool bLoad, FString& Error);
+	/**
+	 * 按路径找对象：完整对象路径；找不到时按资源加载（编辑器、后台编辑器里能读没打开的资源）。
+	 * 蓝图资源默认换成它的类默认对象（读改属性看的是类默认值）；bKeepBlueprint 为真时给蓝图资源本身（读图表、变量定义、组件树用）
+	 */
+	AGENTPANELBRIDGE_API UObject* FindObjectByPath(const FString& Path, bool bLoad, FString& Error, bool bKeepBlueprint = false);
 
 	/** 属性路径解析的结果：Prop 是最后一段的属性，Value 指向它的值，Owner 是值所在的对象（改资源时标脏、做撤销用） */
 	struct FResolved
