@@ -1,7 +1,9 @@
 // 编辑器模块的操作：DataTable 行编辑、资源保存 / 放弃改动 / 列出改过的、PIE、Live Coding、在编辑器里打开资源、编辑器视口截图。
+// 资源通用层和蓝图读写在同目录的 AgentPanelAssetOps.cpp、AgentPanelBlueprint*.cpp（共用的东西在 AgentPanelEditorShared.h）。
 // 后台编辑器（-run=AgentPanel，见 AgentPanelCommandlet）也加载这个模块，所以资源写入在编辑器没开时同样可用。
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
+#include "AgentPanelEditorShared.h"
 
 #include "DataTableEditorUtils.h"
 #include "Editor.h"
@@ -21,6 +23,7 @@
 #endif
 
 using namespace AgentPanel;
+using namespace AgentPanelEd;
 
 namespace
 {
@@ -32,19 +35,6 @@ namespace
 			Error = TEXT("这不是 DataTable");
 		}
 		return DT;
-	}
-
-	void NoteDirty(UObject* Obj)
-	{
-		Obj->MarkPackageDirty();
-		DirtyPackages().Add(Obj->GetOutermost()->GetName());
-	}
-
-	/** 改过的包对应的磁盘文件（面板保存前先在 P4 里签出它们） */
-	FString PackageFile(UPackage* Pkg)
-	{
-		const FString Ext = Pkg->ContainsMap() ? FPackageName::GetMapPackageExtension() : FPackageName::GetAssetPackageExtension();
-		return FPaths::ConvertRelativePathToFull(FPackageName::LongPackageNameToFilename(Pkg->GetName(), Ext));
 	}
 
 	UPackage* PackageOf(const FString& Name)
@@ -102,6 +92,8 @@ static void RegisterEditorOps()
 			return false;
 		}
 		Out->SetField(TEXT("prev"), ToJson(R.Prop, R.Value, 0));
+		// 包进编辑器事务：编辑器里 Ctrl+Z 能撤，ue_undo 按 tx 撤同一步
+		FTx Tx(FString::Printf(TEXT("%s %s.%s"), *DT->GetName(), *RowName.ToString(), *Str(A, TEXT("column"))));
 		DT->Modify();
 		FDataTableEditorUtils::BroadcastPreChange(DT, FDataTableEditorUtils::EDataTableChangeInfo::RowData);
 		const bool bOk = FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error);
@@ -109,6 +101,11 @@ static void RegisterEditorOps()
 		FDataTableEditorUtils::BroadcastPostChange(DT, FDataTableEditorUtils::EDataTableChangeInfo::RowData);
 		NoteDirty(DT);
 		Out->SetField(TEXT("value"), ToJson(R.Prop, R.Value, 0));
+		FString TxError;
+		if (Tx.IsValid() && Tx.Finish(true, TxError))
+		{
+			Out->SetStringField(TEXT("tx"), Tx.Id);
+		}
 		return bOk;
 	});
 
@@ -170,6 +167,8 @@ static void RegisterEditorOps()
 			O->SetStringField(TEXT("package"), Name);
 			O->SetStringField(TEXT("file"), File);
 			O->SetBoolField(TEXT("readOnly"), IFileManager::Get().IsReadOnly(*File));
+			// 还没存过盘的新资源：P4 项目保存后要 p4 add
+			O->SetBoolField(TEXT("isNew"), !IFileManager::Get().FileExists(*File));
 			Items.Add(MakeShared<FJsonValueObject>(O));
 		}
 		Out->SetArrayField(TEXT("items"), Items);
@@ -360,6 +359,9 @@ public:
 	{
 		// 运行时模块的服务在引擎初始化后起；编辑器的操作先登记好，起服务时一起可用
 		RegisterEditorOps();
+		RegisterAssetOps();
+		RegisterBlueprintReadOps();
+		RegisterBlueprintEditOps();
 	}
 };
 

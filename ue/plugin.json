@@ -1,9 +1,9 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.1.6",
+  "version": "0.2.1",
   "icon": "gamepad",
-  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查和调数值。",
+  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
   "api": 2,
@@ -64,6 +64,7 @@
   ],
   "skillGuide": {
     "ue-runtime-debug": "在正在运行的 UE 里排查 Bug、看和改运行时数值、跑 GM、读 DataTable 和资源时（配合 ue_* 工具）",
+    "ue-asset-authoring": "读懂或修改 UE 的蓝图和资源时：看图表和引用关系、按操作列表改蓝图并编译、新建复制改名删除资源（配合 ue_asset、ue_blueprint）",
     "ue-perf-analysis": "排查 UE 的卡顿、帧率低、内存高和内存泄漏，或者分析 CSV Profiler、memreport 文件时（配合 ue_perf、ue_capture）"
   },
   "agents": [
@@ -78,6 +79,18 @@
         "skills": ["ue-runtime-debug", "ue-perf-analysis"],
         "instructions": "你是 UE 运行时调试助手，按 ue-runtime-debug 技能工作：先用 ue_status 看进程和世界，再定位对象、读属性、看日志，用证据（属性值、日志行、截图）说明问题在哪。\n\n- 先在运行时验证（ue_set、ue_gm、ue_console），确认有效后再改资源（ue_asset）或代码；资源保存会请用户确认。\n- 多人游戏：同步属性在服务器世界改，客户端改会被盖掉。\n- 运行时改过的值在结束前列出来，问用户要不要 ue_undo 撤回。\n- 性能和内存问题按 ue-perf-analysis 技能做：用 ue_perf 抓、ue_capture 分析，不直接读抓取文件。\n- 工具报错原样告诉用户，不绕过权限。"
       }
+    },
+    {
+      "key": "ue-asset",
+      "category": "开发",
+      "agent": {
+        "name": "UE 资源",
+        "description": "读写 UE 的资源和蓝图：看蓝图的变量、组件和图表，按操作列表改蓝图并编译，新建、复制、改名资源，查引用关系；先演练再改，保存前请你确认",
+        "icon": "box",
+        "model": "@high",
+        "skills": ["ue-asset-authoring"],
+        "instructions": "你是 UE 资源和蓝图的编辑助手，按 ue-asset-authoring 技能工作：先读（ue_asset describe / refs，ue_blueprint outline / graph），读懂了再改。\n\n- 改蓝图用 ue_blueprint edit 的操作列表，先 dryRun 演练，正式修改后看返回的编译结果，有错按节点 id 接着修。\n- 新建、复制、改名、删除先 dryRun；删除前说明谁在引用它。\n- 改动只在内存里，说明改了什么之后再 ue_asset save；用户不要了就 ue_undo 或 revert。\n- 需要看运行效果时用 ue_editor 开 PIE、ue_log 和 ue_screenshot 验证。\n- 工具报错原样告诉用户，不绕过权限，不用 ue_python 代替有专用工具的操作。"
+      }
     }
   ],
   "mcpServers": ["ue"],
@@ -91,6 +104,8 @@
     "ue_call": "调函数",
     "ue_lua": "执行 Lua",
     "ue_asset": "资源",
+    "ue_blueprint": "蓝图",
+    "ue_python": "执行 Python",
     "ue_log": "日志",
     "ue_screenshot": "截视口",
     "ue_editor": "编辑器",

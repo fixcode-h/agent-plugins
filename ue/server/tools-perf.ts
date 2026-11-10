@@ -1,4 +1,3 @@
-import type { McpResult } from '../../sdk/server.ts'
 import {
   captureCompare,
   captureList,
@@ -9,30 +8,15 @@ import {
   importCapture,
 } from './captures.ts'
 import { BridgeError } from './instances.ts'
-import type { OpCtx } from './ops.ts'
 import { captureStatus, DEFAULT_SECONDS, markCapture, MAX_SECONDS, startCapture, stopCapture } from './perf.ts'
-import { clip, mcpText, t } from './util.ts'
+import { out, str, TARGET, tool } from './toolkit.ts'
+import { t } from './util.ts'
 
 /**
  * 性能和内存分析的两个工具（设计稿「性能与内存分析」第一期）：
  * ue_perf 对着正在运行的 UE 发起抓取，ue_capture 对着抓到的文件做摘要、查询和对比（UE 关了也能用）。
  * 原始文件不直接给 Agent：先摘要、再按条件下钻，结果限长。单独一个文件，tools.ts 只把它拼进工具列表。
  */
-const TARGET = {
-  type: 'object',
-  description: '目标进程：instance 写 PID 或 editor / game / server；不填用 UE 页上选的目标',
-  properties: { instance: { type: ['string', 'number'] }, world: { type: 'string' } },
-}
-
-const out = (data: unknown) => mcpText(clip(typeof data === 'string' ? data : JSON.stringify(data, null, 1)))
-const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
-
-type Handler = (a: Record<string, unknown>, ctx: OpCtx) => Promise<McpResult>
-
-function tool(name: string, description: string, properties: Record<string, unknown>, required: string[], fn: Handler) {
-  return { name, description, properties, required, fn }
-}
-
 const PERF_HELP = `ue_perf：对着正在运行的 UE 抓性能和内存数据。抓到的文件用 ue_capture 分析。
 
 action=start  开始抓取

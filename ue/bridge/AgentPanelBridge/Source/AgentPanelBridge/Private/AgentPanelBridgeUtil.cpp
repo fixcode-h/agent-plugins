@@ -35,7 +35,7 @@ namespace AgentPanel
 		return Prefix.IsEmpty() || S.StartsWith(Prefix, ESearchCase::IgnoreCase);
 	}
 
-	UObject* FindObjectByPath(const FString& Path, bool bLoad, FString& Error)
+	UObject* FindObjectByPath(const FString& Path, bool bLoad, FString& Error, bool bKeepBlueprint)
 	{
 		if (Path.IsEmpty())
 		{
@@ -58,7 +58,11 @@ namespace AgentPanel
 			Error = FString::Printf(TEXT("找不到对象：%s"), *Path);
 			return nullptr;
 		}
-		// 蓝图资源本身没什么可读的，读写的是它生成的类的默认对象（类默认值）
+		// 读改属性时蓝图资源换成它生成的类的默认对象（类默认值）；读图表、变量定义的操作要蓝图本身
+		if (bKeepBlueprint)
+		{
+			return Obj;
+		}
 		if (UBlueprint* BP = Cast<UBlueprint>(Obj))
 		{
 			if (BP->GeneratedClass)

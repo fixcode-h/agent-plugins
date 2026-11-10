@@ -1,6 +1,6 @@
 # UE 插件
 
-按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 15 个 `ue_*` 工具。
+按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 17 个 `ue_*` 工具。
 
 ## 组成
 
@@ -12,7 +12,7 @@
 - **UE 端桥接插件**（`bridge/AgentPanelBridge/`，C++）：添加项目时复制到 `<项目>/Plugins/AgentPanelBridge/`。
   - 进程里起一个只听 127.0.0.1 的 HTTP 服务，名片写在 `Saved/AgentPanel/instances/<PID>.json`。
   - 运行时模块负责控制台、GM、反射读写、日志和截图。
-  - 编辑器模块负责资源写入和保存、PIE 和 Live Coding。
+  - 编辑器模块负责资源读写和保存、蓝图图表读写和编译、PIE 和 Live Coding。
   - 后台编辑器用 `-run=AgentPanel`：编辑器没开时读资源，闲置后自己退出。
   - Shipping 包里没有桥接。
 
@@ -46,6 +46,21 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - 「添加 UE 项目」只列面板里已经添加的项目。
 - 只有接入了的项目里的 Agent 对话会挂工具。聊天和设计模式的对话不挂。
 
+## 资源和蓝图
+
+设计和实现进度见 [docs/asset-blueprint-design.md](docs/asset-blueprint-design.md)。
+
+- **地址**：`/Game/BP_Hero` 在 `ue_get` / `ue_set` 里是类默认值，在 `ue_blueprint` / `ue_asset` 里是蓝图资源本身。
+- **看**：`ue_asset` 的 `describe`（摘要）、`export`（整份属性和内嵌子对象）、`refs`（它用了谁、谁用了它）、`validate`。
+- **蓝图由粗到细读**：`ue_blueprint outline`（变量、组件、各张图、编译状态）→ `graph`（一张图的伪代码，行尾带节点 id；`format=json` 给节点和连线）→ `graph node=<id>`（一个节点的全部引脚）。`ue_find kind=node` 跨蓝图搜节点。
+- **改蓝图**：`ue_blueprint edit` 接受操作列表（变量、函数、接口、父类、组件、节点和连线），整批在一个编辑器事务里，任一步失败整批取消；`dryRun=true` 演练后取消。改完自动编译，返回错误和对应的节点 id、受影响的子类和调用方。要放的节点用 `node_search` 查，候选项和编辑器右键菜单同一个来源。
+- **结构性操作**：`ue_asset` 的 `create`、`duplicate`、`rename`（也用来移动）、`delete`。删除先查引用，有引用方时拒绝并列出。
+- **撤回**：蓝图操作列表和 DataTable 改单元格进编辑器的撤销栈，编辑器里能 Ctrl+Z，Agent 用 `ue_undo`；要从最近一步按顺序撤。
+- **权限**（UE 页「桥接与权限」）：改内容跟随「资源」；新建、复制、改名是「结构性操作」，默认每次问；删除每次都问；`ue_python` 默认关，开了也每次问。保存照旧确认，P4 项目先签出、新文件 `add`、删除的 `delete`，都进默认变更列表不提交。
+- **多个对话**：另一个对话改过、还没保存的资源，后来的对话改它时直接报错。
+- **网页**：资源页选中蓝图后有「蓝图」页（大纲和伪代码，点节点 id 看引脚），所有资源都有「摘要与引用」页。网页上不改图，只提供编译。
+- **`ue_python`**：代码写成临时文件，用控制台的 `py` 命令执行，项目要启用引擎的 Python Editor Script Plugin。桥接不依赖 Python 模块。
+
 ## 读改属性
 
 - 运行时对象的搜索结果分「运行时实例 / 资源 / 类」三组。改资源只影响以后新建的对象，要看到正在显示的界面变化，改运行时实例。
@@ -75,6 +90,8 @@ C++ 部分还没有在真实引擎（5.4 / 5.5 / 5.6）上编译和实测。面�
 ```bash
 npm run build -- ue && node ue/scripts/smoke.mjs
 ```
+
+资源和蓝图读写（桥接 1.2.0）新增的待验证点列在 [docs/asset-blueprint-design.md](docs/asset-blueprint-design.md) 的「要在真实引擎上验证的」。
 
 需要在真实引擎上确认的重点：
 

@@ -1,4 +1,4 @@
-import type { McpCallContext, McpResult, McpTool } from '../../sdk/server.ts'
+import type { McpCallContext, McpTool } from '../../sdk/server.ts'
 import { clearLogs, logTail, projectState, runMacro, undo } from './actions.ts'
 import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { readHistory } from './history.ts'
@@ -9,28 +9,14 @@ import { parseLuaPath } from './luapath.ts'
 import { getProject } from './registry.ts'
 import { PERF_DEFS } from './tools-perf.ts'
 import type { Target } from './types.ts'
-import { clip, mcpText } from './util.ts'
+import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
+import { out, str, TARGET, tool } from './toolkit.ts'
+import { mcpText } from './util.ts'
 
 /**
- * 给 Agent 的 15 个工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
+ * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
  * 每次调用按对话所在项目找登记；出错原样返回（面板硬规则：不悄悄重试）。结果先摘要、再细节，并限长。
  */
-const TARGET = {
-  type: 'object',
-  description:
-    '目标进程和世界：instance 写 PID 或 editor / game / server / background，world 写 editor、pie0、pie1、game；不填用 UE 页上选的目标',
-  properties: { instance: { type: ['string', 'number'] }, world: { type: 'string' } },
-}
-
-const out = (data: unknown) => mcpText(clip(typeof data === 'string' ? data : JSON.stringify(data, null, 1)))
-const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
-
-type Handler = (a: Record<string, unknown>, ctx: OpCtx) => Promise<McpResult>
-
-function tool(name: string, description: string, properties: Record<string, unknown>, required: string[], fn: Handler) {
-  return { name, description, properties, required, fn }
-}
-
 /** Lua 字段路径：没写返回 undefined（不走 Lua）；写了空串表示起点本身 */
 const luaKeys = (v: unknown) => (v === undefined || v === null ? undefined : parseLuaPath(String(v)))
 
@@ -101,11 +87,13 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
     {
-      kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset'] },
+      kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset', 'node'] },
       prefix: { type: 'string' },
       module: { type: 'string' },
+      query: { type: 'string' },
+      blueprint: { type: 'string' },
       class: { type: 'string' },
       path: { type: 'string' },
       limit: { type: 'number' },
@@ -114,6 +102,15 @@ const DEFS = [
     ['kind'],
     async (a, ctx) => {
       const limit = Number(a.limit) || 50
+      if (a.kind === 'node')
+        return out(
+          await runOp(
+            ctx,
+            'bp.find',
+            { query: a.query ?? a.prefix, blueprint: a.blueprint, dir: a.path || '/Game', limit },
+            150000,
+          ),
+        )
       if (a.kind === 'component') return out(await runOp(ctx, 'components', { path: a.path }))
       if (a.kind === 'object') return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit }))
       if (a.kind === 'lua')
@@ -209,17 +206,28 @@ const DEFS = [
   ),
   tool(
     'ue_asset',
-    '资源和 DataTable：action=rows 读 DataTable（path）的行（filter 筛行名前缀或单元格文字，offset / limit 分页）；row 读一行全部字段；set 改单元格（row + column + value）；add / remove / duplicate / rename 增删行（to 是新行名）；dirty 列出改了没保存的资源；save 保存 packages（P4 先签出，按权限请用户确认）；revert 放弃 packages 的改动；open 在编辑器里打开资源。编辑器没开时读写走后台编辑器。',
+    '资源：通用读写和 DataTable。' +
+      '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验）。' +
+      '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
+      'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
+      '保存：dirty 列出改了没保存的；save 保存 packages（P4 先签出、新文件 add，按权限确认）；revert 放弃改动；open 在编辑器里打开。' +
+      'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器。',
     {
-      action: {
-        type: 'string',
-        enum: ['rows', 'row', 'set', 'add', 'remove', 'duplicate', 'rename', 'dirty', 'save', 'revert', 'open'],
-      },
+      action: { type: 'string', enum: ASSET_ACTIONS },
       path: { type: 'string' },
+      to: { type: 'string' },
+      class: { type: 'string' },
+      parent: { type: 'string' },
+      rowStruct: { type: 'string' },
+      direction: { type: 'string', enum: ['dependencies', 'referencers', 'both'] },
+      hard: { type: 'boolean' },
+      depth: { type: 'number' },
+      file: { type: 'boolean' },
+      force: { type: 'boolean' },
+      dryRun: { type: 'boolean' },
       row: { type: 'string' },
       column: { type: 'string' },
       value: {},
-      to: { type: 'string' },
       filter: { type: 'string' },
       offset: { type: 'number' },
       limit: { type: 'number' },
@@ -228,11 +236,14 @@ const DEFS = [
     },
     ['action'],
     async (a, ctx) => {
+      const generic = await assetAction(a, ctx)
+      if (generic) return generic
       switch (a.action) {
         case 'row':
           return out(await runOp(ctx, 'datatable.row', { path: a.path, row: a.row }))
         case 'set':
           return out(await runOp(ctx, 'datatable.set', { path: a.path, row: a.row, column: a.column, value: a.value }))
+        // duplicate / rename 带 row 时是 DataTable 的行操作，不带时是资源的复制 / 改名（assetAction 已经处理）
         case 'add':
         case 'remove':
         case 'duplicate':
@@ -246,7 +257,7 @@ const DEFS = [
           return out(await runOp(ctx, 'asset.revert', { packages: a.packages ?? [] }, 120000))
         case 'open':
           return out(await runOp(ctx, 'asset.open', { path: a.path }))
-        default:
+        case 'rows':
           return out(
             await runOp(ctx, 'datatable', {
               path: a.path,
@@ -255,6 +266,8 @@ const DEFS = [
               limit: a.limit ?? 50,
             }),
           )
+        default:
+          return mcpText(`不认识的 action：${a.action}`, true)
       }
     },
   ),
@@ -377,7 +390,7 @@ const DEFS = [
   ),
   tool(
     'ue_undo',
-    '撤回本对话做过的运行时修改：不写 id 列出本对话的修改记录（id、改了什么、能不能撤回）；写 id 撤回那一条。',
+    '撤回本对话做过的修改：运行时修改，以及还没保存的资源修改（蓝图操作列表、DataTable 单元格；要从最近的一步开始按顺序撤，中间编辑器里有别的修改时会拒绝）。不写 id 列出本对话的修改记录（id、改了什么、能不能撤回）；写 id 撤回那一条。',
     { id: { type: 'string' } },
     [],
     async (a, ctx) => {
@@ -399,6 +412,7 @@ const DEFS = [
       )
     },
   ),
+  ...ASSET_TOOLS,
 ]
 
 // 性能和内存分析的工具在 tools-perf.ts（单独一个文件，免得和这里的改动挤在一起）
