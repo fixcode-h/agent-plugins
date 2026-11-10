@@ -1,5 +1,5 @@
-import { Search, type LucideIcon } from 'lucide-react'
-import { useState, type CSSProperties, type ReactNode, type Ref } from 'react'
+import { ArrowDown, Search, type LucideIcon } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
 import { useLaunch } from './launch.ts'
 import { useUe } from './ctx.tsx'
@@ -133,15 +133,58 @@ export function Note({
 }
 
 /** 深色终端框（控制台、日志、编译输出）：和面板里命令输出同一组 term-* 颜色 */
-export function Term({ children, className }: { children: ReactNode; className?: string }) {
+/**
+ * 终端样式的输出框。follow：内容变化时跟到最底下（编译这类持续输出的地方用）；
+ * 用户往上翻时暂停跟随，滚回底部附近又恢复，不然看历史输出时会被新行拽下去。
+ * 暂停跟随时右下角出现「滚到最下」，点了回到底部并恢复跟随
+ */
+export function Term({ children, className, follow }: { children: ReactNode; className?: string; follow?: boolean }) {
+  const box = useRef<HTMLDivElement>(null)
+  const stick = useRef(true)
+  const [away, setAway] = useState(false)
+  // 故意不写依赖：每次渲染（新输出到了）都要检查一遍，滚动本身很便宜
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const el = box.current
+    if (follow && el && stick.current) el.scrollTop = el.scrollHeight
+  })
+  const toBottom = () => {
+    const el = box.current
+    if (!el) return
+    stick.current = true
+    setAway(false)
+    el.scrollTop = el.scrollHeight
+  }
   return (
     <div
+      ref={box}
+      onScroll={
+        follow
+          ? (e) => {
+              const el = e.currentTarget
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+              setAway(!stick.current)
+            }
+          : undefined
+      }
       className={h().cn(
         'ue:overflow-auto ue:rounded-xl ue:bg-term-bg ue:px-4 ue:py-3 ue:font-mono ue:text-footnote ue:leading-relaxed ue:text-term-fg',
         className,
       )}
     >
       {children}
+      {follow && away && (
+        // sticky 贴在滚动区底部，高度为 0 不占行，按钮往上挪到可视区右下角
+        <div className="ue:pointer-events-none ue:sticky ue:bottom-0 ue:flex ue:h-0 ue:justify-end">
+          <button
+            type="button"
+            onClick={toBottom}
+            className="ue:pointer-events-auto ue:flex ue:-translate-y-full ue:items-center ue:gap-1 ue:rounded-full ue:border ue:border-line ue:bg-card ue:px-2.5 ue:py-1 ue:font-sans ue:text-caption ue:text-fg ue:shadow-md ue:hover:bg-hover"
+          >
+            <ArrowDown className="ue:h-3.5 ue:w-3.5" /> {t('滚到最下')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
