@@ -50,6 +50,7 @@ export function Props({
   onOpen,
   readOnlyHint,
   cdo,
+  viewOnly,
 }: {
   path: string
   title?: string
@@ -57,6 +58,8 @@ export function Props({
   readOnlyHint?: string
   /** 运行时对象页：选到资源默认值（Default__）时醒目提示，给「改运行中的实例」（界面优化第 2 条） */
   cdo?: boolean
+  /** 只看不改（对话里点 .uasset 弹出的查看窗口，那里没有保存、放弃改动的地方）：不出改值、函数、固定到监视 */
+  viewOnly?: boolean
 }) {
   const { project, target, setTarget } = useUe()
   // 面包屑：在面板里点运行时对象的引用，就在这里往下看，← 回到上一个（以前跳到别的页回不来，界面优化第 8 条）
@@ -90,6 +93,11 @@ export function Props({
   const props = (data.data?.props ?? [])
     .filter((p) => !onlyChanged || changed.has(`${path}|${p.name}`))
     .map((p) => (lockAll ? { ...p, readOnly: true, readOnlyWhy: lockAll } : p))
+    .map((p) =>
+      viewOnly
+        ? { ...p, readOnly: true, readOnlyWhy: p.readOnlyWhy ?? t('这里只看不改，要改去 UE 页的资源分区') }
+        : p,
+    )
   // 分类按属性多少排（多的在前），换行显示不横向滚；改过的属性单独一个「改过的」分类（界面优化第 9 条）
   const menus = useMemo(() => {
     const m = new Map<string, Prop[]>()
@@ -209,17 +217,19 @@ export function Props({
         <KindBadge kind={data.data?.kind} />
         {data.data && <Badge>{data.data.object.class}</Badge>}
         <div className="ue:ml-auto ue:flex ue:items-center ue:gap-1">
-          <ui.Segmented
-            size="sm"
-            label={t('属性 / 函数')}
-            value={tab}
-            onChange={setTab}
-            options={[
-              { id: 'props', label: t('属性') },
-              { id: 'fns', label: t('函数') },
-              ...(hasLua ? [{ id: 'lua' as const, label: 'Lua' }] : []),
-            ]}
-          />
+          {!viewOnly && (
+            <ui.Segmented
+              size="sm"
+              label={t('属性 / 函数')}
+              value={tab}
+              onChange={setTab}
+              options={[
+                { id: 'props', label: t('属性') },
+                { id: 'fns', label: t('函数') },
+                ...(hasLua ? [{ id: 'lua' as const, label: 'Lua' }] : []),
+              ]}
+            />
+          )}
           <ui.IconButton
             icon={Copy}
             label={t('复制路径')}
@@ -412,12 +422,14 @@ export function Props({
                               onClick={() => void set(p, show(changed.get(k))).then(() => changed.delete(k))}
                             />
                           )}
-                          <ui.IconButton
-                            icon={Pin}
-                            label={t('固定到监视')}
-                            size="xs"
-                            onClick={() => void pin(p.name)}
-                          />
+                          {!viewOnly && (
+                            <ui.IconButton
+                              icon={Pin}
+                              label={t('固定到监视')}
+                              size="xs"
+                              onClick={() => void pin(p.name)}
+                            />
+                          )}
                         </div>
                       </div>
                       {open[p.name] && (

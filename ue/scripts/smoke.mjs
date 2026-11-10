@@ -102,6 +102,18 @@ try {
   assert.ok(!undone.isError, text(undone))
   assert.equal(bridge.state.hero.Health, 80)
 
+  // 对话里点 .uasset 的查看窗口：磁盘路径 → 目录 + 名字去找资源（网页再挑名字完全一样的那个）→ 表格
+  const byFile = await api('POST', '/p/p1/op', {
+    op: 'assets',
+    args: { class: '', prefix: path.join(proj, 'Content', 'DT_Items.uasset'), path: '/Game', limit: 50 },
+    target: { instance: 'editor' },
+  })
+  assert.deepEqual(byFile.searched, { path: '/Game', prefix: 'DT_Items' }, JSON.stringify(byFile))
+  const dt = byFile.items.find((x) => x.name === 'DT_Items')
+  assert.equal(dt?.class, 'DataTable')
+  const table = await api('POST', '/p/p1/op', { op: 'datatable', args: { path: dt.path, offset: 0, limit: 50 } })
+  assert.equal(table.total, 3, JSON.stringify(table))
+
   // ----- 资源和蓝图 -----
   const yes = { confirm: async () => ({ allow: true, message: '' }) }
   assert.match(text(await call('ue_blueprint', { action: 'outline', path: bridge.bp })), /"MaxHP"/)

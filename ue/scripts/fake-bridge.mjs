@@ -56,6 +56,11 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       : typeof v === 'object'
         ? { t: 'table', n: Object.keys(v).length }
         : { t: typeof v, v, ...(Number.isInteger(v) ? { int: true } : {}) }
+  const ITEMS = {
+    Sword: { Name: '铁剑', Price: 120, Icon: '/Game/UI/T_Sword.T_Sword', Tags: ['Weapon', 'Melee'] },
+    Potion: { Name: '治疗药水', Price: 30, Icon: '/Game/UI/T_Potion.T_Potion', Tags: ['Consumable'] },
+    Shield: { Name: '木盾', Price: 80, Icon: '/Game/UI/T_Shield.T_Shield', Tags: ['Armor'] },
+  }
   const ops = {
     'lua.objects': (a) => ({
       items:
@@ -234,6 +239,28 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       ],
       total: 2,
     }),
+    // 数据表（对话里点 .uasset 的查看窗口、资源分区的表格）
+    datatable: (a) => {
+      if (a.path !== '/Game/DT_Items.DT_Items') throw new Error(`找不到数据表 ${a.path}`)
+      const f = String(a.filter ?? '').toLowerCase()
+      const rows = Object.entries(ITEMS).filter(([n, v]) => !f || (n + JSON.stringify(v)).toLowerCase().includes(f))
+      return {
+        struct: 'FItemRow',
+        columns: [
+          { name: 'Name', type: 'FText', complex: false },
+          { name: 'Price', type: 'int32', complex: false },
+          { name: 'Icon', type: 'TSoftObjectPtr<UTexture2D>', complex: false },
+          { name: 'Tags', type: 'TArray<FName>', complex: true },
+        ],
+        rows: rows.map(([name, values]) => ({ name, values })),
+        total: rows.length,
+        dirty: false,
+      }
+    },
+    'datatable.row': (a) => {
+      if (!ITEMS[a.row]) throw new Error(`找不到行 ${a.row}`)
+      return { props: Object.entries(ITEMS[a.row]).map(([name, value]) => ({ name, type: typeof value, value })) }
+    },
     // ----- 资源通用层和蓝图（只模拟参数、事务 id 和脏包；真正的图表和编译只有引擎里有） -----
     'asset.describe': (a) => ({
       path: a.path,
