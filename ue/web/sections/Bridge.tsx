@@ -102,7 +102,8 @@ export function Bridge() {
                     onBuild={(force) => void act('build', force ? { force: true } : undefined)}
                   />
                 )}
-                <Term className="ue:max-h-72">
+                {/* 换了作业就重新挂载，跟随状态回到「跟到底」 */}
+                <Term key={job.data.id} follow className="ue:max-h-72">
                   {job.data.log.slice(-400).map((l, i) => (
                     <div
                       key={i}

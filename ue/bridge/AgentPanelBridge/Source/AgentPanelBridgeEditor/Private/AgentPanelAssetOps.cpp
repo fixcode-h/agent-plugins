@@ -1,5 +1,6 @@
 // 资源通用层（和具体资源类型无关）：摘要、整份导出、引用关系、数据校验、新建、复制、改名 / 移动、删除、撤回一步。
 // 写入都只改内存并标脏，保存另走 asset.save；面板服务端负责权限、确认、操作记录和 P4。
+#include "AgentPanelCompat.h"
 #include "AgentPanelEditorShared.h"
 
 #include "AssetRegistry/AssetData.h"
@@ -255,7 +256,7 @@ void AgentPanelEd::RegisterAssetOps()
 
 		// 子对象大纲（内嵌的实例化对象、组件模板等），只列名字和类
 		TArray<UObject*> Subs;
-		GetObjectsWithOuter(Obj, Subs, false);
+		GetObjectsWithOuter(Obj, Subs, AGENT_PANEL_OUTER_NESTED(false));
 		TArray<TSharedPtr<FJsonValue>> SubList;
 		for (UObject* S : Subs)
 		{
@@ -350,7 +351,7 @@ void AgentPanelEd::RegisterAssetOps()
 		else
 		{
 			TArray<UObject*> All;
-			GetObjectsWithOuter(Asset, All, true);
+			GetObjectsWithOuter(Asset, All, AGENT_PANEL_OUTER_NESTED(true));
 			for (UObject* S : All)
 			{
 				if (S && !S->HasAnyFlags(RF_Transient) && OuterDepth(S, Asset) <= Depth)
