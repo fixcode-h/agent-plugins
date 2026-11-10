@@ -1,10 +1,11 @@
 import { ListPlus, Play, Plus, Star, Table, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { GmMacro, GmStore } from '../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useAsk } from '../ask.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, ErrorText, PageHead, SearchBox, TargetPicker, Term, useTargetInfo } from '../ui.tsx'
 
 interface Param {
@@ -47,6 +48,9 @@ export function Gm() {
   const [group, setGroup] = useState('')
   const [q, setQ] = useState('')
   const [sel, setSel] = useState<GmItem>()
+  // 左边分组和宏的宽度可拖；右边 GM 列表至少留 360px
+  const pane = usePane('gm', '208px', 160)
+  const left = useRef<HTMLElement>(null)
   const [args, setArgs] = useState<Record<string, string>>({})
   const [output, setOutput] = useState<{ lines: string[]; error?: string }>()
   const [macro, setMacro] = useState<GmMacro>()
@@ -103,8 +107,12 @@ export function Gm() {
           <ui.EmptyPanel>{t('UE 没在运行：GM 要在运行中的编辑器或游戏里执行')}</ui.EmptyPanel>
         </div>
       ) : (
-        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6 ue:lg:flex-row ue:lg:overflow-hidden">
-          <nav className="ue:flex ue:shrink-0 ue:flex-col ue:gap-0.5 ue:lg:w-52 ue:lg:overflow-auto">
+        <div className={SPLIT_ROW}>
+          <nav
+            ref={left}
+            style={pane.style('calc(100% - 376px)')}
+            className={cn('ue:flex ue:flex-col ue:gap-0.5 ue:lg:overflow-auto', PANE_FIXED)}
+          >
             {[['', items.length] as [string, number], ['__fav', gm.favGm.length] as [string, number], ...groups].map(
               ([g, n]) => (
                 <button
@@ -172,8 +180,9 @@ export function Gm() {
               </div>
             ))}
           </nav>
+          <SplitHandle pane={pane} paneRef={left} reserve={() => 376} />
 
-          <div className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-3">
+          <div className={cn('ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3', PANE_FILL)}>
             <SearchBox placeholder={t('GM 名字前缀')} hint={t('前缀')} onSearch={setQ} allowEmpty />
             <ErrorText>{list.error}</ErrorText>
             {list.loading && !items.length && <p className="ue:text-footnote ue:text-subtle">{t('正在列出 GM…')}</p>}

@@ -13,7 +13,7 @@ import {
   Wand2,
   type LucideIcon,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
 import { AddProject } from './AddProject.tsx'
 import { get, pget, ppost, useLoad } from './api.ts'
@@ -31,6 +31,7 @@ import { Lua } from './sections/Lua.tsx'
 import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
 import { Watch } from './sections/Watch.tsx'
+import { SplitHandle, usePane } from './split.tsx'
 import { Dot } from './ui.tsx'
 
 /**
@@ -91,6 +92,9 @@ export function UePage({ path }: { path: string }) {
   const sub = rest.join('/')
   const projects = useLoad(() => get<{ projects: UeProject[] }>('/projects').then((r) => r.projects), [])
   const [adding, setAdding] = useState(false)
+  // 左边分区栏宽度可拖（md 以上），右边内容至少留 480px
+  const nav = usePane('nav', '232px', 180)
+  const navRef = useRef<HTMLElement>(null)
   const list = projects.data ?? []
   const project = list.find((p) => p.id === pid) ?? list[0]
 
@@ -169,7 +173,11 @@ export function UePage({ path }: { path: string }) {
   return (
     <Ctx.Provider value={ctx}>
       <div className="ue:flex ue:h-full ue:min-h-0 ue:w-full ue:min-w-0 ue:flex-1 ue:flex-col ue:bg-bg ue:md:flex-row">
-        <aside className="ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-58 ue:md:border-r">
+        <aside
+          ref={navRef}
+          style={nav.style('calc(100% - 480px)')}
+          className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r"
+        >
           <ui.Select
             aria-label={t('UE 项目')}
             value={project.id}
@@ -225,6 +233,7 @@ export function UePage({ path }: { path: string }) {
           >
             <Plus className="ue:h-4 ue:w-4" /> {t('添加 UE 项目')}
           </button>
+          <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} edge />
         </aside>
         <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
           <View key={`${project.id}/${section.id}`} />

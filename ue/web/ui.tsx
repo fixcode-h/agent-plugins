@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
@@ -12,16 +12,22 @@ export function Card({
   children,
   className,
   bodyClass,
+  style,
+  ref,
 }: {
   title?: ReactNode
   aside?: ReactNode
   children: ReactNode
   className?: string
   bodyClass?: string
+  style?: CSSProperties
+  ref?: Ref<HTMLElement>
 }) {
   const { cn } = h()
   return (
     <section
+      ref={ref}
+      style={style}
       className={cn('ue:flex ue:min-w-0 ue:flex-col ue:rounded-xl ue:border ue:border-line ue:bg-card', className)}
     >
       {(title || aside) && (

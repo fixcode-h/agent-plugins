@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight, CornerLeftUp } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { op, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 import { Props } from './Props.tsx'
+import { SplitHandle, usePane } from './split.tsx'
 import { Badge } from './ui.tsx'
 
 interface Node {
@@ -24,6 +25,9 @@ interface Node {
 export function Inspect({ path, onOpen }: { path: string; onOpen: (path: string) => void }) {
   const { project, target, go } = useUe()
   const [sel, setSel] = useState(path)
+  // 控件树宽度可拖（md 以上左右排时），右边参数至少留 280px
+  const pane = usePane('umg.tree', '42%', 180)
+  const treeRef = useRef<HTMLDivElement>(null)
   useEffect(() => setSel(path), [path])
   const tree = useLoad(
     () =>
@@ -39,7 +43,11 @@ export function Inspect({ path, onOpen }: { path: string; onOpen: (path: string)
   if (!root) return <Props key={path} path={path} onOpen={onOpen} />
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
-      <div className="ue:flex ue:max-h-[40%] ue:min-h-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-[42%] ue:md:border-r ue:md:border-b-0">
+      <div
+        ref={treeRef}
+        style={pane.style('calc(100% - 280px)')}
+        className="ue:relative ue:flex ue:max-h-[40%] ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+      >
         <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2.5">
           <span className="ue:text-footnote ue:font-medium ue:text-muted">{t('控件树')}</span>
           {parent && (
@@ -57,6 +65,7 @@ export function Inspect({ path, onOpen }: { path: string; onOpen: (path: string)
         <ul className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:py-1">
           <TreeRow node={root} depth={0} sel={sel} onSel={setSel} />
         </ul>
+        <SplitHandle pane={pane} paneRef={treeRef} reserve={() => 280} edge />
       </div>
       <div className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col">
         <Props key={sel} path={sel} onOpen={onOpen} />
