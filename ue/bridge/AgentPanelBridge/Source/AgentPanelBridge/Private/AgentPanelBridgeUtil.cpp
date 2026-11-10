@@ -119,6 +119,45 @@ namespace AgentPanel
 		return Out;
 	}
 
+	bool CanEditProp(const FProperty* Prop, const UObject* Owner, FString* Why)
+	{
+		auto No = [Why](const TCHAR* Reason)
+		{
+			if (Why)
+			{
+				*Why = Reason;
+			}
+			return false;
+		};
+		if (Prop->HasAnyPropertyFlags(CPF_EditConst))
+		{
+			return No(TEXT("只读属性（EditConst）"));
+		}
+		// 结构体成员（DataTable 的列、结构体里的字段）跟着外层属性走，这里只拦 EditConst
+		if (!Prop->GetOwner<UClass>())
+		{
+			return true;
+		}
+		const bool bEdit = Prop->HasAnyPropertyFlags(CPF_Edit);
+		const bool bBlueprintWrite = Prop->HasAnyPropertyFlags(CPF_BlueprintVisible) && !Prop->HasAnyPropertyFlags(CPF_BlueprintReadOnly);
+		if (!bEdit && !bBlueprintWrite)
+		{
+			return No(TEXT("编辑器和蓝图里都不能改的内部状态，只能看"));
+		}
+		if (Owner && !bBlueprintWrite)
+		{
+			if (Owner->IsTemplate() && Prop->HasAnyPropertyFlags(CPF_DisableEditOnTemplate))
+			{
+				return No(TEXT("只能在实例上改，类默认值里不能改"));
+			}
+			if (!Owner->IsTemplate() && Prop->HasAnyPropertyFlags(CPF_DisableEditOnInstance))
+			{
+				return No(TEXT("只能在类默认值里改，实例上不能改"));
+			}
+		}
+		return true;
+	}
+
 	bool ResolvePath(UStruct* Struct, void* Container, UObject* Owner, const FString& Path, FResolved& Out, FString& Error)
 	{
 		TArray<FString> Segs = SplitPath(Path);
@@ -154,6 +193,11 @@ namespace AgentPanel
 			{
 				Error = FString::Printf(TEXT("%s 上没有属性 %s"), CurStruct ? *CurStruct->GetName() : TEXT("?"), *Name);
 				return false;
+			}
+			if (Out.bEditable && !CanEditProp(Prop, Owner, &Out.ReadOnlyWhy))
+			{
+				Out.bEditable = false;
+				Out.ReadOnlyWhy = FString::Printf(TEXT("%s：%s"), *Name, *Out.ReadOnlyWhy);
 			}
 			void* Value = Prop->ContainerPtrToValuePtr<void>(CurContainer);
 			for (const FString& Sub : Subs)
@@ -198,6 +242,7 @@ namespace AgentPanel
 				Out.Prop = Prop;
 				Out.Value = Value;
 				Out.Owner = Owner;
+				Out.Container = Subs.Num() == 0 ? CurContainer : nullptr;
 				return true;
 			}
 			// 还有下一段：结构体往里走，对象引用跟到那个对象上
@@ -235,9 +280,51 @@ namespace AgentPanel
 		return S;
 	}
 
+	/**
+	 * 对象引用一律只给路径，不往里展开。
+	 * 为什么：引擎的 JSON 转换遇到 Instanced 子对象会把整个子对象的属性递归转出来，UMG 控件的 Slot、Lua 绑定的对象
+	 * 互相引用时会一直递归到栈溢出，编辑器直接崩（EXCEPTION_STACK_OVERFLOW，2026-11-10 用户报）。
+	 * 要看子对象，网页上点路径跳过去单独读。
+	 */
+	static TSharedPtr<FJsonValue> PathJson(const UObject* Obj)
+	{
+		if (!Obj)
+		{
+			return MakeShared<FJsonValueNull>();
+		}
+		return MakeShared<FJsonValueString>(Obj->GetPathName());
+	}
+
+	static TSharedPtr<FJsonValue> ExportObjectRef(FProperty* Prop, const void* Value)
+	{
+		if (CastField<FSoftObjectProperty>(Prop))
+		{
+			FString Text;
+			Prop->ExportTextItem_Direct(Text, Value, nullptr, nullptr, PPF_None);
+			return MakeShared<FJsonValueString>(Text);
+		}
+		if (const FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(Prop))
+		{
+			const UObject* Obj = OP->GetObjectPropertyValue(Value);
+			return PathJson(Obj);
+		}
+		if (const FInterfaceProperty* IP = CastField<FInterfaceProperty>(Prop))
+		{
+			const UObject* Obj = IP->GetPropertyValue(Value).GetObject();
+			return PathJson(Obj);
+		}
+		return TSharedPtr<FJsonValue>();
+	}
+
 	TSharedPtr<FJsonValue> ToJson(FProperty* Prop, const void* Value, int32 MaxChars)
 	{
-		TSharedPtr<FJsonValue> V = FJsonObjectConverter::UPropertyToJsonValue(Prop, Value);
+		TSharedPtr<FJsonValue> V = ExportObjectRef(Prop, Value);
+		if (!V.IsValid())
+		{
+			// 结构体、数组、Map 里的对象引用也走同一个回调（引擎把回调一路传给里面每一层）
+			FJsonObjectConverter::CustomExportCallback Cb = FJsonObjectConverter::CustomExportCallback::CreateStatic(&ExportObjectRef);
+			V = FJsonObjectConverter::UPropertyToJsonValue(Prop, Value, 0, 0, &Cb);
+		}
 		if (!V.IsValid())
 		{
 			FString Text;
@@ -302,7 +389,7 @@ namespace AgentPanel
 		return Cpp + Extended;
 	}
 
-	static TSharedPtr<FJsonObject> PropInfo(FProperty* Prop, const void* Container, int32 MaxChars)
+	static TSharedPtr<FJsonObject> PropInfo(FProperty* Prop, const void* Container, int32 MaxChars, const UObject* Owner)
 	{
 		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
 		P->SetStringField(TEXT("name"), Prop->GetAuthoredName());
@@ -312,7 +399,13 @@ namespace AgentPanel
 		P->SetStringField(TEXT("tooltip"), Prop->GetMetaData(TEXT("ToolTip")).Left(300));
 #endif
 		P->SetBoolField(TEXT("replicated"), Prop->HasAnyPropertyFlags(CPF_Net));
-		P->SetBoolField(TEXT("readOnly"), Prop->HasAnyPropertyFlags(CPF_EditConst | CPF_BlueprintReadOnly) && !Prop->HasAnyPropertyFlags(CPF_Edit));
+		FString Why;
+		const bool bEditable = CanEditProp(Prop, Owner, &Why);
+		P->SetBoolField(TEXT("readOnly"), !bEditable);
+		if (!bEditable)
+		{
+			P->SetStringField(TEXT("readOnlyWhy"), Why);
+		}
 		if (const FEnumProperty* EP = CastField<FEnumProperty>(Prop))
 		{
 			TArray<TSharedPtr<FJsonValue>> Names;
@@ -338,7 +431,7 @@ namespace AgentPanel
 		return P;
 	}
 
-	TArray<TSharedPtr<FJsonValue>> ListProps(UStruct* Struct, const void* Container, const FString& Filter, int32 MaxChars)
+	TArray<TSharedPtr<FJsonValue>> ListProps(UStruct* Struct, const void* Container, const FString& Filter, int32 MaxChars, const UObject* Owner)
 	{
 		TArray<TSharedPtr<FJsonValue>> Out;
 		for (TFieldIterator<FProperty> It(Struct); It; ++It)
@@ -349,7 +442,7 @@ namespace AgentPanel
 			{
 				continue;
 			}
-			Out.Add(MakeShared<FJsonValueObject>(PropInfo(Prop, Container, MaxChars)));
+			Out.Add(MakeShared<FJsonValueObject>(PropInfo(Prop, Container, MaxChars, Owner)));
 		}
 		return Out;
 	}
