@@ -148,6 +148,21 @@ try {
   const r = await noUeTools.ue_find.call({ kind: 'actor', prefix: 'BP' }, { taskId: 't2', callId: '1' })
   assert.ok(r.isError && /没在运行/.test(text(r)), text(r))
 
+  // 编译被 Live Coding 挡住：输出里认出来，作业带上 hint（网页按它给处理方式）
+  const lcMsg = 'Unable to build while Live Coding is active. Exit the editor and game, or press Ctrl+Alt+F11'
+  await api('POST', '/p/p2/settings', {
+    buildCmd: process.platform === 'win32' ? `echo ${lcMsg}& exit /b 6` : `echo '${lcMsg}'; exit 6`,
+  })
+  const bj = await api('POST', '/p/p2/build', {})
+  let job
+  for (let i = 0; i < 50; i++) {
+    job = await api('GET', `/jobs/${bj.job}`)
+    if (job.status !== 'running' && job.hint) break
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  assert.equal(job.status, 'failed', JSON.stringify(job))
+  assert.equal(job.hint?.kind, 'live-coding', JSON.stringify(job))
+
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
   console.log(`ue 冒烟测试通过：12 个工具，操作记录 ${hist.items.length} 条`)

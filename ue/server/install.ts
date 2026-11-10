@@ -1,6 +1,7 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { endJob, jobLog, newJob, runningJob, spawnJob } from './jobs.ts'
+import { blockerLines, editorBlockers, LIVE_CODING_BLOCK } from './procs.ts'
 import type { InstallMode, Job, UeProject } from './types.ts'
 import { c, exists, run, t } from './util.ts'
 
@@ -146,17 +147,30 @@ function buildArgs(p: UeProject) {
   return { script, args: [target, plat, 'Development', `-Project=${p.uproject}`, '-WaitMutex', '-NoHotReload'] }
 }
 
-/** 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat */
-export function build(p: UeProject) {
+/**
+ * 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat。
+ * 用 Build.bat 时先查这个引擎的编辑器开没开（procs.ts 写了为什么）：开着就不跑，作业带上 hint，网页给出处理方式；
+ * force 跳过检查（检查认错进程时用）。不管哪种方式，输出里出现 Live Coding 拒绝编译也带上 hint。
+ */
+export async function build(p: UeProject, force = false) {
   const busy = runningJob(p.id, 'build')
   if (busy) return busy
   const job = newJob(p.id, 'build', t('编译项目（含桥接插件）'))
+  const finish = (ok: Promise<boolean>) =>
+    void ok.then(() => {
+      if (!job.hint && job.status === 'failed' && job.log.some((l) => LIVE_CODING_BLOCK.test(l))) {
+        job.hint = { kind: 'live-coding', blockers: [] }
+        for (const l of blockerLines([]).slice(1)) jobLog(job, l)
+      }
+    })
   if (p.buildCmd.trim()) {
-    void spawnJob(
-      job,
-      process.platform === 'win32' ? 'cmd.exe' : 'sh',
-      process.platform === 'win32' ? ['/d', '/s', '/c', p.buildCmd] : ['-c', p.buildCmd],
-      p.root,
+    finish(
+      spawnJob(
+        job,
+        process.platform === 'win32' ? 'cmd.exe' : 'sh',
+        process.platform === 'win32' ? ['/d', '/s', '/c', p.buildCmd] : ['-c', p.buildCmd],
+        p.root,
+      ),
     )
     return job
   }
@@ -171,7 +185,17 @@ export function build(p: UeProject) {
     endJob(job, false)
     return job
   }
+  if (!force) {
+    const { list, error } = await editorBlockers(p)
+    if (error) jobLog(job, t('没能检查编辑器是否开着（照常编译）：{msg}', { msg: error }))
+    if (list.length) {
+      for (const l of blockerLines(list)) jobLog(job, l)
+      job.hint = { kind: 'live-coding', blockers: list }
+      endJob(job, false)
+      return job
+    }
+  }
   if (!p.cpp) jobLog(job, t('纯蓝图项目：编译桥接插件需要本机装好 Visual Studio（含「使用 C++ 的游戏开发」）'))
-  void spawnJob(job, script, args, p.root)
+  finish(spawnJob(job, script, args, p.root))
   return job
 }

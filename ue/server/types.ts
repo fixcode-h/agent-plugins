@@ -152,6 +152,19 @@ export interface Job {
   startedAt: string
   endedAt?: string
   code?: number
+  /** 编译被开着的编辑器挡住（Live Coding）：网页按它给出处理方式，不只显示失败 */
+  hint?: { kind: 'live-coding'; blockers: BuildBlocker[] }
+}
+
+/** 挡住编译的编辑器进程（server/procs.ts） */
+export interface BuildBlocker {
+  pid: number
+  /** 命令行里的 .uproject，看不出来为空 */
+  project: string
+  /** 开的就是这个项目 */
+  same: boolean
+  /** -game 跑的游戏 */
+  game: boolean
 }
 
 /** 一个项目的连接概况（项目切换、概览、对话右栏用） */
