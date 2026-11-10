@@ -2,6 +2,7 @@ import { ensureBackground } from './editor.ts'
 import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
+import { formatLuaPath, type LuaKey } from './luapath.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
 
@@ -46,6 +47,8 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'call':
     case 'log.clear':
     case 'livecoding':
+    case 'lua.set':
+    case 'lua.exec':
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
@@ -105,6 +108,10 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'asset.save':
     case 'asset.revert':
       return ((args.packages as string[]) ?? []).join('\n')
+    case 'lua.set':
+      return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
+    case 'lua.exec':
+      return `${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
     case 'pie':
       return `PIE ${args.action}${args.players ? ` × ${args.players}` : ''}${args.netMode ? ` ${args.netMode}` : ''}`
     default:
@@ -120,7 +127,9 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
   if (kind === 'runtime') {
     if (runtime === 'read')
       throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对运行时是只读，不能执行：{what}', { what }))
-    if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
+    // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
+    if (op === 'lua.exec') await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
+    else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
   } else if (kind === 'asset') {
     if (asset === 'read')
       throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对资源是只读，不能修改：{what}', { what }))
@@ -169,6 +178,9 @@ async function checkout(p: UeProject, card: Card, packages: string[]) {
 function undoOf(op: string, args: Record<string, unknown>, res: Record<string, unknown>, world: string) {
   if (op === 'set' && isRuntimePath(String(args.path)))
     return { undo: { op: 'set', args: { path: args.path, prop: args.prop, value: res.prev, world } } }
+  if (op === 'lua.set')
+    return { undo: { op: 'lua.set', args: { path: args.path, keys: args.keys, value: res.prev ?? null, world } } }
+  if (op === 'lua.exec') return { noUndo: t('执行的 Lua 代码不能自动撤回') }
   if (op === 'cvar.set') return { undo: { op: 'cvar.set', args: { name: args.name, value: res.prev } } }
   if (op === 'log.clear') return { noUndo: t('清空日志不能撤回') }
   if (kindOf(op, args) === 'asset') return { noUndo: t('资源改动用「放弃改动」撤回') }

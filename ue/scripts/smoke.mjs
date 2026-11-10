@@ -1,6 +1,7 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
 // 检查：哪些对话挂工具；12 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
-// 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件。
+// 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
+// UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -76,7 +77,7 @@ try {
   )
   assert.match(runTools.hint, /ue_status/)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 12)
+  assert.equal(Object.keys(tools).length, 13)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
 
   const st = await call('ue_status', {})
@@ -119,6 +120,41 @@ try {
   assert.equal(bridge.state.hero.Health, 80)
   await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask' } })
 
+  // UnLua：找对象、读、改、撤回、执行
+  assert.equal(st2.instances[0].lua.available, true)
+  const luaFound = await call('ue_find', { kind: 'lua', module: 'gameinstance' })
+  assert.match(text(luaFound), /Game\.Core\.GameInstance/)
+  const inst = await call('ue_get', { path: bridge.gi, lua: '' })
+  assert.match(text(inst), /ReceiveBeginPlay/)
+  assert.match(text(inst), /"k": "Gold"/)
+  const glob = await call('ue_get', { lua: '_G.GameSystemManager.Players[2]' })
+  assert.match(text(glob), /bob/)
+  const lset = await call('ue_set', { path: bridge.gi, lua: 'Bag.Size', value: 30 })
+  assert.ok(!lset.isError, text(lset))
+  assert.equal(bridge.state.lua.inst.Bag.Size, 30)
+  assert.ok((await call('ue_set', { path: bridge.gi, lua: 'Bag', value: 1 })).isError)
+  const luaHist = JSON.parse(text(await call('ue_undo', {}))).find((i) => i.op === 'lua.set')
+  assert.ok(luaHist?.undo, JSON.stringify(luaHist))
+  assert.ok(!(await call('ue_undo', { id: luaHist.id })).isError)
+  assert.equal(bridge.state.lua.inst.Bag.Size, 20)
+  assert.ok((await call('ue_lua', { code: 'return 1' })).isError, '没有确认卡片时不能执行 Lua')
+  let asked = ''
+  const ran = await call(
+    'ue_lua',
+    { code: 'print("hello") return 42' },
+    {
+      confirm: async (req) => {
+        asked = req.title
+        return { allow: true, message: '' }
+      },
+    },
+  )
+  assert.ok(!ran.isError, text(ran))
+  assert.match(asked, /Lua/)
+  assert.match(text(ran), /hello/)
+  const bad = await call('ue_lua', { code: 'error("x")' }, { confirm: async () => ({ allow: true, message: '' }) })
+  assert.ok(bad.isError && /boom/.test(text(bad)), text(bad))
+
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })
   assert.match(text(tail), /connection timeout/)
@@ -150,7 +186,7 @@ try {
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
-  console.log(`ue 冒烟测试通过：12 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：13 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()
