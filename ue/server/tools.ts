@@ -96,7 +96,7 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；编辑器没开时自动用后台编辑器）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）。',
     {
       kind: { type: 'string', enum: ['actor', 'component', 'object', 'asset'] },
       prefix: { type: 'string' },

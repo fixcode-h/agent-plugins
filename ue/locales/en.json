@@ -177,10 +177,8 @@
   "签出并保存": "Check out and save",
   "保存": "Save",
   "所有类型": "All types",
-  "资源名开头，例如 DT_Item": "Start of an asset name, e.g. DT_Item",
   "UE 没在运行，正在启动后台编辑器，第一次要 30–60 秒…": "UE isn't running; starting the background editor, the first time takes 30–60 seconds…",
   "共 {n} 个，只列前 {m} 个": "{n} in total, showing the first {m}",
-  "选类型、输入名字开头，点「搜索」": "Choose a type, type the start of a name, and click \"Search\"",
   "没有找到": "Nothing found",
   "选一个资源：DataTable 显示成表格，DataAsset 和蓝图显示默认值": "Choose an asset: DataTables show as tables, DataAssets and Blueprints show their defaults",
   "资源的改动只暂存在编辑器里，点右上「保存」才写回文件；蓝图资源改的是类默认值": "Asset changes are only staged in the editor until you click \"Save\" at the top right; for Blueprint assets you're changing class defaults",
@@ -401,5 +399,10 @@
   "运行日志": "Log",
   "绑定 DataTable": "Bind DataTable",
   "DataTable 资源路径，例如 /Game/Data/DT_Items；留空取消绑定": "DataTable asset path, e.g. /Game/Data/DT_Items. Leave empty to unbind",
-  "确定": "OK"
+  "确定": "OK",
+  "资源名开头（DT_Item），或目录（/Game/Data、磁盘上 Content 里的路径）": "Start of an asset name (DT_Item), or a folder (/Game/Data, or a path inside Content on disk)",
+  "选类型，输入名字开头或目录，点「搜索」": "Choose a type, enter the start of a name or a folder, and click \"Search\"",
+  "在 {path} 下找名字以 {prefix} 开头的": "Searched {path} for names starting with {prefix}",
+  "在 {path} 下找": "Searched {path}",
+  "{p} 不在项目的 Content 目录里": "{p} isn't inside the project's Content folder"
 }

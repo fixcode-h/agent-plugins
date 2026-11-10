@@ -53,13 +53,12 @@ export function Assets() {
   const found = useLoad(
     () =>
       q
-        ? op<{ items: AssetRow[]; total: number; instance: { kind: string } }>(
-            project.id,
-            'assets',
-            { class: q.cls, prefix: q.prefix, path: '/Game', limit: 200 },
-            undefined,
-            15 * 60000,
-          )
+        ? op<{
+            items: AssetRow[]
+            total: number
+            instance: { kind: string }
+            searched?: { path: string; prefix: string }
+          }>(project.id, 'assets', { class: q.cls, prefix: q.prefix, path: '/Game', limit: 200 }, undefined, 15 * 60000)
         : Promise.resolve(undefined),
     [q],
   )
@@ -123,7 +122,7 @@ export function Assets() {
               options={CLASSES.map((c) => ({ value: c, label: c || t('所有类型') }))}
             />
             <SearchBox
-              placeholder={t('资源名开头，例如 DT_Item')}
+              placeholder={t('资源名开头（DT_Item），或目录（/Game/Data、磁盘上 Content 里的路径）')}
               hint={t('前缀')}
               allowEmpty={!!cls}
               onSearch={(p) => setQ({ cls, prefix: p })}
@@ -163,11 +162,20 @@ export function Assets() {
             ))}
             {!q && (
               <li className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">
-                {t('选类型、输入名字开头，点「搜索」')}
+                {t('选类型，输入名字开头或目录，点「搜索」')}
               </li>
             )}
             {found.data && !found.data.items.length && (
-              <li className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</li>
+              <li className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">
+                {t('没有找到')}
+                {found.data.searched && (
+                  <span className="ue:mt-1 ue:block ue:font-mono ue:break-all">
+                    {found.data.searched.prefix
+                      ? t('在 {path} 下找名字以 {prefix} 开头的', found.data.searched)
+                      : t('在 {path} 下找', found.data.searched)}
+                  </span>
+                )}
+              </li>
             )}
           </ul>
         </Card>

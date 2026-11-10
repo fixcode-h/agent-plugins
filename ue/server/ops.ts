@@ -1,3 +1,4 @@
+import { assetQuery } from './asset-query.ts'
 import { ensureBackground } from './editor.ts'
 import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
@@ -199,6 +200,7 @@ export async function runOp(
   if (world && !args.world) args.world = world
   if (op === 'asset.save') await checkout(ctx.project, card, (args.packages as string[]) ?? [])
 
+  if (op === 'assets') return searchAssets(ctx, card, args, timeoutMs)
   if (kind === 'read') {
     const res = await rpc(card, op, args, timeoutMs)
     return { ...res, instance: { pid: card.pid, kind: card.kind } }
@@ -225,4 +227,16 @@ export async function runOp(
     await record(ctx.project.id, { ...base, summary: describe(op, args), ok: false, error: (e as Error).message })
     throw e
   }
+}
+
+/** 资源搜索：前缀框里贴的磁盘路径、/Game 路径先拆成目录 + 名字（见 asset-query.ts），结果里带上实际搜的位置 */
+async function searchAssets(ctx: OpCtx, card: Card, args: Record<string, unknown>, timeoutMs: number) {
+  const q = assetQuery(ctx.project, args.prefix, args.path)
+  let searched = { path: q.path, prefix: q.prefix }
+  let res = await rpc(card, 'assets', { ...args, ...searched }, timeoutMs)
+  if (q.fallback && !Number(res.total)) {
+    searched = q.fallback
+    res = await rpc(card, 'assets', { ...args, ...searched }, timeoutMs)
+  }
+  return { ...res, searched, instance: { pid: card.pid, kind: card.kind } }
 }
