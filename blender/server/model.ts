@@ -54,7 +54,7 @@ const START_TIMEOUT_MS = 90_000
 const BPY_PYTHON = () => process.env.AGENT_PANEL_BLENDER_PYTHON ?? ''
 
 /** 常见的安装位置：用户没填路径、PATH 里也没有时按这些找 */
-function candidates(): string[] {
+export function candidates(): string[] {
   const out: string[] = []
   if (process.platform === 'win32') {
     for (const root of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean) as string[]) {
@@ -71,7 +71,7 @@ function candidates(): string[] {
   return out
 }
 
-function onPath(name: string): string {
+export function onPath(name: string): string {
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
     for (const ext of process.platform === 'win32' ? ['.exe', '.cmd', ''] : ['']) {
       const f = path.join(dir, name + ext)
