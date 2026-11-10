@@ -15,3 +15,12 @@ export interface PluginStatus {
   gatewayError?: string
   error?: string
 }
+
+/** 能装 Blender 扩展的一个 Blender 版本（服务端 addon-install.ts 的 AddonTarget） */
+export interface AddonTarget {
+  version: string
+  exe: string
+  configDir: string
+  installed: string
+  supported: boolean
+}

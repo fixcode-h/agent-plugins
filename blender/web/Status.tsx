@@ -1,11 +1,13 @@
-import { Download, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import type { PluginConfig } from '../../sdk/server.ts'
+import { AddonRow } from './AddonRow.tsx'
 import { h, t } from './host.ts'
 import type { PluginStatus } from './types.ts'
 
 /**
  * 插件页上参数表单下面的运行状态：Blender 找没找到、Gateway 在不在跑，
- * 和 Blender 端扩展（DSH Blender Bridge）的下载。参数改了插件会重启，刷新一下就能看到新状态
+ * 和 Blender 端扩展（DSH Blender Bridge）的一键安装 / 下载。参数改了插件会重启，刷新一下就能看到新状态
  */
 export function Status({
   status,
@@ -15,7 +17,9 @@ export function Status({
   config: PluginConfig
   reload: () => void
 }) {
-  const { cn, ui, api } = h()
+  const { cn, ui } = h()
+  // 点「刷新」时扩展那一行也重新找 Blender
+  const [refresh, setRefresh] = useState(0)
   const { IconButton } = ui
   const s = status as PluginStatus | undefined
   const rows: { title: string; value: string; desc?: string; bad?: boolean }[] = s
@@ -42,7 +46,16 @@ export function Status({
     <section aria-label={t('运行状态')} className="bl:flex bl:flex-col bl:gap-2">
       <div className="bl:flex bl:items-center bl:gap-2">
         <span className="bl:text-footnote bl:text-subtle">{t('运行状态')}</span>
-        <IconButton icon={RefreshCw} label={t('刷新')} size="2xs" className="bl:ml-auto" onClick={reload} />
+        <IconButton
+          icon={RefreshCw}
+          label={t('刷新')}
+          size="2xs"
+          className="bl:ml-auto"
+          onClick={() => {
+            reload()
+            setRefresh((n) => n + 1)
+          }}
+        />
       </div>
       {s?.error && <p className="bl:text-footnote bl:text-danger">{s.error}</p>}
       {!s && <p className="bl:text-footnote bl:text-subtle">{t('检测中…')}</p>}
@@ -64,22 +77,7 @@ export function Status({
             </span>
           </li>
         ))}
-        <li className="bl:flex bl:items-start bl:gap-3 bl:px-3.5 bl:py-2.5">
-          <div className="bl:min-w-0 bl:flex-1">
-            <div className="bl:text-body bl:text-fg">{t('Blender 扩展')}</div>
-            <div className="bl:mt-0.5 bl:text-footnote bl:text-subtle">
-              {t('在 Blender 的「偏好设置 → 获取扩展 → 从磁盘安装」装上，再在 N 面板「DSH Blender Bridge」里点连接')}
-            </div>
-          </div>
-          <a
-            href={api.url('/addon.zip')}
-            download="dsh_blender_bridge.zip"
-            className="bl:flex bl:shrink-0 bl:items-center bl:gap-1.5 bl:rounded-md bl:px-2 bl:py-1 bl:text-body bl:text-accent-text bl:hover:bg-hover"
-          >
-            <Download className="bl:h-3.5 bl:w-3.5" />
-            {t('下载')}
-          </a>
-        </li>
+        <AddonRow refresh={refresh} />
       </ul>
     </section>
   )

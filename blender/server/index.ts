@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { ActivateServer, McpTool, PluginConfig, PluginRun } from '../../sdk/server.ts'
+import { addonTargets, installAddon } from './addon-install.ts'
 import { addonZipPath, dshGateway, dshTools, initDsh, startDsh, stopDsh } from './dsh-host.ts'
 import { MODEL_HINT } from './model-meta.ts'
 import { MODEL_TOOLS } from './model-tools.ts'
@@ -61,7 +62,22 @@ const activate: ActivateServer = async (ctx) => {
     async fetch(req) {
       const url = new URL(req.url)
       const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
+      // 把扩展装进本机 Blender：多个版本时网页先列出来让用户选，再按版本号装
+      if (req.method === 'POST' && parts[0] === 'addon' && parts[1] === 'install' && parts.length === 2) {
+        const body = (await req.json().catch(() => ({}))) as { version?: string }
+        const targets = await addonTargets(String(ctx.config().blenderPath ?? '').trim())
+        const target = targets.find((x) => x.version === body.version)
+        if (!target) return json({ error: ctx.t('没有找到 Blender {version}', { version: body.version ?? '' }) }, 404)
+        try {
+          return json(await installAddon(target, addonZipPath(), ctx.t))
+        } catch (e) {
+          ctx.log.warn('安装 Blender 扩展失败', { version: target.version, error: (e as Error).message })
+          return json({ error: (e as Error).message }, 500)
+        }
+      }
       if (req.method !== 'GET') return json({ error: 'not found' }, 404)
+      if (parts[0] === 'addon' && parts[1] === 'targets' && parts.length === 2)
+        return json(await addonTargets(String(ctx.config().blenderPath ?? '').trim()))
       if (parts[0] === 'status' && parts.length === 1) return json(await blenderStatus())
       if (parts[0] === 'addon.zip' && parts.length === 1) {
         const buf = await readFile(addonZipPath()).catch(() => null)
