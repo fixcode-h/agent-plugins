@@ -4,8 +4,9 @@ import type { GmStore, HistoryItem } from '../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { takePending } from '../pending.ts'
 import { PANE_FIXED, SplitHandle, usePane } from '../split.tsx'
-import { Badge, Card, Confirm, PageHead, SearchBox, TargetPicker, Term } from '../ui.tsx'
+import { Badge, Card, Confirm, PageHead, SearchBox, Term } from '../ui.tsx'
 
 interface CVar {
   name: string
@@ -36,7 +37,8 @@ export function Console() {
   // 右边控制台变量栏的宽度可拖；左边终端至少留 360px
   const pane = usePane('console', '384px', 260)
   const vars = useRef<HTMLElement>(null)
-  const [input, setInput] = useState('')
+  // Ctrl+K 带过来的命令先填进输入框，用户自己回车再执行（控制台命令可能改状态）
+  const [input, setInput] = useState(() => takePending('console') ?? '')
   const [hi, setHi] = useState(-1)
   const [completions, setCompletions] = useState<CVar[]>([])
   const [pending, setPending] = useState<{ cmd: string; rule: string }>()
@@ -112,9 +114,7 @@ export function Console() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <PageHead title={t('控制台')} desc={t('输出只截这条命令执行期间的日志')}>
-        <TargetPicker />
-      </PageHead>
+      <PageHead title={t('控制台')} desc={t('输出只截这条命令执行期间的日志')} />
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:p-6 ue:lg:flex-row ue:lg:gap-0">
         <div className="ue:flex ue:min-h-80 ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-3">
           <Term className="ue:min-h-0 ue:flex-1">
@@ -232,7 +232,7 @@ export function Console() {
                       {r && (
                         <button
                           type="button"
-                          title={t('还原到改之前：{v}', { v: String(r.prev ?? '') })}
+                          title={t('撤回修改，回到 {v}', { v: String(r.prev ?? '') })}
                           onClick={() =>
                             void run(r.id, () =>
                               ppost(project.id, 'undo', { id: r.id }).then(() => {

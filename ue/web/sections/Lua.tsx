@@ -6,7 +6,7 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { LuaTable, luaText, type LuaDesc, type LuaField } from '../Lua.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Card, ErrorText, Note, PageHead, SearchBox, TargetPicker, Term, useTargetInfo } from '../ui.tsx'
+import { Card, ErrorText, Note, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
 
 interface Result extends LuaDesc {
   fields?: LuaField[]
@@ -86,9 +86,7 @@ export function Lua() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <PageHead title="Lua" desc={t('UnLua 的 Lua 环境：执行代码、按路径看全局表里的单例和管理器')}>
-        <TargetPicker />
-      </PageHead>
+      <PageHead title="Lua" desc={t('UnLua 的 Lua 环境：执行代码、按路径看全局表里的单例和管理器')} />
       {body ? (
         <div className="ue:p-6">{body}</div>
       ) : (

@@ -1,7 +1,8 @@
 import { clearLogs, logTail, logTargets, projectState, runMacro, undo } from './actions.ts'
 import { detect } from './detect.ts'
 import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
-import { clearHistory, readHistory } from './history.ts'
+import { badges } from './badges.ts'
+import { clearHistory } from './history.ts'
 import { build, install, uninstall } from './install.ts'
 import { getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
@@ -9,6 +10,7 @@ import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
 import type { GmStore, InstallMode, Target, UeProject } from './types.ts'
+import { historyWithLive, undoAll } from './undo.ts'
 import { json, now, t } from './util.ts'
 
 /**
@@ -129,8 +131,12 @@ export async function handle(req: Request): Promise<Response> {
       case 'POST undo':
         return json(await undo(ctx, String(b.id)))
       case 'GET history':
-        // 只给最近 1000 条：网页一页看不了更多，文件本身最多留 5000 条
-        return json({ items: (await readHistory(project.id)).slice(-1000).reverse() })
+        // 只给最近 1000 条：网页一页看不了更多，文件本身最多留 5000 条；每条带上是否还在生效（能一键撤回）
+        return json({ items: await historyWithLive(project) })
+      case 'POST undo/all':
+        return json(await undoAll(ctx))
+      case 'GET badges':
+        return json(await badges(ctx))
       case 'POST history/clear':
         await clearHistory(project.id)
         return json({ ok: true })

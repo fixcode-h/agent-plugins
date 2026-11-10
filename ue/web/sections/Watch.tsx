@@ -1,9 +1,9 @@
-import { Camera, Pause, Play, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { op, pget, ppost, show, useAction, useLoad } from '../api.ts'
+import { Pause, Play, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { op, pget, ppost, show, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
-import { Card, ErrorText, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
+import { Card, ErrorText, PageHead, useTargetInfo } from '../ui.tsx'
 
 interface Item {
   path: string
@@ -16,13 +16,12 @@ const POINTS = 120
 
 /**
  * 监视：在属性面板里固定的属性每秒刷新一次（一个请求取全部，桥接里每个值最多 500 字符），数值画小折线；
- * 页面不在前台、点了暂停时不刷。下面是截视口
+ * 页面不在前台、点了暂停时不刷。截视口挪到左栏底部的浮层（界面优化第 15 条）
  */
 export function Watch() {
-  const { project, target, sub } = useUe()
+  const { project, target } = useUe()
   const { inst } = useTargetInfo()
   const { ui } = h()
-  const { busy, run } = useAction()
   const local = useLoad(() => pget<{ watch: Item[] }>(project.id, 'local'), [project.id])
   const items = local.data?.watch ?? []
   const [paused, setPaused] = useState(false)
@@ -50,15 +49,6 @@ export function Watch() {
     [items.length, inst?.pid, paused, target.world],
     1000,
   )
-  const [shot, setShot] = useState<{ png: string; width: number; height: number; world: string }>()
-  const capture = () =>
-    run('shot', async () => setShot(await op(project.id, 'screenshot', { maxWidth: 1600 }, target, 20000)))
-  useEffect(() => {
-    if (sub === 'shot' && inst) void capture()
-    // 从概览「截视口」跳过来时截一次
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [sub, inst?.pid])
-
   const remove = (i: number) => {
     const watch = items.filter((_, j) => j !== i)
     local.setData({ watch })
@@ -68,13 +58,9 @@ export function Watch() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('监视')} desc={t('在属性面板里点图钉固定属性，这里每秒刷新')}>
-        <TargetPicker />
         <ui.Button size="sm" variant="secondary" onClick={() => setPaused((p) => !p)}>
           {paused ? <Play className="ue:h-3.5 ue:w-3.5" /> : <Pause className="ue:h-3.5 ue:w-3.5" />}{' '}
           {paused ? t('继续') : t('暂停')}
-        </ui.Button>
-        <ui.Button size="sm" variant="secondary" disabled={!inst || busy === 'shot'} onClick={() => void capture()}>
-          <Camera className="ue:h-3.5 ue:w-3.5" /> {t('截视口')}
         </ui.Button>
       </PageHead>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
@@ -120,15 +106,6 @@ export function Watch() {
             )}
           </ul>
         </Card>
-        {shot && (
-          <Card title={t('视口截图')} aside={`${shot.width}×${shot.height} · ${shot.world}`}>
-            <img
-              src={`data:image/png;base64,${shot.png}`}
-              alt={t('视口截图')}
-              className="ue:block ue:w-full ue:rounded-b-xl"
-            />
-          </Card>
-        )}
       </div>
     </div>
   )

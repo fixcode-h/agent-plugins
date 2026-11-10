@@ -135,6 +135,8 @@ TSharedPtr<FJsonObject> FAgentPanelLog::Tail(uint64 Since, int32 Limit, const FS
 	TSharedPtr<FJsonObject> R = MakeShared<FJsonObject>();
 	R->SetArrayField(TEXT("lines"), Out);
 	R->SetNumberField(TEXT("cursor"), (double)Seq);
+	// 行里的 time 是 FPlatformTime::Seconds，面板拿这个 now 换算成钟表时间（1.1.1 起）
+	R->SetNumberField(TEXT("now"), FPlatformTime::Seconds());
 	R->SetNumberField(TEXT("dropped"), (double)Dropped);
 	R->SetNumberField(TEXT("errors"), Errors);
 	R->SetNumberField(TEXT("warnings"), Warnings);

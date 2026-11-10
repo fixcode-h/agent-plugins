@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react'
+import { Cpu, ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Badge, Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
+import { takePending } from '../pending.ts'
+import { Badge, Card, ErrorText, KindBadge, Note, NotRunning, PageHead, useTargetInfo } from '../ui.tsx'
 
 interface Row {
   path: string
@@ -73,6 +75,16 @@ export function Objects() {
         : Promise.resolve(undefined),
     [q, target.instance],
   )
+  // 资源默认值和类默认收起（界面优化第 1 条）：同名的 Default__ 夹在实例中间最容易点错；选中的就在里面、或者没有实例时自动展开
+  const [others, setOthers] = useState(false)
+  // Ctrl+K 带过来的类名：进来就搜
+  useEffect(() => {
+    const p = takePending('objects')
+    if (p) {
+      setCls(p)
+      setQ({ cls: p, prefix: '', lua: false, mod: '' })
+    }
+  }, [])
   const luaOn = lua && hasLua
   const canSearch = luaOn || !!cls.trim() || !!prefix.trim()
   const search = (c = cls, p = prefix) => {
@@ -83,13 +95,9 @@ export function Objects() {
       <PageHead
         title={t('运行时对象')}
         desc={t('按类和名字找活着的 UObject：子系统、GameInstance、GameState、单例管理器…')}
-      >
-        <TargetPicker />
-      </PageHead>
+      ></PageHead>
       {!inst ? (
-        <div className="ue:p-6">
-          <ui.EmptyPanel>{t('UE 没在运行：运行时对象要在运行中的编辑器或游戏里找；资源在「资源」里看')}</ui.EmptyPanel>
-        </div>
+        <NotRunning icon={Cpu} what={t('运行时对象要在运行中的编辑器或游戏里找；资源在「资源」里看。')} />
       ) : (
         <div className={SPLIT_ROW}>
           <Card
@@ -171,40 +179,86 @@ export function Objects() {
               )}
             </form>
             <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-1.5">
-              {KINDS.map((k) => {
-                const rows = (found.data?.items ?? []).filter((o) => kindOf(o) === k.id)
-                if (!rows.length) return null
-                return (
-                  <section key={k.id} className="ue:mb-2">
-                    <div className="ue:flex ue:items-baseline ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1" title={k.hint()}>
-                      <span className="ue:text-footnote ue:font-medium ue:text-muted">{k.label()}</span>
-                      <span className="ue:text-caption ue:text-subtle">{rows.length}</span>
-                    </div>
-                    <ul>
-                      {rows.map((o) => (
-                        <li key={o.path}>
-                          <button
-                            type="button"
-                            onClick={() => go('objects', o.path)}
-                            className={cn(
-                              'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
-                              sub === o.path && 'ue:bg-sel',
-                            )}
-                          >
-                            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
-                              <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
-                              {o.module && <Badge tone="accent">{o.module}</Badge>}
-                            </span>
-                            <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
-                              {o.class} · {o.path}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
+              {(() => {
+                const items = found.data?.items ?? []
+                const inst = items.filter((o) => kindOf(o) === 'instance')
+                const rest = items.filter((o) => kindOf(o) !== 'instance')
+                const nAsset = rest.filter((o) => kindOf(o) === 'asset').length
+                const show = others || !inst.length || rest.some((o) => o.path === sub)
+                const row = (o: Row) => (
+                  <li key={o.path}>
+                    <button
+                      type="button"
+                      onClick={() => go('objects', o.path)}
+                      className={cn(
+                        'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
+                        sub === o.path && 'ue:bg-sel',
+                      )}
+                    >
+                      <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+                        <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                        {o.module && <Badge tone="accent">{o.module}</Badge>}
+                      </span>
+                      <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
+                        {o.class} · {o.path}
+                      </span>
+                    </button>
+                  </li>
                 )
-              })}
+                const head = (id: (typeof KINDS)[number]['id'], n: number) => {
+                  const k = KINDS.find((x) => x.id === id)!
+                  return (
+                    <div className="ue:flex ue:items-center ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1" title={k.hint()}>
+                      <KindBadge kind={id} />
+                      <span className="ue:truncate ue:text-caption ue:text-subtle">
+                        {n} · {k.hint()}
+                      </span>
+                    </div>
+                  )
+                }
+                return (
+                  <>
+                    {inst.length > 0 && (
+                      <section className="ue:mb-2">
+                        {head('instance', inst.length)}
+                        <ul>{inst.map(row)}</ul>
+                      </section>
+                    )}
+                    {rest.length > 0 && inst.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setOthers((v) => !v)}
+                        aria-expanded={show}
+                        className="ue:mx-1 ue:mb-2 ue:flex ue:w-[calc(100%-0.5rem)] ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-dashed ue:border-line-strong ue:px-2.5 ue:py-2 ue:text-left ue:hover:bg-hover"
+                      >
+                        {show ? (
+                          <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+                        ) : (
+                          <ChevronRight className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+                        )}
+                        <span className="ue:min-w-0">
+                          <span className="ue:block ue:text-footnote ue:text-fg">
+                            {t('资源和默认值 {a} · 类 {c}', { a: nAsset, c: rest.length - nAsset })}
+                          </span>
+                          <span className="ue:block ue:text-caption ue:text-subtle">
+                            {t('改的是以后新建的对象，正在跑的不会变')}
+                          </span>
+                        </span>
+                      </button>
+                    )}
+                    {show &&
+                      (['asset', 'class'] as const).map((id) => {
+                        const rows = rest.filter((o) => kindOf(o) === id)
+                        return rows.length ? (
+                          <section key={id} className="ue:mb-2">
+                            {head(id, rows.length)}
+                            <ul>{rows.map(row)}</ul>
+                          </section>
+                        ) : null
+                      })}
+                  </>
+                )
+              })()}
               {found.data && !found.data.items.length && (
                 <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</p>
               )}
@@ -213,7 +267,7 @@ export function Objects() {
           <SplitHandle pane={pane} paneRef={left} reserve={() => 376} />
           <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
             {sub ? (
-              <Inspect key={sub} path={sub} onOpen={(p) => go(p.startsWith('/Game') ? 'assets' : 'objects', p)} />
+              <Inspect key={sub} path={sub} cdo onOpen={(p) => go(p.startsWith('/Game') ? 'assets' : 'objects', p)} />
             ) : (
               <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">{t('选中对象后在这里看和改属性')}</p>
             )}

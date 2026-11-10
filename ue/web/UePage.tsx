@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
 import { AddProject } from './AddProject.tsx'
 import { get, pget, ppost, useLoad } from './api.ts'
-import { Ctx, type UeCtx } from './ctx.tsx'
+import { Ctx, type Badges, type UeCtx } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
 import { Actors } from './sections/Actors.tsx'
@@ -32,7 +32,10 @@ import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
 import { Watch } from './sections/Watch.tsx'
 import { SplitHandle, usePane } from './split.tsx'
-import { Dot } from './ui.tsx'
+import { usePendingPie } from './launch.ts'
+import { Jump } from './Jump.tsx'
+import { ShotDialog } from './Shot.tsx'
+import { NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
 
 /**
  * UE 管理页（设计文档 4.2，图 1）：左栏切项目和分区，右边是分区内容。地址 #/plugin/ue/main/<项目>/<分区>/<子位置>，
@@ -69,24 +72,8 @@ const SECTIONS: Section[] = [
   { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
 ]
 
-function connLine(s: ProjectState | undefined) {
-  if (!s) return { tone: 'muted' as const, text: t('检测中…') }
-  const live = s.instances.filter((i) => i.kind !== 'background')
-  if (!s.bridge) return { tone: 'warn' as const, text: t('还没装桥接插件') }
-  if (!live.length)
-    return { tone: 'muted' as const, text: s.background.running ? t('UE 没在运行 · 后台编辑器在线') : t('UE 没在运行') }
-  const pie = live.some((i) => i.worlds.some((w) => w.type === 'PIE'))
-  const bad = live.filter((i) => !i.online)
-  if (bad.length) return { tone: 'danger' as const, text: t('{n} 个进程连不上', { n: bad.length }) }
-  const ed = live.some((i) => i.kind === 'editor')
-  return {
-    tone: 'ok' as const,
-    text: (ed ? t('编辑器已连接') : t('游戏已连接')) + (pie ? ` · ${t('PIE 运行中')}` : ''),
-  }
-}
-
 export function UePage({ path }: { path: string }) {
-  const { cn, ui, hooks } = h()
+  const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
   const [pid, sectionId = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
   const sub = rest.join('/')
@@ -107,6 +94,25 @@ export function UePage({ path }: { path: string }) {
   )
   // 选目标：内存里记 PID（同类进程有多个时分得开），项目登记里存类型和世界
   const [pidTarget, setPidTarget] = useState<number>()
+  const [shot, setShot] = useState(false)
+  const [jump, setJump] = useState(false)
+  // 左栏的数字：5 秒一次，一个请求取全（服务端 badges.ts）
+  const badges = useLoad(
+    () => (project ? pget<Badges>(project.id, 'badges') : Promise.resolve(undefined)),
+    [project?.id],
+    5000,
+  )
+  // Ctrl+K（Mac 上 Cmd+K）打开跳转；只在 UE 页里生效
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setJump(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   useEffect(() => {
     setPidTarget(undefined)
   }, [project?.id])
@@ -127,11 +133,15 @@ export function UePage({ path }: { path: string }) {
             section: sectionId,
             sub,
             go,
+            badges: badges.data,
+            reloadBadges: () => void badges.reload(),
+            openShot: () => setShot(true),
+            openJump: () => setJump(true),
           }
         : null,
     // go、list 每次渲染都是新的，按数据变化重建就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [project, state.data, pidTarget, sectionId, sub],
+    [project, state.data, pidTarget, sectionId, sub, badges.data],
   )
 
   if (projects.loading && !projects.data)
@@ -166,37 +176,36 @@ export function UePage({ path }: { path: string }) {
   // 有条件的分区：条件不满足时不列，但地址直接指向它时照样打开（页面里会说明为什么用不了）
   const visible = SECTIONS.filter((s) => !s.when || s.when(state.data) || s.id === sectionId)
   const section = SECTIONS.find((s) => s.id === sectionId) ?? SECTIONS[0]
-  const conn = connLine(state.data)
-  const errs = state.data ? undefined : state.error
   const groups = [...new Set(visible.map((s) => s.group()))]
   const View = section.View
+  const b = badges.data
+  const counts: Record<string, Parameters<typeof NavItem>[0]['count']> = {
+    logs: b?.errors
+      ? { text: String(b.errors), tone: 'danger', title: t('本次日志 {n} 个错误', { n: b.errors }) }
+      : undefined,
+    watch: b?.watch ? { text: String(b.watch) } : undefined,
+    history: b?.undoable
+      ? { text: t('{n} 可撤', { n: b.undoable }), title: t('{n} 处运行时修改还在生效，可以撤回', { n: b.undoable }) }
+      : undefined,
+    assets: b?.dirty ? { text: t('{n} 未存', { n: b.dirty }), tone: 'warn' } : undefined,
+  }
   return (
     <Ctx.Provider value={ctx}>
+      <PendingPie />
       <div className="ue:flex ue:h-full ue:min-h-0 ue:w-full ue:min-w-0 ue:flex-1 ue:flex-col ue:bg-bg ue:md:flex-row">
         <aside
           ref={navRef}
           style={nav.style('calc(100% - 480px)')}
-          className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r"
+          className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
         >
-          <ui.Select
-            aria-label={t('UE 项目')}
-            value={project.id}
-            options={[
-              ...list.map((p) => ({ value: p.id, label: `${p.name} · UE ${p.engine.version}` })),
-              { value: '__add__', label: t('＋ 添加 UE 项目') },
-            ]}
-            onChange={(e: { target: { value: string } }) =>
-              e.target.value === '__add__'
-                ? setAdding(true)
-                : route.go('main', `${encodeURIComponent(e.target.value)}/${section.id}`)
-            }
+          <ProjectCard
+            list={list}
+            onAdd={() => setAdding(true)}
+            onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}
           />
-          <div className="ue:flex ue:items-center ue:gap-2 ue:px-1 ue:text-footnote ue:text-muted" title={errs}>
-            <Dot tone={conn.tone} />
-            <span className="ue:truncate">{conn.text}</span>
-          </div>
+          <TargetCard />
           <nav
-            className="ue:flex ue:gap-1 ue:overflow-x-auto ue:md:mt-2 ue:md:flex-col ue:md:overflow-visible"
+            className="ue:flex ue:gap-1 ue:overflow-x-auto ue:md:mt-1 ue:md:flex-col ue:md:overflow-visible"
             aria-label={t('UE 页分区')}
           >
             {groups.map((g) => (
@@ -204,35 +213,20 @@ export function UePage({ path }: { path: string }) {
                 <div className="ue:hidden ue:px-2 ue:pt-3 ue:pb-1 ue:text-caption ue:text-subtle ue:md:block">{g}</div>
                 {visible
                   .filter((s) => s.group() === g)
-                  .map((s) => {
-                    const Icon = s.icon
-                    const on = s.id === section.id
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => go(s.id)}
-                        aria-current={on ? 'page' : undefined}
-                        className={cn(
-                          'ue:flex ue:h-8 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-2.5 ue:rounded-lg ue:px-2.5 ue:text-body ue:whitespace-nowrap',
-                          on ? 'ue:bg-active ue:text-fg' : 'ue:text-muted ue:hover:bg-hover ue:hover:text-fg',
-                        )}
-                      >
-                        <Icon className="ue:h-4 ue:w-4 ue:shrink-0" strokeWidth={1.75} />
-                        {s.label()}
-                      </button>
-                    )
-                  })}
+                  .map((s) => (
+                    <NavItem
+                      key={s.id}
+                      icon={s.icon}
+                      label={s.label()}
+                      on={s.id === section.id}
+                      onClick={() => go(s.id)}
+                      count={counts[s.id]}
+                    />
+                  ))}
               </div>
             ))}
           </nav>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="ue:mt-auto ue:hidden ue:h-8 ue:cursor-pointer ue:items-center ue:gap-2.5 ue:rounded-lg ue:px-2.5 ue:text-body ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:md:flex"
-          >
-            <Plus className="ue:h-4 ue:w-4" /> {t('添加 UE 项目')}
-          </button>
+          <SideFoot onShot={() => setShot(true)} onJump={() => setJump(true)} onAdd={() => setAdding(true)} />
           <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} edge />
         </aside>
         <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
@@ -244,6 +238,14 @@ export function UePage({ path }: { path: string }) {
         onOpenChange={setAdding}
         onAdded={(p) => void projects.reload().then(() => route.go('main', encodeURIComponent(p.id)))}
       />
+      {shot && <ShotDialog onClose={() => setShot(false)} />}
+      {jump && <Jump onClose={() => setJump(false)} />}
     </Ctx.Provider>
   )
+}
+
+/** 「启动编辑器并开始 PIE」排着的 PIE：要在 Ctx 里面才拿得到项目和状态 */
+function PendingPie() {
+  usePendingPie()
+  return null
 }

@@ -83,6 +83,11 @@ export interface WebHost {
     useNewAskUser: () => [boolean, (v: boolean) => void]
     /** 插件整页的子位置（插件接口 2）：#/plugin/<插件>/<页面>/<path> */
     usePluginRoute: () => { page: string; path: string; go: (page: string, path?: string) => void }
+    /**
+     * 把一段文字接进对话的输入框草稿再打开那个对话（不直接发送）；没给 taskId 时放进项目新建对话的输入框。
+     * 2026-11-10 加的，旧面板没有：用之前先判断有没有
+     */
+    useToChat?: () => (o: { projectId: string; taskId?: string; text: string }) => void
   }
   ui: {
     Button: Loose
