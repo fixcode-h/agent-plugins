@@ -401,5 +401,7 @@
   "运行日志": "Log",
   "绑定 DataTable": "Bind DataTable",
   "DataTable 资源路径，例如 /Game/Data/DT_Items；留空取消绑定": "DataTable asset path, e.g. /Game/Data/DT_Items. Leave empty to unbind",
-  "确定": "OK"
+  "确定": "OK",
+  "拖动调整宽度": "Drag to resize",
+  "拖动调整宽度，双击恢复默认": "Drag to resize, double-click to reset"
 }

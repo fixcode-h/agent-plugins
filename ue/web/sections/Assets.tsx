@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight, Copy, ExternalLink, Plus, Trash2 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { op, show, useAction, useLoad } from '../api.ts'
 import { useAsk } from '../ask.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, ErrorText, Note, PageHead, SearchBox, kindLabel } from '../ui.tsx'
 
 interface AssetRow {
@@ -50,6 +51,9 @@ export function Assets() {
   const { busy, run } = useAction()
   const [cls, setCls] = useState('DataTable')
   const [q, setQ] = useState<{ cls: string; prefix: string }>()
+  // 左边资源列表宽度可拖；右边表格、属性至少留 420px
+  const pane = usePane('assets', '28%', 220)
+  const left = useRef<HTMLElement>(null)
   const found = useLoad(
     () =>
       q
@@ -113,8 +117,13 @@ export function Assets() {
           </>
         )}
       </PageHead>
-      <div className="ue:grid ue:min-h-0 ue:flex-1 ue:gap-4 ue:overflow-auto ue:p-6 ue:lg:grid-cols-[minmax(260px,1fr)_minmax(420px,2.6fr)] ue:lg:overflow-hidden">
-        <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+      <div className={SPLIT_ROW}>
+        <Card
+          ref={left}
+          className={PANE_FIXED}
+          style={pane.style('calc(100% - 436px)')}
+          bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+        >
           <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3">
             <ui.Select
               size="sm"
@@ -171,7 +180,8 @@ export function Assets() {
             )}
           </ul>
         </Card>
-        <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+        <SplitHandle pane={pane} paneRef={left} reserve={() => 436} />
+        <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
           {!sub ? (
             <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">
               {t('选一个资源：DataTable 显示成表格，DataAsset 和蓝图显示默认值')}

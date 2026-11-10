@@ -1,9 +1,10 @@
 import { Pin, PersonStanding, Puzzle, RefreshCw, X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { op, pget, ppost, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Card, ErrorText, PageHead, SearchBox, TargetPicker, useTargetInfo } from '../ui.tsx'
 
 interface ActorRow {
@@ -36,6 +37,12 @@ export function Actors() {
   const { cn, ui } = h()
   const [q, setQ] = useState('')
   const [actor, comp] = sub.split('|')
+  // 三栏：Actor 列表、组件两栏宽度可拖，属性表占剩下的、至少留 320px
+  const listPane = usePane('actors.list', '26%', 200)
+  const compPane = usePane('actors.comps', '22%', 180)
+  const listRef = useRef<HTMLElement>(null)
+  const compRef = useRef<HTMLElement>(null)
+  const widthOf = (r: { current: HTMLElement | null }) => r.current?.getBoundingClientRect().width ?? 0
   const local = useLoad(() => pget<Local>(project.id, 'local'), [project.id])
   const found = useLoad(
     () =>
@@ -103,8 +110,13 @@ export function Actors() {
           <ui.EmptyPanel>{t('UE 没在运行：Actor 只在运行中的编辑器或游戏里有')}</ui.EmptyPanel>
         </div>
       ) : (
-        <div className="ue:grid ue:min-h-0 ue:flex-1 ue:gap-4 ue:overflow-auto ue:p-6 ue:lg:grid-cols-[minmax(240px,1fr)_minmax(200px,0.9fr)_minmax(320px,1.6fr)] ue:lg:overflow-hidden">
-          <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+        <div className={SPLIT_ROW}>
+          <Card
+            ref={listRef}
+            className={PANE_FIXED}
+            style={listPane.style(`calc(100% - ${compPane.size} - 352px)`)}
+            bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+          >
             <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3">
               <SearchBox
                 placeholder={t('Actor 名字开头，例如 BP_Hero')}
@@ -182,8 +194,12 @@ export function Actors() {
               </div>
             )}
           </Card>
+          <SplitHandle pane={listPane} paneRef={listRef} reserve={() => widthOf(compRef) + 352} />
 
           <Card
+            ref={compRef}
+            className={PANE_FIXED}
+            style={compPane.style(`calc(100% - ${listPane.size} - 352px)`)}
             title={t('组件')}
             aside={
               actor && (
@@ -233,8 +249,9 @@ export function Actors() {
               </button>
             ))}
           </Card>
+          <SplitHandle pane={compPane} paneRef={compRef} reserve={() => widthOf(listRef) + 352} />
 
-          <Card bodyClass="ue:flex ue:min-h-0 ue:flex-col">
+          <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
             {actor ? (
               <Props
                 key={comp || actor}

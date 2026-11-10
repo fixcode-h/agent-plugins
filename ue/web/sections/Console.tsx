@@ -4,6 +4,7 @@ import type { GmStore, HistoryItem } from '../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { PANE_FIXED, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, PageHead, SearchBox, TargetPicker, Term } from '../ui.tsx'
 
 interface CVar {
@@ -32,6 +33,9 @@ export function Console() {
   const { cn, toast } = h()
   const { busy, run } = useAction()
   const [entries, setEntries] = useState<Entry[]>([])
+  // 右边控制台变量栏的宽度可拖；左边终端至少留 360px
+  const pane = usePane('console', '384px', 260)
+  const vars = useRef<HTMLElement>(null)
   const [input, setInput] = useState('')
   const [hi, setHi] = useState(-1)
   const [completions, setCompletions] = useState<CVar[]>([])
@@ -111,7 +115,7 @@ export function Console() {
       <PageHead title={t('控制台')} desc={t('输出只截这条命令执行期间的日志')}>
         <TargetPicker />
       </PageHead>
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:p-6 ue:lg:flex-row">
+      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:p-6 ue:lg:flex-row ue:lg:gap-0">
         <div className="ue:flex ue:min-h-80 ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-3">
           <Term className="ue:min-h-0 ue:flex-1">
             {!entries.length && <div className="ue:text-term-subtle">{t('输入命令回车执行；↑↓ 翻历史，Tab 补全')}</div>}
@@ -200,8 +204,11 @@ export function Console() {
           </form>
         </div>
 
+        <SplitHandle pane={pane} paneRef={vars} side="right" reserve={() => 376} />
         <Card
-          className="ue:max-h-full ue:lg:w-96"
+          ref={vars}
+          className={cn('ue:max-h-full', PANE_FIXED)}
+          style={pane.style('calc(100% - 376px)')}
           bodyClass="ue:flex ue:flex-col ue:min-h-0"
           title={t('控制台变量')}
           aside={query ? t('搜索结果 {n}', { n: cvars.data?.total ?? 0 }) : t('只看改过的')}
