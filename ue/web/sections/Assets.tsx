@@ -1,5 +1,7 @@
-import { ChevronLeft, ChevronRight, Copy, ExternalLink, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, ExternalLink, MessageSquare, Plus, Trash2 } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
+import { useToChat } from '../chat.tsx'
+import { takePending } from '../pending.ts'
 import { op, show, useAction, useLoad } from '../api.ts'
 import { useAsk } from '../ask.tsx'
 import { useUe } from '../ctx.tsx'
@@ -49,8 +51,10 @@ export function Assets() {
   const { project, sub, go, state } = useUe()
   const { cn, ui, toast } = h()
   const { busy, run } = useAction()
-  const [cls, setCls] = useState('DataTable')
-  const [q, setQ] = useState<{ cls: string; prefix: string }>()
+  // Ctrl+K 带过来的路径或名字：按所有类型搜一次（lazy 初始值只取一次，切回来不会再搜）
+  const [pend] = useState(() => takePending('assets'))
+  const [cls, setCls] = useState(pend ? '' : 'DataTable')
+  const [q, setQ] = useState<{ cls: string; prefix: string } | undefined>(pend ? { cls: '', prefix: pend } : undefined)
   // 左边资源列表宽度可拖；右边表格、属性至少留 420px
   const pane = usePane('assets', '28%', 220)
   const left = useRef<HTMLElement>(null)
@@ -131,6 +135,7 @@ export function Assets() {
               options={CLASSES.map((c) => ({ value: c, label: c || t('所有类型') }))}
             />
             <SearchBox
+              initial={pend}
               placeholder={t('资源名开头（DT_Item），或目录（/Game/Data、磁盘上 Content 里的路径）')}
               hint={t('前缀')}
               allowEmpty={!!cls}
@@ -466,6 +471,7 @@ function FragmentRow({ children }: { children: ReactNode }) {
 /** 展开的一行：全部字段（结构体、数组按 JSON 展开） */
 function RowDetail({ path, row }: { path: string; row: string }) {
   const { project } = useUe()
+  const chat = useToChat()
   const data = useLoad(
     () => op<{ props: { name: string; type: string; value: unknown }[] }>(project.id, 'datatable.row', { path, row }),
     [path, row],
@@ -476,18 +482,48 @@ function RowDetail({ path, row }: { path: string; row: string }) {
         <ErrorText>{data.error}</ErrorText>
       </div>
     )
+  const props = data.data?.props ?? []
+  // 「发给对话」（界面优化第 16 条）：数据表路径、行名和这一行的全部字段
+  const describe = () =>
+    [
+      `${t('UE 数据表')} ${path}`,
+      `${t('行')} ${row}`,
+      '```json',
+      JSON.stringify(Object.fromEntries(props.map((p) => [p.name, p.value])), null, 2),
+      '```',
+    ].join('\n')
   return (
-    <dl className="ue:grid ue:grid-cols-[minmax(120px,auto)_1fr] ue:gap-x-4 ue:gap-y-1 ue:p-3 ue:text-footnote">
-      {(data.data?.props ?? []).map((p) => (
-        <div key={p.name} className="ue:contents">
-          <dt className="ue:text-muted" title={p.type}>
-            {p.name}
-          </dt>
-          <dd className="ue:font-mono ue:break-all ue:whitespace-pre-wrap ue:text-fg">
-            {typeof p.value === 'object' ? JSON.stringify(p.value, null, 1) : show(p.value)}
-          </dd>
+    <div className="ue:flex ue:flex-col">
+      {chat.available && data.data && (
+        <div className="ue:flex ue:justify-end ue:px-3 ue:pt-2">
+          <LinkBtnChat onClick={() => chat.send(describe())} />
         </div>
-      ))}
-    </dl>
+      )}
+      <dl className="ue:grid ue:grid-cols-[minmax(120px,auto)_1fr] ue:gap-x-4 ue:gap-y-1 ue:p-3 ue:text-footnote">
+        {(data.data?.props ?? []).map((p) => (
+          <div key={p.name} className="ue:contents">
+            <dt className="ue:text-muted" title={p.type}>
+              {p.name}
+            </dt>
+            <dd className="ue:font-mono ue:break-all ue:whitespace-pre-wrap ue:text-fg">
+              {typeof p.value === 'object' ? JSON.stringify(p.value, null, 1) : show(p.value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {chat.dialog}
+    </div>
+  )
+}
+
+function LinkBtnChat({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:text-footnote ue:text-accent-text ue:hover:underline"
+    >
+      <MessageSquare className="ue:h-3 ue:w-3" /> {t('发给对话')}
+    </button>
   )
 }

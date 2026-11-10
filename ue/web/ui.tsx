@@ -1,6 +1,7 @@
-import { Search } from 'lucide-react'
+import { Search, type LucideIcon } from 'lucide-react'
 import { useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
+import { useLaunch } from './launch.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 
@@ -86,7 +87,15 @@ export function PageHead({ title, desc, children }: { title: string; desc?: Reac
   return (
     <header className="ue:flex ue:min-h-16 ue:flex-wrap ue:items-center ue:gap-x-3 ue:gap-y-2 ue:border-b ue:border-line ue:px-6 ue:py-3">
       <h1 className="ue:text-title ue:font-medium ue:text-fg">{title}</h1>
-      {desc && <div className="ue:min-w-0 ue:truncate ue:text-body ue:text-subtle">{desc}</div>}
+      {/* 长路径（.uproject、日志文件）一行放不下时截断，完整的放悬停提示（界面优化第 20 条） */}
+      {desc && (
+        <div
+          className="ue:min-w-0 ue:flex-1 ue:basis-40 ue:truncate ue:text-body ue:text-subtle"
+          title={typeof desc === 'string' ? desc : undefined}
+        >
+          {desc}
+        </div>
+      )}
       <div className="ue:ml-auto ue:flex ue:flex-wrap ue:items-center ue:gap-2">{children}</div>
     </header>
   )
@@ -171,42 +180,20 @@ export function useTargetInfo() {
   return { list, inst, world }
 }
 
-/** 顶栏的「目标」选择：进程 + 世界（设计文档 4.2） */
-export function TargetPicker() {
-  const { setTarget } = useUe()
-  const { list, inst, world } = useTargetInfo()
-  const { Select } = h().ui
-  if (!list.length)
-    return (
-      <span className="ue:flex ue:h-8 ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-line ue:px-2.5 ue:text-body ue:text-subtle">
-        <Dot /> {t('没有运行中的 UE')}
-      </span>
-    )
-  const options = list.flatMap((i) => [
-    { value: `${i.pid}|`, label: `${kindLabel(i.kind)} · ${t('默认世界')}`, group: `${kindLabel(i.kind)} ${i.pid}` },
-    ...i.worlds.map((w) => ({
-      value: `${i.pid}|${w.id}`,
-      label: worldLabel(w),
-      group: `${kindLabel(i.kind)} ${i.pid}`,
-    })),
-  ])
-  return (
-    <div className="ue:flex ue:items-center ue:gap-2">
-      <span className="ue:text-body ue:text-subtle">{t('目标实例')}</span>
-      <Select
-        size="sm"
-        className="ue:w-56"
-        aria-label={t('目标实例')}
-        value={inst ? `${inst.pid}|${world?.id ?? ''}` : ''}
-        options={options}
-        onChange={(e: { target: { value: string } }) => {
-          const [pid, w] = e.target.value.split('|')
-          const i = list.find((x) => x.pid === Number(pid))
-          setTarget(Number(pid), i?.kind ?? '', w ?? '')
-        }}
-      />
-    </div>
-  )
+/** 世界是服务器还是客户端（多人 PIE 时最容易改错边）：单机、编辑器世界不标 */
+export function WorldBadge({ world }: { world: World }) {
+  if (world.netMode === 'ListenServer' || world.netMode === 'DedicatedServer')
+    return <Badge tone="warn">{t('服务器')}</Badge>
+  if (world.netMode === 'Client') return <Badge tone="run">{t('客户端')}</Badge>
+  return null
+}
+
+/** 对象是运行时实例、资源默认值还是类：颜色区分，运行时实例改了马上生效，默认值不影响正在跑的对象 */
+export function KindBadge({ kind }: { kind?: 'instance' | 'asset' | 'class' }) {
+  if (!kind) return null
+  if (kind === 'instance') return <Badge tone="run">{t('运行时实例')}</Badge>
+  if (kind === 'class') return <Badge>{t('类')}</Badge>
+  return <Badge tone="warn">{t('资源默认值')}</Badge>
 }
 
 /** 小号文字按钮（行内的「撤回」「固定」） */
@@ -340,5 +327,55 @@ export function Confirm({
     >
       <div className="ue:text-body ue:leading-relaxed ue:text-fg">{children}</div>
     </Modal>
+  )
+}
+
+/**
+ * UE 没在运行时的空页面：说明 + 直接启动（不用回概览），下面给不开编辑器也能做的事。
+ * 桥接没装时启动了也连不上，按钮换成去「桥接与权限」
+ */
+export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: string }) {
+  const { state, go } = useUe()
+  const { ui } = h()
+  const launch = useLaunch()
+  const link = (label: string, section: string, sub?: string) => (
+    <button
+      type="button"
+      onClick={() => go(section, sub)}
+      className="ue:cursor-pointer ue:text-accent-text ue:hover:underline"
+    >
+      {label}
+    </button>
+  )
+  return (
+    <div className="ue:flex ue:flex-1 ue:items-center ue:justify-center ue:p-6">
+      <div className="ue:flex ue:max-w-lg ue:flex-col ue:items-center ue:gap-3 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:px-8 ue:py-8 ue:text-center">
+        <span className="ue:flex ue:h-11 ue:w-11 ue:items-center ue:justify-center ue:rounded-xl ue:bg-hover ue:text-muted">
+          <Icon className="ue:h-5 ue:w-5" strokeWidth={1.75} />
+        </span>
+        <h2 className="ue:text-heading ue:font-medium ue:text-fg">{t('UE 没在运行')}</h2>
+        <p className="ue:text-body ue:leading-relaxed ue:text-subtle">{what}</p>
+        {state && !state.bridge ? (
+          <ui.Button onClick={() => go('bridge')}>{t('先装桥接插件')}</ui.Button>
+        ) : (
+          <div className="ue:flex ue:flex-wrap ue:justify-center ue:gap-2">
+            <ui.Button disabled={launch.busy} onClick={() => void launch.start(false)}>
+              {t('启动编辑器')}
+            </ui.Button>
+            <ui.Button variant="secondary" disabled={launch.busy} onClick={() => void launch.start(true)}>
+              {t('启动编辑器并开始 PIE')}
+            </ui.Button>
+          </div>
+        )}
+        <p className="ue:flex ue:flex-wrap ue:justify-center ue:gap-x-2 ue:text-footnote ue:text-subtle">
+          {t('不开编辑器也能：')}
+          {link(t('查资源和数据表'), 'assets')}
+          <span>·</span>
+          {link(t('看上次的日志'), 'logs')}
+          <span>·</span>
+          {link(t('看崩溃记录'), 'logs', 'crash')}
+        </p>
+      </div>
+    </div>
   )
 }

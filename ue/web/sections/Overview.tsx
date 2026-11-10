@@ -1,18 +1,5 @@
-import {
-  Camera,
-  Database,
-  FileText,
-  Hammer,
-  Play,
-  Plug,
-  Square,
-  SquareTerminal,
-  Star,
-  Undo2,
-  User,
-  Wand2,
-  Zap,
-} from 'lucide-react'
+import { Camera, Database, FileText, Plug, SquareTerminal, Star, Undo2, User, Wand2 } from 'lucide-react'
+import { useState } from 'react'
 import type { GmStore, HistoryItem } from '../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
@@ -20,47 +7,53 @@ import { h, t } from '../host.ts'
 import {
   Badge,
   Card,
+  Confirm,
   Dot,
   LinkBtn,
   PageHead,
-  TargetPicker,
+  WorldBadge,
   fmtTime,
   kindLabel,
   useTargetInfo,
   worldLabel,
 } from '../ui.tsx'
+import { RunBar } from './RunBar.tsx'
 
-/** 概览（图 1）：四个状态块、实例列表（点一行设为目标）、最近操作、常用 */
+/**
+ * 概览（图 1）：四个状态块（点了去对应的页）、实例列表（点一行设为目标）、最近操作（还在生效的能一键撤回）、常用。
+ * 日志计数用左栏同一份 badges，不再单独请求
+ */
 export function Overview() {
-  const { project, state, setTarget, target, go, reload } = useUe()
-  const { ui, cn, toast } = h()
+  const { project, state, setTarget, target, go, badges, reloadBadges, openShot } = useUe()
+  const { cn, toast } = h()
   const { busy, run } = useAction()
   const { inst } = useTargetInfo()
   const hist = useLoad(() => pget<{ items: HistoryItem[] }>(project.id, 'history'), [project.id], 5000)
   const gm = useLoad(() => pget<GmStore>(project.id, 'gm'), [project.id])
   const live = (state?.instances ?? []).filter((i) => i.kind !== 'background')
-  // 本次日志的错误 / 警告数：桥接自己数的，只取计数不取行
-  const logs = useLoad(
-    () =>
-      live.length
-        ? ppost<{ errors?: number; warnings?: number }>(project.id, 'logs', { limit: 1, since: 1e15 })
-        : Promise.resolve(undefined),
-    [project.id, live.length],
-    10000,
-  )
-  const editor = live.find((i) => i.kind === 'editor')
-  const pieRunning = !!editor?.worlds.some((w) => w.type === 'PIE')
-
-  const pie = (action: string) =>
-    run(`pie-${action}`, async () => {
-      await op(project.id, 'pie', { action, players: 1, netMode: 'standalone' }, { instance: 'editor' })
-      setTimeout(reload, 800)
+  const [confirmAll, setConfirmAll] = useState(false)
+  const undoAll = () =>
+    run('undo-all', async () => {
+      setConfirmAll(false)
+      const r = await ppost<{ done: number; failed: { summary: string; error: string }[] }>(project.id, 'undo/all')
+      if (r.failed.length)
+        toast.error(
+          t('撤回了 {n} 处，{m} 处没撤回：{why}', {
+            n: r.done,
+            m: r.failed.length,
+            why: r.failed.map((f) => `${f.summary}（${f.error}）`).join('；'),
+          }),
+        )
+      else toast.success(t('撤回了 {n} 处修改', { n: r.done }))
+      void hist.reload()
+      reloadBadges()
     })
 
   const cards = [
     {
       icon: Plug,
       title: t('桥接插件'),
+      to: () => go('bridge'),
       value: state?.bridge ? t('已安装') : t('未安装'),
       badge: state?.bridge ? (
         <Badge tone={state.bundled && state.bundled !== state.bridge ? 'warn' : 'ok'}>{state.bridge}</Badge>
@@ -74,12 +67,14 @@ export function Overview() {
     {
       icon: Plug,
       title: t('引擎'),
+      to: () => go('bridge'),
       value: `UE ${project.engine.version || '?'}`,
       desc: `${project.engine.source} · ${project.engine.dir || t('没找到引擎目录')}`,
     },
     {
       icon: Database,
       title: t('离线读取'),
+      to: () => go('assets'),
       value: state?.background.running
         ? t('后台编辑器在线')
         : state?.background.starting
@@ -97,9 +92,15 @@ export function Overview() {
     {
       icon: FileText,
       title: t('本次日志'),
-      value: logs.data ? t('{e} 错误 · {w} 警告', { e: logs.data.errors ?? 0, w: logs.data.warnings ?? 0 }) : '—',
-      danger: (logs.data?.errors ?? 0) > 0,
-      desc: live.length ? t('点「日志」看详情') : t('UE 没在运行'),
+      to: () => go('logs', (badges?.errors ?? 0) > 0 ? 'error' : ''),
+      value:
+        badges?.errors !== undefined ? t('{e} 错误 · {w} 警告', { e: badges.errors, w: badges.warnings ?? 0 }) : '—',
+      danger: (badges?.errors ?? 0) > 0,
+      desc: live.length
+        ? (badges?.errors ?? 0) > 0
+          ? t('点这里只看错误')
+          : t('点这里看日志')
+        : t('UE 没在运行，点这里看上次的日志'),
     },
   ]
 
@@ -127,61 +128,16 @@ export function Overview() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('概览')} desc={project.uproject}>
-        <TargetPicker />
-        <ui.Button
-          size="sm"
-          variant="secondary"
-          disabled={busy === 'build'}
-          onClick={() => run('build', () => ppost(project.id, 'build').then(() => go('bridge')))}
-        >
-          <Hammer className="ue:h-3.5 ue:w-3.5" /> {t('编译')}
-        </ui.Button>
-        {editor ? (
-          <>
-            <ui.Button
-              size="sm"
-              variant="secondary"
-              disabled={!!busy}
-              onClick={() =>
-                run('lc', () =>
-                  op(project.id, 'livecoding', {}, { instance: 'editor' }, 120000).then(() =>
-                    toast.success(t('Live Coding 已开始')),
-                  ),
-                )
-              }
-            >
-              <Zap className="ue:h-3.5 ue:w-3.5" /> Live Coding
-            </ui.Button>
-            <ui.Button
-              size="sm"
-              variant="secondary"
-              disabled={!!busy}
-              onClick={() => void pie(pieRunning ? 'stop' : 'start')}
-            >
-              {pieRunning ? <Square className="ue:h-3.5 ue:w-3.5" /> : <Play className="ue:h-3.5 ue:w-3.5" />}
-              {pieRunning ? t('停止 PIE') : t('开始 PIE')}
-            </ui.Button>
-          </>
-        ) : (
-          <ui.Button
-            size="sm"
-            disabled={!!busy || !state?.bridge}
-            onClick={() =>
-              run('ed', () =>
-                ppost(project.id, 'editor').then(() => toast.success(t('编辑器启动中，加载完会自动连上'))),
-              )
-            }
-          >
-            <Play className="ue:h-3.5 ue:w-3.5" /> {t('启动编辑器')}
-          </ui.Button>
-        )}
+        <RunBar />
       </PageHead>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
         <div className="ue:grid ue:gap-4 ue:sm:grid-cols-2 ue:xl:grid-cols-4">
           {cards.map((c) => (
-            <div
+            <button
+              type="button"
               key={c.title}
-              className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:p-4"
+              onClick={c.to}
+              className="ue:flex ue:min-w-0 ue:cursor-pointer ue:flex-col ue:gap-1.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:p-4 ue:text-left ue:transition-colors ue:hover:border-line-strong ue:hover:bg-hover"
             >
               <div className="ue:flex ue:items-center ue:gap-1.5 ue:text-footnote ue:text-subtle">
                 <c.icon className="ue:h-3.5 ue:w-3.5" /> {c.title}
@@ -197,7 +153,7 @@ export function Overview() {
                 {c.badge}
               </div>
               <div className="ue:text-footnote ue:break-all ue:text-subtle">{c.desc}</div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -206,10 +162,16 @@ export function Overview() {
             <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
               {live.flatMap((i) =>
                 [
-                  { id: '', label: kindLabel(i.kind), detail: `PID ${i.pid} · ${t('端口')} ${i.port}` },
+                  {
+                    id: '',
+                    label: kindLabel(i.kind),
+                    badge: null,
+                    detail: `PID ${i.pid} · ${t('端口')} ${i.port}`,
+                  },
                   ...i.worlds.map((w) => ({
                     id: w.id,
                     label: worldLabel(w),
+                    badge: <WorldBadge world={w} />,
                     detail: [w.player, w.map].filter(Boolean).join(' · '),
                   })),
                 ].map((w) => {
@@ -227,6 +189,7 @@ export function Overview() {
                       >
                         <Dot tone={i.online ? 'ok' : 'danger'} />
                         <span className="ue:text-body ue:text-fg">{w.label}</span>
+                        {w.badge}
                         <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-subtle">
                           {i.online ? w.detail : i.error}
                         </span>
@@ -250,6 +213,14 @@ export function Overview() {
           </Card>
 
           <Card title={t('最近操作')} aside={<LinkBtn onClick={() => go('history')}>{t('全部')}</LinkBtn>}>
+            {!!badges?.undoable && (
+              <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:bg-warning/10 ue:px-4 ue:py-2 ue:text-footnote ue:text-fg">
+                <span className="ue:min-w-0 ue:flex-1">{t('{n} 处运行时修改还在生效', { n: badges.undoable })}</span>
+                <LinkBtn disabled={!!busy} onClick={() => setConfirmAll(true)}>
+                  <Undo2 className="ue:h-3 ue:w-3" /> {t('全部撤回')}
+                </LinkBtn>
+              </div>
+            )}
             <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
               {(hist.data?.items ?? []).slice(0, 6).map((it) => (
                 <li key={it.id} className="ue:flex ue:items-start ue:gap-3 ue:px-4 ue:py-2.5">
@@ -272,7 +243,12 @@ export function Overview() {
                     <LinkBtn
                       disabled={!!busy}
                       onClick={() =>
-                        void run(it.id, () => ppost(project.id, 'undo', { id: it.id }).then(() => hist.reload()))
+                        void run(it.id, () =>
+                          ppost(project.id, 'undo', { id: it.id }).then(() => {
+                            void hist.reload()
+                            reloadBadges()
+                          }),
+                        )
                       }
                     >
                       <Undo2 className="ue:h-3 ue:w-3" /> {t('撤回修改')}
@@ -320,7 +296,7 @@ export function Overview() {
             ))}
             <button
               type="button"
-              onClick={() => go('watch', 'shot')}
+              onClick={openShot}
               className="ue:flex ue:h-8 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-lg ue:border ue:border-line ue:px-2.5 ue:text-body ue:text-fg ue:hover:bg-hover"
             >
               <Camera className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {t('截视口')}
@@ -328,6 +304,21 @@ export function Overview() {
           </div>
         </Card>
       </div>
+      <Confirm
+        open={confirmAll}
+        title={t('全部撤回')}
+        okText={t('全部撤回')}
+        danger
+        onOk={() => void undoAll()}
+        onCancel={() => setConfirmAll(false)}
+      >
+        {t(
+          '把还在生效的 {n} 处运行时修改按从新到旧撤回到改之前的值。资源的修改不在这里，用「资源」页的「放弃改动」。',
+          {
+            n: badges?.undoable ?? 0,
+          },
+        )}
+      </Confirm>
     </div>
   )
 }

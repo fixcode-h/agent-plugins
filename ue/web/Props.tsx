@@ -1,10 +1,15 @@
-import { ChevronDown, ChevronRight, Copy, Pin, Play, Undo2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight, Copy, MessageSquare, Pin, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { op, pget, ppost, show, useAction, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 import { LuaTable } from './Lua.tsx'
-import { Badge, ErrorText, Note, SearchBox, Term, useTargetInfo } from './ui.tsx'
+import { Badge, ErrorText, KindBadge, Note, SearchBox, useTargetInfo, worldLabel } from './ui.tsx'
+import { useToChat } from './chat.tsx'
+import { CdoNote } from './CdoNote.tsx'
+import { Functions } from './Functions.tsx'
+import { ValueEdit, VecEdit, vecKeys } from './PropValue.tsx'
+import type { World } from '../server/types.ts'
 
 export interface Prop {
   name: string
@@ -17,15 +22,6 @@ export interface Prop {
   readOnlyWhy?: string
   enum?: string[]
   value: unknown
-}
-
-interface Fn {
-  name: string
-  owner: string
-  category: string
-  tooltip: string
-  params: { name: string; type: string; out?: boolean; enum?: string[] }[]
-  ret: string
 }
 
 /** 这次在网页上改过的值（对象路径 + 属性 → 原值），换分区也保留，高亮「原 80」 */
@@ -49,17 +45,24 @@ function splitCategory(c: string | undefined) {
  * 性能：属性列表一次取（大的值是摘要，展开时按路径单独取全量），按名字筛选点「搜索」才发请求
  */
 export function Props({
-  path,
+  path: root,
   title,
   onOpen,
   readOnlyHint,
+  cdo,
 }: {
   path: string
   title?: string
   onOpen?: (path: string) => void
   readOnlyHint?: string
+  /** 运行时对象页：选到资源默认值（Default__）时醒目提示，给「改运行中的实例」（界面优化第 2 条） */
+  cdo?: boolean
 }) {
   const { project, target, setTarget } = useUe()
+  // 面包屑：在面板里点运行时对象的引用，就在这里往下看，← 回到上一个（以前跳到别的页回不来，界面优化第 8 条）
+  const [trail, setTrail] = useState<string[]>([])
+  const path = trail.at(-1) ?? root
+  const chat = useToChat()
   const { inst, world } = useTargetInfo()
   const { ui, cn, toast } = h()
   const [tab, setTab] = useState<'props' | 'fns' | 'lua'>('props')
@@ -87,14 +90,16 @@ export function Props({
   const props = (data.data?.props ?? [])
     .filter((p) => !onlyChanged || changed.has(`${path}|${p.name}`))
     .map((p) => (lockAll ? { ...p, readOnly: true, readOnlyWhy: lockAll } : p))
+  // 分类按属性多少排（多的在前），换行显示不横向滚；改过的属性单独一个「改过的」分类（界面优化第 9 条）
   const menus = useMemo(() => {
     const m = new Map<string, Prop[]>()
     for (const p of props) {
       const g = splitCategory(p.category).top
       m.set(g, [...(m.get(g) ?? []), p])
     }
-    return [...m.entries()]
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length)
   }, [props])
+  const changedCount = (data.data?.props ?? []).filter((p) => changed.has(`${path}|${p.name}`)).length
   // 搜索或「只看改过的」时跨分类列出；平时只列选中的分类（选的分类没了就回到第一个）
   const across = !!filter || onlyChanged
   const cur = menus.some(([g]) => g === menu) ? menu : (menus[0]?.[0] ?? '')
@@ -157,19 +162,51 @@ export function Props({
       setOpen((o) => ({ ...o, [p.name]: true }))
     })
 
+  // 运行时对象页选到资源默认值：改值时提醒一句正在跑的对象不会变
+  const editNote = cdo && data.data?.kind === 'asset' ? t('回车后改的是默认值，正在跑的对象不会变') : undefined
+  /** 点对象引用：运行时对象在这里往下看（面包屑能回来），资源交给外面（跳到资源页） */
+  const openRef = (p: string) => {
+    if (isRuntimePath(p)) {
+      setTrail((x) => [...x, p])
+      setTab('props')
+      setMenu('')
+      setOnlyChanged(false)
+      setFilter('')
+    } else onOpen?.(p)
+  }
+
   const server = inst?.worlds.find((w) => w.netMode === 'ListenServer' || w.netMode === 'DedicatedServer')
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <header className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2.5">
-        <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg" title={path}>
-          {title ?? data.data?.object.name ?? path.split(/[.:/]/).pop()}
-        </span>
-        {data.data?.kind && (
-          <Badge tone={data.data.kind === 'instance' ? 'run' : 'muted'}>
-            {data.data.kind === 'instance' ? t('运行时实例') : data.data.kind === 'class' ? t('类') : t('资源')}
-          </Badge>
+        {trail.length > 0 && (
+          <ui.IconButton
+            icon={ArrowLeft}
+            label={t('返回上一个')}
+            size="sm"
+            onClick={() => setTrail((x) => x.slice(0, -1))}
+          />
         )}
+        <nav aria-label={t('对象路径')} className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
+          {[root, ...trail].slice(0, -1).map((p, i) => (
+            <span key={`${i}:${p}`} className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
+              <button
+                type="button"
+                title={p}
+                onClick={() => setTrail((x) => x.slice(0, i))}
+                className="ue:max-w-40 ue:cursor-pointer ue:truncate ue:font-mono ue:text-footnote ue:text-accent-text ue:hover:underline"
+              >
+                {shortName(p)}
+              </button>
+              <ChevronRight className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-subtle" />
+            </span>
+          ))}
+          <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg" title={path}>
+            {(!trail.length && title) || data.data?.object.name || shortName(path)}
+          </span>
+        </nav>
+        <KindBadge kind={data.data?.kind} />
         {data.data && <Badge>{data.data.object.class}</Badge>}
         <div className="ue:ml-auto ue:flex ue:items-center ue:gap-1">
           <ui.Segmented
@@ -189,8 +226,18 @@ export function Props({
             size="sm"
             onClick={() => void navigator.clipboard.writeText(path).then(() => toast.success(t('已复制')))}
           />
+          {chat.available && (
+            <ui.Button
+              size="sm"
+              variant="secondary"
+              onClick={() => chat.send(describeObject(path, data.data, props, world))}
+            >
+              <MessageSquare className="ue:h-3.5 ue:w-3.5" /> {t('发给对话')}
+            </ui.Button>
+          )}
         </div>
       </header>
+      {cdo && data.data?.kind === 'asset' && <CdoNote cls={data.data.object.class} />}
       {(readOnlyHint || lockAll) && (
         <div className="ue:px-4 ue:pt-3">
           <Note tone="info">{readOnlyHint || lockAll}</Note>
@@ -212,28 +259,24 @@ export function Props({
                 busy={data.loading}
               />
             </div>
-            <ui.Button
-              size="sm"
-              variant={onlyChanged ? 'primary' : 'secondary'}
-              onClick={() => setOnlyChanged((v) => !v)}
-            >
-              {t('只看改过的')}
-            </ui.Button>
           </div>
-          {!across && menus.length > 1 && (
+          {!filter && (menus.length > 1 || changedCount > 0) && (
             <nav
               aria-label={t('属性分类')}
-              className="ue:flex ue:gap-1 ue:overflow-x-auto ue:border-b ue:border-line ue:px-4 ue:pt-3 ue:pb-2"
+              className="ue:flex ue:flex-wrap ue:gap-1 ue:border-b ue:border-line ue:px-4 ue:pt-3 ue:pb-2"
             >
               {menus.map(([g, ps]) => (
                 <button
                   key={g}
                   type="button"
-                  onClick={() => setMenu(g)}
-                  aria-current={g === cur ? 'true' : undefined}
+                  onClick={() => {
+                    setMenu(g)
+                    setOnlyChanged(false)
+                  }}
+                  aria-current={!onlyChanged && g === cur ? 'true' : undefined}
                   className={cn(
                     'ue:inline-flex ue:h-7 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-md ue:px-2 ue:text-footnote',
-                    g === cur
+                    !onlyChanged && g === cur
                       ? 'ue:bg-sel ue:font-medium ue:text-fg'
                       : 'ue:text-muted ue:hover:bg-hover ue:hover:text-fg',
                   )}
@@ -242,6 +285,20 @@ export function Props({
                   <span className="ue:text-caption ue:text-subtle">{ps.length}</span>
                 </button>
               ))}
+              {changedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyChanged((v) => !v)}
+                  aria-current={onlyChanged ? 'true' : undefined}
+                  className={cn(
+                    'ue:inline-flex ue:h-7 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-md ue:px-2 ue:text-footnote ue:text-accent-text',
+                    onlyChanged ? 'ue:bg-accent-soft ue:font-medium' : 'ue:hover:bg-hover',
+                  )}
+                >
+                  {t('改过的')}
+                  <span className="ue:text-caption">{changedCount}</span>
+                </button>
+              )}
             </nav>
           )}
           {warn && (
@@ -281,7 +338,8 @@ export function Props({
                 {ps.map((p) => {
                   const k = `${path}|${p.name}`
                   const was = changed.has(k)
-                  const complex = typeof p.value === 'object' && p.value !== null
+                  const vec = vecKeys(p.value)
+                  const complex = typeof p.value === 'object' && p.value !== null && !vec
                   const str = show(p.value)
                   return (
                     <div key={p.name} className="ue:group ue:border-b ue:border-line/60 ue:px-4 ue:py-1.5">
@@ -309,14 +367,25 @@ export function Props({
                           {p.replicated && <Badge tone="run">{t('同步')}</Badge>}
                         </div>
                         <div className="ue:min-w-0 ue:flex-1">
-                          {typeof p.value === 'string' && looksLikePath(p.value) && onOpen ? (
+                          {typeof p.value === 'string' &&
+                          looksLikePath(p.value) &&
+                          (onOpen || isRuntimePath(p.value)) ? (
                             <button
                               type="button"
-                              onClick={() => onOpen(p.value as string)}
+                              onClick={() => openRef(p.value as string)}
                               className="ue:max-w-full ue:cursor-pointer ue:truncate ue:font-mono ue:text-footnote ue:text-accent-text ue:hover:underline"
                             >
                               {p.value}
                             </button>
+                          ) : vec && !p.readOnly ? (
+                            <VecEdit
+                              p={p}
+                              keys={vec}
+                              was={was ? show(changed.get(k)) : undefined}
+                              busy={busy === p.name}
+                              onSet={(v) => void set(p, v)}
+                              note={editNote}
+                            />
                           ) : complex ? (
                             <span
                               className="ue:block ue:truncate ue:font-mono ue:text-footnote ue:text-muted"
@@ -330,6 +399,7 @@ export function Props({
                               was={was ? show(changed.get(k)) : undefined}
                               busy={busy === p.name}
                               onSet={(v) => void set(p, v)}
+                              note={editNote}
                             />
                           )}
                         </div>
@@ -337,7 +407,7 @@ export function Props({
                           {was && !p.readOnly && (
                             <ui.IconButton
                               icon={Undo2}
-                              label={t('改回原值')}
+                              label={t('撤回修改')}
                               size="xs"
                               onClick={() => void set(p, show(changed.get(k))).then(() => changed.delete(k))}
                             />
@@ -381,172 +451,31 @@ export function Props({
   )
 }
 
-/** 单个值：布尔开关、枚举下拉、其余文本框（回车提交，失焦不提交，免得误改） */
-function ValueEdit({ p, was, busy, onSet }: { p: Prop; was?: string; busy: boolean; onSet: (v: string) => void }) {
-  const { ui, cn } = h()
-  const v = show(p.value)
-  const why = p.readOnly ? p.readOnlyWhy || t('这个属性不能改') : undefined
-  if (p.type === 'bool')
-    return (
-      <button
-        type="button"
-        title={why}
-        role="switch"
-        aria-checked={p.value === true}
-        disabled={busy || p.readOnly}
-        onClick={() => onSet(String(!(p.value === true)))}
-        className={cn(
-          'ue:relative ue:h-5 ue:w-9 ue:rounded-full ue:transition-colors',
-          p.readOnly ? 'ue:cursor-not-allowed ue:opacity-50' : 'ue:cursor-pointer',
-          p.value === true ? 'ue:bg-accent' : 'ue:bg-line-strong',
-        )}
-      >
-        <span
-          className={cn(
-            'ue:absolute ue:top-0.5 ue:h-4 ue:w-4 ue:rounded-full ue:bg-card ue:shadow-card ue:transition-all',
-            p.value === true ? 'ue:left-4.5' : 'ue:left-0.5',
-          )}
-        />
-      </button>
-    )
-  // 只读的值不给输入框和下拉，只显示文字，一眼看出改不了
-  if (p.readOnly)
-    return (
-      <span
-        title={why}
-        className="ue:flex ue:h-7 ue:cursor-not-allowed ue:items-center ue:truncate ue:px-2 ue:font-mono ue:text-footnote ue:text-muted"
-      >
-        {v}
-      </span>
-    )
-  if (p.enum?.length)
-    return (
-      <ui.Select
-        size="xs"
-        value={v}
-        disabled={busy || p.readOnly}
-        onChange={(e: { target: { value: string } }) => onSet(e.target.value)}
-        options={p.enum.map((x) => ({ value: x, label: x }))}
-      />
-    )
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSet(String(new FormData(e.currentTarget).get('v') ?? ''))
-      }}
-      className={cn(
-        'ue:flex ue:h-7 ue:items-center ue:rounded-md ue:border ue:px-2',
-        was !== undefined ? 'ue:border-danger/50 ue:bg-danger/5' : 'ue:border-line ue:bg-field',
-        'ue:focus-within:border-focus',
-      )}
-    >
-      <input
-        name="v"
-        key={v}
-        defaultValue={v}
-        disabled={busy}
-        readOnly={p.readOnly}
-        aria-label={p.name}
-        className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:font-mono ue:text-footnote ue:text-fg ue:outline-none"
-      />
-      {was !== undefined && (
-        <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{t('原 {v}', { v: was })}</span>
-      )}
-    </form>
-  )
+/** 路径的最后一段（面包屑、标题）：…:PersistentLevel.BP_Hero_C_1.HealthComponent → HealthComponent */
+export function shortName(p: string) {
+  return p.split(/[.:/]/).pop() || p
 }
 
-/** 函数页签：能调的函数（BlueprintCallable / Exec / 标了 AgentPanel 的），填参数调用 */
-function Functions({ path }: { path: string }) {
-  const { project, target } = useUe()
-  const { ui } = h()
-  const [q, setQ] = useState('')
-  const [sel, setSel] = useState('')
-  const [args, setArgs] = useState<Record<string, string>>({})
-  const [res, setRes] = useState<{ text: string; error?: boolean }>()
-  const { busy, run } = useAction()
-  const fns = useLoad(() => op<{ items: Fn[] }>(project.id, 'functions', { path }, target), [path])
-  const list = (fns.data?.items ?? []).filter((f) => !q || f.name.toLowerCase().startsWith(q.toLowerCase()))
-  return (
-    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-2 ue:p-4">
-      <SearchBox placeholder={t('函数名前缀')} onSearch={setQ} allowEmpty />
-      <ErrorText>{fns.error}</ErrorText>
-      <ul className="ue:min-h-0 ue:flex-1 ue:divide-y ue:divide-line ue:overflow-auto ue:rounded-xl ue:border ue:border-line">
-        {list.slice(0, 200).map((f) => (
-          <li key={`${f.owner}.${f.name}`} className="ue:px-3 ue:py-2">
-            <button
-              type="button"
-              className="ue:flex ue:w-full ue:cursor-pointer ue:items-baseline ue:gap-2 ue:text-left"
-              onClick={() => {
-                setSel(sel === f.name ? '' : f.name)
-                setArgs({})
-                setRes(undefined)
-              }}
-            >
-              <span className="ue:font-mono ue:text-footnote ue:text-fg">{f.name}</span>
-              <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
-                (
-                {f.params
-                  .filter((p) => !p.out)
-                  .map((p) => `${p.type} ${p.name}`)
-                  .join(', ')}
-                ){f.ret ? ` → ${f.ret}` : ''}
-              </span>
-              <span className="ue:ml-auto ue:shrink-0 ue:text-caption ue:text-subtle">{f.owner}</span>
-            </button>
-            {sel === f.name && (
-              <form
-                className="ue:mt-2 ue:flex ue:flex-col ue:gap-1.5"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  void run('call', async () => {
-                    try {
-                      const r = await op(project.id, 'call', { path, function: f.name, args }, target)
-                      setRes({ text: JSON.stringify({ ret: r.ret, out: r.out }, null, 2) })
-                    } catch (err) {
-                      setRes({ text: (err as Error).message, error: true })
-                    }
-                  })
-                }}
-              >
-                {f.tooltip && <p className="ue:text-footnote ue:text-subtle">{f.tooltip}</p>}
-                {f.params
-                  .filter((p) => !p.out)
-                  .map((p) => (
-                    <label key={p.name} className="ue:flex ue:items-center ue:gap-2">
-                      <span className="ue:w-32 ue:truncate ue:font-mono ue:text-caption ue:text-muted">{p.name}</span>
-                      <ui.Input
-                        size="xs"
-                        className="ue:flex-1 ue:font-mono"
-                        placeholder={p.type}
-                        value={args[p.name] ?? ''}
-                        onChange={(e: { target: { value: string } }) =>
-                          setArgs((a) => ({ ...a, [p.name]: e.target.value }))
-                        }
-                      />
-                    </label>
-                  ))}
-                <div>
-                  <ui.Button size="sm" type="submit" disabled={busy === 'call'}>
-                    <Play className="ue:h-3.5 ue:w-3.5" /> {t('调用')}
-                  </ui.Button>
-                </div>
-                {res && (
-                  <Term className="ue:max-h-48">
-                    <pre className={res.error ? 'ue:whitespace-pre-wrap ue:text-danger' : 'ue:whitespace-pre-wrap'}>
-                      {res.text}
-                    </pre>
-                  </Term>
-                )}
-              </form>
-            )}
-          </li>
-        ))}
-        {fns.data && !list.length && (
-          <li className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有能调的函数')}</li>
-        )}
-      </ul>
-    </div>
-  )
+/** 「发给对话」的内容：对象路径、类、目标世界，和当前列出来的属性值（最多 40 个，长值截断） */
+function describeObject(
+  path: string,
+  d: { object: { class: string }; kind?: string } | undefined,
+  props: Prop[],
+  world: World | undefined,
+) {
+  const lines = props.slice(0, 40).map((p) => {
+    const v = show(p.value)
+    return `${p.name} = ${v.length > 200 ? `${v.slice(0, 200)} …` : v}`
+  })
+  // 发给 Agent 的话不翻译（作为用户消息交给 CLI）
+  return [
+    `UE 对象 \`${path}\`${d ? `（${d.object.class}）` : ''}${world ? `，目标世界：${worldLabel(world)}` : ''}`,
+    lines.length
+      ? ['```', ...lines, props.length > 40 ? `… 还有 ${props.length - 40} 个属性` : '', '```']
+          .filter(Boolean)
+          .join('\n')
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
