@@ -96,20 +96,22 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；编辑器没开时自动用后台编辑器）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController、界面上的控件…），默认只列运行时实例，all=true 时连资源和类默认对象（Default__）一起列，每项的 kind 标明是哪种（instance/cdo/asset/class）；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；编辑器没开时自动用后台编辑器）。',
     {
       kind: { type: 'string', enum: ['actor', 'component', 'object', 'asset'] },
       prefix: { type: 'string' },
       class: { type: 'string' },
       path: { type: 'string' },
       limit: { type: 'number' },
+      all: { type: 'boolean' },
       target: TARGET,
     },
     ['kind'],
     async (a, ctx) => {
       const limit = Number(a.limit) || 50
       if (a.kind === 'component') return out(await runOp(ctx, 'components', { path: a.path }))
-      if (a.kind === 'object') return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit }))
+      if (a.kind === 'object')
+        return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit, all: a.all === true }))
       if (a.kind === 'asset')
         return out(await runOp(ctx, 'assets', { class: a.class, prefix: a.prefix, path: a.path || '/Game', limit }))
       return out(await runOp(ctx, 'actors', { prefix: a.prefix, limit }))
@@ -132,7 +134,7 @@ const DEFS = [
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。',
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。有 setter 的属性（如控件的 Visibility）走 setter，界面会跟着刷新，结果里 via 说明走的哪种。结果 kind=cdo 表示改的是类默认对象（Default__…），只影响之后新建的对象，正在显示的不会变，要改正在跑的就用 ue_find kind=object 找它的实例。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },

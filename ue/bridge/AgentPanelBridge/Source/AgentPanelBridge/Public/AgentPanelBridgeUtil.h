@@ -64,6 +64,13 @@ namespace AgentPanel
 	/** 面板改过、还没保存的资源包（「放弃改动」「签出并保存」按它列） */
 	AGENTPANELBRIDGE_API TSet<FString>& DirtyPackages();
 
-	/** 一个对象的简要信息：path、name、class */
+	/**
+	 * 对象是哪一类：instance（活着的实例）、cdo（类默认对象、模板及其子对象，名字常是 Default__）、
+	 * class（类、结构、枚举、函数、包）、asset（资源及资源里的子对象）。
+	 * 只有 instance 改了会反映到正在跑的游戏 / 编辑器界面上
+	 */
+	AGENTPANELBRIDGE_API const TCHAR* ObjectKind(const UObject* Obj);
+
+	/** 一个对象的简要信息：path、name、class、kind（见 ObjectKind） */
 	AGENTPANELBRIDGE_API TSharedPtr<FJsonObject> Brief(const UObject* Obj);
 }

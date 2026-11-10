@@ -9,7 +9,9 @@ public class AgentPanelBridge : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"HTTPServer", "Json", "JsonUtilities", "AssetRegistry", "ImageCore"
+			"HTTPServer", "Json", "JsonUtilities", "AssetRegistry", "ImageCore",
+			// 改控件属性后要调 UWidget::SynchronizeProperties 刷新界面
+			"UMG"
 		});
 		// Shipping 里一律不编进去：.uplugin 已经拦了加载，这里再保证代码不在
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)

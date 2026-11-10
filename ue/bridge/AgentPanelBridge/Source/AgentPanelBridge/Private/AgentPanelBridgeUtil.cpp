@@ -1,6 +1,7 @@
 #include "AgentPanelBridgeUtil.h"
 
 #include "Engine/Blueprint.h"
+#include "Engine/World.h"
 #include "Misc/PackageName.h"
 #include "JsonObjectConverter.h"
 #include "Serialization/JsonSerializer.h"
@@ -462,12 +463,39 @@ namespace AgentPanel
 		return Set;
 	}
 
+	const TCHAR* ObjectKind(const UObject* Obj)
+	{
+		// IsTemplate 会顺着 Outer 查：类默认对象、蓝图里的模板控件 / 组件都算
+		if (Obj->IsTemplate())
+		{
+			return TEXT("cdo");
+		}
+		if (Obj->IsA<UField>() || Obj->IsA<UPackage>())
+		{
+			return TEXT("class");
+		}
+		// 顺着 Outer 往上：先碰到世界的是场景里的对象（编辑器里关卡的包不是临时包，不能按包判断）；先碰到资源的是资源
+		for (const UObject* X = Obj; X; X = X->GetOuter())
+		{
+			if (X->IsA<UWorld>())
+			{
+				return TEXT("instance");
+			}
+			if (X->IsAsset())
+			{
+				return TEXT("asset");
+			}
+		}
+		return TEXT("instance");
+	}
+
 	TSharedPtr<FJsonObject> Brief(const UObject* Obj)
 	{
 		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 		O->SetStringField(TEXT("path"), Obj->GetPathName());
 		O->SetStringField(TEXT("name"), Obj->GetName());
 		O->SetStringField(TEXT("class"), Obj->GetClass()->GetName());
+		O->SetStringField(TEXT("kind"), ObjectKind(Obj));
 		return O;
 	}
 }

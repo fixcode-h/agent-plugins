@@ -84,7 +84,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     props: (a) => {
       if (a.path !== HERO) throw new Error(`找不到对象 ${a.path}`)
       return {
-        object: { path: HERO, name: 'BP_Hero_C_1', class: 'BP_Hero_C' },
+        object: { path: HERO, name: 'BP_Hero_C_1', class: 'BP_Hero_C', kind: 'instance' },
         props: Object.entries(state.hero).map(([name, value]) => ({
           name,
           type: typeof value === 'boolean' ? 'bool' : 'float',
@@ -97,7 +97,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       if (!(a.prop in state.hero)) throw new Error(`没有属性 ${a.prop}`)
       const prev = state.hero[a.prop]
       state.hero[a.prop] = a.value
-      return { prev, value: a.value, asset: false, replicated: true, client: false }
+      return { prev, value: a.value, asset: false, replicated: true, client: false, via: 'field', kind: 'instance' }
     },
     'log.tail': (a) => {
       const since = Number(a.since) || 0

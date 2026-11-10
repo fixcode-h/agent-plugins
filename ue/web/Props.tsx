@@ -58,7 +58,7 @@ export function Props({
   const { busy, run } = useAction()
   const data = useLoad(
     () =>
-      op<{ object: { path: string; name: string; class: string }; props: Prop[] }>(
+      op<{ object: { path: string; name: string; class: string; kind?: string }; props: Prop[] }>(
         project.id,
         'props',
         { path, filter, maxChars: 400 },
@@ -152,6 +152,16 @@ export function Props({
       {readOnlyHint && (
         <div className="ue:px-4 ue:pt-3">
           <Note tone="info">{readOnlyHint}</Note>
+        </div>
+      )}
+      {data.data?.object.kind === 'cdo' && (
+        <div className="ue:px-4 ue:pt-3">
+          <Note>
+            {t(
+              '这是类默认对象（Default__…）：改了只影响之后新建的对象，正在显示的界面和正在跑的对象不会变。要改它们，在「运行时对象」里搜实例（名字一般是 {name}_数字）。',
+              { name: data.data.object.class },
+            )}
+          </Note>
         </div>
       )}
       {tab === 'fns' ? (

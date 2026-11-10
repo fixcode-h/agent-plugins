@@ -3,13 +3,19 @@ import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
-import { Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
+import { Badge, Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
 
 interface Row {
   path: string
   name: string
   class: string
+  /** instance 活着的实例；cdo 类默认对象（Default__）；asset 资源；class 类、结构、函数 */
+  kind?: string
 }
+
+/** 不是活着的实例时在行上标出来：改了不影响正在跑的对象，免得误选 */
+const kindLabel = (k?: string) =>
+  k === 'cdo' ? t('类默认对象') : k === 'asset' ? t('资源') : k === 'class' ? t('类') : ''
 
 /** 常用的运行时对象：点一下按类搜 */
 const QUICK = [
@@ -32,21 +38,22 @@ export function Objects() {
   const { cn, ui } = h()
   const [cls, setCls] = useState('')
   const [prefix, setPrefix] = useState('')
-  const [q, setQ] = useState<{ cls: string; prefix: string }>()
+  const [all, setAll] = useState(false)
+  const [q, setQ] = useState<{ cls: string; prefix: string; all: boolean }>()
   const found = useLoad(
     () =>
       q
         ? op<{ items: Row[]; more: boolean; partial: boolean }>(
             project.id,
             'objects',
-            { class: q.cls, prefix: q.prefix, limit: 200 },
+            { class: q.cls, prefix: q.prefix, limit: 200, all: q.all },
             target,
           )
         : Promise.resolve(undefined),
     [q, target.instance],
   )
-  const search = (c = cls, p = prefix) => {
-    if (c.trim() || p.trim()) setQ({ cls: c.trim(), prefix: p.trim() })
+  const search = (c = cls, p = prefix, a = all) => {
+    if (c.trim() || p.trim()) setQ({ cls: c.trim(), prefix: p.trim(), all: a })
   }
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -108,6 +115,17 @@ export function Objects() {
                   </button>
                 ))}
               </div>
+              <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
+                <input
+                  type="checkbox"
+                  checked={all}
+                  onChange={(e) => {
+                    setAll(e.target.checked)
+                    if (q) search(q.cls, q.prefix, e.target.checked)
+                  }}
+                />
+                {t('也列资源和类默认对象（改了不影响正在跑的对象）')}
+              </label>
               <ErrorText>{found.error}</ErrorText>
               {found.data?.partial && (
                 <Note>{t('只写了名字没写类名：对象太多，只搜了一部分。加上类名搜得更快也更全。')}</Note>
@@ -129,7 +147,10 @@ export function Objects() {
                       sub === o.path && 'ue:bg-sel',
                     )}
                   >
-                    <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                    <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+                      <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                      {kindLabel(o.kind) && <Badge>{kindLabel(o.kind)}</Badge>}
+                    </span>
                     <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
                       {o.class} · {o.path}
                     </span>

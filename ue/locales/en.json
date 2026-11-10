@@ -401,5 +401,9 @@
   "运行日志": "Log",
   "绑定 DataTable": "Bind DataTable",
   "DataTable 资源路径，例如 /Game/Data/DT_Items；留空取消绑定": "DataTable asset path, e.g. /Game/Data/DT_Items. Leave empty to unbind",
-  "确定": "OK"
+  "确定": "OK",
+  "类默认对象": "Class default",
+  "类": "Class",
+  "也列资源和类默认对象（改了不影响正在跑的对象）": "Also list assets and class defaults (changing them doesn't affect running objects)",
+  "这是类默认对象（Default__…）：改了只影响之后新建的对象，正在显示的界面和正在跑的对象不会变。要改它们，在「运行时对象」里搜实例（名字一般是 {name}_数字）。": "This is a class default object (Default__…): changes only affect objects created later, not the UI on screen or objects already running. To change those, search for the instance under Runtime objects (usually named {name}_<number>)."
 }

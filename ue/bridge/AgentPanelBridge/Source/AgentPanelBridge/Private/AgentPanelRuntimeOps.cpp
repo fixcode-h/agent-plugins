@@ -10,6 +10,7 @@
 #include "Misc/Base64.h"
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/Widget.h"
 #include "Engine/DataTable.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -45,6 +46,77 @@ namespace
 	};
 
 	TSharedPtr<FJsonValue> Obj(const TSharedPtr<FJsonObject>& O) { return MakeShared<FJsonValueObject>(O); }
+
+	/** 属性的 setter 函数：BlueprintSetter 元数据（只有编辑器里有）或者同名的 Set<属性名>，要求只有一个同类型参数 */
+	UFunction* SetterFunction(UObject* Owner, FProperty* Prop)
+	{
+		TArray<FName> Names;
+#if WITH_EDITORONLY_DATA
+		const FString Meta = Prop->GetMetaData(TEXT("BlueprintSetter"));
+		if (!Meta.IsEmpty())
+		{
+			Names.Add(FName(*Meta));
+		}
+#endif
+		Names.Add(FName(*(TEXT("Set") + Prop->GetName())));
+		for (const FName& N : Names)
+		{
+			UFunction* F = Owner->FindFunction(N);
+			if (!F || F->NumParms != 1)
+			{
+				continue;
+			}
+			// 唯一的参数要是输入参数（不是返回值；输出参数只有 const 引用算输入）且类型和属性一样
+			TFieldIterator<FProperty> It(F);
+			const bool bInput = It && !It->HasAnyPropertyFlags(CPF_ReturnParm)
+				&& (!It->HasAnyPropertyFlags(CPF_OutParm) || It->HasAnyPropertyFlags(CPF_ConstParm));
+			if (bInput && It->SameType(Prop))
+			{
+				return F;
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * 把新值交给对象：属性直接长在对象上（不是结构体里的一个字段、数组的一个元素）时，优先走 C++ 的 Setter，
+	 * 再试蓝图 setter 函数；都没有才直接写字段。返回用了哪种：setter / function / field
+	 */
+	const TCHAR* AssignWithSetter(UObject* Owner, const FResolved& R, const void* NewValue)
+	{
+		UClass* PropClass = R.Prop->GetOwnerClass();
+		const bool bDirect = PropClass && Owner->IsA(PropClass)
+			&& R.Value == R.Prop->ContainerPtrToValuePtr<void>(Owner) && R.Prop->ArrayDim == 1;
+		if (bDirect && R.Prop->HasSetter())
+		{
+			R.Prop->CallSetter(Owner, NewValue);
+			return TEXT("setter");
+		}
+		if (bDirect && !Owner->IsTemplate())
+		{
+			if (UFunction* F = SetterFunction(Owner, R.Prop))
+			{
+				uint8* Parms = (uint8*)FMemory_Alloca_Aligned(F->ParmsSize, F->GetMinAlignment());
+				FMemory::Memzero(Parms, F->ParmsSize);
+				for (TFieldIterator<FProperty> It(F); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+				{
+					It->InitializeValue_InContainer(Parms);
+					if (!It->HasAnyPropertyFlags(CPF_ReturnParm))
+					{
+						It->CopyCompleteValue(It->ContainerPtrToValuePtr<void>(Parms), NewValue);
+					}
+				}
+				Owner->ProcessEvent(F, Parms);
+				for (TFieldIterator<FProperty> It(F); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+				{
+					It->DestroyValue_InContainer(Parms);
+				}
+				return TEXT("function");
+			}
+		}
+		R.Prop->CopyCompleteValue(R.Value, NewValue);
+		return TEXT("field");
+	}
 
 	/** 控制台变量是谁设的（「改过的」筛选和界面上的来源标签） */
 	FString SetByName(EConsoleVariableFlags F)
@@ -535,7 +607,27 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			Owner->PreEditChange(R.Prop);
 		}
 #endif
-		const bool bOk = FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error);
+		// 先写进临时值，再按「setter → 直接写字段」交给对象：很多属性（UMG 的 Visibility、文字、颜色…）只改字段不会刷新界面，
+		// 要走它的 setter 才会推给 Slate / 触发逻辑
+		TArray<uint8> Temp;
+		Temp.SetNumZeroed(R.Prop->GetSize());
+		R.Prop->InitializeValue(Temp.GetData());
+		R.Prop->CopyCompleteValue(Temp.GetData(), R.Value);
+		bool bOk = FromJson(R.Prop, Temp.GetData(), A->TryGetField(TEXT("value")), Error);
+		const TCHAR* Via = TEXT("field");
+		if (bOk)
+		{
+			Via = AssignWithSetter(Owner, R, Temp.GetData());
+		}
+		R.Prop->DestroyValue(Temp.GetData());
+		// 没有 setter 的控件属性（字体、边距…）：让控件把属性重新同步给 Slate；模板 / 类默认对象没有界面，不用
+		if (bOk && !Owner->IsTemplate())
+		{
+			if (UWidget* W = Cast<UWidget>(Owner))
+			{
+				W->SynchronizeProperties();
+			}
+		}
 #if WITH_EDITOR
 		if (bAsset)
 		{
@@ -550,6 +642,9 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		}
 		Out->SetField(TEXT("value"), ToJson(R.Prop, R.Value, 0));
 		Out->SetBoolField(TEXT("asset"), bAsset);
+		Out->SetStringField(TEXT("via"), Via);
+		// 改的是类默认对象 / 资源：只影响之后新建的对象，界面上已经在的不会变，面板据此提示去改实例
+		Out->SetStringField(TEXT("kind"), ObjectKind(Owner));
 		Out->SetBoolField(TEXT("replicated"), R.Prop->HasAnyPropertyFlags(CPF_Net));
 		UWorld* W = Owner->GetWorld();
 		Out->SetBoolField(TEXT("client"), W && W->GetNetMode() == NM_Client);
@@ -650,6 +745,8 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		const FString ClassName = Str(A, TEXT("class"));
 		const FString Prefix = Str(A, TEXT("prefix"));
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 1000);
+		// 默认只列活着的实例：资源（WidgetBlueprint、生成的类…）和类默认对象改了不影响正在跑的对象，混在结果里容易点错
+		const bool bAll = Bool(A, TEXT("all"), false);
 		UWorld* World = nullptr;
 		if (!Str(A, TEXT("world")).IsEmpty())
 		{
@@ -675,11 +772,12 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		bool bPartial = false;
 		auto Visit = [&](UObject* O)
 		{
-			if (!IsValid(O) || O->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+			if (!IsValid(O) || !StartsWithNoCase(O->GetName(), Prefix) || (World && O->GetWorld() != World))
 			{
 				return true;
 			}
-			if (!StartsWithNoCase(O->GetName(), Prefix) || (World && O->GetWorld() != World))
+			const TCHAR* Kind = ObjectKind(O);
+			if (!bAll && FCString::Strcmp(Kind, TEXT("instance")) != 0)
 			{
 				return true;
 			}
