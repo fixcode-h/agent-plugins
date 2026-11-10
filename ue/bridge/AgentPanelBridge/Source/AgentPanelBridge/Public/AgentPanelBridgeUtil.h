@@ -32,7 +32,18 @@ namespace AgentPanel
 		FProperty* Prop = nullptr;
 		void* Value = nullptr;
 		UObject* Owner = nullptr;
+		/** 最后一段属性所在的容器（对象或结构体）；路径最后一段带 [下标] 时为空，这时没有 setter 可走 */
+		void* Container = nullptr;
+		/** 路径上每一段都允许改（见 CanEditProp）；不允许时 ReadOnlyWhy 写原因 */
+		bool bEditable = true;
+		FString ReadOnlyWhy;
 	};
+
+	/**
+	 * 这个属性能不能在面板上改：EditConst、纯 C++ 内部状态（编辑器和蓝图都看不见）、只能在类默认值 / 只能在实例上改的，都不让改。
+	 * Owner 是值所在的对象（判断是类默认值还是实例），结构体成员只看 EditConst。Why 写不让改的原因
+	 */
+	AGENTPANELBRIDGE_API bool CanEditProp(const FProperty* Prop, const UObject* Owner, FString* Why = nullptr);
 
 	/**
 	 * 属性路径：Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health（对象引用会跟进去）。
@@ -50,7 +61,7 @@ namespace AgentPanel
 	AGENTPANELBRIDGE_API FString TypeOf(FProperty* Prop);
 
 	/** 一个结构的属性列表（名字、类型、分类、同步、只读、值），Filter 是名字前缀 */
-	AGENTPANELBRIDGE_API TArray<TSharedPtr<FJsonValue>> ListProps(UStruct* Struct, const void* Container, const FString& Filter, int32 MaxChars);
+	AGENTPANELBRIDGE_API TArray<TSharedPtr<FJsonValue>> ListProps(UStruct* Struct, const void* Container, const FString& Filter, int32 MaxChars, const UObject* Owner = nullptr);
 
 	/** 函数的参数说明：[{name, type, enum?:[]}]，不含返回值 */
 	AGENTPANELBRIDGE_API TArray<TSharedPtr<FJsonValue>> ParamsOf(UFunction* Func);
