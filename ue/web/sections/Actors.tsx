@@ -1,11 +1,13 @@
-import { Pin, PersonStanding, Puzzle, RefreshCw, X } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { op, pget, ppost, useLoad } from '../api.ts'
+import { Box, Pin, PersonStanding, Puzzle, RefreshCw, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { op, pget, ppost, useAction, useLoad } from '../api.ts'
+import { isInstance } from '../CdoNote.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { takePending } from '../pending.ts'
 import { Props } from '../Props.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Card, ErrorText, PageHead, SearchBox, TargetPicker, useTargetInfo } from '../ui.tsx'
+import { Card, ErrorText, NotRunning, PageHead, SearchBox, useTargetInfo } from '../ui.tsx'
 
 interface ActorRow {
   path: string
@@ -62,7 +64,53 @@ export function Actors() {
     [actor],
   )
 
-  const search = (s: string) => {
+  // Ctrl+K 带过来的名字开头：进来就搜一次；搜索框重挂一次好把字带进去
+  const [boxKey, setBoxKey] = useState(0)
+  useEffect(() => {
+    const p = takePending('actors')
+    if (p) {
+      search(p)
+      setBoxKey((n) => n + 1)
+    }
+    // 只在进来时取一次
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 常去的几个对象一键打开（界面优化第 9 条）：按类找目标世界里的实例，「我的角色」再读控制器的 Pawn
+  const quickRun = useAction()
+  const [quickErr, setQuickErr] = useState('')
+  const quick = (key: string, cls: string, prop?: string) => () =>
+    quickRun.run(key, async () => {
+      setQuickErr('')
+      try {
+        const r = await op<{ items: { path: string; kind?: 'instance' | 'asset' | 'class' }[] }>(
+          project.id,
+          'objects',
+          { class: cls, prefix: '', limit: 20 },
+          target,
+        )
+        const hit = r.items.find(isInstance)
+        if (!hit) throw new Error(t('目标世界里没有 {c}，游戏开始（PIE）后才有', { c: cls }))
+        let path = hit.path
+        if (prop) {
+          const v = await op<{ value: unknown }>(project.id, 'get', { path, prop }, target)
+          if (typeof v.value !== 'string' || !v.value || v.value === 'None')
+            throw new Error(t('玩家控制器现在没有控制角色'))
+          path = v.value
+        }
+        go('actors', path)
+      } catch (e) {
+        setQuickErr((e as Error).message)
+      }
+    })
+  const quicks = [
+    { key: 'pawn', label: t('我的角色'), run: quick('pawn', 'PlayerController', 'Pawn') },
+    { key: 'pc', label: t('玩家控制器'), run: quick('pc', 'PlayerController') },
+    { key: 'gs', label: 'GameState', run: quick('gs', 'GameStateBase') },
+    { key: 'gm', label: 'GameMode', run: quick('gm', 'GameModeBase') },
+  ]
+
+  function search(s: string) {
     setQ(s)
     const recent = [s, ...(local.data?.recent ?? []).filter((x) => x !== s)].slice(0, 12)
     local.setData({ ...(local.data ?? { pinned: [] }), recent } as Local)
@@ -93,7 +141,6 @@ export function Actors() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title="Actor" desc={t('按名字前缀搜索，不列场景树')}>
-        <TargetPicker />
         <ui.Button
           size="sm"
           variant="secondary"
@@ -106,9 +153,7 @@ export function Actors() {
         </ui.Button>
       </PageHead>
       {!inst ? (
-        <div className="ue:p-6">
-          <ui.EmptyPanel>{t('UE 没在运行：Actor 只在运行中的编辑器或游戏里有')}</ui.EmptyPanel>
-        </div>
+        <NotRunning icon={Box} what={t('Actor 只在运行中的编辑器或游戏里有。')} />
       ) : (
         <div className={SPLIT_ROW}>
           <Card
@@ -119,11 +164,27 @@ export function Actors() {
           >
             <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3">
               <SearchBox
+                key={boxKey}
+                initial={q}
                 placeholder={t('Actor 名字开头，例如 BP_Hero')}
                 hint={t('前缀')}
                 onSearch={search}
                 busy={found.loading}
               />
+              <div className="ue:flex ue:flex-wrap ue:gap-1">
+                {quicks.map((x) => (
+                  <button
+                    key={x.key}
+                    type="button"
+                    disabled={!!quickRun.busy}
+                    onClick={() => void x.run()}
+                    className="ue:h-6 ue:cursor-pointer ue:rounded-md ue:border ue:border-line ue:px-2 ue:text-footnote ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50"
+                  >
+                    {quickRun.busy === x.key ? t('找…') : x.label}
+                  </button>
+                ))}
+              </div>
+              <ErrorText>{quickErr}</ErrorText>
               {found.data && (
                 <span className="ue:text-footnote ue:text-subtle">
                   {found.data.more

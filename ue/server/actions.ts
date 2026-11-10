@@ -47,7 +47,10 @@ export interface LogArgs {
 /** 日志：UE 在跑就从桥接取（带游标），没在跑读日志文件尾部 */
 export async function logTail(ctx: OpCtx, a: LogArgs) {
   const cards = (await liveCards(ctx.project.root)).filter((x) => x.kind !== 'background')
-  if (cards.length) return { live: true, ...(await runOp(ctx, 'log.tail', { ...a, limit: a.limit ?? 300 })) }
+  if (cards.length) {
+    const r = await runOp(ctx, 'log.tail', { ...a, limit: a.limit ?? 300 })
+    return { live: true, ...r, lines: withWallTime(r.lines as RawLine[], r.now as number | undefined) }
+  }
   // UE 没在运行：没筛选时只读文件尾部；有筛选时流式搜索最后 64 MB（大文件不整个读进内存）
   const filtered = !!(a.category || a.verbosity || a.contains)
   const r = filtered
@@ -55,7 +58,7 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
     : { ...(await tailFile(logFile(ctx.project), a.limit ?? 300)), truncated: false, matched: 0 }
   return {
     live: false,
-    lines: r.lines,
+    lines: r.lines.map((l) => ({ ...l, at: fileTime(l.time) })),
     cursor: 0,
     errors: r.lines.filter((l) => /error|fatal/i.test(l.verbosity)).length,
     warnings: r.lines.filter((l) => /warning/i.test(l.verbosity)).length,
@@ -63,6 +66,30 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
     size: r.size,
     truncated: r.truncated,
   }
+}
+
+interface RawLine {
+  time?: number | string
+  [k: string]: unknown
+}
+
+/**
+ * 进程里的日志行带的是 FPlatformTime::Seconds（开机后的秒数，不是钟表时间）。桥接 1.1.1 起回包里带上它自己的 now，
+ * 用「现在 - (now - time)」换成钟表时间；旧桥接没有 now，就不给 at，网页按收到的时间显示
+ */
+function withWallTime(lines: RawLine[] = [], bridgeNow?: number) {
+  const wall = Date.now()
+  return lines.map((l) =>
+    typeof bridgeNow === 'number' && typeof l.time === 'number'
+      ? { ...l, at: Math.round(wall - (bridgeNow - l.time) * 1000) }
+      : l,
+  )
+}
+
+/** 日志文件里的时间 [2026.11.10-11.30.12:345]（UTC），换成毫秒时间戳 */
+function fileTime(s?: string) {
+  const m = /^(\d{4})\.(\d\d)\.(\d\d)-(\d\d)\.(\d\d)\.(\d\d):(\d{1,3})$/.exec(s ?? '')
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], +m[7]) : undefined
 }
 
 /** 清空日志会影响到的进程（清空弹窗列出来，设计文档 3.5） */

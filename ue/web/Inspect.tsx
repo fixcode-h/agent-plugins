@@ -22,7 +22,7 @@ interface Node {
  * 像 UE 的 UMG 编辑器的层级 + 细节面板，只是不画中间的样式预览；其他对象只显示属性。
  * 桥接是旧版本（没有 umg.tree）或对象不是控件时，退回只显示属性
  */
-export function Inspect({ path, onOpen }: { path: string; onOpen: (path: string) => void }) {
+export function Inspect({ path, onOpen, cdo }: { path: string; onOpen: (path: string) => void; cdo?: boolean }) {
   const { project, target, go } = useUe()
   const [sel, setSel] = useState(path)
   // 控件树宽度可拖（md 以上左右排时），右边参数至少留 280px
@@ -40,7 +40,7 @@ export function Inspect({ path, onOpen }: { path: string; onOpen: (path: string)
   const parent = tree.data?.parent
   // 先等控件树回来再决定布局，免得属性先按单栏读一遍、再换成两栏又读一遍
   if (!tree.data) return <p className="ue:p-4 ue:text-footnote ue:text-subtle">{t('读取中…')}</p>
-  if (!root) return <Props key={path} path={path} onOpen={onOpen} />
+  if (!root) return <Props key={path} path={path} onOpen={onOpen} cdo={cdo} />
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
       <div

@@ -13,6 +13,20 @@ export interface UeCtx {
   /** 分区里的子位置（选中的 Actor、资源路径…），写进地址 */
   sub: string
   go: (section: string, sub?: string) => void
+  /** 左栏分区旁的数字（服务端 badges.ts），概览、操作记录也用 */
+  badges?: Badges
+  reloadBadges: () => void
+  /** 打开截视口浮层、Ctrl+K 跳转 */
+  openShot: () => void
+  openJump: () => void
+}
+
+export interface Badges {
+  errors?: number
+  warnings?: number
+  watch: number
+  undoable: number
+  dirty: number
 }
 
 export const Ctx = createContext<UeCtx | null>(null)
