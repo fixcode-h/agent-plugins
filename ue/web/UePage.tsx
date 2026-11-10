@@ -1,5 +1,6 @@
 import {
   Box,
+  Braces,
   Cpu,
   Database,
   Eye,
@@ -26,6 +27,7 @@ import { Console } from './sections/Console.tsx'
 import { Gm } from './sections/Gm.tsx'
 import { History } from './sections/History.tsx'
 import { Logs } from './sections/Logs.tsx'
+import { Lua } from './sections/Lua.tsx'
 import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
 import { Watch } from './sections/Watch.tsx'
@@ -42,12 +44,22 @@ interface Section {
   icon: LucideIcon
   group: () => string
   View: ComponentType
+  /** 只在条件满足时列出（Lua：有进程的桥接编进了 UnLua 支持） */
+  when?: (s: ProjectState | undefined) => boolean
 }
 
 const SECTIONS: Section[] = [
   { id: 'overview', label: () => t('概览'), icon: LayoutGrid, group: () => t('运行时'), View: Overview },
   { id: 'console', label: () => t('控制台'), icon: SquareTerminal, group: () => t('运行时'), View: Console },
   { id: 'gm', label: () => 'GM', icon: Wand2, group: () => t('运行时'), View: Gm },
+  {
+    id: 'lua',
+    label: () => 'Lua',
+    icon: Braces,
+    group: () => t('运行时'),
+    View: Lua,
+    when: (s) => !!s?.instances.some((i) => i.lua),
+  },
   { id: 'actors', label: () => 'Actor', icon: Box, group: () => t('数据'), View: Actors },
   { id: 'objects', label: () => t('运行时对象'), icon: Cpu, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
@@ -151,10 +163,12 @@ export function UePage({ path }: { path: string }) {
       </div>
     )
 
+  // 有条件的分区：条件不满足时不列，但地址直接指向它时照样打开（页面里会说明为什么用不了）
+  const visible = SECTIONS.filter((s) => !s.when || s.when(state.data) || s.id === sectionId)
   const section = SECTIONS.find((s) => s.id === sectionId) ?? SECTIONS[0]
   const conn = connLine(state.data)
   const errs = state.data ? undefined : state.error
-  const groups = [...new Set(SECTIONS.map((s) => s.group()))]
+  const groups = [...new Set(visible.map((s) => s.group()))]
   const View = section.View
   return (
     <Ctx.Provider value={ctx}>
@@ -188,25 +202,27 @@ export function UePage({ path }: { path: string }) {
             {groups.map((g) => (
               <div key={g} className="ue:flex ue:gap-1 ue:md:flex-col">
                 <div className="ue:hidden ue:px-2 ue:pt-3 ue:pb-1 ue:text-caption ue:text-subtle ue:md:block">{g}</div>
-                {SECTIONS.filter((s) => s.group() === g).map((s) => {
-                  const Icon = s.icon
-                  const on = s.id === section.id
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => go(s.id)}
-                      aria-current={on ? 'page' : undefined}
-                      className={cn(
-                        'ue:flex ue:h-8 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-2.5 ue:rounded-lg ue:px-2.5 ue:text-body ue:whitespace-nowrap',
-                        on ? 'ue:bg-active ue:text-fg' : 'ue:text-muted ue:hover:bg-hover ue:hover:text-fg',
-                      )}
-                    >
-                      <Icon className="ue:h-4 ue:w-4 ue:shrink-0" strokeWidth={1.75} />
-                      {s.label()}
-                    </button>
-                  )
-                })}
+                {visible
+                  .filter((s) => s.group() === g)
+                  .map((s) => {
+                    const Icon = s.icon
+                    const on = s.id === section.id
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => go(s.id)}
+                        aria-current={on ? 'page' : undefined}
+                        className={cn(
+                          'ue:flex ue:h-8 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-2.5 ue:rounded-lg ue:px-2.5 ue:text-body ue:whitespace-nowrap',
+                          on ? 'ue:bg-active ue:text-fg' : 'ue:text-muted ue:hover:bg-hover ue:hover:text-fg',
+                        )}
+                      >
+                        <Icon className="ue:h-4 ue:w-4 ue:shrink-0" strokeWidth={1.75} />
+                        {s.label()}
+                      </button>
+                    )
+                  })}
               </div>
             ))}
           </nav>

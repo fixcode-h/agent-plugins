@@ -87,6 +87,8 @@ export interface Instance {
   error?: string
   log?: string
   worlds: World[]
+  /** 装了 UnLua 的项目：桥接编进了 Lua 支持时有这个字段；available 表示现在拿得到 Lua 环境 */
+  lua?: { available: boolean; error?: string; version?: string }
 }
 
 export interface Target {

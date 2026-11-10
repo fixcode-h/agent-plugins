@@ -1,6 +1,7 @@
 #include "AgentPanelBridge.h"
 
 #include "AgentPanelLog.h"
+#include "AgentPanelLuaOps.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -27,7 +28,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogAgentPanelBridge, Log, All);
 
-static const TCHAR* BridgeVersion = TEXT("1.0.0");
+static const TCHAR* BridgeVersion = TEXT("1.1.0");
 
 FAgentPanelBridge& FAgentPanelBridge::Get()
 {
@@ -201,6 +202,7 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Info() const
 		Names.Add(MakeShared<FJsonValueString>(P.Key));
 	}
 	O->SetArrayField(TEXT("ops"), Names);
+	AgentPanelLuaInfo(O);
 	return O;
 }
 
