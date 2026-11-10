@@ -1,11 +1,11 @@
 # UE 插件
 
-按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 12 个 `ue_*` 工具。
+按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 13 个 `ue_*` 工具。
 
 ## 组成
 
 - **面板插件**（`server/`、`web/`）：
-  - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Actor、运行时对象、资源 / DataTable、监视、日志、操作记录、桥接与权限。
+  - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Lua（UnLua 项目）、Actor、运行时对象、资源 / DataTable、监视、日志、操作记录、桥接与权限。
   - 添加项目的弹窗。
   - 对话右栏的「UE」页签。
   - Agent 工具。
@@ -15,6 +15,16 @@
   - 编辑器模块负责资源写入和保存、PIE 和 Live Coding。
   - 后台编辑器用 `-run=AgentPanel`：编辑器没开时读资源，闲置后自己退出。
   - Shipping 包里没有桥接。
+
+## UnLua 项目
+
+UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plugins` 里的 UnLua（`.uproject` 里关掉了就当没有），有就编进 Lua 支持，没有时这部分代码不编译。
+
+- 运行时对象页可以只看绑了 Lua 模块的对象、按模块名搜；属性面板多一个「Lua」页签看和改实例表的字段。
+- 「Lua」页：执行 Lua 代码（`self` 可以是某个对象的实例表），按路径看全局表里纯 Lua 的单例和管理器。
+- Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认）。
+- 读写只用 Lua 的 C 接口：UnLua 注册表里「UObject 指针 → 实例表」的对象表名字对不上时，扫注册表认出来；会触发元方法的读写都在 `lua_pcall` 里。
+- 只有「拿到 lua_State」和 UnLua 版本有关：`AgentPanelBridge.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
 
 设计见面板仓库的 UE 插件设计文档，面板侧的扩展点是插件接口 2（ADR 0059）。
 
@@ -57,4 +67,5 @@ npm run build -- ue && node ue/scripts/smoke.mjs
 
 - 清空日志的「关闭 → 清空 → 原名重开」是否可靠；
 - 后台编辑器的 HTTP 服务能不能被 commandlet 的循环泵起来；
-- PIE 多客户端时世界 id 是否正确。
+- PIE 多客户端时世界 id 是否正确；
+- UnLua：Build.cs 能不能选对拿 lua_State 的接口，对象表能不能认出来，绑定对象的模块名对不对。

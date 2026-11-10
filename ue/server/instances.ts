@@ -72,7 +72,8 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
     )
   }
   const body = (await res.json().catch(() => null)) as
-    ({ ok?: boolean; error?: string } & Record<string, unknown>) | null
+    | ({ ok?: boolean; error?: string } & Record<string, unknown>)
+    | null
   if (!body) throw new BridgeError(t('桥接回了无法解析的内容（HTTP {code}）', { code: res.status }))
   if (!body.ok) throw new BridgeError(body.error || t('桥接返回失败（HTTP {code}）', { code: res.status }))
   return body
@@ -96,7 +97,7 @@ export async function info(card: Card): Promise<Instance> {
     })
     const body = (await res.json()) as Partial<Instance> & { ok?: boolean; error?: string }
     if (!body.ok) return { ...base, error: body.error || `HTTP ${res.status}` }
-    return { ...base, online: true, log: body.log, worlds: body.worlds ?? [] }
+    return { ...base, online: true, log: body.log, worlds: body.worlds ?? [], lua: body.lua }
   } catch (e) {
     return { ...base, error: (e as Error).message }
   }

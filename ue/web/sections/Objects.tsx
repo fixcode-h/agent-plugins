@@ -3,12 +3,14 @@ import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
-import { Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
+import { Badge, Card, ErrorText, Note, PageHead, TargetPicker, useTargetInfo } from '../ui.tsx'
 
 interface Row {
   path: string
   name: string
   class: string
+  /** 只看绑了 Lua 的对象时：它的 Lua 模块名 */
+  module?: string
   /** 桥接给的分类：instance（活着的实例）、asset（资源、默认值）、class（类本身）；旧桥接没有，按路径猜 */
   kind?: 'instance' | 'asset' | 'class'
 }
@@ -48,21 +50,29 @@ export function Objects() {
   const { cn, ui } = h()
   const [cls, setCls] = useState('')
   const [prefix, setPrefix] = useState('')
-  const [q, setQ] = useState<{ cls: string; prefix: string }>()
+  const [lua, setLua] = useState(false)
+  const [mod, setMod] = useState('')
+  const [q, setQ] = useState<{ cls: string; prefix: string; lua: boolean; mod: string }>()
+  // 装了 UnLua 的项目：可以只看绑了 Lua 模块的对象、按模块名搜（桥接遍历 UnLua 的对象表，不扫全部 UObject，空条件也能搜）
+  const hasLua = !!inst?.lua
   const found = useLoad(
     () =>
       q
-        ? op<{ items: Row[]; more: boolean; partial: boolean }>(
+        ? op<{ items: Row[]; more: boolean; partial?: boolean; bound?: number }>(
             project.id,
-            'objects',
-            { class: q.cls, prefix: q.prefix, limit: 200 },
+            q.lua ? 'lua.objects' : 'objects',
+            q.lua
+              ? { class: q.cls, prefix: q.prefix, module: q.mod, limit: 200 }
+              : { class: q.cls, prefix: q.prefix, limit: 200 },
             target,
           )
         : Promise.resolve(undefined),
     [q, target.instance],
   )
+  const luaOn = lua && hasLua
+  const canSearch = luaOn || !!cls.trim() || !!prefix.trim()
   const search = (c = cls, p = prefix) => {
-    if (c.trim() || p.trim()) setQ({ cls: c.trim(), prefix: p.trim() })
+    if (luaOn || c.trim() || p.trim()) setQ({ cls: c.trim(), prefix: p.trim(), lua: luaOn, mod: mod.trim() })
   }
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -100,15 +110,32 @@ export function Objects() {
                   placeholder={t('名字开头（可选）')}
                   onChange={(e: { target: { value: string } }) => setPrefix(e.target.value)}
                 />
-                <ui.Button
-                  size="sm"
-                  variant="secondary"
-                  type="submit"
-                  disabled={found.loading || (!cls.trim() && !prefix.trim())}
-                >
+                <ui.Button size="sm" variant="secondary" type="submit" disabled={found.loading || !canSearch}>
                   {t('搜索')}
                 </ui.Button>
               </div>
+              {hasLua && (
+                <div className="ue:flex ue:items-center ue:gap-2">
+                  <label className="ue:flex ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
+                    <input
+                      type="checkbox"
+                      checked={lua}
+                      onChange={(e) => setLua(e.target.checked)}
+                      className="ue:accent-accent"
+                    />
+                    {t('只看绑了 Lua 的')}
+                  </label>
+                  {lua && (
+                    <ui.Input
+                      size="sm"
+                      className="ue:flex-1"
+                      value={mod}
+                      placeholder={t('Lua 模块名包含（可选）')}
+                      onChange={(e: { target: { value: string } }) => setMod(e.target.value)}
+                    />
+                  )}
+                </div>
+              )}
               <div className="ue:flex ue:flex-wrap ue:gap-1">
                 {QUICK.map((c) => (
                   <button
@@ -140,10 +167,7 @@ export function Objects() {
                 if (!rows.length) return null
                 return (
                   <section key={k.id} className="ue:mb-2">
-                    <div
-                      className="ue:flex ue:items-baseline ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1"
-                      title={k.hint()}
-                    >
+                    <div className="ue:flex ue:items-baseline ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1" title={k.hint()}>
                       <span className="ue:text-footnote ue:font-medium ue:text-muted">{k.label()}</span>
                       <span className="ue:text-caption ue:text-subtle">{rows.length}</span>
                     </div>
@@ -158,7 +182,10 @@ export function Objects() {
                               sub === o.path && 'ue:bg-sel',
                             )}
                           >
-                            <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+                              <span className="ue:truncate ue:text-body ue:text-fg">{o.name}</span>
+                              {o.module && <Badge tone="accent">{o.module}</Badge>}
+                            </span>
                             <span className="ue:truncate ue:text-caption ue:text-subtle" title={o.path}>
                               {o.class} · {o.path}
                             </span>

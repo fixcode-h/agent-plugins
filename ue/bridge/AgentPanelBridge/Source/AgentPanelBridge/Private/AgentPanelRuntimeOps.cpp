@@ -4,6 +4,7 @@
 #include "AgentPanelBridgeUtil.h"
 #include "AgentPanelGMLibrary.h"
 #include "AgentPanelLog.h"
+#include "AgentPanelLuaOps.h"
 #include "AgentPanelUmg.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -923,5 +924,7 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		return AgentPanelCaptureViewport(GameViewport(World), Int(A, TEXT("maxWidth"), 1280), Out, Error);
 	});
 
+	// ---------- Lua（项目里有 UnLua 才编进来，见 AgentPanelLua.cpp） ----------
+	AgentPanelRegisterLuaOps(*this);
 	RegisterUmgOps(*this);
 }
