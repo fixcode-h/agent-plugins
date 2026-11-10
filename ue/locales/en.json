@@ -436,5 +436,21 @@
   "Lua 路径，例如 GameSystemManager 或 package.loaded[\"Game.Core\"]": "Lua path, e.g. GameSystemManager or package.loaded[\"Game.Core\"]",
   "只看绑了 Lua 的": "Lua-bound only",
   "Lua 模块名包含（可选）": "Lua module name contains (optional)",
-  "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查和调数值。": "Connects to running Unreal Engine (5.4 or later) per project: console, GMs, finding Actors by name, reading and changing runtime properties, DataTables and assets (readable even when the editor is closed), logs and screenshots; with UnLua, also search Lua instances, view and edit Lua fields, and run Lua; Agents can use these to debug and tune values."
+  "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查和调数值。": "Connects to running Unreal Engine (5.4 or later) per project: console, GMs, finding Actors by name, reading and changing runtime properties, DataTables and assets (readable even when the editor is closed), logs and screenshots; with UnLua, also search Lua instances, view and edit Lua fields, and run Lua; Agents can use these to debug and tune values.",
+  "没能检查编辑器是否开着（照常编译）：{msg}": "Couldn't check whether the editor is open (building anyway): {msg}",
+  "本项目": "this project",
+  "项目未知": "unknown project",
+  "这个引擎的编辑器还开着：{who}": "An editor of this engine is still open: {who}",
+  "未知进程": "unknown process",
+  "编辑器启用 Live Coding 时引擎拒绝在外面编译，就算关了 Live Coding，编辑器也占着插件的 DLL，编出来写不进去。": "With Live Coding enabled in the editor, the engine refuses to build from outside; even with Live Coding off, the editor holds the plugin DLLs, so the build can't write them.",
+  "先保存并关掉编辑器再编译；只改了已加载模块的代码时，也可以在编辑器里按 Ctrl+Alt+F11 用 Live Coding 编。": "Save and close the editor, then build. If you only changed code in modules the editor has loaded, you can also press Ctrl+Alt+F11 in the editor to build with Live Coding.",
+  "UE 编辑器开着，引擎拒绝编译": "The UE editor is open, so the engine refused to build",
+  "这个引擎的编辑器还开着（{list}），这次没有开始编译。": "An editor of this engine is still open ({list}), so the build didn't start.",
+  "编辑器启用了 Live Coding，Build.bat 看到后直接退出了。": "Live Coding is active in the editor, so Build.bat exited right away.",
+  "关掉编辑器再编译最稳；桥接插件是这次新装或升级的，只能这样，编完重新打开编辑器就会加载。": "Closing the editor and building is the reliable way, and the only way when the bridge plugin was just installed or upgraded; it loads the next time you open the editor.",
+  "编辑器里已经连上桥接，只改了它已加载模块的代码时，也可以直接用 Live Coding 编译，不用关编辑器。": "The bridge is connected in the editor. If you only changed code in modules it has loaded, you can build with Live Coding without closing the editor.",
+  "已关掉编辑器，重新编译": "Editor closed, build again",
+  "Live Coding 已开始，进度看编辑器里的 Live Coding 窗口": "Live Coding started; watch the Live Coding window in the editor for progress",
+  "用 Live Coding 编译": "Build with Live Coding",
+  "不检查，仍然编译": "Build anyway without checking"
 }

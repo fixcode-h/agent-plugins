@@ -57,7 +57,7 @@ async function register(b: Body) {
   if (mode === 'local' || mode === 'vcs') {
     jobs.push(await install(p, mode))
     p.install = { mode, version: det.bridge || '', at: now() }
-    jobs.push(build(p))
+    jobs.push(await build(p))
   }
   await saveProject(p)
   return { project: p, jobs: jobs.map((j) => j.id) }
@@ -108,7 +108,7 @@ export async function handle(req: Request): Promise<Response> {
         const job = await install(project, mode)
         const det = await detect(project.root, project.engineDir)
         await patchProject(project.id, { install: { mode, version: det.bridge, at: now() } })
-        return json({ job: job.id, build: build(project).id })
+        return json({ job: job.id, build: (await build(project)).id })
       }
       case 'POST uninstall': {
         const job = await uninstall(project)
@@ -116,7 +116,7 @@ export async function handle(req: Request): Promise<Response> {
         return json({ job: job.id })
       }
       case 'POST build':
-        return json({ job: build(project).id })
+        return json({ job: (await build(project, b.force === true)).id })
       case 'POST op':
         return json(await runOp(ctx, String(b.op), (b.args as Body) ?? {}, Number(b.timeout) || 30000))
       case 'POST console': {

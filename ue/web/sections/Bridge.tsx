@@ -5,6 +5,7 @@ import { get, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Badge, Card, Confirm, PageHead, Term } from '../ui.tsx'
+import { BuildHint } from './BuildHint.tsx'
 
 /**
  * 桥接与权限：桥接插件的安装、升级、编译、卸载和输出；Agent 权限；GM 预设存哪；引擎目录和编译命令；从 UE 页移除项目
@@ -94,6 +95,13 @@ export function Bridge() {
                     {job.data.status === 'done' ? t('完成') : job.data.status === 'failed' ? t('失败') : t('进行中')}
                   </Badge>
                 </div>
+                {job.data.hint && (
+                  <BuildHint
+                    hint={job.data.hint}
+                    busy={!!busy}
+                    onBuild={(force) => void act('build', force ? { force: true } : undefined)}
+                  />
+                )}
                 <Term className="ue:max-h-72">
                   {job.data.log.slice(-400).map((l, i) => (
                     <div
