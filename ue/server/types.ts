@@ -7,6 +7,8 @@
 export type RuntimePerm = 'read' | 'write' | 'ask'
 /** Agent 对资源的权限：只读 / 可改、保存前问我 / 直接保存 */
 export type AssetPerm = 'read' | 'ask' | 'save'
+/** Agent 对结构性操作（新建、复制、改名 / 移动资源）的权限：不允许 / 每次问我 / 允许。删除不看这个，每次都问 */
+export type StructPerm = 'read' | 'ask' | 'allow'
 export type Vcs = 'git' | 'p4' | 'svn' | 'none'
 /** 桥接插件装进项目的方式：只在本机（写进 ignore）/ 加入版本管理 */
 export type InstallMode = 'local' | 'vcs'
@@ -36,7 +38,8 @@ export interface UeProject {
   cpp: boolean
   vcs: Vcs
   install?: { mode: InstallMode; version: string; at: string }
-  perms: { runtime: RuntimePerm; asset: AssetPerm }
+  /** python：允许 Agent 在编辑器里执行 Python（默认关；开了也每次确认） */
+  perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: boolean }
   /** GM 预设和宏存哪：项目里 .agent-panel/ue/gm.json（团队共用）/ 插件数据目录（只自己用） */
   gmStore: 'project' | 'local'
   /** 手动指定的引擎目录（自动找不到时填） */

@@ -4,6 +4,8 @@ import { useToChat } from '../chat.tsx'
 import { takePending } from '../pending.ts'
 import { op, show, useAction, useLoad } from '../api.ts'
 import { useAsk } from '../ask.tsx'
+import { AssetInfo } from '../AssetInfo.tsx'
+import { BlueprintView } from '../Blueprint.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
@@ -44,7 +46,7 @@ const PAGE = 50
 
 /**
  * 资源（图 5）：按类型和名字前缀找资源（点搜索才搜）；DataTable 表格视图（分页、筛选、改单元格、增删行），
- * DataAsset、蓝图默认值（CDO）用属性面板。编辑器关着时走后台编辑器，读的是磁盘上的版本。
+ * DataAsset、蓝图默认值（CDO）用属性面板；蓝图另有「蓝图」页看大纲和图表伪代码，任何资源都有「摘要与引用」页。编辑器关着时走后台编辑器，读的是磁盘上的版本。
  * 改动只暂存在编辑器里，「签出并保存」才写回（P4 先签出）
  */
 export function Assets() {
@@ -80,6 +82,12 @@ export function Assets() {
   const [confirmSave, setConfirmSave] = useState(false)
   const selected = (found.data?.items ?? []).find((a) => a.path === sub)
   const isTable = selected ? selected.class === 'DataTable' : /\/DT_/.test(sub)
+  // 蓝图资源（含控件蓝图、动画蓝图）；从别处跳过来、列表里没有这一项时按常见前缀猜。组件模板这类子对象路径带冒号，不算
+  const isBlueprint =
+    !sub.includes(':') && (selected ? /Blueprint$/.test(selected.class) : /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(sub))
+  // 右栏看什么：内容（表格 / 属性）、蓝图（大纲和图表）、摘要（文件、标签、引用关系）
+  const [view, setView] = useState<'main' | 'graph' | 'info'>('main')
+  const tab = view === 'graph' && !isBlueprint ? 'main' : view
   const source = found.data?.instance?.kind
 
   const save = () =>
@@ -197,17 +205,46 @@ export function Assets() {
         <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
           {!sub ? (
             <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">
-              {t('选一个资源：DataTable 显示成表格，DataAsset 和蓝图显示默认值')}
+              {t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看大纲和图表')}
             </p>
-          ) : isTable ? (
-            <DataTableView key={sub} path={sub} onChanged={() => void dirty.reload()} />
           ) : (
-            <Props
-              key={sub}
-              path={sub}
-              onOpen={(p) => go('assets', p)}
-              readOnlyHint={t('资源的改动只暂存在编辑器里，点右上「保存」才写回文件；蓝图资源改的是类默认值')}
-            />
+            <>
+              <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
+                <ui.Segmented
+                  size="sm"
+                  label={t('内容 / 蓝图 / 摘要')}
+                  value={tab}
+                  onChange={setView}
+                  options={[
+                    { id: 'main' as const, label: isTable ? t('表格') : isBlueprint ? t('类默认值') : t('属性') },
+                    ...(isBlueprint ? [{ id: 'graph' as const, label: t('蓝图') }] : []),
+                    { id: 'info' as const, label: t('摘要与引用') },
+                  ]}
+                />
+              </div>
+              {tab === 'info' ? (
+                <AssetInfo key={sub} path={sub} onOpen={(p) => go('assets', p)} />
+              ) : tab === 'graph' ? (
+                <BlueprintView
+                  key={sub}
+                  path={sub}
+                  onOpen={(p) => {
+                    setView('main')
+                    go('assets', p)
+                  }}
+                  onChanged={() => void dirty.reload()}
+                />
+              ) : isTable ? (
+                <DataTableView key={sub} path={sub} onChanged={() => void dirty.reload()} />
+              ) : (
+                <Props
+                  key={sub}
+                  path={sub}
+                  onOpen={(p) => go('assets', p)}
+                  readOnlyHint={t('资源的改动只暂存在编辑器里，点右上「保存」才写回文件；蓝图资源改的是类默认值')}
+                />
+              )}
+            </>
           )}
         </Card>
       </div>

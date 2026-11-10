@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "3.1.0-alpha.2",
+  "version": "3.1.0-alpha.3",
   "icon": "box",
   "description": "让 Agent 直接驱动你的 Blender：GUI 会话里执行 Python、看视口、跑 228 个建模算子，无头作业和渲染排队执行；附带模型设计页。",
   "author": "fixcode-h",
@@ -12,7 +12,7 @@
     "version": "3.1.0-alpha.1",
     "license": "BSD-3-Clause"
   },
-  "api": 1,
+  "api": 2,
   "settings": [
     {
       "key": "blenderPath",

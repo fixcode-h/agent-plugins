@@ -42,7 +42,7 @@ export interface TaskInput {
   prompt: string
   attachments: unknown[]
   askUser?: boolean
-  /** 归哪个插件的设计模式（DesignMode.id） */
+  /** 归哪个插件（DesignMode.id 或 PluginPage.taskPlugin） */
   plugin?: string
 }
 
@@ -101,6 +101,11 @@ export interface WebHost {
     Segmented: Loose
     DirPicker: Loose
     TaskView: Loose
+    /**
+     * 新建对话的输入框（CLI、模型、附件都能选）：standalone + plugin 时建出不属于项目、task.plugin = plugin 的对话。
+     * 2026-11-10 加的，旧面板没有：用之前先判断有没有
+     */
+    TaskComposer?: Loose
   }
   toast: { error: (m: string) => void; success: (m: string) => void }
   cn: (...c: unknown[]) => string
@@ -145,6 +150,11 @@ export interface PluginPage {
   icon: (p: { className?: string; strokeWidth?: number }) => ReactNode
   /** 图标右上角的小点（有新内容、出错），给文字时也写进悬停提示 */
   useDot?: () => string | boolean | undefined
+  /**
+   * 这一页管的对话（task.plugin 等于它的对话，例如 Blender 插件的 blender.model）：面板不把这些对话列进 Agent 项目和 Chat，
+   * 从通知、旧链接打开时转到这一页（#/plugin/<插件>/<页面>/<对话 id>）。2026-11-10 加的，旧面板忽略它
+   */
+  taskPlugin?: string
   Page: ComponentType<{ path: string }>
 }
 

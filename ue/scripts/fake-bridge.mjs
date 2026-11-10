@@ -18,12 +18,23 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       inst: { Gold: 100, Ratio: 0.5, Bag: { Size: 20 } },
       exec: [],
     },
+    // 假的蓝图 /Game/BP_Hero：变量、图里的节点、没保存的包、撤销栈（事务 id）
+    bp: {
+      vars: [{ name: 'MaxHP', type: 'Float' }],
+      nodes: ['a1b2c3d4'],
+      dirty: new Set(),
+      tx: [],
+      created: [],
+      deleted: [],
+    },
   }
   const log = (category, verbosity, text) => state.lines.push({ seq: ++state.seq, category, verbosity, text })
   log('LogInit', 'Display', 'fake bridge up')
   log('LogNet', 'Warning', 'connection timeout (client 2)')
   const HERO = '/Game/Maps/UEDPIE_0_Town.Town:PersistentLevel.BP_Hero_C_1'
   const GI = '/Engine/Transient.GameEngine_0:BP_LuaGameInstance_C_0'
+  const BP = '/Game/BP_Hero'
+  const packageOf = (p) => String(p ?? '').split('.')[0]
   // 假桥接的 Lua：对象实例表 / 全局表按 keys 往下取（和真桥接一样数字键写成数字）
   const luaRoot = (a) => {
     if (!a.path) return state.lua.global
@@ -199,6 +210,157 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       return { file: path.join(root, 'Saved', 'Logs', 'Fake.log'), size, backup: '', cursor: state.seq }
     },
     screenshot: () => ({ png: 'iVBORw0KGgo=', width: 1, height: 1, world: 'pie0' }),
+    assets: () => ({
+      items: [
+        { path: '/Game/BP_Hero.BP_Hero', name: 'BP_Hero', class: 'Blueprint' },
+        { path: '/Game/DT_Items.DT_Items', name: 'DT_Items', class: 'DataTable' },
+      ],
+      total: 2,
+    }),
+    // ----- 资源通用层和蓝图（只模拟参数、事务 id 和脏包；真正的图表和编译只有引擎里有） -----
+    'asset.describe': (a) => ({
+      path: a.path,
+      name: 'BP_Hero',
+      class: 'Blueprint',
+      classChain: ['BlueprintCore', 'Object'],
+      package: BP,
+      file: path.join(root, 'Content', 'BP_Hero.uasset'),
+      onDisk: true,
+      size: 1234,
+      dirty: state.bp.dirty.has(BP),
+      tags: { ParentClass: '/Script/Engine.Character' },
+      subobjects: [],
+      subobjectCount: 0,
+      dependencies: 1,
+      referencers: 1,
+    }),
+    'asset.refs': () => ({
+      package: BP,
+      dependencies: [{ package: '/Game/DT_Items', level: 1 }],
+      dependencyTotal: 1,
+      referencers: [{ package: '/Game/Maps/Town', level: 1 }],
+      referencerTotal: 1,
+    }),
+    'asset.create': (a) => {
+      if (!a.dryRun) {
+        state.bp.created.push(a.path)
+        state.bp.dirty.add(a.path)
+      }
+      return { path: `${a.path}.${a.path.split('/').pop()}`, class: a.class, dryRun: !!a.dryRun }
+    },
+    'asset.duplicate': (a) => ({ path: `${a.to}.${a.to.split('/').pop()}`, dryRun: !!a.dryRun }),
+    'asset.delete': (a) => {
+      const referencers = a.path === BP ? ['/Game/Maps/Town'] : []
+      if (a.dryRun) return { package: a.path, referencers, referencerTotal: referencers.length, dryRun: true }
+      if (referencers.length && !a.force) throw new Error(`${a.path} 还被 1 个资源引用，没有删：/Game/Maps/Town`)
+      state.bp.deleted.push(a.path)
+      return { package: a.path, file: '', onDisk: false, referencers, referencerTotal: referencers.length }
+    },
+    'asset.dirty': () => ({
+      items: [...state.bp.dirty].map((p) => ({ package: p, file: `${p}.uasset`, readOnly: false, isNew: false })),
+    }),
+    'asset.save': () => {
+      state.bp.dirty.clear()
+      return { saved: [] }
+    },
+    'asset.undo': (a) => {
+      if (state.bp.tx.at(-1)?.id !== a.tx) throw new Error('这一步不在撤销栈顶')
+      state.bp.tx.pop().undo()
+      return { undone: true }
+    },
+    'bp.outline': (a) => {
+      if (packageOf(a.path) !== BP) throw new Error(`${a.path} 不是蓝图`)
+      return {
+        path: `${BP}.BP_Hero`,
+        name: 'BP_Hero',
+        parent: '/Script/Engine.Character',
+        status: 'ok',
+        dirty: state.bp.dirty.has(BP),
+        interfaces: [],
+        variables: state.bp.vars.map((v) => ({ ...v, instanceEditable: true })),
+        dispatchers: [],
+        components: [
+          { name: 'Health', class: 'BP_HealthComponent_C', template: `${BP}.BP_Hero_C:Health_GEN_VARIABLE` },
+        ],
+        graphs: [{ name: 'EventGraph', kind: 'event', nodes: state.bp.nodes.length }],
+        timelines: [],
+        compile: { status: 'ok', nodes: [] },
+      }
+    },
+    'bp.graph': (a) =>
+      a.node
+        ? {
+            graph: 'EventGraph',
+            node: {
+              id: a.node,
+              kind: 'event',
+              title: 'Event BeginPlay',
+              pins: [{ name: 'then', dir: 'out', type: 'exec' }],
+            },
+          }
+        : a.format === 'json'
+          ? {
+              graph: 'EventGraph',
+              kind: 'event',
+              total: state.bp.nodes.length,
+              nodes: state.bp.nodes.map((id) => ({ id, kind: 'other', title: id, pins: [] })),
+            }
+          : {
+              graph: 'EventGraph',
+              kind: 'event',
+              total: state.bp.nodes.length,
+              pseudo: 'Event ReceiveBeginPlay()  #a1b2c3d4\n  HP = MaxHP  #0f3e77a1',
+              more: false,
+            },
+    'bp.node_search': (a) => ({
+      items: [
+        {
+          spawner: 'f00dfeed',
+          name: `Print String (${a.query})`,
+          category: 'Development',
+          nodeClass: 'K2Node_CallFunction',
+        },
+      ],
+      total: 1,
+    }),
+    'bp.find': (a) => ({
+      items: [{ blueprint: `${BP}.BP_Hero`, graph: 'EventGraph', node: 'a1b2c3d4', kind: 'call', title: a.query }],
+      matched: 1,
+      scanned: 1,
+      blueprints: 1,
+      partial: false,
+    }),
+    'bp.edit': (a) => {
+      const before = { vars: [...state.bp.vars], nodes: [...state.bp.nodes] }
+      const results = []
+      for (const [i, o] of a.ops.entries()) {
+        if (o.op === 'add_variable') state.bp.vars.push({ name: o.name, type: o.type })
+        else if (o.op === 'add_node') {
+          const id = `n${state.bp.nodes.length}0000000`.slice(0, 8)
+          state.bp.nodes.push(id)
+          results.push({ op: o.op, node: id, as: o.as })
+          continue
+        } else if (o.op !== 'connect') {
+          // 和真桥接一样：任一步失败整批取消
+          Object.assign(state.bp, before)
+          throw new Error(`第 ${i + 1} 个操作（${o.op}）失败：不认识的操作 ${o.op}。整批已取消，蓝图没有变化`)
+        }
+        results.push({ op: o.op })
+      }
+      const compile = { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] }
+      if (a.dryRun) {
+        Object.assign(state.bp, before)
+        return { path: a.path, dryRun: true, results, compile }
+      }
+      const tx = `tx${state.bp.tx.length + 1}`
+      state.bp.tx.push({ id: tx, undo: () => Object.assign(state.bp, before) })
+      state.bp.dirty.add(BP)
+      return { path: a.path, dryRun: false, results, compile, tx }
+    },
+    'bp.compile': (a) => ({
+      path: a.path,
+      compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
+    }),
   }
   const server = createServer((req, res) => {
     const send = (code, body) => {
@@ -252,6 +414,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     state,
     hero: HERO,
     gi: GI,
+    bp: BP,
     stop: () => {
       rmSync(card, { force: true })
       return new Promise((r) => server.close(r))

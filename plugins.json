@@ -3,21 +3,21 @@
     {
       "id": "blender",
       "name": "Blender",
-      "version": "3.1.0-alpha.2",
+      "version": "3.1.0-alpha.3",
       "description": "让 Agent 直接驱动你的 Blender：GUI 会话里执行 Python、看视口、跑 228 个建模算子，无头作业和渲染排队执行；附带模型设计页。",
       "icon": "box",
-      "tag": "blender-v3.1.0-alpha.2",
-      "asset": "blender-3.1.0-alpha.2.zip",
+      "tag": "blender-v3.1.0-alpha.3",
+      "asset": "blender-3.1.0-alpha.3.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/blender"
     },
     {
       "id": "ue",
       "name": "UE",
-      "version": "0.1.5",
-      "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查和调数值。",
+      "version": "0.2.0",
+      "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
       "icon": "gamepad",
-      "tag": "ue-v0.1.5",
-      "asset": "ue-0.1.5.zip",
+      "tag": "ue-v0.2.0",
+      "asset": "ue-0.2.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
     }
   ]
