@@ -1,4 +1,5 @@
 import { ExternalLink, MessageSquare, Trash2 } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import { ppost, useAction, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -16,15 +17,17 @@ export function Detail({
   canAgent,
   onAgent,
   onDelete,
+  onMenu,
 }: {
   capture: Capture
   canAgent: boolean
   onAgent: (extra: string) => void
   onDelete: () => void
+  onMenu: (e: MouseEvent) => void
 }) {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-rise">
-      <DetailBar capture={capture} canAgent={canAgent} onAgent={onAgent} onDelete={onDelete} />
+      <DetailBar capture={capture} canAgent={canAgent} onAgent={onAgent} onDelete={onDelete} onMenu={onMenu} />
       {capture.kind === 'trace' ? (
         <TraceView capture={capture} onAgent={canAgent ? onAgent : undefined} />
       ) : (
@@ -45,18 +48,20 @@ function DetailBar({
   canAgent,
   onAgent,
   onDelete,
+  onMenu,
 }: {
   capture: Capture
   canAgent: boolean
   onAgent: (extra: string) => void
   onDelete: () => void
+  onMenu: (e: MouseEvent) => void
 }) {
   const { project } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
   const preset = PRESETS.find((p) => p.value === capture.preset)
   return (
-    <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-5 ue:py-2">
+    <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-5 ue:py-2" onContextMenu={onMenu}>
       <Badge tone={KIND[capture.kind].tone}>{KIND[capture.kind].label()}</Badge>
       {preset && <Badge tone="muted">{preset.label()}</Badge>}
       <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-footnote ue:text-subtle" title={capture.file}>

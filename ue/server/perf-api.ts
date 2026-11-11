@@ -1,6 +1,7 @@
 import { captureCompare, captureList, captureQuery, captureSummary, deleteCapture, importCapture } from './captures.ts'
 import type { OpCtx } from './ops.ts'
 import { captureStatus, markCapture, startCapture, stopCapture } from './perf.ts'
+import { renameCapture, revealCapture } from './perf-files.ts'
 import { liveRead } from './perf-live.ts'
 import { openInInsights, traceQuery } from './trace-query.ts'
 
@@ -20,10 +21,12 @@ export async function perfRoute(ctx: OpCtx, key: string, b: Record<string, unkno
     case 'POST perf/start':
       return startCapture(ctx, {
         kind: s(b.kind),
-        seconds: Number(b.seconds),
+        // 网页传 0（不限时长）；Agent 那边没给时按默认
+        seconds: b.seconds,
         label: s(b.label),
         preset: s(b.preset),
         channels: s(b.channels),
+        named: b.named === true,
       })
     case 'POST perf/stop':
       return stopCapture(ctx, s(b.id) || undefined)
@@ -44,6 +47,10 @@ export async function perfRoute(ctx: OpCtx, key: string, b: Record<string, unkno
       return captureCompare(p, s(b.id), s(b.other), Number(b.top) || undefined)
     case 'POST perf/import':
       return importCapture(p, s(b.path), s(b.label) || undefined)
+    case 'POST perf/reveal':
+      return revealCapture(p, s(b.id))
+    case 'POST perf/rename':
+      return renameCapture(p, s(b.id), s(b.label))
     case 'POST perf/delete':
       return deleteCapture(p, s(b.id))
     default:

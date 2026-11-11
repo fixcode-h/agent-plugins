@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
+import { openMenu, type MenuItem } from './menu.tsx'
 
 /**
  * 性能页共用的小部件（用户 2026-11-11：部件都做成组件、该有动效的加动效）。
@@ -174,50 +175,113 @@ export interface TreeNode {
   name: string
   count: number
   incl: number
+  /** 独占时间：桥接 1.5.0 起有 */
+  excl?: number
   children?: TreeNode[]
   more?: number
 }
 
+/** 调用树的列（Insights 的 Callers / Callees）：名字、次数、包含、占父、占根、独占 */
+export const TREE_COLS = 'ue:grid-cols-[minmax(0,1fr)_36px_56px_44px_44px_56px]'
+
+type Expand = 'auto' | 'all' | 'none'
+
 /**
- * 调用树（调用者 / 被调用者）：每行名字、次数、包含时间和占根节点的比例条。
- * 默认展开前两层；展开的子树从上方滑入，箭头转 90°。
+ * 调用树（调用者 / 被调用者）：每行名字、次数、包含时间、占父节点 / 根节点的比例和独占时间。
+ * 默认展开前两层；展开的子树从上方滑入，箭头转 90°。右键行出菜单（onMenu 由使用方给，Tree 自己补「全部展开 / 收起」）。
  */
-export function Tree({ root, onPick, picked }: { root: TreeNode; onPick?: (n: TreeNode) => void; picked?: number }) {
+export function Tree({
+  root,
+  onPick,
+  picked,
+  onMenu,
+}: {
+  root: TreeNode
+  onPick?: (n: TreeNode) => void
+  picked?: number
+  onMenu?: (e: MouseEvent, n: TreeNode, extra: MenuItem[]) => void
+}) {
+  // 换展开方式时整棵树按新方式重建（key 变了）
+  const [mode, setMode] = useState<{ m: Expand; v: number }>({ m: 'auto', v: 0 })
+  const extra: MenuItem[] = [
+    { label: t('全部展开'), onClick: () => setMode((x) => ({ m: 'all', v: x.v + 1 })) },
+    { label: t('全部收起'), onClick: () => setMode((x) => ({ m: 'none', v: x.v + 1 })) },
+  ]
   return (
-    <div role="tree" className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:py-1 ue:text-footnote">
-      <TreeRow node={root} depth={0} total={root.incl || 1} onPick={onPick} picked={picked} />
+    <div
+      role="tree"
+      className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:py-1 ue:text-footnote"
+      onContextMenu={(e) => onMenu && openMenu(e, extra)}
+    >
+      <TreeRow
+        key={mode.v}
+        node={root}
+        parent={undefined}
+        depth={0}
+        total={root.incl || 1}
+        onPick={onPick}
+        picked={picked}
+        mode={mode.m}
+        onMenu={onMenu && ((e, n) => onMenu(e, n, extra))}
+      />
     </div>
   )
 }
 
 function TreeRow({
   node,
+  parent,
   depth,
   total,
   onPick,
   picked,
+  mode,
+  onMenu,
 }: {
   node: TreeNode
+  parent?: TreeNode
   depth: number
   total: number
   onPick?: (n: TreeNode) => void
   picked?: number
+  mode: Expand
+  onMenu?: (e: MouseEvent, n: TreeNode) => void
 }) {
   const { cn } = h()
   const kids = node.children ?? []
-  const [open, setOpen] = useState(depth < 2)
-  const pct = (node.incl / total) * 100
+  const [open, setOpen] = useState(mode === 'all' || (mode === 'auto' && depth < 2) || depth === 0)
+  const pRoot = (node.incl / total) * 100
+  const pParent = parent ? (node.incl / Math.max(parent.incl, 1e-9)) * 100 : 100
+  const pct = (v: number) => (v >= 99.95 ? '100%' : `${v.toFixed(v < 10 ? 2 : 1)}%`)
   return (
     <div role="treeitem" aria-expanded={kids.length ? open : undefined}>
       <div
         className={cn(
-          'ue:group ue:grid ue:cursor-default ue:grid-cols-[minmax(0,1fr)_48px_72px_56px] ue:items-center ue:gap-2 ue:py-[3px] ue:pr-3 ue:transition-colors ue:hover:bg-hover',
+          'ue:group ue:relative ue:grid ue:cursor-default ue:items-center ue:gap-2 ue:py-[3px] ue:pr-3 ue:transition-colors ue:hover:bg-hover',
+          TREE_COLS,
           picked === node.id && depth > 0 && 'ue:bg-sel',
         )}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        style={{ paddingLeft: 6 + Math.min(depth, 24) * 10 }}
         onDoubleClick={() => onPick?.(node)}
+        onContextMenu={(e) => onMenu?.(e, node)}
+        title={[
+          node.name,
+          `${t('次数')} ${node.count.toLocaleString()}`,
+          `${t('包含')} ${fmtMs(node.incl)} · ${t('平均')} ${fmtMs(node.incl / Math.max(1, node.count))}`,
+          node.excl !== undefined ? `${t('独占')} ${fmtMs(node.excl)}` : '',
+          parent ? `${t('占父')} ${pct(pParent)}（${parent.name}）` : '',
+          `${t('占根')} ${pct(pRoot)}`,
+        ]
+          .filter(Boolean)
+          .join('\n')}
       >
-        <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
+        {/* 行底一条淡的占根比例条（和计时器表一样），比单独一列进度条省地方 */}
+        <span
+          aria-hidden
+          className="ue:pointer-events-none ue:absolute ue:inset-y-0 ue:left-0 ue:bg-accent/8 ue:transition-[width] ue:duration-300"
+          style={{ width: `${Math.min(100, pRoot)}%` }}
+        />
+        <span className="ue:relative ue:flex ue:min-w-0 ue:items-center ue:gap-1">
           <button
             type="button"
             aria-label={open ? t('收起') : t('展开')}
@@ -231,7 +295,6 @@ function TreeRow({
           </button>
           <button
             type="button"
-            title={onPick ? t('{name}（双击以它为中心看调用者 / 被调用者）', { name: node.name }) : node.name}
             onClick={() => onPick?.(node)}
             className={cn(
               'ue:min-w-0 ue:truncate ue:text-left',
@@ -241,23 +304,42 @@ function TreeRow({
             {node.name}
           </button>
         </span>
-        <span className="ue:text-right ue:font-mono ue:text-caption ue:text-subtle ue:tabular-nums">
+        <span className="ue:relative ue:text-right ue:font-mono ue:text-caption ue:text-subtle ue:tabular-nums">
           {node.count.toLocaleString()}
         </span>
-        <span className="ue:text-right ue:font-mono ue:text-caption ue:text-fg ue:tabular-nums">
+        <span className="ue:relative ue:text-right ue:font-mono ue:text-caption ue:text-fg ue:tabular-nums">
           {fmtMs(node.incl)}
         </span>
-        <span className="ue:flex ue:items-center ue:gap-1">
-          <PctBar pct={pct} className="ue:flex-1" />
+        <span className="ue:relative ue:text-right ue:font-mono ue:text-caption ue:text-subtle ue:tabular-nums">
+          {parent ? pct(pParent) : ''}
+        </span>
+        <span className="ue:relative ue:text-right ue:font-mono ue:text-caption ue:text-subtle ue:tabular-nums">
+          {pct(pRoot)}
+        </span>
+        <span className="ue:relative ue:text-right ue:font-mono ue:text-caption ue:text-muted ue:tabular-nums">
+          {node.excl !== undefined ? fmtMs(node.excl) : '—'}
         </span>
       </div>
       {open && kids.length > 0 && (
         <div role="group" className="ue:motion-safe:animate-rise">
           {kids.map((k) => (
-            <TreeRow key={k.id} node={k} depth={depth + 1} total={total} onPick={onPick} picked={picked} />
+            <TreeRow
+              key={k.id}
+              node={k}
+              parent={node}
+              depth={depth + 1}
+              total={total}
+              onPick={onPick}
+              picked={picked}
+              mode={mode}
+              onMenu={onMenu}
+            />
           ))}
           {!!node.more && (
-            <div className="ue:py-[3px] ue:text-caption ue:text-subtle" style={{ paddingLeft: 30 + (depth + 1) * 14 }}>
+            <div
+              className="ue:py-[3px] ue:text-caption ue:text-subtle"
+              style={{ paddingLeft: 26 + Math.min(depth + 1, 24) * 10 }}
+            >
               {t('还有 {n} 项', { n: node.more })}
             </div>
           )}
