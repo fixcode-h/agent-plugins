@@ -1,4 +1,4 @@
-import { Box, Pin, PersonStanding, Puzzle, RefreshCw, X } from 'lucide-react'
+import { Box, Pin, PersonStanding, RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { isInstance } from '../CdoNote.tsx'
@@ -6,6 +6,7 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
 import { Props } from '../Props.tsx'
+import { CompTree, type Comp } from '../CompTree.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Card, ErrorText, NotRunning, PageHead, SearchBox, useTargetInfo } from '../ui.tsx'
 
@@ -17,13 +18,6 @@ interface ActorRow {
   level: string
   player: boolean
 }
-interface Comp {
-  path: string
-  name: string
-  class: string
-  parent: string
-  root: boolean
-}
 interface Local {
   recent: string[]
   pinned: { path: string; label: string }[]
@@ -31,7 +25,7 @@ interface Local {
 
 /**
  * Actor（图 4）：不做场景树。左栏按名字前缀搜（点搜索才搜，空的不搜），最近搜过和固定的 Actor；
- * 中栏组件树；右栏属性
+ * 中栏组件树（照 UE 组件面板按挂接关系）；右栏属性（照 UE 细节面板）
  */
 export function Actors() {
   const { project, target, sub, go } = useUe()
@@ -124,16 +118,6 @@ export function Actors() {
     local.setData({ ...(local.data ?? { recent: [] }), pinned: next } as Local)
     void ppost(project.id, 'local', { pinned: next })
   }
-
-  // 组件按父子缩进：桥接给了每个场景组件的父组件路径
-  const tree = (() => {
-    const items = comps.data?.items ?? []
-    const depth = (c: Comp, n = 0): number => {
-      const p = items.find((x) => x.path === c.parent)
-      return p && n < 12 ? depth(p, n + 1) : n
-    }
-    return items.map((c) => ({ ...c, depth: depth(c) }))
-  })()
 
   const chip =
     'ue:flex ue:h-7 ue:max-w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-md ue:border ue:border-line ue:px-2 ue:font-mono ue:text-footnote ue:text-fg ue:hover:bg-hover'
@@ -275,40 +259,20 @@ export function Actors() {
                 </span>
               )
             }
-            bodyClass="ue:overflow-auto ue:p-1.5"
+            bodyClass="ue:overflow-auto"
           >
             {!actor && (
               <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('先在左边选一个 Actor')}</p>
             )}
             <ErrorText>{comps.error}</ErrorText>
             {actor && (
-              <button
-                type="button"
-                onClick={() => go('actors', actor)}
-                className={cn(
-                  'ue:flex ue:h-8 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:px-2.5 ue:text-body ue:hover:bg-hover',
-                  !comp && 'ue:bg-sel',
-                )}
-              >
-                <PersonStanding className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {t('（Actor 自身）')}
-              </button>
+              <CompTree
+                actor={actor}
+                items={comps.data?.items ?? []}
+                selected={comp ?? ''}
+                onSelect={(c) => go('actors', c ? `${actor}|${c}` : actor)}
+              />
             )}
-            {tree.map((c) => (
-              <button
-                key={c.path}
-                type="button"
-                onClick={() => go('actors', `${actor}|${c.path}`)}
-                style={{ paddingLeft: 10 + c.depth * 14 }}
-                className={cn(
-                  'ue:flex ue:h-8 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:pr-2.5 ue:text-body ue:hover:bg-hover',
-                  comp === c.path && 'ue:bg-sel',
-                )}
-                title={c.class}
-              >
-                <Puzzle className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-                <span className="ue:truncate">{c.name}</span>
-              </button>
-            ))}
           </Card>
           <SplitHandle pane={compPane} paneRef={compRef} reserve={() => widthOf(listRef) + 352} />
 

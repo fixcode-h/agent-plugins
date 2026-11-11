@@ -92,7 +92,7 @@ export function Lua() {
       ) : (
         <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
           {inst?.lua && !inst.lua.available && (
-            <div className="ue:px-6 ue:pt-6">
+            <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
               <Note>{inst.lua.error || t('现在拿不到 Lua 环境')}</Note>
             </div>
           )}

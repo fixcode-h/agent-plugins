@@ -29,7 +29,7 @@ export function Functions({ path }: { path: string }) {
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-2 ue:p-4">
       <SearchBox placeholder={t('函数名前缀')} onSearch={setQ} allowEmpty />
       <ErrorText>{fns.error}</ErrorText>
-      <ul className="ue:min-h-0 ue:flex-1 ue:divide-y ue:divide-line ue:overflow-auto ue:rounded-xl ue:border ue:border-line">
+      <ul className="ue:min-h-0 ue:flex-1 ue:divide-y ue:divide-line ue:overflow-auto ue:border-t ue:border-line">
         {list.slice(0, 200).map((f) => (
           <li key={`${f.owner}.${f.name}`} className="ue:px-3 ue:py-2">
             <button

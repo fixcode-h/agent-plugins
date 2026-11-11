@@ -110,8 +110,8 @@ export function History() {
           {t('清空记录')}
         </ui.Button>
       </PageHead>
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-6">
-        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
           <ui.Segmented
             size="sm"
             label={t('谁')}
@@ -136,7 +136,7 @@ export function History() {
           </label>
         </div>
         {(liveN > 0 || !!badges?.undoable) && (
-          <div className="ue:flex ue:items-center ue:gap-3 ue:rounded-xl ue:border ue:border-warning/30 ue:bg-warning/10 ue:px-4 ue:py-2.5 ue:text-body ue:text-fg">
+          <div className="ue:flex ue:items-center ue:gap-3 ue:border-b ue:border-warning/30 ue:bg-warning/10 ue:px-4 ue:py-2 ue:text-body ue:text-fg">
             <Undo2 className="ue:h-4 ue:w-4 ue:shrink-0 ue:text-warning" />
             <span className="ue:min-w-0 ue:flex-1">
               {t('{n} 处运行时修改还在生效（进程和世界还在）', { n: liveN || badges?.undoable || 0 })}
@@ -149,11 +149,11 @@ export function History() {
         <ErrorText>{list.error}</ErrorText>
         <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
           {groups.map(([d, its]) => (
-            <section key={d} className="ue:mb-4">
-              <h3 className="ue:sticky ue:top-0 ue:z-10 ue:bg-bg ue:py-1.5 ue:text-footnote ue:font-medium ue:text-subtle">
+            <section key={d}>
+              <h3 className="ue:sticky ue:top-0 ue:z-10 ue:border-b ue:border-line ue:bg-hover ue:px-4 ue:py-1.5 ue:text-footnote ue:font-medium ue:text-subtle">
                 {d}
               </h3>
-              <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line ue:rounded-xl ue:border ue:border-line ue:bg-card">
+              <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line ue:border-b ue:border-line ue:bg-card">
                 {its.map((it) => (
                   <li key={it.id} className="ue:flex ue:items-start ue:gap-3 ue:px-4 ue:py-2.5">
                     <span className="ue:w-11 ue:shrink-0 ue:pt-px ue:font-mono ue:text-footnote ue:text-subtle">

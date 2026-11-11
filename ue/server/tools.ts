@@ -154,15 +154,17 @@ const DEFS = [
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。数组加删元素用 array（add 末尾加一个默认元素、insert 在 index 前插入、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；集合和映射只能 clear），这时不写 value；实例化子对象数组（Instanced）也这样改，不用整体替换。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
       lua: { type: 'string' },
       value: {},
+      array: { type: 'string', enum: ['add', 'insert', 'duplicate', 'remove', 'clear'] },
+      index: { type: 'number' },
       target: TARGET,
     },
-    ['value'],
+    [],
     async (a, ctx) => {
       const keys = luaKeys(a.lua)
       if (keys) {
@@ -170,6 +172,15 @@ const DEFS = [
         return out(await runOp(ctx, 'lua.set', { path: a.path ?? '', keys, value: a.value ?? null }))
       }
       if (!a.path || !a.prop) return mcpText('要给 path 和 prop（改 Lua 字段时给 lua）', true)
+      if (a.array)
+        return out(
+          await runOp(ctx, 'set', {
+            path: a.path,
+            prop: a.prop,
+            array: a.array,
+            ...(a.index !== undefined ? { index: Number(a.index) } : {}),
+          }),
+        )
       return out(await runOp(ctx, 'set', { path: a.path, prop: a.prop, value: a.value }))
     },
   ),

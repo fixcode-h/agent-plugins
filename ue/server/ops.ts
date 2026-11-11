@@ -133,6 +133,8 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'gm.run':
       return `${args.name} ${((args.args as unknown[]) ?? []).map(v).join(' ')}`.trim()
     case 'set':
+      if (args.array)
+        return `${args.path} · ${args.prop} ${args.array}${args.index !== undefined ? ` [${args.index}]` : ''}`
       return `${args.path} · ${args.prop} = ${v(args.value)}`
     case 'call':
       return `${args.path} · ${args.function}(${v(args.args ?? [])})`

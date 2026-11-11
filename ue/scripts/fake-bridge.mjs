@@ -4,6 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
+import { makeDetails } from './fake-details.mjs'
 
 export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const token = 'fake-token'
@@ -36,6 +37,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const HERO = '/Game/Maps/UEDPIE_0_Town.Town:PersistentLevel.BP_Hero_C_1'
   const GI = '/Engine/Transient.GameEngine_0:BP_LuaGameInstance_C_0'
   const BP = '/Game/BP_Hero'
+  const details = makeDetails(HERO)
   const packageOf = (p) => String(p ?? '').split('.')[0]
   // 假桥接的 Lua：对象实例表 / 全局表按 keys 往下取（和真桥接一样数字键写成数字）
   const luaRoot = (a) => {
@@ -183,6 +185,8 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
                 class: 'CapsuleComponent',
                 parent: '',
                 root: true,
+                scene: true,
+                created: 'native',
               },
               {
                 path: `${HERO}.Mesh`,
@@ -190,24 +194,83 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
                 class: 'SkeletalMeshComponent',
                 parent: `${HERO}.CapsuleComponent`,
                 root: false,
+                scene: true,
+                created: 'native',
               },
-              { path: `${HERO}.Health`, name: 'Health', class: 'BP_HealthComponent_C', parent: '', root: false },
+              {
+                path: `${HERO}.BackSpringArm`,
+                name: 'BackSpringArm',
+                class: 'SpringArmComponent',
+                parent: `${HERO}.Mesh`,
+                root: false,
+                scene: true,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.BackCamera`,
+                name: 'BackCamera',
+                class: 'CameraComponent',
+                parent: `${HERO}.BackSpringArm`,
+                root: false,
+                scene: true,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.Chasis_Main`,
+                name: 'Chasis_Main',
+                class: 'StaticMeshComponent',
+                parent: `${HERO}.Mesh`,
+                root: false,
+                scene: true,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.Headlight_L`,
+                name: 'Headlight_L',
+                class: 'SpotLightComponent',
+                parent: `${HERO}.Mesh`,
+                root: false,
+                scene: true,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.Headlight_R`,
+                name: 'Headlight_R',
+                class: 'SpotLightComponent',
+                parent: `${HERO}.Mesh`,
+                root: false,
+                scene: true,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.Health`,
+                name: 'Health',
+                class: 'BP_HealthComponent_C',
+                parent: '',
+                root: false,
+                scene: false,
+                created: 'blueprint',
+              },
+              {
+                path: `${HERO}.CharMoveComp`,
+                name: 'CharMoveComp',
+                class: 'CharacterMovementComponent',
+                parent: '',
+                root: false,
+                scene: false,
+                created: 'native',
+              },
             ]
           : [],
     }),
-    props: (a) => {
-      if (a.path !== HERO) throw new Error(`找不到对象 ${a.path}`)
-      return {
-        object: { path: HERO, name: 'BP_Hero_C_1', class: 'BP_Hero_C' },
-        props: Object.entries(state.hero).map(([name, value]) => ({
-          name,
-          type: typeof value === 'boolean' ? 'bool' : 'float',
-          value,
-        })),
-      }
-    },
-    get: (a) => ({ value: state.hero[a.prop], type: 'float' }),
+    props: (a) => details.props(a, state.hero),
+    get: (a) =>
+      details.has(a.path) && !(a.prop in state.hero)
+        ? details.get(a, state.hero)
+        : { value: state.hero[a.prop], type: 'float' },
     set: (a) => {
+      const r = details.has(a.path) ? details.set(a, state.hero) : null
+      if (r) return r
       if (!(a.prop in state.hero)) throw new Error(`没有属性 ${a.prop}`)
       const prev = state.hero[a.prop]
       state.hero[a.prop] = a.value
@@ -236,8 +299,9 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       items: [
         { path: '/Game/BP_Hero.BP_Hero', name: 'BP_Hero', class: 'Blueprint' },
         { path: '/Game/DT_Items.DT_Items', name: 'DT_Items', class: 'DataTable' },
+        { path: '/Game/Input/IA_LookAround.IA_LookAround', name: 'IA_LookAround', class: 'InputAction' },
       ],
-      total: 2,
+      total: 3,
     }),
     // 数据表（对话里点 .uasset 的查看窗口、资源分区的表格）
     datatable: (a) => {

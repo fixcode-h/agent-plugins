@@ -172,6 +172,91 @@ namespace
 		UGameViewportClient* VC = World ? World->GetGameViewport() : nullptr;
 		return VC ? VC->Viewport : nullptr;
 	}
+
+	/**
+	 * 细节面板数组那几个按钮（加一个、插入、复制、删除、清空）：直接改容器，不走 JSON 整体替换。
+	 * 整体替换会丢掉实例化子对象（Triggers、Modifiers 这种 Instanced 数组）里的数据，元素也构造不出默认值。
+	 * Change 给 PostEditChangeProperty 用，编辑器按它刷新细节面板
+	 */
+	static bool EditContainer(FProperty* Prop, void* Value, UObject* Owner, const FString& Op, int32 Index, EPropertyChangeType::Type& Change, FString& Error)
+	{
+		if (FArrayProperty* AP = CastField<FArrayProperty>(Prop))
+		{
+			FScriptArrayHelper H(AP, Value);
+			if (Op != TEXT("clear") && Prop->HasAnyPropertyFlags(CPF_EditFixedSize))
+			{
+				Error = FString::Printf(TEXT("%s 是固定长度的数组（EditFixedSize），不能加删元素"), *Prop->GetName());
+				return false;
+			}
+			if (Op == TEXT("add"))
+			{
+				H.AddValue();
+				Change = EPropertyChangeType::ArrayAdd;
+				return true;
+			}
+			if (Op == TEXT("clear"))
+			{
+				H.EmptyValues();
+				Change = EPropertyChangeType::ArrayClear;
+				return true;
+			}
+			if (!H.IsValidIndex(Index))
+			{
+				Error = FString::Printf(TEXT("%s 只有 %d 个元素，没有 [%d]"), *Prop->GetName(), H.Num(), Index);
+				return false;
+			}
+			if (Op == TEXT("insert"))
+			{
+				H.InsertValues(Index, 1);
+				Change = EPropertyChangeType::ArrayAdd;
+				return true;
+			}
+			if (Op == TEXT("remove"))
+			{
+				H.RemoveValues(Index, 1);
+				Change = EPropertyChangeType::ArrayRemove;
+				return true;
+			}
+			if (Op == TEXT("duplicate"))
+			{
+				H.InsertValues(Index + 1, 1);
+				AP->Inner->CopyCompleteValue(H.GetRawPtr(Index + 1), H.GetRawPtr(Index));
+				// 实例化子对象：复制出一个新对象，不让两个元素指向同一个（和编辑器里「复制」一样）
+				if (FObjectProperty* OP = CastField<FObjectProperty>(AP->Inner))
+				{
+					if (OP->HasAnyPropertyFlags(CPF_InstancedReference | CPF_PersistentInstance) || AP->HasAnyPropertyFlags(CPF_ContainsInstancedReference))
+					{
+						if (UObject* Src = OP->GetObjectPropertyValue(H.GetRawPtr(Index)))
+						{
+							OP->SetObjectPropertyValue(H.GetRawPtr(Index + 1), DuplicateObject(Src, Owner));
+						}
+					}
+				}
+				Change = EPropertyChangeType::Duplicate;
+				return true;
+			}
+			Error = FString::Printf(TEXT("不认识的数组操作 %s（add / insert / duplicate / remove / clear）"), *Op);
+			return false;
+		}
+		// 集合和映射只给清空：加元素要先有不重复的键，交给按值整体改
+		if (Op == TEXT("clear"))
+		{
+			if (FSetProperty* SP = CastField<FSetProperty>(Prop))
+			{
+				FScriptSetHelper(SP, Value).EmptyElements();
+				Change = EPropertyChangeType::ArrayClear;
+				return true;
+			}
+			if (FMapProperty* MP = CastField<FMapProperty>(Prop))
+			{
+				FScriptMapHelper(MP, Value).EmptyValues();
+				Change = EPropertyChangeType::ArrayClear;
+				return true;
+			}
+		}
+		Error = FString::Printf(TEXT("%s 不是数组，不能 %s"), *Prop->GetName(), *Op);
+		return false;
+	}
 }
 
 /** 截一个视口的图：缩到 MaxWidth 以内，PNG 转 base64（编辑器模块截编辑器视口时也用） */
@@ -479,6 +564,25 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			USceneComponent* S = Cast<USceneComponent>(C);
 			O->SetStringField(TEXT("parent"), S && S->GetAttachParent() ? S->GetAttachParent()->GetPathName() : FString());
 			O->SetBoolField(TEXT("root"), S && S == Act->GetRootComponent());
+			// 网页照 UE 组件面板画树：场景组件按挂接关系，非场景组件（移动组件这种）放分隔线下面；
+			// 右边标「C++ / 蓝图 / 实例」，和 UE 的「在 C++ 中编辑 / 在蓝图中编辑」对应
+			O->SetBoolField(TEXT("scene"), S != nullptr);
+			const TCHAR* Created = TEXT("native");
+			switch (C->CreationMethod)
+			{
+			case EComponentCreationMethod::SimpleConstructionScript:
+				Created = TEXT("blueprint");
+				break;
+			case EComponentCreationMethod::UserConstructionScript:
+				Created = TEXT("script");
+				break;
+			case EComponentCreationMethod::Instance:
+				Created = TEXT("instance");
+				break;
+			default:
+				break;
+			}
+			O->SetStringField(TEXT("created"), Created);
 			Items.Add(Obj(O));
 		}
 		Out->SetArrayField(TEXT("items"), Items);
@@ -545,6 +649,10 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		}
 		Out->SetField(TEXT("prev"), ToJson(R.Prop, R.Value, 0));
 		UObject* Owner = R.Owner ? R.Owner : Target;
+		// array 给了就是数组按钮（add / insert / duplicate / remove / clear，index 是元素下标），不给就是按 value 整体写
+		const FString ArrayOp = Str(A, TEXT("array"));
+		const int32 Index = Int(A, TEXT("index"), -1);
+		EPropertyChangeType::Type Change = EPropertyChangeType::ValueSet;
 		// 资源（不在任何世界里、包不是临时的）：编辑器里按编辑器的方式改（可撤销、通知编辑器刷新、标脏）
 		const bool bAsset = !Owner->GetWorld() && !Owner->GetOutermost()->HasAnyPackageFlags(PKG_PlayInEditor) && Owner->GetOutermost() != GetTransientPackage();
 		bool bOk = false;
@@ -554,9 +662,10 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			Owner->Modify();
 			Owner->PreEditChange(R.Prop);
 #endif
-			bOk = FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error);
+			bOk = ArrayOp.IsEmpty() ? FromJson(R.Prop, R.Value, A->TryGetField(TEXT("value")), Error)
+									: EditContainer(R.Prop, R.Value, Owner, ArrayOp, Index, Change, Error);
 #if WITH_EDITOR
-			FPropertyChangedEvent Ev(R.Prop, EPropertyChangeType::ValueSet);
+			FPropertyChangedEvent Ev(R.Prop, Change);
 			Owner->PostEditChangeProperty(Ev);
 #endif
 			if (bOk)
@@ -568,7 +677,9 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		else
 		{
 			// 运行时对象：走属性的 setter，界面和逻辑才会跟着变（UMG 的 Visibility、颜色等只写内存不会刷新到屏幕上）
-			bOk = SetRuntimeValue(Owner, R, A->TryGetField(TEXT("value")), Error);
+			// 数组按钮直接改容器（数组属性很少有 setter）
+			bOk = ArrayOp.IsEmpty() ? SetRuntimeValue(Owner, R, A->TryGetField(TEXT("value")), Error)
+									: EditContainer(R.Prop, R.Value, Owner, ArrayOp, Index, Change, Error);
 		}
 		Out->SetField(TEXT("value"), ToJson(R.Prop, R.Value, 0));
 		Out->SetBoolField(TEXT("asset"), bAsset);

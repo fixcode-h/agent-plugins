@@ -5,7 +5,7 @@ import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
-import { PANE_FIXED, SplitHandle, usePane } from '../split.tsx'
+import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, PageHead, SearchBox, Term } from '../ui.tsx'
 
 interface CVar {
@@ -115,8 +115,8 @@ export function Console() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('控制台')} desc={t('输出只截这条命令执行期间的日志')} />
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:p-6 ue:lg:flex-row ue:lg:gap-0">
-        <div className="ue:flex ue:min-h-80 ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-3">
+      <div className={SPLIT_ROW}>
+        <div className="ue:flex ue:min-h-80 ue:min-w-0 ue:flex-1 ue:flex-col">
           <Term className="ue:min-h-0 ue:flex-1">
             {!entries.length && <div className="ue:text-term-subtle">{t('输入命令回车执行；↑↓ 翻历史，Tab 补全')}</div>}
             {entries.map((e, i) => (
@@ -174,7 +174,7 @@ export function Console() {
               e.preventDefault()
               if (input.trim()) void exec(input.trim())
             }}
-            className="ue:flex ue:items-center ue:gap-2 ue:rounded-xl ue:border ue:border-line-strong ue:bg-field ue:px-3 ue:focus-within:border-focus"
+            className="ue:flex ue:items-center ue:gap-2 ue:border-t ue:border-line ue:bg-field ue:px-3 ue:focus-within:bg-card"
           >
             <span className="ue:font-mono ue:text-body ue:text-subtle">&gt;</span>
             <input
