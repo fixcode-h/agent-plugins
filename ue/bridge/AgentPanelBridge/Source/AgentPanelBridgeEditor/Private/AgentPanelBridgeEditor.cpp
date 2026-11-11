@@ -362,6 +362,7 @@ public:
 		RegisterAssetOps();
 		RegisterBlueprintReadOps();
 		RegisterBlueprintEditOps();
+		RegisterTraceOps();
 	}
 };
 

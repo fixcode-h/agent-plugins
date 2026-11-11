@@ -11,7 +11,9 @@ public class AgentPanelBridgeEditor : ModuleRules
 		{
 			"AgentPanelBridge", "UnrealEd", "Json", "JsonUtilities", "AssetRegistry", "Slate", "SlateCore",
 			// 资源新建 / 改名（AssetTools）、蓝图图表读写（BlueprintGraph：K2 节点和节点动作库）
-			"AssetTools", "BlueprintGraph"
+			"AssetTools", "BlueprintGraph",
+			// trace 分析（性能页二期）：Unreal Insights 读 trace 用的同一套模块
+			"TraceAnalysis", "TraceServices"
 		});
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{

@@ -8,3 +8,48 @@
 @import '../../sdk/theme.css';
 
 @source './';
+
+/*
+ * 动效（用户 2026-11-11：该有动效的地方加动效）。时长都很短，只用来交代「从哪来、到哪去」：
+ * rise 内容出现（切换视图、展开树、弹出提示），fade 叠层淡入，shimmer 加载占位。
+ * 系统设置了「减少动态效果」时全部关掉。
+ */
+@theme {
+  --animate-rise: ue-rise 180ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-fade: ue-fade 140ms ease-out both;
+  --animate-shimmer: ue-shimmer 1.4s linear infinite;
+  @keyframes ue-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes ue-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ue-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*='ue:animate-'],
+  [class*='ue:transition'] {
+    animation: none !important;
+    transition: none !important;
+  }
+}
