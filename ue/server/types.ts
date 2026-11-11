@@ -174,6 +174,8 @@ export interface BuildBlocker {
   game: boolean
   /** 读不到路径和命令行（管理员权限打开的），看不出是不是这个引擎的 */
   unknown?: boolean
+  /** 不是编辑器本身时的 exe 名（加载了 Live Coding 模块的进程、LiveCodingConsole） */
+  name?: string
 }
 
 /** 一个项目的连接概况（项目切换、概览、对话右栏用） */

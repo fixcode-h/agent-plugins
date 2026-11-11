@@ -112,7 +112,7 @@ export function blockerLines(list: BuildBlocker[]) {
   const who = list
     .map((b) =>
       t('{kind} PID {pid}（{project}）', {
-        kind: b.game ? t('游戏') : t('编辑器'),
+        kind: b.name ?? (b.game ? t('游戏') : t('编辑器')),
         pid: b.pid,
         project: b.unknown
           ? t('读不到路径，可能是管理员权限打开的')
