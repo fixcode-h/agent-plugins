@@ -8,6 +8,7 @@
 #include "AgentPanelPerf.h"
 #include "AgentPanelUmg.h"
 
+#include "Algo/Sort.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Misc/Base64.h"
@@ -812,7 +813,17 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			{
 				return true;
 			}
-			if (!StartsWithNoCase(O->GetName(), Prefix) || (World && O->GetWorld() != World))
+			// Actor 另按编辑器里的显示名比一次（大纲里看到的名字和对象名常常不一样）
+			AActor* Act = Cast<AActor>(O);
+			FString Label;
+#if WITH_EDITOR
+			if (Act)
+			{
+				Label = Act->GetActorLabel(false);
+			}
+#endif
+			const bool bNameHit = StartsWithNoCase(O->GetName(), Prefix) || (!Label.IsEmpty() && StartsWithNoCase(Label, Prefix));
+			if (!bNameHit || (World && O->GetWorld() != World))
 			{
 				return true;
 			}
@@ -823,6 +834,15 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			}
 			TSharedPtr<FJsonObject> B = Brief(O);
 			B->SetStringField(TEXT("kind"), ObjectKind(O));
+			if (Act)
+			{
+				// 面板的 Object 页按这几项把 Actor 画成原来 Actor 页的样子（显示名、所在关卡、是不是玩家）
+				B->SetBoolField(TEXT("actor"), true);
+				B->SetStringField(TEXT("label"), Label);
+				B->SetStringField(TEXT("level"), Act->GetLevel() ? Act->GetLevel()->GetOuter()->GetName() : FString());
+				APawn* Pawn = Cast<APawn>(Act);
+				B->SetBoolField(TEXT("player"), Pawn && Pawn->IsPlayerControlled());
+			}
 			Items.Add(Obj(B));
 			return true;
 		};
@@ -861,6 +881,165 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		Out->SetBoolField(TEXT("partial"), bPartial);
 		Out->SetArrayField(TEXT("items"), Items);
 		Out->SetBoolField(TEXT("more"), bMore);
+		return true;
+	});
+
+	// ---------- 类（面板里「选类型」的可搜索下拉） ----------
+	// 按名字找已加载的类：名字开头匹配的排前面，其余是名字里包含的；不给 q 不列（几万个类）
+	AddOp(TEXT("classes"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+	{
+		const FString Q = Str(A, TEXT("q")).TrimStartAndEnd();
+		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 50), 1, 500);
+		TArray<UClass*> Head;
+		TArray<UClass*> Tail;
+		if (!Q.IsEmpty())
+		{
+			for (TObjectIterator<UClass> It; It; ++It)
+			{
+				UClass* C = *It;
+				if (IsTempClass(C) || C->HasAnyClassFlags(CLASS_NewerVersionExists))
+				{
+					continue;
+				}
+				const FString N = C->GetName();
+				if (StartsWithNoCase(N, Q))
+				{
+					Head.Add(C);
+				}
+				else if (N.Contains(Q, ESearchCase::IgnoreCase))
+				{
+					Tail.Add(C);
+				}
+			}
+		}
+		// 名字短的更接近输入的字，排前面
+		auto ByName = [](const UClass* L, const UClass* R)
+		{
+			const FString LN = L->GetName();
+			const FString RN = R->GetName();
+			return LN.Len() != RN.Len() ? LN.Len() < RN.Len() : LN < RN;
+		};
+		Algo::Sort(Head, ByName);
+		Algo::Sort(Tail, ByName);
+		Head.Append(Tail);
+		TArray<TSharedPtr<FJsonValue>> Items;
+		for (int32 i = 0; i < Head.Num() && i < Limit; ++i)
+		{
+			UClass* C = Head[i];
+			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetStringField(TEXT("name"), C->GetName());
+			O->SetStringField(TEXT("path"), C->GetPathName());
+			O->SetStringField(TEXT("parent"), C->GetSuperClass() ? C->GetSuperClass()->GetName() : FString());
+			O->SetBoolField(TEXT("actor"), C->IsChildOf(AActor::StaticClass()));
+			Items.Add(Obj(O));
+		}
+		Out->SetArrayField(TEXT("items"), Items);
+		Out->SetBoolField(TEXT("more"), Head.Num() > Limit);
+		return true;
+	});
+
+	// 资源类型：资源注册表里真有资源的类（带个数）和它们的父类；有 q 时后面再接上名字对得上的其他类，
+	// 这样引擎里任何类型都选得到。扫一遍注册表在大项目里要上百毫秒，结果留 30 秒，打字时不反复扫
+	AddOp(TEXT("asset.classes"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+	{
+		static TMap<FTopLevelAssetPath, int32> Counts;
+		static double CountsAt = 0;
+		const double Now = FPlatformTime::Seconds();
+		if (Counts.Num() == 0 || Now - CountsAt > 30.0)
+		{
+			Counts.Reset();
+			IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+			AR.EnumerateAllAssets([](const FAssetData& D)
+			{
+				Counts.FindOrAdd(D.AssetClassPath)++;
+				return true;
+			});
+			// 父类也算资源类型：按 DataAsset 搜能搜出所有子类的资源
+			TArray<FTopLevelAssetPath> Direct;
+			Counts.GetKeys(Direct);
+			for (const FTopLevelAssetPath& P : Direct)
+			{
+				UClass* C = FindObject<UClass>(nullptr, *P.ToString());
+				for (C = C ? C->GetSuperClass() : nullptr; C && C != UObject::StaticClass(); C = C->GetSuperClass())
+				{
+					Counts.FindOrAdd(C->GetClassPathName());
+				}
+			}
+			CountsAt = Now;
+		}
+		const FString Q = Str(A, TEXT("q")).TrimStartAndEnd();
+		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 2000);
+		struct FRow
+		{
+			FString Name;
+			FString Path;
+			int32 Count = 0;
+			// 0 名字开头匹配，1 名字里包含，2 注册表里没有资源的其他类
+			int32 Rank = 0;
+		};
+		TArray<FRow> Rows;
+		for (const TPair<FTopLevelAssetPath, int32>& P : Counts)
+		{
+			const FString N = P.Key.GetAssetName().ToString();
+			const bool bHead = Q.IsEmpty() || StartsWithNoCase(N, Q);
+			if (!bHead && !N.Contains(Q, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			FRow R;
+			R.Name = N;
+			R.Path = P.Key.ToString();
+			R.Count = P.Value;
+			R.Rank = bHead ? 0 : 1;
+			Rows.Add(MoveTemp(R));
+		}
+		if (!Q.IsEmpty())
+		{
+			for (TObjectIterator<UClass> It; It; ++It)
+			{
+				UClass* C = *It;
+				// Actor、组件存不成单独的资源，不往资源类型里放
+				if (IsTempClass(C) || C->HasAnyClassFlags(CLASS_NewerVersionExists) || C->IsChildOf(AActor::StaticClass()) ||
+					C->IsChildOf(UActorComponent::StaticClass()) || Counts.Contains(C->GetClassPathName()))
+				{
+					continue;
+				}
+				const FString N = C->GetName();
+				if (!N.Contains(Q, ESearchCase::IgnoreCase))
+				{
+					continue;
+				}
+				FRow R;
+				R.Name = N;
+				R.Path = C->GetPathName();
+				R.Rank = 2;
+				Rows.Add(MoveTemp(R));
+			}
+		}
+		const bool bByCount = Q.IsEmpty();
+		Algo::Sort(Rows, [bByCount](const FRow& L, const FRow& R)
+		{
+			if (L.Rank != R.Rank)
+			{
+				return L.Rank < R.Rank;
+			}
+			if (bByCount && L.Count != R.Count)
+			{
+				return L.Count > R.Count;
+			}
+			return L.Name.Len() != R.Name.Len() ? L.Name.Len() < R.Name.Len() : L.Name < R.Name;
+		});
+		TArray<TSharedPtr<FJsonValue>> Items;
+		for (int32 i = 0; i < Rows.Num() && i < Limit; ++i)
+		{
+			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetStringField(TEXT("name"), Rows[i].Name);
+			O->SetStringField(TEXT("path"), Rows[i].Path);
+			O->SetNumberField(TEXT("count"), Rows[i].Count);
+			Items.Add(Obj(O));
+		}
+		Out->SetArrayField(TEXT("items"), Items);
+		Out->SetBoolField(TEXT("more"), Rows.Num() > Limit);
 		return true;
 	});
 

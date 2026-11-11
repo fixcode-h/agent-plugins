@@ -1,0 +1,50 @@
+/*
+ * UI 设计插件的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 ud:（写成 ud:flex、ud:md:flex-row）：插件的样式表在面板之后加载，同名的工具类（.flex-col）
+ * 会排在面板的响应式类（md:flex-row）后面把它盖掉，面板整页的布局跟着乱；加了前缀两边的类名不会重叠。
+ * 主题变量是面板的（sdk/theme.css），颜色跟着面板的配色和深浅色走。
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(ud);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';
+
+/* 面板 web/src/index.css 里自定义的工具类，插件用到的几个照抄一份（加前缀后才生成得出 ud:panel 这类类名）。
+   scroll-fade 用的关键帧 sf-y 和变量 --sf-top/--sf-bot 在面板的全局样式里，运行时直接用面板那份。面板改了这几个要同步。 */
+@utility chip-idle {
+  background-color: color-mix(in oklab, var(--sel) 75%, transparent);
+  :where(.dark) & {
+    background-color: color-mix(in oklab, var(--card) 90%, white);
+  }
+}
+@utility chip-lift {
+  position: relative;
+  top: calc(-1 * var(--chip-lift));
+}
+@utility frost-card {
+  background-color: color-mix(in oklab, var(--card) 78%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+}
+@utility panel {
+  background-color: var(--bg);
+  overflow: hidden;
+  @media (width >= 48rem) {
+    border-radius: var(--panel-radius, 0);
+    border-left: 1px solid var(--line);
+  }
+}
+@utility scroll-fade {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--sf-top),
+      #000 calc(100% - var(--sf-bot)),
+      transparent
+    );
+    animation: sf-y linear both;
+    animation-timeline: scroll(self);
+  }
+}

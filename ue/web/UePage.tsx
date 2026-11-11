@@ -21,7 +21,6 @@ import { get, pget, ppost, useLoad } from './api.ts'
 import { Ctx, type Badges, type UeCtx } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
-import { Actors } from './sections/Actors.tsx'
 import { Assets } from './sections/Assets.tsx'
 import { Bridge } from './sections/Bridge.tsx'
 import { Console } from './sections/Console.tsx'
@@ -65,8 +64,7 @@ const SECTIONS: Section[] = [
     View: Lua,
     when: (s) => !!s?.instances.some((i) => i.lua),
   },
-  { id: 'actors', label: () => 'Actor', icon: Box, group: () => t('数据'), View: Actors },
-  { id: 'objects', label: () => t('运行时对象'), icon: Cpu, group: () => t('数据'), View: Objects },
+  { id: 'objects', label: () => 'Object', icon: Box, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
   { id: 'watch', label: () => t('监视'), icon: Eye, group: () => t('观察'), View: Watch },
   { id: 'perf', label: () => t('性能'), icon: Gauge, group: () => t('观察'), View: Perf },
@@ -78,7 +76,9 @@ const SECTIONS: Section[] = [
 export function UePage({ path }: { path: string }) {
   const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
-  const [pid, sectionId = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
+  const [pid, rawSection = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
+  // Actor 页并进了 Object 页：以前记下的地址、别处写死的链接照样能打开
+  const sectionId = rawSection === 'actors' ? 'objects' : rawSection
   const sub = rest.join('/')
   const projects = useLoad(() => get<{ projects: UeProject[] }>('/projects').then((r) => r.projects), [])
   const [adding, setAdding] = useState(false)

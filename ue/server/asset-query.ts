@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { BridgeError } from './instances.ts'
 import type { UeProject } from './types.ts'
 import { t } from './util.ts'
@@ -17,7 +18,7 @@ export interface AssetQuery {
 const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
 
 /** 磁盘路径 → 包路径：项目 Content → /Game，插件 Content → /<插件名>；不在 Content 里的报错 */
-function diskToPackage(p: string, root: string): string {
+export function diskToPackage(p: string, root: string): string {
   const r = norm(root)
   const lower = p.toLowerCase()
   let rel = lower.startsWith(r.toLowerCase() + '/') ? p.slice(r.length + 1) : ''
@@ -36,6 +37,16 @@ function diskToPackage(p: string, root: string): string {
   const pm = /^Plugins\/(?:.+\/)?([^/]+)\/Content(\/.*)?$/i.exec(rel)
   if (pm) return `/${pm[1]}` + (pm[2] ?? '')
   throw new BridgeError(t('{p} 不在项目的 Content 目录里', { p }))
+}
+
+/**
+ * 包路径 → 磁盘上的 .uasset：只认 /Game（项目 Content）；插件的挂载点要扫 Plugins 才知道在哪，算不出返回空串。
+ * 给面板的工具前守卫和验证覆盖范围用，不用来读写文件
+ */
+export function packageToDisk(root: string, pkg: string) {
+  const p = String(pkg).split('.')[0]
+  const m = /^\/Game\/(.+)$/i.exec(p)
+  return m ? path.join(root, 'Content', ...m[1].split('/')) + '.uasset' : ''
 }
 
 export function assetQuery(project: UeProject, rawPrefix: unknown, rawPath: unknown): AssetQuery {

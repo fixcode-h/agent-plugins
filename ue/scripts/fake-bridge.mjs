@@ -1,6 +1,6 @@
 // 假的桥接（冒烟测试用）：在本进程里起一个 HTTP 服务，协议和 UE 里的 AgentPanelBridge 一样（GET /info、POST /rpc、令牌头），
 // 在 <项目>/Saved/AgentPanel/instances/<PID>.json 写名片。只实现冒烟测试用到的几个操作，状态放在内存里。
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
@@ -64,6 +64,67 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     Shield: { Name: '木盾', Price: 80, Icon: '/Game/UI/T_Shield.T_Shield', Tags: ['Armor'] },
   }
   const ops = {
+    // 资源转文本：真桥接在编辑器里加载那一版；这里只读临时文件（冒烟测试写的是文本），查参数和临时文件的位置
+    'asset.textify': (a) => {
+      state.textify = (state.textify ?? 0) + 1
+      if (!existsSync(a.file)) throw new Error(`没有这个文件：${a.file}`)
+      if (!String(a.file).startsWith(root.replaceAll('\\', '/'))) throw new Error('临时文件不在项目目录里')
+      return { text: `资源 ${a.package}\n${readFileSync(a.file, 'utf8')}` }
+    },
+    // Object 页：类下拉（classes）、按类和名字前缀找对象（objects，Actor 带显示名和关卡）
+    classes: (a) => ({
+      items: [
+        { name: 'Character', path: '/Script/Engine.Character', parent: 'Pawn', actor: true },
+        { name: 'BP_Hero_C', path: '/Game/BP_Hero.BP_Hero_C', parent: 'Character', actor: true },
+        { name: 'GameInstance', path: '/Script/Engine.GameInstance', parent: 'Object', actor: false },
+      ].filter((c) => a.q && c.name.toLowerCase().includes(String(a.q).toLowerCase())),
+      more: false,
+    }),
+    objects: (a) => {
+      const all = [
+        {
+          path: HERO,
+          name: 'BP_Hero_C_1',
+          class: 'BP_Hero_C',
+          kind: 'instance',
+          actor: true,
+          label: 'BP_Hero',
+          level: 'Town',
+          player: true,
+          is: ['', 'Actor', 'Pawn', 'Character', 'BP_Hero_C'],
+        },
+        {
+          path: GI,
+          name: 'BP_LuaGameInstance_C_0',
+          class: 'BP_LuaGameInstance_C',
+          kind: 'instance',
+          is: ['', 'GameInstance'],
+        },
+      ]
+      const cls = String(a.class ?? '')
+        .split('.')
+        .pop()
+      const pre = String(a.prefix ?? '').toLowerCase()
+      if (!cls && !pre) throw new Error('要给类名或名字前缀')
+      return {
+        items: all
+          .filter(
+            (o) =>
+              o.is.includes(cls) && (o.name.toLowerCase().startsWith(pre) || !!o.label?.toLowerCase().startsWith(pre)),
+          )
+          .map(({ is: _is, ...o }) => o),
+        more: false,
+        partial: !cls,
+      }
+    },
+    'asset.classes': (a) => ({
+      items: [
+        { name: 'Blueprint', path: '/Script/Engine.Blueprint', count: 1 },
+        { name: 'DataTable', path: '/Script/Engine.DataTable', count: 1 },
+        { name: 'InputAction', path: '/Script/EnhancedInput.InputAction', count: 1 },
+      ].filter((c) => c.name.toLowerCase().includes(String(a.q ?? '').toLowerCase())),
+      more: false,
+    }),
     'lua.objects': (a) => ({
       items:
         !a.module || 'Game.Core.GameInstance'.toLowerCase().includes(String(a.module).toLowerCase())
@@ -367,9 +428,22 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     'asset.dirty': () => ({
       items: [...state.bp.dirty].map((p) => ({ package: p, file: `${p}.uasset`, readOnly: false, isNew: false })),
     }),
-    'asset.save': () => {
+    'asset.save': (a) => {
+      // 真桥接回写回的磁盘文件；这里按 /Game → Content 拼出来
+      const pkgs = a.packages?.length ? a.packages : [...state.bp.dirty]
+      const saved = pkgs.map(
+        (p) =>
+          path.join(
+            root,
+            'Content',
+            ...String(p)
+              .replace(/^\/Game\//, '')
+              .split('.')[0]
+              .split('/'),
+          ) + '.uasset',
+      )
       state.bp.dirty.clear()
-      return { saved: [] }
+      return { saved }
     },
     'asset.undo': (a) => {
       if (state.bp.tx.at(-1)?.id !== a.tx) throw new Error('这一步不在撤销栈顶')

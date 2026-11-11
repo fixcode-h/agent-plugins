@@ -22,6 +22,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 照面板源码布局放文件的插件（ui-design）类型和单测要用面板的源码：浅克隆面板 dev 分支到 .panel 再装依赖
+      - name: 准备面板源码（.panel）
+        run: npm run panel
       - name: 检查（类型、漏翻、插件目录）
         run: npm run check
       - name: 构建插件包
@@ -32,6 +35,8 @@ jobs:
         run: node ue/scripts/smoke.mjs
       - name: UE 性能抓取解析器测试（CSV、memreport）
         run: node ue/scripts/perf-test.mjs
+      - name: UI 设计单测（面板模块取自 .panel）
+        run: npm test
       - uses: actions/upload-artifact@v4
         with:
           name: plugins

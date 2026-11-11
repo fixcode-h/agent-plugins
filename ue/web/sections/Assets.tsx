@@ -4,6 +4,7 @@ import { takePending } from '../pending.ts'
 import { op, useAction, useLoad } from '../api.ts'
 import { AssetInfo } from '../AssetInfo.tsx'
 import { BlueprintView } from '../Blueprint.tsx'
+import { ClassPicker, type ClassOpt } from '../ClassPicker.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
@@ -22,16 +23,27 @@ interface Dirty {
   readOnly: boolean
 }
 
-const CLASSES = [
-  '',
+/** 类型下拉不打字时先列的常用类型；其余的从 UE 的资源注册表里取（项目里真有资源的所有类型），打字能搜到引擎里任何类 */
+const COMMON = [
   'DataTable',
   'PrimaryDataAsset',
   'DataAsset',
   'Blueprint',
+  'WidgetBlueprint',
   'CurveTable',
   'CurveFloat',
   'StringTable',
+  'Material',
+  'MaterialInstanceConstant',
+  'Texture2D',
+  'StaticMesh',
+  'SkeletalMesh',
+  'AnimSequence',
+  'AnimBlueprint',
+  'SoundWave',
+  'World',
 ]
+const TABLE: ClassOpt = { name: 'DataTable' }
 
 /**
  * 资源（图 5）：按类型和名字前缀找资源（点搜索才搜）；DataTable 表格视图（分页、筛选、改单元格、增删行），
@@ -44,8 +56,13 @@ export function Assets() {
   const { busy, run } = useAction()
   // Ctrl+K 带过来的路径或名字：按所有类型搜一次（lazy 初始值只取一次，切回来不会再搜）
   const [pend] = useState(() => takePending('assets'))
-  const [cls, setCls] = useState(pend ? '' : 'DataTable')
+  const all: ClassOpt = { name: '', label: t('所有类型') }
+  const [cls, setCls] = useState<ClassOpt>(pend ? all : TABLE)
+  // 搜索框里的字收在这里：换类型时按现在的字重搜
+  const [prefix, setPrefix] = useState(pend ?? '')
   const [q, setQ] = useState<{ cls: string; prefix: string } | undefined>(pend ? { cls: '', prefix: pend } : undefined)
+  // 有编辑器（或后台编辑器已经起来）才去取类型列表：只是点开下拉，不为它启动后台编辑器
+  const canList = (state?.instances ?? []).some((i) => i.kind === 'editor' || i.kind === 'background')
   // 左边资源列表宽度可拖；右边表格、属性至少留 420px
   const pane = usePane('assets', '28%', 220)
   const left = useRef<HTMLElement>(null)
@@ -125,18 +142,43 @@ export function Assets() {
           bodyClass="ue:flex ue:min-h-0 ue:flex-col"
         >
           <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3">
-            <ui.Select
-              size="sm"
-              value={cls}
-              onChange={(e: { target: { value: string } }) => setCls(e.target.value)}
-              options={CLASSES.map((c) => ({ value: c, label: c || t('所有类型') }))}
+            <ClassPicker
+              value={cls.name ? cls : all}
+              common={[all, ...COMMON.map((name) => ({ name }))]}
+              placeholder={t('搜资源类型，例如 Material、InputAction')}
+              load={
+                canList
+                  ? (s) =>
+                      op<{ items: { name: string; path: string; count: number }[] }>(
+                        project.id,
+                        'asset.classes',
+                        { q: s, limit: 200 },
+                        undefined,
+                        60000,
+                      ).then((r) =>
+                        r.items.map((c) => ({
+                          name: c.name,
+                          path: c.path,
+                          note: c.count ? t('{n} 个', { n: c.count }) : undefined,
+                        })),
+                      )
+                  : undefined
+              }
+              onChange={(c) => {
+                setCls(c)
+                // 选了具体类型就按现在的字重搜（空的也行，列这个类型的全部）；选「所有类型」要有字才搜
+                if (c.name || prefix) setQ({ cls: c.path || c.name, prefix })
+              }}
             />
             <SearchBox
               initial={pend}
               placeholder={t('资源名开头（DT_Item），或目录（/Game/Data、磁盘上 Content 里的路径）')}
               hint={t('前缀')}
-              allowEmpty={!!cls}
-              onSearch={(p) => setQ({ cls, prefix: p })}
+              allowEmpty={!!cls.name}
+              onSearch={(p) => {
+                setPrefix(p)
+                setQ({ cls: cls.path || cls.name, prefix: p })
+              }}
               busy={found.loading}
             />
             {found.loading &&

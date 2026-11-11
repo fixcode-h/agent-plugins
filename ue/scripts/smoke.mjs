@@ -1,13 +1,17 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；17 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；19 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
 // 资源和蓝图：大纲、图表伪代码、搜节点；操作列表演练不留改动、正式修改能撤回、失败整批取消；另一个对话改同一个没保存的包会被拒绝；
 // 结构性操作按权限确认，删除每次确认；Python 默认关。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
+// 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+
+/** 目录里还剩下的东西 */
+const hasEntries = (d) => readdirSync(d).length > 0
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -80,7 +84,7 @@ try {
   )
   assert.match(runTools.hint, /ue_status/)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 17)
+  assert.equal(Object.keys(tools).length, 19)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
 
   const st = await call('ue_status', {})
@@ -90,6 +94,17 @@ try {
 
   const found = await call('ue_find', { kind: 'actor', prefix: 'bp_he' })
   assert.match(text(found), /BP_Hero_C_1/)
+
+  // Object 页：类下拉搜类，再在选的类里按名字前缀找（Actor 也按显示名找）；资源页的类型从 UE 里取
+  const classes = await api('POST', '/p/p1/op', { op: 'classes', args: { q: 'char' } })
+  assert.equal(classes.items[0].path, '/Script/Engine.Character', JSON.stringify(classes))
+  const inClass = await api('POST', '/p/p1/op', {
+    op: 'objects',
+    args: { class: '/Script/Engine.Character', prefix: 'bp_hero' },
+  })
+  assert.equal(inClass.items[0].label, 'BP_Hero', JSON.stringify(inClass))
+  const assetTypes = await api('POST', '/p/p1/op', { op: 'asset.classes', args: { q: 'input' } })
+  assert.equal(assetTypes.items[0].name, 'InputAction', JSON.stringify(assetTypes))
 
   // 改属性 → 操作记录 → 撤回
   const set = await call('ue_set', { path: bridge.hero, prop: 'Health', value: 10 })
@@ -279,7 +294,6 @@ try {
   assert.equal(job.status, 'failed', JSON.stringify(job))
   assert.equal(job.hint?.kind, 'live-coding', JSON.stringify(job))
 
-
   // ---------- 性能和内存抓取（ue_perf / ue_capture） ----------
   const permsBefore = (await api('GET', '/p/p1/state')).project.perms
   await api('POST', '/p/p1/settings', { perms: { ...permsBefore, runtime: 'read' } })
@@ -317,8 +331,13 @@ try {
   assert.equal(csvSum.capture.id, stopped.capture.id)
   assert.equal(csvSum.summary.frames, 600)
   assert.equal(csvSum.summary.hitches.count, 3)
-  const hitches = JSON.parse(text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches' })))
-  assert.ok(hitches.worst[0].spikes.some((s) => s.column === 'Slate/Tick'), JSON.stringify(hitches.worst[0]))
+  const hitches = JSON.parse(
+    text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches' })),
+  )
+  assert.ok(
+    hitches.worst[0].spikes.some((s) => s.column === 'Slate/Tick'),
+    JSON.stringify(hitches.worst[0]),
+  )
   // from 可以写书签名（CSV 里的事件）
   const afterBag = JSON.parse(
     text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches', from: 'close_bag' })),
@@ -344,7 +363,11 @@ try {
   const webPerf = await api('GET', '/p/p1/perf')
   assert.equal(webPerf.items.length, 3)
   assert.equal(webPerf.active.length, 0)
-  const noDel = await call('ue_capture', { action: 'delete', id: m1.capture.id }, { confirm: async () => ({ allow: false, message: 'no' }) })
+  const noDel = await call(
+    'ue_capture',
+    { action: 'delete', id: m1.capture.id },
+    { confirm: async () => ({ allow: false, message: 'no' }) },
+  )
   assert.ok(noDel.isError, text(noDel))
   assert.ok(existsSync(m1.capture.file))
   const del = await call('ue_capture', { action: 'delete', id: m1.capture.id }, yes)
@@ -352,9 +375,49 @@ try {
   assert.match(text(await call('ue_capture', { action: 'help' })), /hitches/)
   await api('POST', '/p/p1/settings', { perms: permsBefore })
 
+  // 保存和编译拆成单独的工具，带面板接口 3 的作用声明：编译报验证结论，保存报写回了哪些文件
+  assert.equal(tools.ue_save.effect, 'edit')
+  assert.equal(tools.ue_compile.effect, 'verify')
+  assert.equal(tools.ue_asset.effect, undefined)
+  const bpFile =
+    path.join(
+      proj,
+      'Content',
+      ...bridge.bp
+        .split('.')[0]
+        .replace(/^\/Game\//, '')
+        .split('/'),
+    ) + '.uasset'
+  assert.deepEqual(tools.ue_save.targets({ packages: [bridge.bp.split('.')[0]] }), [bpFile])
+  const compiled = await call('ue_compile', { path: bridge.bp })
+  assert.ok(!compiled.isError, text(compiled))
+  assert.deepEqual(compiled.verified, { passed: true, name: '蓝图编译', files: [bpFile] })
+  assert.ok((await call('ue_blueprint', { action: 'compile', path: bridge.bp })).isError)
+  assert.ok((await call('ue_asset', { action: 'save' })).isError)
+  const savedRes = await call('ue_save', { packages: [bridge.bp.split('.')[0]] }, yes)
+  assert.ok(!savedRes.isError, text(savedRes))
+  assert.deepEqual(savedRes.changed, [bpFile])
+
+  // 评审转 .uasset：临时文件在项目 Saved 下、用完删掉，包名按 Content 换成 /Game；同一内容不再调桥接
+  assert.deepEqual(plugin.textify.exts, ['uasset'])
+  const tx = (rel, body, side = 'new') => plugin.textify.text({ path: rel, cwd: proj, side, data: Buffer.from(body) })
+  const t1 = await tx('Content/Data/BP_Hero.uasset', 'v1')
+  assert.equal(t1, '资源 /Game/Data/BP_Hero\nv1')
+  assert.equal(await tx('Content/Data/BP_Hero.uasset', 'v1', 'old'), t1)
+  assert.equal(bridge.state.textify, 1)
+  assert.match(await tx('Content/Data/BP_Hero.uasset', 'v2'), /v2$/)
+  assert.ok(
+    !existsSync(path.join(proj, 'Saved', 'AgentPanel', 'textify')) ||
+      !hasEntries(path.join(proj, 'Saved', 'AgentPanel', 'textify')),
+  )
+  await assert.rejects(
+    () => plugin.textify.text({ path: 'a.uasset', cwd: tmp, side: 'new', data: Buffer.from('x') }),
+    /没在 UE 页接入/,
+  )
+
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
-  console.log(`ue 冒烟测试通过：17 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：19 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()

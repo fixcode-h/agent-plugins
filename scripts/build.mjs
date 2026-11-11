@@ -4,7 +4,7 @@
 // 包的布局（面板 ADR 0059）：plugin.json、server/index.js（服务端入口，依赖打进去）、web/index.js + web/index.css、
 // locales/en.json、skills/<分类>/<名字>/，再加插件自己的构建钩子（<插件>/build.mjs 的 extra）放进去的资源。
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
@@ -37,6 +37,71 @@ const panelReact = {
   },
 }
 
+/**
+ * 面板开放的模块（面板插件接口 4，清单 sdk/host-modules.json 是面板 shared/plugins/host-modules.json 的副本）：
+ * 插件目录照面板的源码布局放文件（web/src/…、server/…、shared/…）时，import 先找插件自己的文件，
+ * 插件里没有、清单里开放了的接到面板挂在全局上的那一份（网页 globalThis.__agentPanel.modules，服务端 __agentPanelServer.modules），
+ * 和面板共用同一份状态。@/ 是插件的 web/src/，@shared/ 是插件的 shared/，和面板的别名一致，搬过来的代码不用改 import。
+ * 都没有时构建直接报错：多半是面板没开放这个模块，要先在面板加进清单。
+ */
+const HOST_MODULES = JSON.parse(readFileSync(path.join(ROOT, 'sdk', 'host-modules.json'), 'utf8'))
+const EXTS = ['', '.ts', '.tsx', '.js', '.mjs', '.json', '/index.ts', '/index.tsx', '/index.js']
+const findLocal = (p) => EXTS.map((e) => p + e).find((f) => existsSync(f) && !statSync(f).isDirectory())
+
+function panelModules(dir, side) {
+  const allowed = new Set(HOST_MODULES[side])
+  // 要和面板共用同一份实例的第三方包（zod：面板开放模块里的 schema 要能和插件自己的拼在一起）
+  const packages = new Set(HOST_MODULES[`${side}Packages`] ?? [])
+  const global = side === 'web' ? '__agentPanel' : '__agentPanelServer'
+  return {
+    name: 'agent-panel-modules',
+    setup(b) {
+      b.onResolve({ filter: /.*/ }, (a) =>
+        a.namespace === 'file' && packages.has(a.path) ? { path: a.path, namespace: `agent-panel-${side}` } : undefined,
+      )
+      // @panel/<面板源码路径>：一定取面板那一份（插件自己有同名文件、要在上面包一层时用，例如插件的 web/src/lib/api.ts）
+      b.onResolve({ filter: /^@panel\// }, (a) => {
+        const key = a.path.slice(7).replace(/\.(tsx?|m?js)$/, '')
+        return allowed.has(key)
+          ? { path: key, namespace: `agent-panel-${side}` }
+          : { errors: [{ text: `面板没有开放 ${key}（sdk/host-modules.json 的 ${side}）` }] }
+      })
+      b.onResolve({ filter: /^(@\/|@shared\/|\.)/ }, (a) => {
+        if (a.namespace !== 'file') return undefined
+        const abs = a.path.startsWith('@/')
+          ? path.join(dir, 'web', 'src', a.path.slice(2))
+          : a.path.startsWith('@shared/')
+            ? path.join(dir, 'shared', a.path.slice(8))
+            : path.resolve(a.resolveDir, a.path)
+        // 插件里有这个文件：别名指到这个文件；相对路径（含 TS 惯用的 ./x.js 指 x.ts）交回 esbuild 照常解析
+        const local = findLocal(abs) ?? (/\.m?js$/.test(abs) ? findLocal(abs.replace(/\.m?js$/, '')) : undefined)
+        if (local) return a.path.startsWith('.') ? undefined : { path: local }
+        const rel = path.relative(dir, abs)
+        // 插件目录外、或者连目录都不像面板布局的相对路径：交回 esbuild，按它自己的报错来
+        if (rel.startsWith('..') || path.isAbsolute(rel)) return undefined
+        const key = rel
+          .split(path.sep)
+          .join('/')
+          .replace(/\.(tsx?|m?js)$/, '')
+        if (!allowed.has(key))
+          return {
+            errors: [{ text: `插件里没有 ${a.path}，面板也没有开放 ${key}（sdk/host-modules.json 的 ${side}）` }],
+          }
+        return { path: key, namespace: `agent-panel-${side}` }
+      })
+      b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => ({
+        // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
+        contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
+if (!m) throw new Error('面板没有开放模块 ${a.path}：要插件接口 4 及以上的面板')
+const o = { __esModule: true }
+for (const k of Object.keys(m)) Object.defineProperty(o, k, { enumerable: true, get: () => m[k] })
+module.exports = o`,
+        loader: 'js',
+      }))
+    },
+  }
+}
+
 function pluginDirs(args) {
   if (args.length) return args.map((a) => path.resolve(ROOT, a))
   return readdirSync(ROOT, { withFileTypes: true })
@@ -65,6 +130,7 @@ async function buildPlugin(dir) {
       target: 'node22',
       // 打进来的 CommonJS 依赖可能用 require：给 ESM 产物补一个
       banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
+      plugins: [panelModules(dir, 'server')],
       logLevel: 'warning',
     })
   }
@@ -78,7 +144,9 @@ async function buildPlugin(dir) {
       target: 'es2022',
       jsx: 'automatic',
       minify: true,
-      plugins: [panelReact],
+      // 从面板搬过来的代码里有 import.meta.env（面板是 Vite 构建的）：插件只跑在正式版面板里，按正式版的值定死
+      define: { 'import.meta.env': JSON.stringify({ MODE: 'production', DEV: false, PROD: true, VITE_DEMO: '' }) },
+      plugins: [panelReact, panelModules(dir, 'web')],
       logLevel: 'warning',
     })
   }

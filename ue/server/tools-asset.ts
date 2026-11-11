@@ -1,4 +1,5 @@
 import type { McpResult } from '../../sdk/server.ts'
+import { packageToDisk } from './asset-query.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
@@ -24,7 +25,6 @@ export const ASSET_ACTIONS = [
   'add',
   'remove',
   'dirty',
-  'save',
   'revert',
   'open',
   'help',
@@ -45,7 +45,7 @@ const HELP: Record<string, unknown> = {
       duplicate: 'path, to, dryRun?',
       rename: 'path, to, dryRun?（也用来移动目录）',
       delete: 'path, force?, dryRun?',
-      'dirty / save / revert': 'packages?（不给就是所有改了没保存的）',
+      'dirty / revert': 'packages?（不给就是所有改了没保存的）；保存用 ue_save 工具',
       open: 'path',
     },
   },
@@ -67,7 +67,7 @@ const HELP: Record<string, unknown> = {
       'ue_blueprint graph': 'path, graph?, node?, format?(pseudo|json), around?, hops?, offset?, limit?',
       'ue_blueprint node_search': 'path, graph?, query',
       'ue_blueprint edit': 'path, ops[], dryRun?, compile?',
-      'ue_blueprint compile': 'path',
+      'ue_compile（单独的工具）': 'path：编译并给出通过没有，保存前用它确认'
     },
   },
   DataAsset: { 说明: '没有专用动作：describe / export 看内容，ue_get / ue_set 读改属性' },
@@ -169,11 +169,11 @@ export const ASSET_TOOLS = [
     'ue_blueprint',
     '读写蓝图（path 是蓝图资源路径 /Game/...；普通蓝图：Actor、组件、对象、函数库、接口）。由粗到细读：action=outline 大纲（父类、接口、变量、组件树、各张图和函数的入参出参、编译状态和上次的错误）；action=graph 读一张图（graph 是图名，不写是事件图）：默认给伪代码（沿执行线一行一句，行尾 #节点id，@id.引脚 指某个节点的输出），format=json 给节点和引脚连线（offset / limit 分页，around=节点id + hops 只取周围几跳），node=节点id 看一个节点的全部引脚。' +
       'action=node_search 按 query 查能放的节点（和编辑器右键菜单一致），结果里的 spawner 给 add_node 用。' +
-      'action=edit 按操作列表修改（改完自动编译并返回每步结果、新节点 id、编译错误和对应的节点 id、受影响的子类和调用方）；dryRun=true 演练：真实执行和编译，拿到结果后取消，不留改动。复杂修改先演练。action=compile 只编译。' +
-      '修改只在内存里（标脏），用 ue_asset save 保存；没保存前可以 ue_undo 撤回。类默认值和组件模板的属性也可以用 ue_get / ue_set。\n' +
+      'action=edit 按操作列表修改（改完自动编译并返回每步结果、新节点 id、编译错误和对应的节点 id、受影响的子类和调用方）；dryRun=true 演练：真实执行和编译，拿到结果后取消，不留改动。复杂修改先演练。只编译用 ue_compile。' +
+      '修改只在内存里（标脏），用 ue_save 保存；没保存前可以 ue_undo 撤回。类默认值和组件模板的属性也可以用 ue_get / ue_set。\n' +
       EDIT_HELP,
     {
-      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit', 'compile'] },
+      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit'] },
       path: { type: 'string' },
       graph: { type: 'string' },
       node: { type: 'string' },
@@ -226,12 +226,48 @@ export const ASSET_TOOLS = [
           return out(
             await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile: a.compile !== false }, 300000),
           )
+        // 编译拆成了 ue_compile（面板据此把编译结果算进完成依据）；老会话里还按旧说明调的，指过去
         case 'compile':
-          return out(await runOp(ctx, 'bp.compile', { path }, 300000))
+          return mcpText('只编译改用 ue_compile 工具（path 参数不变）', true)
         default:
           return mcpText(`不认识的 action：${a.action}`, true)
       }
     },
+  ),
+  tool(
+    'ue_save',
+    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「桥接与权限」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过。',
+    { packages: { type: 'array', items: { type: 'string' } }, target: TARGET },
+    [],
+    async (a, ctx) => {
+      const res = await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000)
+      // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
+      const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
+      return { ...out(res), changed: saved }
+    },
+    {
+      effect: 'edit',
+      // 守卫判断要改哪些文件：给了 packages 就按 /Game 换成 Content 下的文件；不给（保存全部）算不出
+      targets: (a, root) =>
+        (Array.isArray(a.packages) ? a.packages : []).map((p) => packageToDisk(root, String(p))).filter(Boolean),
+    },
+  ),
+  tool(
+    'ue_compile',
+    '编译蓝图（path 是蓝图资源路径 /Game/...），返回编译状态（ok / warnings / error）、错误和警告（带图名和节点 id）、受影响的子类和调用方。改完蓝图、保存之前用它确认通过；有错按节点 id 用 ue_blueprint edit 修，再编译。',
+    { path: { type: 'string' }, target: TARGET },
+    ['path'],
+    async (a, ctx) => {
+      const res = await runOp(ctx, 'bp.compile', { path: a.path }, 300000)
+      const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
+      const file = packageToDisk(ctx.project.root, str(a.path))
+      // 编译结论交给面板的完成依据：通过的蓝图不再要求跑项目的测试步骤，没通过时不让对话结束
+      return {
+        ...out(res),
+        verified: { passed: status === 'ok' || status === 'warnings', name: '蓝图编译', ...(file && { files: [file] }) },
+      }
+    },
+    { effect: 'verify' },
   ),
   tool(
     'ue_python',

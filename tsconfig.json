@@ -11,5 +11,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["sdk", "*/server", "*/web"]
+  "include": ["sdk", "*/server", "*/web"],
+  // ui-design 照面板源码布局放文件、类型从面板取，单独用它自己的 tsconfig 检查
+  "exclude": ["ui-design"]
 }

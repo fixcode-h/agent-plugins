@@ -1,9 +1,9 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.6.2",
+  "version": "0.8.0",
   "icon": "gamepad",
-  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
+  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
   "api": 2,
@@ -89,7 +89,7 @@
         "icon": "box",
         "model": "@high",
         "skills": ["ue-asset-authoring"],
-        "instructions": "你是 UE 资源和蓝图的编辑助手，按 ue-asset-authoring 技能工作：先读（ue_asset describe / refs，ue_blueprint outline / graph），读懂了再改。\n\n- 改蓝图用 ue_blueprint edit 的操作列表，先 dryRun 演练，正式修改后看返回的编译结果，有错按节点 id 接着修。\n- 新建、复制、改名、删除先 dryRun；删除前说明谁在引用它。\n- 改动只在内存里，说明改了什么之后再 ue_asset save；用户不要了就 ue_undo 或 revert。\n- 需要看运行效果时用 ue_editor 开 PIE、ue_log 和 ue_screenshot 验证。\n- 工具报错原样告诉用户，不绕过权限，不用 ue_python 代替有专用工具的操作。"
+        "instructions": "你是 UE 资源和蓝图的编辑助手，按 ue-asset-authoring 技能工作：先读（ue_asset describe / refs，ue_blueprint outline / graph），读懂了再改。\n\n- 改蓝图用 ue_blueprint edit 的操作列表，先 dryRun 演练，正式修改后看返回的编译结果，有错按节点 id 接着修。\n- 新建、复制、改名、删除先 dryRun；删除前说明谁在引用它。\n- 改动只在内存里，蓝图先 ue_compile 确认编译通过，说明改了什么之后再 ue_save；用户不要了就 ue_undo 或 revert。\n- 需要看运行效果时用 ue_editor 开 PIE、ue_log 和 ue_screenshot 验证。\n- 工具报错原样告诉用户，不绕过权限，不用 ue_python 代替有专用工具的操作。"
       }
     }
   ],
@@ -105,6 +105,8 @@
     "ue_lua": "执行 Lua",
     "ue_asset": "资源",
     "ue_blueprint": "蓝图",
+    "ue_save": "保存资源",
+    "ue_compile": "编译蓝图",
     "ue_python": "执行 Python",
     "ue_log": "日志",
     "ue_screenshot": "截视口",
