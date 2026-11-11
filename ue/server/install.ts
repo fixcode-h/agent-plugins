@@ -1,7 +1,8 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { endJob, jobLog, newJob, runningJob, spawnJob } from './jobs.ts'
-import { blockerLines, editorBlockers, killBlockers, LIVE_CODING_BLOCK } from './procs.ts'
+import { guardBuild } from './build-guard.ts'
+import { blockerLines, LIVE_CODING_BLOCK } from './procs.ts'
 import type { InstallMode, Job, UeProject } from './types.ts'
 import { c, exists, run, t } from './util.ts'
 
@@ -153,8 +154,8 @@ const NO_TOOLCHAIN =
 
 /**
  * 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat。
- * 用 Build.bat 时先查这个引擎的编辑器开没开（procs.ts 写了为什么）：开着就不跑，作业带上 hint，网页给出处理方式；
- * force 跳过检查（检查认错进程时用）；kill 先强制结束查到的编辑器再编（用户在网页上确认过未保存的改动会丢）。
+ * 用 Build.bat 时先过 guardBuild（build-guard.ts）：编辑器开着或 Live Coding 的锁还在就不跑，作业带上 hint，网页给出处理方式；
+ * force 跳过检查（检查认错时用）；kill 先强制结束占着的进程再编（用户在网页上确认过未保存的改动会丢）。
  * 不管哪种方式，输出里出现 Live Coding 拒绝编译也带上 hint。
  */
 export async function build(p: UeProject, opts: { force?: boolean; kill?: boolean } = {}) {
@@ -195,41 +196,7 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
     endJob(job, false)
     return job
   }
-  if (kill) {
-    const { list, others, error } = await editorBlockers(p)
-    if (error) {
-      jobLog(job, t('没能查到开着的编辑器，没有结束任何进程：{msg}', { msg: error }))
-      job.hint = { kind: 'live-coding', blockers: [] }
-      endJob(job, false)
-      return job
-    }
-    if (!list.length) {
-      jobLog(job, t('没找到这个引擎开着的编辑器，直接编译'))
-      for (const o of others) jobLog(job, t('（别的引擎的编辑器，没动：{o}）', { o }))
-    } else {
-      jobLog(job, t('强制结束编辑器：{list}', { list: list.map((b) => `PID ${b.pid}`).join('、') }))
-      const { failed } = await killBlockers(list)
-      if (failed.length) {
-        for (const f of failed) jobLog(job, t('PID {pid} 没能结束：{msg}', { pid: f.pid, msg: f.msg }))
-        jobLog(job, t('编辑器是用管理员权限打开的话，面板没有权限结束它，请在编辑器里保存后手动关掉'))
-        job.hint = { kind: 'live-coding', blockers: list.filter((b) => failed.some((f) => f.pid === b.pid)) }
-        endJob(job, false)
-        return job
-      }
-      jobLog(job, t('编辑器已结束，开始编译'))
-    }
-  } else if (!force) {
-    const { list, others, error } = await editorBlockers(p)
-    if (error) jobLog(job, t('没能检查编辑器是否开着（照常编译）：{msg}', { msg: error }))
-    // 预检没认出来、Build.bat 却说被 Live Coding 挡住时，靠这几行看出是路径对不上还是没查到
-    if (!list.length) for (const o of others) jobLog(job, t('（别的引擎的编辑器，不挡编译：{o}）', { o }))
-    if (list.length) {
-      for (const l of blockerLines(list)) jobLog(job, l)
-      job.hint = { kind: 'live-coding', blockers: list }
-      endJob(job, false)
-      return job
-    }
-  }
+  if (!force && !(await guardBuild(p, job, kill))) return job
   finish(spawnJob(job, script, args, p.root))
   return job
 }
