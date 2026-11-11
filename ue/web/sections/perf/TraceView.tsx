@@ -9,6 +9,7 @@ import { FrameStrip } from './FrameStrip.tsx'
 import { Empty, Section, Skeleton, Tabs, fmtAt, fmtMs } from './parts.tsx'
 import { StatsBar, type StatItem } from './StatsBar.tsx'
 import { Timeline } from './Timeline.tsx'
+import { ZoomControls } from './ZoomControls.tsx'
 import { TimersTable } from './TimersTable.tsx'
 import { Counters, TraceLog } from './TraceExtras.tsx'
 import { CallTree, InstancesView, StackView, type PanelActions } from './TracePanels.tsx'
@@ -76,6 +77,9 @@ function TraceBody({
   const [range, setRange] = useState<Range>()
   const [view, setViewState] = useState<Range>(() => ({ t0: 0, t1: Math.min(duration, 0.1) }))
   const setView = useCallback((r: Range) => setViewState(r), [])
+  // 帧条自己的缩放窗口（和时间轴的 view 分开）：默认整段，换了 trace 回到整段
+  const [strip, setStrip] = useState<Range>(() => ({ t0: 0, t1: duration }))
+  useEffect(() => setStrip({ t0: 0, t1: duration }), [id, duration])
   const [picked, setPicked] = useState<PickedBlock>()
   const [timer, setTimer] = useState<{ id: number; name: string }>()
   const [tab, setTab] = useState<'timers' | 'counters' | 'log'>('timers')
@@ -170,8 +174,12 @@ function TraceBody({
                     <LinkBtn onClick={() => pickRange(undefined)}>{t('整段')}</LinkBtn>
                   </>
                 ) : (
-                  t('拖选一段设为分析范围')
+                  <span>
+                    {t('拖选一段设为分析范围')}
+                    <span className="ue:hidden ue:xl:inline"> · {t('滚轮缩放 · 右键拖动平移')}</span>
+                  </span>
                 )}
+                <ZoomControls win={strip} duration={duration} onWin={setStrip} />
               </span>
             }
           >
@@ -190,6 +198,8 @@ function TraceBody({
                   duration={duration}
                   range={range}
                   view={view}
+                  win={strip}
+                  onWin={setStrip}
                   marks={marks.data?.items ?? []}
                   budget={BUDGET}
                   onRange={pickRange}
@@ -318,7 +328,9 @@ function TraceBody({
                 <CallTree id={id} range={range} timer={timer.id} name={timer.name} actions={actions} />
               ) : (
                 <Empty>
-                  {t('选一段时间（帧条或时间轴刻度条上拖），再在计时器表里点一行看调用者 / 被调用者；在时间轴上点一块看它的调用堆栈')}
+                  {t(
+                    '选一段时间（帧条或时间轴刻度条上拖），再在计时器表里点一行看调用者 / 被调用者；在时间轴上点一块看它的调用堆栈',
+                  )}
                 </Empty>
               )}
             </div>
@@ -375,9 +387,7 @@ function summary(
 ): StatItem[] {
   // 有分析范围时只算和范围有重叠的帧（一帧比范围还长时也算上它）
   const ms =
-    range && f
-      ? f.ms.filter((m, i) => f.start[i] < range.t1 && f.start[i] + m / 1000 > range.t0)
-      : (f?.ms ?? [])
+    range && f ? f.ms.filter((m, i) => f.start[i] < range.t1 && f.start[i] + m / 1000 > range.t0) : (f?.ms ?? [])
   const sorted = [...ms].sort((a, b) => a - b)
   const avg = ms.length ? ms.reduce((s, x) => s + x, 0) / ms.length : undefined
   const p95 = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : undefined
