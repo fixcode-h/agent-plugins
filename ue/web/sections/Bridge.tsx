@@ -2,6 +2,7 @@ import { Download, Hammer, Loader2, Square, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Job, UeProject } from '../../server/types.ts'
 import { get, post, ppost, useAction, useLoad } from '../api.ts'
+import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Badge, Card, Confirm, PageHead, Term } from '../ui.tsx'
@@ -43,7 +44,7 @@ export function Bridge() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('桥接与权限')} desc={project.root} />
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
+      <div className={STACK}>
         <Card
           title={t('桥接插件 AgentPanelBridge')}
           aside={installed ? <Badge tone={upgrade ? 'warn' : 'ok'}>{installed}</Badge> : <Badge>{t('未安装')}</Badge>}

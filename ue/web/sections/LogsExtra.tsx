@@ -120,7 +120,7 @@ export function Crashes() {
   const { project } = useUe()
   const list = useLoad(() => pget<{ items: Crash[] }>(project.id, 'crashes'), [project.id])
   return (
-    <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-6">
+    <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
       <ErrorText>{list.error}</ErrorText>
       <Card title={t('崩溃记录')} aside="Saved/Crashes">
         <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">

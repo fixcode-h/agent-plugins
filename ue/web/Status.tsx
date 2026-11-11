@@ -29,7 +29,7 @@ export function Status({
       </div>
       {s?.error && <p className="ue:text-footnote ue:text-danger">{s.error}</p>}
       {!s && <p className="ue:text-footnote ue:text-subtle">{t('检测中…')}</p>}
-      <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line ue:rounded-xl ue:border ue:border-line ue:bg-card">
+      <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line ue:border ue:border-line ue:bg-card">
         {(s?.items ?? []).map((p) => (
           <li key={p.name} className="ue:flex ue:items-center ue:gap-3 ue:px-3.5 ue:py-2.5">
             <div className="ue:min-w-0 ue:flex-1">

@@ -110,7 +110,7 @@ export function Gm() {
           <nav
             ref={left}
             style={pane.style('calc(100% - 376px)')}
-            className={cn('ue:flex ue:flex-col ue:gap-0.5 ue:lg:overflow-auto', PANE_FIXED)}
+            className={cn('ue:flex ue:flex-col ue:gap-0.5 ue:p-2 ue:lg:overflow-auto', PANE_FIXED)}
           >
             {[['', items.length] as [string, number], ['__fav', gm.favGm.length] as [string, number], ...groups].map(
               ([g, n]) => (
@@ -181,7 +181,7 @@ export function Gm() {
           </nav>
           <SplitHandle pane={pane} paneRef={left} reserve={() => 376} />
 
-          <div className={cn('ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3', PANE_FILL)}>
+          <div className={cn('ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-4', PANE_FILL)}>
             <SearchBox initial={q} placeholder={t('GM 名字前缀')} hint={t('前缀')} onSearch={setQ} allowEmpty />
             <ErrorText>{list.error}</ErrorText>
             {list.loading && !items.length && <p className="ue:text-footnote ue:text-subtle">{t('正在列出 GM…')}</p>}
@@ -193,7 +193,7 @@ export function Gm() {
                   <div
                     key={`${it.owner}.${it.name}`}
                     className={cn(
-                      'ue:flex ue:flex-col ue:gap-2 ue:rounded-xl ue:border ue:bg-card ue:p-3',
+                      'ue:flex ue:flex-col ue:gap-2 ue:border ue:bg-card ue:p-3',
                       on ? 'ue:border-sel-line ue:xl:col-span-2' : 'ue:border-line',
                     )}
                   >

@@ -181,8 +181,8 @@ export function Logs() {
       {tab === 'crash' ? (
         <Crashes />
       ) : (
-        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-6">
-          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
+          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
             <ui.Segmented
               size="sm"
               label={t('级别')}
@@ -227,7 +227,7 @@ export function Logs() {
             <div
               ref={box}
               onScroll={onScroll}
-              className="ue:absolute ue:inset-0 ue:overflow-auto ue:rounded-xl ue:bg-term-bg ue:font-mono ue:text-footnote"
+              className="ue:absolute ue:inset-0 ue:overflow-auto ue:bg-term-bg ue:font-mono ue:text-footnote"
             >
               <div style={{ height: rows.length * ROW, position: 'relative' }}>
                 {rows.slice(first, last).map((l, i) =>
