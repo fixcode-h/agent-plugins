@@ -29,7 +29,9 @@
 #include "HAL/IConsoleManager.h"
 #include "ImageUtils.h"
 #include "JsonObjectConverter.h"
+#include "Templates/Function.h"
 #include "UObject/UObjectHash.h"
+#include "UObject/UnrealType.h"
 #include "UObject/UObjectIterator.h"
 #include "UnrealClient.h"
 
@@ -726,6 +728,9 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		{
 			return false;
 		}
+		// all=true（面板网页，桥接 1.9.0 起）：列所有 UFUNCTION，按公有 / 受保护 / 私有分组，标出不是蓝图可调的；
+		// 不给 all（Agent 的 ue_call、旧面板）照旧只列蓝图开放的
+		const bool bAll = Bool(A, TEXT("all"), false);
 		TArray<TSharedPtr<FJsonValue>> Items;
 		for (TFieldIterator<UFunction> F(Target->GetClass()); F; ++F)
 		{
@@ -733,11 +738,13 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 #if WITH_EDITORONLY_DATA
 			bAllowed = bAllowed || F->HasMetaData(TEXT("AgentPanel"));
 #endif
-			if (!bAllowed || F->HasAnyFunctionFlags(FUNC_Delegate))
+			if ((!bAllowed && !bAll) || F->HasAnyFunctionFlags(FUNC_Delegate) || F->GetName().StartsWith(TEXT("ExecuteUbergraph")))
 			{
 				continue;
 			}
 			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetStringField(TEXT("access"), F->HasAnyFunctionFlags(FUNC_Private) ? TEXT("private") : F->HasAnyFunctionFlags(FUNC_Protected) ? TEXT("protected") : TEXT("public"));
+			O->SetBoolField(TEXT("blueprint"), bAllowed);
 			O->SetStringField(TEXT("name"), F->GetName());
 			O->SetStringField(TEXT("owner"), F->GetOwnerClass()->GetName());
 			O->SetStringField(TEXT("category"), CategoryOf(*F, F->GetOwnerClass()));
@@ -766,7 +773,7 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			Error = FString::Printf(TEXT("%s 上没有函数 %s"), *Target->GetClass()->GetName(), *Name);
 			return false;
 		}
-		bool bAllowed = F->HasAnyFunctionFlags(FUNC_BlueprintCallable | FUNC_Exec);
+		bool bAllowed = F->HasAnyFunctionFlags(FUNC_BlueprintCallable | FUNC_Exec) || Bool(A, TEXT("any"), false);
 #if WITH_EDITORONLY_DATA
 		bAllowed = bAllowed || F->HasMetaData(TEXT("AgentPanel"));
 #endif
@@ -807,9 +814,17 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		TArray<TSharedPtr<FJsonValue>> Items;
 		bool bMore = false;
 		bool bPartial = false;
+		// 接口类没有自己的对象：按「类实现了这个接口」扫（同样限时）
+		const bool bInterface = C->HasAnyClassFlags(CLASS_Interface);
+		// 给函数参数选值时资源也要：只把「在别的世界里」的对象筛掉，不在任何世界里的资源留着
+		const bool bAssets = Bool(A, TEXT("assets"), false);
 		auto Visit = [&](UObject* O)
 		{
 			if (!IsValid(O) || O->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+			{
+				return true;
+			}
+			if (bInterface && !O->GetClass()->ImplementsInterface(C))
 			{
 				return true;
 			}
@@ -823,7 +838,8 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			}
 #endif
 			const bool bNameHit = StartsWithNoCase(O->GetName(), Prefix) || (!Label.IsEmpty() && StartsWithNoCase(Label, Prefix));
-			if (!bNameHit || (World && O->GetWorld() != World))
+			const UWorld* OW = O->GetWorld();
+			if (!bNameHit || (World && OW != World && !(bAssets && !OW)))
 			{
 				return true;
 			}
@@ -846,7 +862,7 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			Items.Add(Obj(B));
 			return true;
 		};
-		if (!ClassName.IsEmpty())
+		if (!ClassName.IsEmpty() && !bInterface)
 		{
 			// 有类名：按类的哈希只取这个类（含子类）的对象，快
 			TArray<UObject*> Objs;
@@ -878,9 +894,157 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 				}
 			}
 		}
+		// assets=true（函数执行弹窗给对象参数选值，桥接 1.9.0 起）：再从资源注册表补上这个类还没加载的资源，标 unloaded，
+		// 执行时才加载。没写类名不补（那就是全部资源）
+		if (bAssets && !ClassName.IsEmpty() && !bInterface && !bMore)
+		{
+			IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+			FARFilter Filter;
+			Filter.ClassPaths.Add(C->GetClassPathName());
+			Filter.bRecursiveClasses = true;
+			TArray<FAssetData> Found;
+			AR.GetAssets(Filter, Found);
+			for (const FAssetData& D : Found)
+			{
+				if (D.IsAssetLoaded() || !StartsWithNoCase(D.AssetName.ToString(), Prefix))
+				{
+					continue;
+				}
+				if (Items.Num() >= Limit)
+				{
+					bMore = true;
+					break;
+				}
+				TSharedPtr<FJsonObject> B = MakeShared<FJsonObject>();
+				B->SetStringField(TEXT("path"), D.GetObjectPathString());
+				B->SetStringField(TEXT("name"), D.AssetName.ToString());
+				B->SetStringField(TEXT("class"), D.AssetClassPath.GetAssetName().ToString());
+				B->SetStringField(TEXT("kind"), TEXT("unloaded"));
+				Items.Add(Obj(B));
+			}
+		}
 		Out->SetBoolField(TEXT("partial"), bPartial);
 		Out->SetArrayField(TEXT("items"), Items);
 		Out->SetBoolField(TEXT("more"), bMore);
+		return true;
+	});
+
+	// ---------- 对象属性里放着的对象（函数执行弹窗「从对象的属性里选」） ----------
+	// 列 path 这个对象的属性里现在放着的对象：单个引用、数组 / 集合元素、Map 的值、结构体里一层，Actor 再加上它的组件；
+	// 给了 class 只列能赋给它的（是这个类或子类，接口按实现）
+	AddOp(TEXT("object.refs"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+	{
+		UObject* Src = FindObjectByPath(Str(A, TEXT("path")), true, Error);
+		if (!Src)
+		{
+			return false;
+		}
+		UClass* Want = nullptr;
+		if (!Str(A, TEXT("class")).IsEmpty())
+		{
+			Want = FindClassByName(Str(A, TEXT("class")));
+			if (!Want)
+			{
+				Error = FString::Printf(TEXT("找不到类 %s"), *Str(A, TEXT("class")));
+				return false;
+			}
+		}
+		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 300), 1, 2000);
+		TArray<TSharedPtr<FJsonValue>> Items;
+		TSet<FString> Seen;
+		auto Add = [&](UObject* O, const FString& Via)
+		{
+			if (!IsValid(O) || Items.Num() >= Limit)
+			{
+				return;
+			}
+			if (Want && !(Want->HasAnyClassFlags(CLASS_Interface) ? O->GetClass()->ImplementsInterface(Want) : O->IsA(Want)))
+			{
+				return;
+			}
+			const FString Key = O->GetPathName() + TEXT("|") + Via;
+			if (Seen.Contains(Key))
+			{
+				return;
+			}
+			Seen.Add(Key);
+			TSharedPtr<FJsonObject> B = Brief(O);
+			B->SetStringField(TEXT("kind"), ObjectKind(O));
+			B->SetStringField(TEXT("via"), Via);
+			Items.Add(Obj(B));
+		};
+		// 一个属性值里的对象：对象引用、接口，数组 / 集合 / Map 值逐个看，结构体往里看（Depth 限两层，免得大结构体扫太深）
+		TFunction<void(FProperty*, const void*, const FString&, int32)> Walk = [&](FProperty* P, const void* V, const FString& Via, int32 Depth)
+		{
+			if (const FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(P))
+			{
+				if (!CastField<FSoftObjectProperty>(P) && !CastField<FClassProperty>(P))
+				{
+					Add(OP->GetObjectPropertyValue(V), Via);
+				}
+			}
+			else if (const FInterfaceProperty* IP = CastField<FInterfaceProperty>(P))
+			{
+				Add(IP->GetPropertyValue(V).GetObject(), Via);
+			}
+			else if (FArrayProperty* AP = CastField<FArrayProperty>(P))
+			{
+				FScriptArrayHelper H(AP, V);
+				for (int32 i = 0; i < H.Num(); ++i)
+				{
+					Walk(AP->Inner, H.GetRawPtr(i), FString::Printf(TEXT("%s[%d]"), *Via, i), Depth);
+				}
+			}
+			else if (FSetProperty* SP = CastField<FSetProperty>(P))
+			{
+				FScriptSetHelper H(SP, V);
+				for (int32 i = 0, n = 0; i < H.GetMaxIndex(); ++i)
+				{
+					if (H.IsValidIndex(i))
+					{
+						Walk(SP->ElementProp, H.GetElementPtr(i), FString::Printf(TEXT("%s{%d}"), *Via, n++), Depth);
+					}
+				}
+			}
+			else if (FMapProperty* MP = CastField<FMapProperty>(P))
+			{
+				FScriptMapHelper H(MP, V);
+				for (int32 i = 0; i < H.GetMaxIndex(); ++i)
+				{
+					if (H.IsValidIndex(i))
+					{
+						FString K;
+						MP->KeyProp->ExportTextItem_Direct(K, H.GetKeyPtr(i), nullptr, nullptr, PPF_None);
+						Walk(MP->ValueProp, H.GetValuePtr(i), FString::Printf(TEXT("%s[%s]"), *Via, *K.Left(40)), Depth);
+					}
+				}
+			}
+			else if (FStructProperty* StP = CastField<FStructProperty>(P))
+			{
+				if (Depth < 2)
+				{
+					for (TFieldIterator<FProperty> It(StP->Struct); It; ++It)
+					{
+						Walk(*It, It->ContainerPtrToValuePtr<void>(V), Via + TEXT(".") + It->GetAuthoredName(), Depth + 1);
+					}
+				}
+			}
+		};
+		for (TFieldIterator<FProperty> It(Src->GetClass()); It && Items.Num() < Limit; ++It)
+		{
+			Walk(*It, It->ContainerPtrToValuePtr<void>(Src), It->GetAuthoredName(), 0);
+		}
+		if (AActor* Act = Cast<AActor>(Src))
+		{
+			TArray<UActorComponent*> Comps;
+			Act->GetComponents(Comps);
+			for (UActorComponent* Comp : Comps)
+			{
+				Add(Comp, FString::Printf(TEXT("组件 %s"), *Comp->GetName()));
+			}
+		}
+		Out->SetArrayField(TEXT("items"), Items);
+		Out->SetBoolField(TEXT("more"), Items.Num() >= Limit);
 		return true;
 	});
 
@@ -890,14 +1054,29 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 	{
 		const FString Q = Str(A, TEXT("q")).TrimStartAndEnd();
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 50), 1, 500);
+		// base（桥接 1.9.0 起）：只列能赋给它的类（它自己和子类，接口按实现），函数执行弹窗按参数类型限定；给了 base 时空 q 也列
+		UClass* Base = nullptr;
+		if (!Str(A, TEXT("base")).IsEmpty())
+		{
+			Base = FindClassByName(Str(A, TEXT("base")));
+			if (!Base)
+			{
+				Error = FString::Printf(TEXT("找不到类 %s"), *Str(A, TEXT("base")));
+				return false;
+			}
+		}
 		TArray<UClass*> Head;
 		TArray<UClass*> Tail;
-		if (!Q.IsEmpty())
+		if (!Q.IsEmpty() || Base)
 		{
 			for (TObjectIterator<UClass> It; It; ++It)
 			{
 				UClass* C = *It;
 				if (IsTempClass(C) || C->HasAnyClassFlags(CLASS_NewerVersionExists))
+				{
+					continue;
+				}
+				if (Base && !(Base->HasAnyClassFlags(CLASS_Interface) ? (C == Base || C->ImplementsInterface(Base)) : C->IsChildOf(Base)))
 				{
 					continue;
 				}
@@ -922,6 +1101,11 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		Algo::Sort(Head, ByName);
 		Algo::Sort(Tail, ByName);
 		Head.Append(Tail);
+		// 参数本身的类型排第一个（下拉默认就是它）
+		if (Base && Head.Remove(Base) > 0)
+		{
+			Head.Insert(Base, 0);
+		}
 		TArray<TSharedPtr<FJsonValue>> Items;
 		for (int32 i = 0; i < Head.Num() && i < Limit; ++i)
 		{

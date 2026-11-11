@@ -231,9 +231,11 @@ export function WorldBadge({ world }: { world: World }) {
 }
 
 /** 对象是运行时实例、资源默认值还是类：颜色区分，运行时实例改了马上生效，默认值不影响正在跑的对象 */
-export function KindBadge({ kind }: { kind?: 'instance' | 'asset' | 'class' }) {
+export function KindBadge({ kind }: { kind?: 'instance' | 'asset' | 'class' | 'unloaded' }) {
   if (!kind) return null
   if (kind === 'instance') return <Badge tone="run">{t('运行时实例')}</Badge>
+  // 资源注册表里有、还没加载进内存的资源：执行函数时才加载
+  if (kind === 'unloaded') return <Badge>{t('没加载的资源')}</Badge>
   if (kind === 'class') return <Badge>{t('类')}</Badge>
   return <Badge tone="warn">{t('资源默认值')}</Badge>
 }

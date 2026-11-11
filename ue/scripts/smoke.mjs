@@ -117,6 +117,25 @@ try {
   assert.ok(!undone.isError, text(undone))
   assert.equal(bridge.state.hero.Health, 80)
 
+  // 函数执行：网页列出非蓝图函数，网页（你自己点）能执行；Agent 带 any 也调不了
+  const fnAll = await api('POST', '/p/p1/op', { op: 'functions', args: { path: bridge.hero, all: true } })
+  assert.ok(
+    fnAll.items.some((f) => f.access === 'private' && f.blueprint === false),
+    JSON.stringify(fnAll),
+  )
+  const webCall = await api('POST', '/p/p1/op', {
+    op: 'call',
+    args: { path: bridge.hero, function: 'ResetCache', any: true },
+  })
+  assert.equal(webCall.ret, true, JSON.stringify(webCall))
+  const agentCall = await call('ue_call', { path: bridge.hero, function: 'ResetCache', any: true })
+  assert.ok(agentCall.isError, text(agentCall))
+  const refs = await api('POST', '/p/p1/op', {
+    op: 'object.refs',
+    args: { path: bridge.hero, class: '/Script/Engine.MaterialInterface' },
+  })
+  assert.equal(refs.items[0].via, 'Mesh.OverrideMaterials[0]', JSON.stringify(refs))
+
   // 对话里点 .uasset 的查看窗口：磁盘路径 → 目录 + 名字去找资源（网页再挑名字完全一样的那个）→ 表格
   const byFile = await api('POST', '/p/p1/op', {
     op: 'assets',
