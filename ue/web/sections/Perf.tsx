@@ -1,96 +1,70 @@
-import { Bookmark, Circle, GitCompareArrows, MessageSquare, Square, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { Bookmark, Circle, MessageSquare, Square, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { pget, ppost, useAction, useLoad } from '../api.ts'
 import { useToChat } from '../chat.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
-import { Badge, Card, Confirm, ErrorText, LinkBtn, Note, PageHead, fmtSize, fmtTime, useTargetInfo } from '../ui.tsx'
-
-interface Capture {
-  id: string
-  kind: 'csv' | 'memreport' | 'trace'
-  label?: string
-  file: string
-  sizeKB: number
-  at: string
-  by?: string
-  imported?: boolean
-}
-interface Active {
-  id: string
-  label: string
-  seconds: number
-  elapsed: number
-  marks: { at: number; name: string }[]
-}
-interface PerfState {
-  items: Capture[]
-  totalKB: number
-  active: Active[]
-}
-interface Stat {
-  avg: number
-  p95: number
-  p99: number
-  max: number
-}
-interface CsvSummary {
-  frames: number
-  seconds: number
-  fps?: { avg: number; p95Low: number; p99Low: number }
-  key: Record<string, Stat>
-  hitches: { thresholdMs: number; count: number; worst: { frame: number; at: number; ms: number }[] }
-  events: { at: number; name: string }[]
-  note?: string
-}
-interface MemSummary {
-  header: string[]
-  sections: { command: string; lines: number }[]
-  objects?: { columns: string[]; rows: (string | number)[][] }
-}
-interface Series {
-  series: { at: number; avg: number; max: number }[]
-}
-
-const KIND: Record<Capture['kind'], () => string> = {
-  csv: () => t('帧数据'),
-  memreport: () => t('内存报告'),
-  trace: () => 'Insights',
-}
-const fileName = (f: string) => f.split(/[\\/]/).pop() ?? f
-const nameOf = (c: Capture) => c.label || fileName(c.file)
+import { SplitHandle, usePane } from '../split.tsx'
+import { Badge, Confirm, ErrorText, LinkBtn, Note, PageHead, fmtSize, fmtTime, useTargetInfo } from '../ui.tsx'
+import { Compare } from './perf/Compare.tsx'
+import { CsvView } from './perf/CsvView.tsx'
+import { recentAvg, useLive } from './perf/live.ts'
+import { LiveView } from './perf/LiveView.tsx'
+import { MemLive, MemReportView } from './perf/MemView.tsx'
+import { Sessions } from './perf/Sessions.tsx'
+import { StatsBar, liveItems } from './perf/StatsBar.tsx'
+import { fileName, nameOf, type Capture, type CsvSummary, type MemSummary, type PerfState } from './perf/types.ts'
 
 /**
- * 性能（设计稿「性能与内存分析」第一期）：在这里发起 CSV Profiler 抓取和内存报告，看抓到的文件的摘要，
- * 选两份同类的对比，或者把一份抓取交给对话里的 Agent 分析。分析都在面板这边做，UE 关了也能看。
+ * 性能页（性能页设计 2026-11-11 一期）：顶上是和 stat unit 同源的实时读数条，左边会话列表（实时、内存、抓到的文件），
+ * 右边按选中的会话显示实时帧条和线程曲线、内存曲线、CSV 详情、内存报告或两份对比。
+ * 选中哪个会话写进地址（#…/perf/<会话>），刷新后还在。
  */
 export function Perf() {
-  const { project, target } = useUe()
+  const { project, target, sub, go } = useUe()
   const { inst } = useTargetInfo()
   const { ui, cn } = h()
   const chat = useToChat()
   const { busy, run } = useAction()
   const [seconds, setSeconds] = useState('30')
   const [mark, setMark] = useState('')
-  const [open, setOpen] = useState('')
   const [picked, setPicked] = useState<string[]>([])
-  const [diff, setDiff] = useState<[string, string]>()
   const [del, setDel] = useState<Capture>()
+  const pane = usePane('perf', '264px', 200)
+  const paneRef = useRef<HTMLElement>(null)
   const state = useLoad(() => pget<PerfState>(project.id, 'perf'), [project.id], 2000)
   const items = state.data?.items ?? []
   const active = state.data?.active[0]
+  const live = useLive(project.id, target, inst?.pid)
+  const buf = live.buf
   const reload = () => void state.reload()
+  const sel = sub || 'live'
+  const setSel = (id: string) => go('perf', id === 'live' ? '' : id)
+  const cur = items.find((c) => c.id === sel)
 
   const start = (kind: 'csv' | 'memreport') =>
     run(kind, async () => {
-      const r = await ppost<{ capture?: { id: string } }>(project.id, 'perf/start', { kind, seconds: Number(seconds), target })
-      if (r.capture) setOpen(r.capture.id)
+      const r = await ppost<{ capture?: { id: string } }>(project.id, 'perf/start', {
+        kind,
+        seconds: Number(seconds),
+        target,
+      })
+      // 内存报告马上出文件：直接打开；CSV 录制中留在「实时」看着
+      if (r.capture) setSel(r.capture.id)
+      else setSel('live')
       reload()
     })
   const stop = () =>
     run('stop', async () => {
       const r = await ppost<{ capture: { id: string } }>(project.id, 'perf/stop', { target })
-      setOpen(r.capture.id)
+      setSel(r.capture.id)
+      reload()
+    })
+  const addMark = () =>
+    mark.trim() &&
+    run('mark', async () => {
+      await ppost(project.id, 'perf/mark', { name: mark, target })
+      setMark('')
       reload()
     })
   const toggle = (c: Capture) =>
@@ -100,18 +74,72 @@ export function Perf() {
       const same = p.filter((id) => items.find((x) => x.id === id)?.kind === c.kind)
       return [...same.slice(-1), c.id]
     })
-  const askAgent = (c: Capture) =>
+  const askAgent = (c: Capture, extra = '') =>
     chat.send(
-      `请分析这份 UE ${c.kind === 'csv' ? '性能抓取（CSV Profiler）' : c.kind === 'memreport' ? '内存报告（memreport）' : '抓取'}：${nameOf(c)}（抓取 id ${c.id}）。\n先用 ue_capture action=summary 看摘要，再用 action=query 下钻，告诉我瓶颈在哪、可能的原因，以及下一步怎么验证。\n我看到的现象：`,
+      `请分析这份 UE ${c.kind === 'csv' ? '性能抓取（CSV Profiler）' : c.kind === 'memreport' ? '内存报告（memreport）' : '抓取'}：${nameOf(c)}（抓取 id ${c.id}）。\n先用 ue_capture action=summary 看摘要，再用 action=query 下钻，告诉我瓶颈在哪、可能的原因，以及下一步怎么验证。${extra ? `\n${extra}` : ''}\n我看到的现象：`,
     )
+  const frameNow = buf ? recentAvg(buf, 'frame', 1) : undefined
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <PageHead title={t('性能')} desc={t('抓帧数据和内存报告，看摘要、对比，或者交给 Agent 分析')}>
+      <PageHead
+        title={t('性能')}
+        desc={
+          cur ? (
+            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
+              <span className="ue:truncate ue:font-medium ue:text-fg">{nameOf(cur)}</span>
+              <span className="ue:truncate" title={cur.file}>
+                {fmtTime(cur.at)} · {fmtSize(cur.sizeKB * 1024)}
+                {cur.label ? ` · ${fileName(cur.file)}` : ''}
+              </span>
+            </span>
+          ) : sel === 'mem' ? (
+            t('内存：实时曲线和内存报告')
+          ) : (
+            t('实时读数和 stat unit 同源；抓帧数据和内存报告，看摘要、对比，或者交给 Agent 分析')
+          )
+        }
+      >
         {active ? (
-          <ui.Button size="sm" variant="secondary" disabled={!!busy} onClick={stop}>
-            <Square className="ue:h-3.5 ue:w-3.5" /> {t('停止抓取')}
-          </ui.Button>
+          <>
+            <span className="ue:flex ue:h-8 ue:items-center ue:gap-2 ue:rounded-lg ue:bg-danger/10 ue:px-3 ue:text-footnote ue:font-medium ue:text-danger">
+              <span className="ue:h-2 ue:w-2 ue:animate-pulse ue:rounded-full ue:bg-danger" />
+              <span className="ue:font-mono ue:tabular-nums">
+                {Math.round(active.elapsed)} / {active.seconds} s
+              </span>
+              <span className="ue:h-1 ue:w-20 ue:overflow-hidden ue:rounded-full ue:bg-danger/15">
+                <span
+                  className="ue:block ue:h-full ue:bg-danger"
+                  style={{ width: `${Math.min(100, (active.elapsed / active.seconds) * 100)}%` }}
+                />
+              </span>
+            </span>
+            <form
+              className="ue:flex ue:items-center ue:gap-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void addMark()
+              }}
+            >
+              <ui.Input
+                size="sm"
+                className="ue:w-44"
+                value={mark}
+                placeholder={t('书签名，回车打书签')}
+                onChange={(e: { target: { value: string } }) => setMark(e.target.value)}
+              />
+              <ui.IconButton
+                icon={Bookmark}
+                label={t('打书签')}
+                size="sm"
+                disabled={!mark.trim() || !!busy}
+                onClick={() => void addMark()}
+              />
+            </form>
+            <ui.Button size="sm" variant="secondary" disabled={!!busy} onClick={stop}>
+              <Square className="ue:h-3.5 ue:w-3.5" /> {t('停止')}
+            </ui.Button>
+          </>
         ) : (
           <>
             <ui.Select
@@ -130,102 +158,69 @@ export function Perf() {
           </>
         )}
       </PageHead>
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
-        <ErrorText>{state.error}</ErrorText>
-        {!inst && !active && (
-          <Note tone="info">{t('UE 没在运行：现在不能抓新的，已经抓到的文件照样能看、能对比、能交给 Agent。')}</Note>
-        )}
-        {active && (
-          <Card title={t('正在抓帧数据')} aside={t('{s} / {max} 秒，到时间自动停', { s: Math.round(active.elapsed), max: active.seconds })}>
-            <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:px-4 ue:py-3">
-              <ui.Input
-                size="sm"
-                className="ue:w-56"
-                value={mark}
-                placeholder={t('书签名，例如 打开背包')}
-                onChange={(e: { target: { value: string } }) => setMark(e.target.value)}
-              />
-              <ui.Button
-                size="sm"
-                variant="secondary"
-                disabled={!mark.trim() || !!busy}
-                onClick={() =>
-                  run('mark', async () => {
-                    await ppost(project.id, 'perf/mark', { name: mark, target })
-                    setMark('')
-                    reload()
-                  })
-                }
-              >
-                <Bookmark className="ue:h-3.5 ue:w-3.5" /> {t('打书签')}
-              </ui.Button>
-              <span className="ue:text-footnote ue:text-subtle">
-                {active.marks.length
-                  ? active.marks.map((m) => `${m.name} @${m.at}s`).join('  ·  ')
-                  : t('在要测的操作前后各打一个书签，分析时可以按书签分段')}
-              </span>
-            </div>
-          </Card>
-        )}
-        <Card
-          title={t('抓到的文件')}
-          aside={
-            <span className="ue:flex ue:items-center ue:gap-2">
-              {picked.length === 2 && (
-                <LinkBtn onClick={() => setDiff([picked[0], picked[1]])}>
-                  <GitCompareArrows className="ue:h-3.5 ue:w-3.5" /> {t('对比选中的两份')}
-                </LinkBtn>
-              )}
-              {items.length ? t('{n} 份，共 {size}', { n: items.length, size: fmtSize((state.data?.totalKB ?? 0) * 1024) }) : undefined}
-            </span>
-          }
+      {sel === 'live' && inst && buf && <StatsBar items={liveItems(buf)} badge="stat unit" />}
+      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
+        <aside
+          ref={paneRef}
+          style={pane.style('calc(100% - 480px)')}
+          className="ue:relative ue:flex ue:max-h-72 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
         >
-          <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
-            {items.map((c) => (
-              <li key={c.id} className="ue:group ue:flex ue:flex-col">
-                <div className={cn('ue:flex ue:items-center ue:gap-3 ue:px-4 ue:py-2.5', open === c.id && 'ue:bg-hover')}>
-                  <input
-                    type="checkbox"
-                    aria-label={t('选来对比')}
-                    className="ue:cursor-pointer"
-                    disabled={c.kind === 'trace'}
-                    checked={picked.includes(c.id)}
-                    onChange={() => toggle(c)}
-                  />
-                  <button
-                    type="button"
-                    className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-3 ue:text-left"
-                    onClick={() => setOpen(open === c.id ? '' : c.id)}
-                  >
-                    <Badge tone={c.kind === 'csv' ? 'accent' : c.kind === 'memreport' ? 'run' : 'muted'}>{KIND[c.kind]()}</Badge>
-                    <span className="ue:min-w-0 ue:flex-1">
-                      <span className="ue:block ue:truncate ue:text-body ue:text-fg">{nameOf(c)}</span>
-                      <span className="ue:block ue:truncate ue:text-caption ue:text-subtle" title={c.file}>
-                        {c.label ? `${fileName(c.file)} · ` : ''}
-                        {fmtTime(c.at)} · {fmtSize(c.sizeKB * 1024)}
-                        {c.by ? ` · ${c.by === 'user' ? t('你') : c.by}` : ''}
-                        {c.imported ? ` · ${t('导入的')}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                  {chat.available && c.kind !== 'trace' && (
-                    <LinkBtn onClick={() => askAgent(c)}>
-                      <MessageSquare className="ue:h-3.5 ue:w-3.5" /> {t('让 Agent 分析')}
-                    </LinkBtn>
-                  )}
-                  <ui.IconButton icon={Trash2} tone="danger" reveal="hover" label={t('删除')} size="xs" onClick={() => setDel(c)} />
-                </div>
-                {open === c.id && <Detail capture={c} />}
-              </li>
+          <Sessions
+            items={items}
+            totalKB={state.data?.totalKB ?? 0}
+            sel={sel}
+            onSel={setSel}
+            picked={picked}
+            onPick={toggle}
+            onCompare={() => setSel('cmp')}
+            onDelete={setDel}
+            live={{
+              running: !!inst,
+              active,
+              fps: frameNow ? Math.round(1000 / frameNow) : undefined,
+              memGB: buf?.last ? buf.last.memory.usedPhysicalMB / 1024 : undefined,
+            }}
+          />
+          <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 480} edge />
+        </aside>
+        <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col">
+          <ErrorText>{state.error}</ErrorText>
+          {sel === 'live' && <LiveView buf={buf} error={live.error} running={!!inst} active={active} />}
+          {sel === 'mem' && (
+            <MemLive
+              buf={buf}
+              running={!!inst}
+              reports={items.filter((c) => c.kind === 'memreport')}
+              picked={picked}
+              onPick={toggle}
+              onOpen={setSel}
+            />
+          )}
+          {sel === 'cmp' &&
+            (picked.length === 2 ? (
+              <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-5">
+                <Compare a={picked[0]} b={picked[1]} onClose={() => setSel('live')} />
+              </div>
+            ) : (
+              <div className="ue:p-5">
+                <Note tone="info">{t('在左边勾两份同类的抓取再对比。')}</Note>
+              </div>
             ))}
-            {!items.length && (
-              <li className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">
-                {t('还没有抓取。点右上角「抓帧数据」录一段，或者让 Agent 用 ue_perf 抓')}
-              </li>
-            )}
-          </ul>
-        </Card>
-        {diff && <Compare a={diff[0]} b={diff[1]} onClose={() => setDiff(undefined)} />}
+          {cur && (
+            <Detail
+              key={cur.id}
+              capture={cur}
+              canAgent={chat.available}
+              onAgent={(extra) => askAgent(cur, extra)}
+              onDelete={() => setDel(cur)}
+            />
+          )}
+          {!cur && !['live', 'mem', 'cmp'].includes(sel) && state.data && (
+            <div className="ue:p-5">
+              <Note tone="info">{t('这份抓取已经不在了（可能被删了），在左边选别的。')}</Note>
+            </div>
+          )}
+        </main>
       </div>
       <Confirm
         open={!!del}
@@ -239,11 +234,12 @@ export function Perf() {
           void run('del', async () => {
             await ppost(project.id, 'perf/delete', { id: c.id })
             setPicked((p) => p.filter((x) => x !== c.id))
+            if (sel === c.id) setSel('live')
             reload()
           })
         }}
       >
-        <div className="ue:font-mono ue:text-footnote ue:break-all">{del?.file}</div>
+        <div className={cn('ue:font-mono ue:text-footnote ue:break-all')}>{del?.file}</div>
         {del?.imported && <div className="ue:mt-2 ue:text-subtle">{t('导入的外部文件只取消登记，不删原文件。')}</div>}
       </Confirm>
       {chat.dialog}
@@ -251,12 +247,20 @@ export function Perf() {
   )
 }
 
-const TH = 'ue:px-3 ue:py-1.5 ue:text-left ue:text-caption ue:font-medium ue:text-subtle'
-const TD = 'ue:px-3 ue:py-1.5 ue:font-mono ue:text-footnote ue:text-fg'
-const NUM = `${TD} ue:text-right ue:tabular-nums`
-
-function Detail({ capture }: { capture: Capture }) {
+/** 一份抓取的详情：先读摘要，CSV 和内存报告各用自己的视图 */
+function Detail({
+  capture,
+  canAgent,
+  onAgent,
+  onDelete,
+}: {
+  capture: Capture
+  canAgent: boolean
+  onAgent: (extra: string) => void
+  onDelete: () => void
+}) {
   const { project } = useUe()
+  const { ui } = h()
   const sum = useLoad(
     () =>
       capture.kind === 'trace'
@@ -264,222 +268,46 @@ function Detail({ capture }: { capture: Capture }) {
         : ppost<{ summary: CsvSummary | MemSummary }>(project.id, 'perf/summary', { id: capture.id }),
     [project.id, capture.id],
   )
-  if (capture.kind === 'trace')
-    return (
-      <div className="ue:px-4 ue:pb-3">
-        <Note tone="info">{t('Unreal Insights 的 trace 这个版本还不能在这里分析，先用 Unreal Insights 打开看。')}</Note>
-      </div>
-    )
-  return (
-    <div className="ue:flex ue:flex-col ue:gap-3 ue:border-t ue:border-line ue:bg-panel ue:px-4 ue:py-3">
-      <ErrorText>{sum.error}</ErrorText>
-      {!sum.data && !sum.error && <div className="ue:text-footnote ue:text-subtle">{t('正在读文件…')}</div>}
-      {sum.data && capture.kind === 'csv' && <CsvView id={capture.id} s={sum.data.summary as CsvSummary} />}
-      {sum.data && capture.kind === 'memreport' && <MemView s={sum.data.summary as MemSummary} />}
+  const bar = (
+    <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-5 ue:py-2">
+      <Badge tone={capture.kind === 'csv' ? 'run' : capture.kind === 'memreport' ? 'ok' : 'accent'}>
+        {capture.kind === 'csv' ? t('帧数据') : capture.kind === 'memreport' ? t('内存报告') : 'trace'}
+      </Badge>
+      <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-footnote ue:text-subtle" title={capture.file}>
+        {capture.file}
+      </span>
+      {canAgent && capture.kind !== 'trace' && (
+        <LinkBtn onClick={() => onAgent('')}>
+          <MessageSquare className="ue:h-3.5 ue:w-3.5" /> {t('让 Agent 分析')}
+        </LinkBtn>
+      )}
+      <ui.IconButton icon={Trash2} tone="danger" label={t('删除')} size="xs" onClick={onDelete} />
     </div>
   )
-}
-
-function CsvView({ id, s }: { id: string; s: CsvSummary }) {
-  const { project } = useUe()
-  const ft = useLoad(
-    () => ppost<Series>(project.id, 'perf/query', { id, what: 'column', name: 'FrameTime', top: 200 }).catch(() => undefined),
-    [project.id, id],
-  )
+  if (capture.kind === 'trace')
+    return (
+      <>
+        {bar}
+        <div className="ue:p-5">
+          <Note tone="info">
+            {t('Unreal Insights 的 trace 这个版本还不能在这里分析，先用 Unreal Insights 打开看。')}
+          </Note>
+        </div>
+      </>
+    )
   return (
     <>
-      <div className="ue:flex ue:flex-wrap ue:gap-x-6 ue:gap-y-1 ue:text-footnote ue:text-subtle">
-        <span>{t('{n} 帧，{s} 秒', { n: s.frames, s: s.seconds })}</span>
-        {s.fps && <span>{t('平均 {fps} 帧/秒，最差 1% 时 {low} 帧/秒', { fps: s.fps.avg, low: s.fps.p99Low })}</span>}
-        <span className={s.hitches.count ? 'ue:text-danger' : undefined}>
-          {t('卡顿 {n} 帧（超过 {ms} 毫秒）', { n: s.hitches.count, ms: s.hitches.thresholdMs })}
-        </span>
-      </div>
-      {s.note && <Note>{s.note}</Note>}
-      {ft.data && <FrameChart series={ft.data.series} threshold={s.hitches.thresholdMs} />}
-      <table className="ue:w-full ue:border-collapse">
-        <thead>
-          <tr className="ue:border-b ue:border-line">
-            <th className={TH}>{t('指标')}</th>
-            <th className={`${TH} ue:text-right`}>{t('平均')}</th>
-            <th className={`${TH} ue:text-right`}>P95</th>
-            <th className={`${TH} ue:text-right`}>P99</th>
-            <th className={`${TH} ue:text-right`}>{t('最大')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(s.key).map(([name, v]) => (
-            <tr key={name} className="ue:border-b ue:border-line/60">
-              <td className={TD}>{name}</td>
-              <td className={NUM}>{v.avg}</td>
-              <td className={NUM}>{v.p95}</td>
-              <td className={NUM}>{v.p99}</td>
-              <td className={NUM}>{v.max}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!!s.hitches.worst.length && (
-        <div className="ue:text-footnote ue:text-subtle">
-          {t('最慢的几帧：')}
-          {s.hitches.worst.map((w) => t('第 {f} 帧 {ms} 毫秒（{at} 秒处）', { f: w.frame, ms: w.ms, at: w.at })).join('，')}
+      {bar}
+      {sum.error && (
+        <div className="ue:p-5">
+          <ErrorText>{sum.error}</ErrorText>
         </div>
       )}
-      {!!s.events.length && (
-        <div className="ue:text-footnote ue:text-subtle">
-          {t('书签：')}
-          {s.events.map((e) => `${e.name} @${e.at}s`).join('  ·  ')}
-        </div>
+      {!sum.data && !sum.error && <div className="ue:p-5 ue:text-footnote ue:text-subtle">{t('正在读文件…')}</div>}
+      {sum.data && capture.kind === 'csv' && (
+        <CsvView capture={capture} s={sum.data.summary as CsvSummary} onAgent={canAgent ? onAgent : undefined} />
       )}
+      {sum.data && capture.kind === 'memreport' && <MemReportView s={sum.data.summary as MemSummary} />}
     </>
-  )
-}
-
-/** 帧时间图：每一段画这段里最慢的一帧，超过卡顿门槛的标红；纵轴封顶在门槛的 3 倍，免得一次长卡顿把其余的压成一条线 */
-function FrameChart({ series, threshold }: { series: Series['series']; threshold: number }) {
-  if (series.length < 2) return null
-  const w = 800
-  const hgt = 72
-  const top = Math.max(threshold * 3, 1)
-  const bw = w / series.length
-  const y = (v: number) => hgt - (Math.min(v, top) / top) * hgt
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${hgt}`}
-      preserveAspectRatio="none"
-      className="ue:h-[72px] ue:w-full ue:rounded-md ue:border ue:border-line ue:bg-card"
-      role="img"
-      aria-label={t('帧时间走势')}
-    >
-      {series.map((p, i) => (
-        <rect
-          key={i}
-          x={i * bw}
-          y={y(p.max)}
-          width={Math.max(bw - 0.5, 0.5)}
-          height={hgt - y(p.max)}
-          className={p.max > threshold ? 'ue:fill-danger' : 'ue:fill-accent/60'}
-        >
-          <title>{`${p.at}s · ${p.max} ms`}</title>
-        </rect>
-      ))}
-      <line x1="0" x2={w} y1={y(threshold)} y2={y(threshold)} className="ue:stroke-subtle/50" strokeDasharray="4 4" strokeWidth="1" />
-    </svg>
-  )
-}
-
-function MemView({ s }: { s: MemSummary }) {
-  const mem = s.header.filter((l) => /memory|内存/i.test(l)).slice(0, 6)
-  return (
-    <>
-      {!!mem.length && (
-        <div className="ue:flex ue:flex-col ue:gap-0.5 ue:font-mono ue:text-footnote ue:text-fg">
-          {mem.map((l) => (
-            <span key={l}>{l.trim()}</span>
-          ))}
-        </div>
-      )}
-      {s.objects ? (
-        <Rows columns={s.objects.columns.slice(0, 5)} rows={s.objects.rows} />
-      ) : (
-        <Note>{t('这份内存报告里没认出按类的对象表，可以让 Agent 按分段看原文。')}</Note>
-      )}
-      <div className="ue:text-footnote ue:text-subtle">
-        {t('包含的分段：')}
-        {s.sections.map((x) => x.command).join('  ·  ')}
-      </div>
-    </>
-  )
-}
-
-function Rows({ columns, rows }: { columns: string[]; rows: (string | number)[][] }) {
-  return (
-    <table className="ue:w-full ue:border-collapse">
-      <thead>
-        <tr className="ue:border-b ue:border-line">
-          {columns.map((c, i) => (
-            <th key={c} className={i ? `${TH} ue:text-right` : TH}>
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={String(r[0])} className="ue:border-b ue:border-line/60">
-            {columns.map((c, i) => (
-              <td key={c} className={i ? NUM : TD}>
-                {r[i]}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-interface CsvDiff {
-  hitches: { a: number; b: number; thresholdMs: number }
-  key: { column: string; a: number; b: number; delta: number; pct: number | null }[]
-  changed: { column: string; a: number; b: number; delta: number; pct: number | null }[]
-}
-interface MemDiff {
-  totals: { countDelta: number; kbDelta: number; resKbDelta: number }
-  byCount: { class: string; countA: number; countB: number; countDelta: number; kbDelta: number; resKbDelta: number }[]
-}
-
-function Compare({ a, b, onClose }: { a: string; b: string; onClose: () => void }) {
-  const { project } = useUe()
-  const r = useLoad(
-    () =>
-      ppost<{ a: Capture; b: Capture; diff: CsvDiff | MemDiff }>(project.id, 'perf/compare', {
-        // 先抓的当 A：列表里新的在前，选的顺序不一定是时间顺序，交给服务端返回后按时间摆
-        id: a,
-        other: b,
-      }).then(async (x) => (x.a.at <= x.b.at ? x : ppost<typeof x>(project.id, 'perf/compare', { id: b, other: a }))),
-    [project.id, a, b],
-  )
-  const d = r.data
-  const sign = (n: number) => (n > 0 ? `+${n}` : String(n))
-  return (
-    <Card
-      title={d ? t('对比：{a} → {b}', { a: nameOf(d.a), b: nameOf(d.b) }) : t('对比')}
-      aside={<LinkBtn onClick={onClose}>{t('关闭')}</LinkBtn>}
-    >
-      <div className="ue:flex ue:flex-col ue:gap-3 ue:px-4 ue:py-3">
-        <ErrorText>{r.error}</ErrorText>
-        {d && 'hitches' in d.diff && (
-          <>
-            <div className="ue:text-footnote ue:text-subtle">
-              {t('卡顿帧：{a} → {b}（门槛 {ms} 毫秒）', { a: d.diff.hitches.a, b: d.diff.hitches.b, ms: d.diff.hitches.thresholdMs })}
-            </div>
-            <Rows
-              columns={[t('指标'), t('之前'), t('之后'), t('变化'), '%']}
-              rows={[...d.diff.key, ...d.diff.changed.slice(0, 15)].map((x) => [x.column, x.a, x.b, sign(x.delta), x.pct === null ? '' : sign(x.pct)])}
-            />
-          </>
-        )}
-        {d && 'byCount' in d.diff && (
-          <>
-            <div className="ue:text-footnote ue:text-subtle">
-              {t('对象总数 {n}，对象大小 {kb} KB，持有的资源 {res} KB', {
-                n: sign(d.diff.totals.countDelta),
-                kb: sign(d.diff.totals.kbDelta),
-                res: sign(d.diff.totals.resKbDelta),
-              })}
-            </div>
-            {d.diff.byCount.length ? (
-              <Rows
-                columns={[t('类'), t('之前'), t('之后'), t('数量变化'), t('大小变化 KB')]}
-                rows={d.diff.byCount.map((x) => [x.class, x.countA, x.countB, sign(x.countDelta), sign(x.kbDelta)])}
-              />
-            ) : (
-              <div className="ue:text-footnote ue:text-subtle">{t('两份报告里各个类的对象数量一样。')}</div>
-            )}
-          </>
-        )}
-      </div>
-    </Card>
   )
 }
