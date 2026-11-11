@@ -1,11 +1,13 @@
 import type { ActivateServer } from '../../sdk/server.ts'
 import { projectState } from './actions.ts'
+import { bundledVersion } from './install.ts'
+import { bridgeVersionIn, olderVersion } from './instances.ts'
 import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
 import { listProjects, projectForRun } from './registry.ts'
 import { ueTextifier } from './textify.ts'
 import { ueTools } from './tools.ts'
-import { setCtx } from './util.ts'
+import { setCtx, t } from './util.ts'
 
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
@@ -27,6 +29,24 @@ const HINT = `## UE 工具
 - 蓝图：ue_blueprint outline 看大纲 → graph 读一张图的伪代码 → edit 按操作列表改（先 dryRun 演练，改完看返回的编译结果，有错按节点 id 接着修），保存前用 ue_compile 编译确认通过；ue_find kind=node 跨蓝图搜节点。蓝图资源路径在 ue_get / ue_set 里是类默认值，在 ue_blueprint / ue_asset 里是蓝图本身。
 - 工具报错原样告诉用户，不要绕过权限或换别的办法偷偷重试；运行时修改和没保存的资源修改可以 ue_undo 撤回。`
 
+/**
+ * 新对话开头提醒用户桥接可以更新（面板插件框架改进 C1，旧面板不显示 notices）：只提醒、不拦，
+ * 旧桥接上用不到新操作的功能照常能用，用到时 rpc 会说清楚要更新（instances.ts 的 oldBridgeError）
+ */
+async function bridgeNotice(root: string) {
+  const [installed, bundled] = await Promise.all([bridgeVersionIn(root), bundledVersion()])
+  if (!installed || installed === '?' || !bundled || !olderVersion(installed, bundled)) return undefined
+  return [
+    t(
+      '项目里的 UE 桥接是 {old}，插件带的是 {new}：新功能要更新桥接后才能用。到 UE 页「桥接与权限」更新，再重新编译。',
+      {
+        old: installed,
+        new: bundled,
+      },
+    ),
+  ]
+}
+
 const activate: ActivateServer = async (ctx) => {
   setCtx(ctx)
   return {
@@ -41,6 +61,7 @@ const activate: ActivateServer = async (ctx) => {
       return {
         servers: [{ name: 'ue', tools: () => ueTools(project.id, project.root, run.agentName) }],
         hint: run.resume ? undefined : HINT,
+        notices: run.resume ? undefined : await bridgeNotice(project.root),
       }
     },
 

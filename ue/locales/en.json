@@ -1024,5 +1024,7 @@
   "当前对象": "Current object",
   "换来源": "Change source",
   "没有能赋给这个参数的对象": "No objects can be assigned to this parameter",
-  "没加载的资源": "Not loaded"
+  "没加载的资源": "Not loaded",
+  "UE 进程 {pid} 里的桥接是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新桥接，重新编译并重启 UE。用不到新操作的功能照常能用": "The bridge in UE process {pid} is {old} and has no \"{op}\" operation (the plugin ships {new}). Update the bridge under \"Bridge & permissions\" on the UE page, rebuild and restart UE. Features that do not need new operations keep working",
+  "项目里的 UE 桥接是 {old}，插件带的是 {new}：新功能要更新桥接后才能用。到 UE 页「桥接与权限」更新，再重新编译。": "The UE bridge in this project is {old}; the plugin ships {new}. New features need the updated bridge: update it under \"Bridge & permissions\" on the UE page, then rebuild."
 }
