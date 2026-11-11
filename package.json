@@ -12,7 +12,7 @@
     "panel": "node scripts/panel.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p ui-design",
     "test": "node scripts/test.mjs",
-    "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs"
+    "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs && node scripts/check-sdk.mjs"
   },
   "devDependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

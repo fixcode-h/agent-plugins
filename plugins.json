@@ -13,21 +13,21 @@
     {
       "id": "ue",
       "name": "UE",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
       "icon": "gamepad",
-      "tag": "ue-v0.9.0",
-      "asset": "ue-0.9.0.zip",
+      "tag": "ue-v0.9.1",
+      "asset": "ue-0.9.1.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
     },
     {
       "id": "ui-design",
       "name": "UI 设计",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "用对话设计游戏界面和网页：AI 改控件树、加图片和动画，出整屏原画、抠切图和还原，标注、版本和导出（UE 控件树、React 网页、ZIP）。原来是面板自带的「设计」模式。",
       "icon": "palette",
-      "tag": "ui-design-v1.0.0",
-      "asset": "ui-design-1.0.0.zip",
+      "tag": "ui-design-v1.1.0",
+      "asset": "ui-design-1.1.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ui-design"
     }
   ]

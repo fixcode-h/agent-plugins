@@ -15,18 +15,18 @@
 
 - `plugin.json`：清单。名字、版本、参数（在插件页上生成表单）、技能触发说明、角色、工作流、MCP 服务名、工具显示名、入口；
 - `server/index.js`：服务端入口，默认导出 `activate(ctx)`，返回插件接口（`fetch`）、每轮对话挂哪些 MCP 工具（`tools`）、参数变化（`onConfig`）、状态和停止；
-- `web/index.js`、`web/index.css`：网页入口，默认导出 `activate(host)`，返回设计模式、对话右栏页签、插件页状态面板；
+- `web/index.js`、`web/index.css`：网页入口，默认导出 `activate(host)`，返回图标栏里的整页、对话右栏页签、插件页状态面板；
 - `skills/<分类>/<名字>/`、`locales/en.json` 和插件自己的资源。
 
 接口的类型在 `sdk/`（面板 `server/plugins/sdk.ts`、`web/src/plugins/sdk.ts` 的副本）。网页部分和面板共用 React：
 构建时把 `react` 系的 import 换成面板放在 `globalThis.__agentPanel` 上的那一份；样式只出用到的 Tailwind 工具类，颜色用面板的主题变量（`sdk/theme.css`）。
-类名要带插件自己的前缀（Blender 插件是 `bl:`，写成 `bl:flex`、`bl:md:flex-row`）：插件样式表在面板之后加载，不带前缀的同名类会盖掉面板的响应式类，把面板的布局弄乱。
+类名要带插件自己的前缀（Blender 插件是 `bl:`，写成 `bl:flex`、`bl:md:flex-row`）：插件样式表在面板之后加载，不带前缀的同名类会盖掉面板的响应式类，把面板的布局弄乱。构建时会检查：`index.css` 要写 `prefix(<前缀>)`，产物里的类只能是 `<前缀>:…` 或插件自己写的 `<前缀>-…`，不然构建失败。
 
 ## 开发
 
 ```bash
 npm install
-npm run check                 # 类型检查、漏翻检查、plugins.json 和各插件对得上
+npm run check                 # 类型检查、漏翻检查、plugins.json 和各插件对得上；有 .panel 时再核对 sdk/ 副本和面板一致
 npm run build                 # 所有插件 → dist/<id>/ 和 dist/<id>-<版本>.zip
 npm run build -- blender      # 只构建一个
 npm run panel                 # 准备 .panel（面板源码）：ui-design 这类照面板源码布局放文件的插件，类型检查和单测要用
@@ -38,7 +38,8 @@ npm test                      # 这类插件的单测
 
 ## 发布
 
-推到 `main` 后 GitHub Actions（`.github/workflows/release.yml`）检查、构建，每个插件的包发到 Release：标签 `<id>-v<版本>`，附件 `<id>-<版本>.zip`。
+推到 `main` 后 GitHub Actions（`.github/workflows/release.yml`）检查、构建，每个插件的包发到 Release：标签 `<id>-v<版本>`，附件 `<id>-<版本>.zip` 和校验文件 `<id>-<版本>.zip.sha256`（面板下载后核对，对不上不装）。
+同一版本号的 Release 已经有了时不覆盖：内容一样就跳过，内容变了只出警告，要发布就升版本号。
 要让用户收到新版本，同时改插件的 `plugin.json` 和根上 `plugins.json` 里的版本号（`npm run check` 会核对）。
 
 ## 新增插件

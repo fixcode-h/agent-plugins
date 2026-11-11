@@ -4,6 +4,7 @@
 // 包的布局（面板 ADR 0059）：plugin.json、server/index.js（服务端入口，依赖打进去）、web/index.js + web/index.css、
 // locales/en.json、skills/<分类>/<名字>/，再加插件自己的构建钩子（<插件>/build.mjs 的 extra）放进去的资源。
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -48,6 +49,13 @@ const HOST_MODULES = JSON.parse(readFileSync(path.join(ROOT, 'sdk', 'host-module
 const EXTS = ['', '.ts', '.tsx', '.js', '.mjs', '.json', '/index.ts', '/index.tsx', '/index.js']
 const findLocal = (p) => EXTS.map((e) => p + e).find((f) => existsSync(f) && !statSync(f).isDirectory())
 
+/**
+ * 这次构建实际接到面板的模块（按插件、按网页 / 服务端）：写进产物 plugin.json 的 hostModules，
+ * 面板安装和启动时逐项核对自己开放了没有（面板 server/plugins/store.ts），旧面板缺模块时安装就拒绝并说明要升级面板，
+ * 而不是装上以后运行到那里才报「面板没有开放模块」
+ */
+const usedModules = { web: new Set(), server: new Set() }
+
 function panelModules(dir, side) {
   const allowed = new Set(HOST_MODULES[side])
   // 要和面板共用同一份实例的第三方包（zod：面板开放模块里的 schema 要能和插件自己的拼在一起）
@@ -89,17 +97,51 @@ function panelModules(dir, side) {
           }
         return { path: key, namespace: `agent-panel-${side}` }
       })
-      b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => ({
-        // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
-        contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
+      b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => {
+        usedModules[side].add(a.path)
+        return {
+          // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
+          contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
 if (!m) throw new Error('面板没有开放模块 ${a.path}：要插件接口 4 及以上的面板')
 const o = { __esModule: true }
 for (const k of Object.keys(m)) Object.defineProperty(o, k, { enumerable: true, get: () => m[k] })
 module.exports = o`,
-        loader: 'js',
-      }))
+          loader: 'js',
+        }
+      })
     },
   }
+}
+
+/**
+ * 插件样式的类名必须带插件自己的前缀（面板 ADR 0059 风险一节）：插件样式表在面板之后加载，不带前缀的 .flex-col
+ * 会盖掉面板的 md:flex-row，打开插件后面板整页布局乱掉（试装时出过）。以前只靠约定，这里在构建时拦：
+ * index.css 要用 prefix(<前缀>)，产物里的类选择器只能是 <前缀>:…（Tailwind 工具类）或 <前缀>-…（插件自己写的类）；
+ * dark 是面板主题的类（sdk/theme.css 用它判断深色），放行
+ */
+const UNPREFIXED_OK = new Set(['dark'])
+function checkCssPrefix(id, src, built) {
+  const m = /prefix\(([a-z][a-z0-9]*)\)/.exec(readFileSync(src, 'utf8'))
+  if (!m)
+    throw new Error(`${id}：web/index.css 的 tailwindcss/theme.css 要写 prefix(<前缀>)，不然插件的类会盖掉面板的同名类`)
+  const pre = m[1]
+  // 去掉注释、字符串和 url()：里面的「github.com」这类不是选择器
+  const css = readFileSync(built, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/url\([^)]*\)/g, '')
+    .replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '')
+  const bad = new Set()
+  // 只看选择器（{ 前面的部分），属性值里的小数（.5rem）不算
+  for (const sel of css.match(/[^{}]+(?=\{)/g) ?? [])
+    for (const [, cls] of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+      const name = cls.replace(/\\(.)/g, '$1')
+      if (/^\d/.test(name) || UNPREFIXED_OK.has(name)) continue
+      if (!name.startsWith(`${pre}:`) && !name.startsWith(`${pre}-`)) bad.add(name)
+    }
+  if (bad.size)
+    throw new Error(
+      `${id}：样式里有不带前缀 ${pre} 的类（${[...bad].slice(0, 10).join('、')}）。Tailwind 类写成 ${pre}:flex，自己写的类以 ${pre}- 开头`,
+    )
 }
 
 function pluginDirs(args) {
@@ -111,6 +153,8 @@ function pluginDirs(args) {
 
 async function buildPlugin(dir) {
   const manifest = JSON.parse(readFileSync(path.join(dir, 'plugin.json'), 'utf8'))
+  usedModules.web.clear()
+  usedModules.server.clear()
   const out = path.join(DIST, manifest.id)
   rmSync(out, { recursive: true, force: true })
   mkdirSync(out, { recursive: true })
@@ -164,15 +208,27 @@ async function buildPlugin(dir) {
       { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] },
     )
   }
+  if (manifest.css) checkCssPrefix(manifest.id, path.join(dir, 'web', 'index.css'), path.join(out, manifest.css))
   const hook = path.join(dir, 'build.mjs')
   if (existsSync(hook)) await (await import(pathToFileURL(hook).href)).extra(out)
+
+  const hostModules = Object.fromEntries(
+    Object.entries(usedModules)
+      .filter(([, set]) => set.size)
+      .map(([side, set]) => [side, [...set].sort()]),
+  )
+  if (Object.keys(hostModules).length)
+    writeFileSync(path.join(out, 'plugin.json'), JSON.stringify({ ...manifest, hostModules }, null, 2) + '\n')
 
   for (const k of ['server', 'web', 'css'])
     if (manifest[k] && !existsSync(path.join(out, manifest[k])))
       throw new Error(`${manifest.id}：构建后缺少 ${manifest[k]}`)
 
   const zip = path.join(DIST, `${manifest.id}-${manifest.version}.zip`)
-  writeFileSync(zip, zipDir(out))
+  const data = zipDir(out)
+  writeFileSync(zip, data)
+  // 校验文件和包一起发到 Release：面板下载后核对（面板 server/plugins/github.ts 的 verifySha），格式同 sha256sum
+  writeFileSync(`${zip}.sha256`, `${createHash('sha256').update(data).digest('hex')}  ${path.basename(zip)}\n`)
   console.log(`${manifest.id} ${manifest.version} → ${path.relative(ROOT, zip)}`)
   return { manifest, zip }
 }

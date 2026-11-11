@@ -1,5 +1,6 @@
-# 推到 main：检查、构建所有插件，每个插件的包发到 Release（标签 <id>-v<版本>，附件 <id>-<版本>.zip）。
-# 同一个版本的 Release 已经有了就覆盖附件（修了构建脚本、没改版本号时）；要让用户收到升级，改 plugin.json 和 plugins.json 的版本号。
+# 推到 main：检查、构建所有插件，每个插件的包发到 Release（标签 <id>-v<版本>，附件 <id>-<版本>.zip 和校验文件 .zip.sha256）。
+# 同一个版本的 Release 已经有了：包的内容一样就跳过；不一样也不覆盖（同一版本号两份内容，用户装到的东西对不上，
+# 更新检查也查不出来），只出警告提醒升版本号。要让用户收到升级，改 plugin.json 和 plugins.json 的版本号。
 # 拉取请求只检查和构建，不发布。
 name: 构建与发布
 
@@ -40,7 +41,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: plugins
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
       - name: 发到 Release
         if: github.event_name != 'pull_request'
         env:
@@ -50,11 +53,23 @@ jobs:
           while read -r id version asset; do
             tag="${id}-v${version}"
             if gh release view "$tag" >/dev/null 2>&1; then
-              gh release upload "$tag" "dist/$asset" --clobber
+              old=""
+              if gh release download "$tag" -p "$asset" -D .old-release --clobber >/dev/null 2>&1; then
+                old=$(sha256sum ".old-release/$asset" | cut -d' ' -f1)
+              fi
+              new=$(cut -d' ' -f1 "dist/$asset.sha256")
+              if [ "$old" = "$new" ]; then
+                # 内容没变：只补上旧 Release 没有的校验文件
+                gh release upload "$tag" "dist/$asset.sha256" --clobber
+              elif [ -z "$old" ]; then
+                gh release upload "$tag" "dist/$asset" "dist/$asset.sha256"
+              else
+                echo "::warning::$id $version 的包内容变了但版本号没变，Release 没有覆盖；要发布这次改动请升 $id 的版本号"
+              fi
             else
               prerelease=""
               case "$version" in *-*) prerelease="--prerelease" ;; esac
-              gh release create "$tag" "dist/$asset" --target "$GITHUB_SHA" --title "$id $version" \
+              gh release create "$tag" "dist/$asset" "dist/$asset.sha256" --target "$GITHUB_SHA" --title "$id $version" \
                 --notes "插件 $id $version。在 Agent 面板「设置 → 插件」的插件市场里安装，或下载 $asset 后选「从压缩包安装」。" $prerelease
             fi
           done

@@ -688,7 +688,8 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     req.on('end', () => {
       try {
         const { op, args } = JSON.parse(body)
-        if (!ops[op]) return send(200, { ok: false, error: `不认识的操作 ${op}` })
+        if (!ops[op])
+          return send(200, { ok: false, error: `这个进程不支持 ${op}（编辑器专用的操作要在编辑器或后台编辑器里执行）` })
         send(200, { ok: true, ...ops[op](args ?? {}) })
       } catch (e) {
         send(200, { ok: false, error: e.message })
