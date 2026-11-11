@@ -102,7 +102,7 @@ export function Watch() {
             })}
             {!items.length && (
               <li className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">
-                {t('还没有固定的属性。在 Actor、运行时对象的属性面板里点图钉')}
+                {t('还没有固定的属性。在 Object 页的属性面板里点图钉')}
               </li>
             )}
           </ul>
