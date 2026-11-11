@@ -19,6 +19,16 @@
       "tag": "ue-v0.7.0",
       "asset": "ue-0.7.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
+    },
+    {
+      "id": "ui-design",
+      "name": "UI 设计",
+      "version": "1.0.0",
+      "description": "用对话设计游戏界面和网页：AI 改控件树、加图片和动画，出整屏原画、抠切图和还原，标注、版本和导出（UE 控件树、React 网页、ZIP）。原来是面板自带的「设计」模式。",
+      "icon": "palette",
+      "tag": "ui-design-v1.0.0",
+      "asset": "ui-design-1.0.0.zip",
+      "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ui-design"
     }
   ]
 }

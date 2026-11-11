@@ -19,9 +19,11 @@ function walk(dir, out = []) {
 
 function codeStrings(dir) {
   const out = new Set()
-  for (const f of [...walk(path.join(dir, 'server')), ...walk(path.join(dir, 'web'))]) {
+  // shared/：照面板源码布局搬过来的插件（插件接口 4）前后端共用的代码也有界面文案
+  for (const f of ['server', 'web', 'shared'].flatMap((s) => walk(path.join(dir, s)))) {
     const src = readFileSync(f, 'utf8')
-    for (const m of src.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g)) out.add(m[1].replace(/\\'/g, "'"))
+    for (const m of src.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g))
+      out.add(m[1].replace(/\\'/g, "'").replace(/\\n/g, '\n'))
   }
   return out
 }

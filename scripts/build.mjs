@@ -50,10 +50,22 @@ const findLocal = (p) => EXTS.map((e) => p + e).find((f) => existsSync(f) && !st
 
 function panelModules(dir, side) {
   const allowed = new Set(HOST_MODULES[side])
+  // 要和面板共用同一份实例的第三方包（zod：面板开放模块里的 schema 要能和插件自己的拼在一起）
+  const packages = new Set(HOST_MODULES[`${side}Packages`] ?? [])
   const global = side === 'web' ? '__agentPanel' : '__agentPanelServer'
   return {
     name: 'agent-panel-modules',
     setup(b) {
+      b.onResolve({ filter: /.*/ }, (a) =>
+        a.namespace === 'file' && packages.has(a.path) ? { path: a.path, namespace: `agent-panel-${side}` } : undefined,
+      )
+      // @panel/<面板源码路径>：一定取面板那一份（插件自己有同名文件、要在上面包一层时用，例如插件的 web/src/lib/api.ts）
+      b.onResolve({ filter: /^@panel\// }, (a) => {
+        const key = a.path.slice(7).replace(/\.(tsx?|m?js)$/, '')
+        return allowed.has(key)
+          ? { path: key, namespace: `agent-panel-${side}` }
+          : { errors: [{ text: `面板没有开放 ${key}（sdk/host-modules.json 的 ${side}）` }] }
+      })
       b.onResolve({ filter: /^(@\/|@shared\/|\.)/ }, (a) => {
         if (a.namespace !== 'file') return undefined
         const abs = a.path.startsWith('@/')
@@ -67,9 +79,14 @@ function panelModules(dir, side) {
         const rel = path.relative(dir, abs)
         // 插件目录外、或者连目录都不像面板布局的相对路径：交回 esbuild，按它自己的报错来
         if (rel.startsWith('..') || path.isAbsolute(rel)) return undefined
-        const key = rel.split(path.sep).join('/').replace(/\.(tsx?|m?js)$/, '')
+        const key = rel
+          .split(path.sep)
+          .join('/')
+          .replace(/\.(tsx?|m?js)$/, '')
         if (!allowed.has(key))
-          return { errors: [{ text: `插件里没有 ${a.path}，面板也没有开放 ${key}（sdk/host-modules.json 的 ${side}）` }] }
+          return {
+            errors: [{ text: `插件里没有 ${a.path}，面板也没有开放 ${key}（sdk/host-modules.json 的 ${side}）` }],
+          }
         return { path: key, namespace: `agent-panel-${side}` }
       })
       b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => ({
@@ -127,6 +144,8 @@ async function buildPlugin(dir) {
       target: 'es2022',
       jsx: 'automatic',
       minify: true,
+      // 从面板搬过来的代码里有 import.meta.env（面板是 Vite 构建的）：插件只跑在正式版面板里，按正式版的值定死
+      define: { 'import.meta.env': JSON.stringify({ MODE: 'production', DEV: false, PROD: true, VITE_DEMO: '' }) },
       plugins: [panelReact, panelModules(dir, 'web')],
       logLevel: 'warning',
     })

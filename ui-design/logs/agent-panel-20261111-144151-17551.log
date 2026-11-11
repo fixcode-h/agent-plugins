@@ -1,0 +1,7 @@
+# Agent 面板运行日志
+# 启动于 2026-11-11 14:41:51.417，进程 17551
+# Node v22.23.4 · linux x64 · /home/user/agent-plugins/ui-design/server/headless.test.ts
+
+2026-11-11 14:41:51.433 INFO  [headless] 设计页没有打开，用无头浏览器截图
+    designId: d1
+    exe: /tmp/hl-eP6rCC/fake-browser
