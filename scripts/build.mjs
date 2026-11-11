@@ -38,7 +38,7 @@ const panelReact = {
 }
 
 /**
- * 面板开放的模块（面板插件接口 3，清单 sdk/host-modules.json 是面板 shared/plugins/host-modules.json 的副本）：
+ * 面板开放的模块（面板插件接口 4，清单 sdk/host-modules.json 是面板 shared/plugins/host-modules.json 的副本）：
  * 插件目录照面板的源码布局放文件（web/src/…、server/…、shared/…）时，import 先找插件自己的文件，
  * 插件里没有、清单里开放了的接到面板挂在全局上的那一份（网页 globalThis.__agentPanel.modules，服务端 __agentPanelServer.modules），
  * 和面板共用同一份状态。@/ 是插件的 web/src/，@shared/ 是插件的 shared/，和面板的别名一致，搬过来的代码不用改 import。
@@ -75,7 +75,7 @@ function panelModules(dir, side) {
       b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => ({
         // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
         contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
-if (!m) throw new Error('面板没有开放模块 ${a.path}：要插件接口 3 及以上的面板')
+if (!m) throw new Error('面板没有开放模块 ${a.path}：要插件接口 4 及以上的面板')
 const o = { __esModule: true }
 for (const k of Object.keys(m)) Object.defineProperty(o, k, { enumerable: true, get: () => m[k] })
 module.exports = o`,
