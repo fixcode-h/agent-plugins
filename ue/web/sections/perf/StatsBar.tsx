@@ -41,7 +41,7 @@ export function StatsBar({ items, badge }: { items: StatItem[]; badge?: string }
           </div>
           <div
             className={cn(
-              'ue:font-mono ue:text-[19px] ue:leading-tight ue:font-semibold ue:tabular-nums',
+              'ue:font-mono ue:text-[19px] ue:leading-tight ue:font-semibold ue:tabular-nums ue:transition-colors ue:duration-300',
               VALUE[x.level ?? 'none'],
             )}
           >

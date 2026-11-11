@@ -1,6 +1,14 @@
-import { stat } from 'node:fs/promises'
+import { mkdir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { captureId, kindOfFile, listCaptures, setMeta, type Capture, type CaptureKind } from './captures.ts'
+import {
+  captureId,
+  kindOfFile,
+  listCaptures,
+  profilingDir,
+  setMeta,
+  type Capture,
+  type CaptureKind,
+} from './captures.ts'
 import { BridgeError } from './instances.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import type { Actor, UeProject } from './types.ts'
@@ -11,11 +19,17 @@ import { c, now, readJson, t, uid, writeJson } from './util.ts'
  * - CSV Profiler：CsvProfile Start / Stop，文件写在 Saved/Profiling/CSV；
  * - memreport：memreport -full，文件写在 Saved/Profiling/MemReports。
  * 引擎不告诉我们文件写到哪了，所以开始前记下已有的文件，结束后找新出现的那个。
- * 每次抓取都有时长上限，到了自己停：Agent 开了忘关的话 CSV 会一直涨。
+ * - trace（性能页二期）：Trace.File 写到 Saved/Profiling/AgentPanel/<名字>.utrace，Trace.Stop 停；分析见 trace-query.ts。
+ * 每次抓取都有时长上限，到了自己停：Agent 开了忘关的话 CSV / trace 会一直涨。
  */
 export interface ActiveCapture {
   id: string
-  kind: 'csv'
+  kind: 'csv' | 'trace'
+  /** trace：录制预设（TRACE_PRESETS 的键或 custom）和开了命名事件没有（停的时候要关回去） */
+  preset?: string
+  named?: boolean
+  /** trace：期望写出的文件（绝对路径） */
+  file?: string
   label: string
   startedAt: string
   /** 到这个时间自动停 */
@@ -34,6 +48,31 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export const DEFAULT_SECONDS = 30
 export const MAX_SECONDS = 600
+
+/**
+ * trace 录制预设（性能页设计 3.4，默认「标准」）。命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，
+ * 开销大一些所以单独一档。内存标签要 UE 用 -llm 启动才有数据。
+ */
+const STANDARD = 'cpu,gpu,frame,bookmark,counters,log'
+export const TRACE_PRESETS: Record<string, { channels: string; named?: boolean }> = {
+  standard: { channels: STANDARD },
+  named: { channels: STANDARD, named: true },
+  loading: { channels: `${STANDARD},loadtime,assetloadtime` },
+  memtag: { channels: `${STANDARD},memtag` },
+}
+
+function traceChannels(preset: string, custom: string) {
+  if (preset === 'custom') {
+    const ch = custom.replace(/\s+/g, '')
+    if (!/^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$/.test(ch))
+      throw new BridgeError(t('自定义通道要写成逗号分隔的通道名，例如 cpu,gpu,frame'))
+    return { channels: ch, named: false }
+  }
+  const p = TRACE_PRESETS[preset]
+  if (!p)
+    throw new BridgeError(t('不认识的录制预设：{p}（standard / named / loading / memtag / custom）', { p: preset }))
+  return { channels: p.channels, named: !!p.named }
+}
 
 /**
  * 抓取的权限在这里按「一次抓取」问一遍（卡片上写清种类和时长），之后发给 UE 的控制台命令不再逐条确认：
@@ -82,7 +121,9 @@ async function waitNewFile(p: UeProject, kind: CaptureKind, before: string[], si
 /** 控制台输出里如果带了文件路径（引擎会打一行写到哪了），直接用它，比扫目录准 */
 async function fileFromOutput(output: unknown, kind: CaptureKind): Promise<string | undefined> {
   for (const line of Array.isArray(output) ? output : []) {
-    for (const m of String(line).matchAll(/((?:[A-Za-z]:)?[^\s"':*?<>|]*[\\/][^"':*?<>|]*\.(?:csv(?:\.gz)?|memreport))/gi)) {
+    for (const m of String(line).matchAll(
+      /((?:[A-Za-z]:)?[^\s"':*?<>|]*[\\/][^"':*?<>|]*\.(?:csv(?:\.gz)?|memreport))/gi,
+    )) {
       const file = path.resolve(m[1].trim())
       if (kindOfFile(file) === kind && (await stat(file).catch(() => undefined))?.isFile()) return file
     }
@@ -102,18 +143,21 @@ export async function captureStatus(ctx: OpCtx) {
 
 const elapsedOf = (startedAt: string) => Math.round((Date.now() - Date.parse(startedAt)) / 100) / 10
 
-export async function startCapture(ctx: OpCtx, a: { kind?: string; seconds?: number; label?: string }) {
+export async function startCapture(
+  ctx: OpCtx,
+  a: { kind?: string; seconds?: number; label?: string; preset?: string; channels?: string },
+) {
   const kind = String(a.kind || 'csv')
   if (kind === 'memreport') return memreport(ctx, a.label)
-  if (kind !== 'csv')
-    throw new BridgeError(t('这个版本能抓 csv（CSV Profiler）和 memreport；trace 和 GPU 要等桥接更新'))
+  if (kind !== 'csv' && kind !== 'trace')
+    throw new BridgeError(t('能抓的种类：trace（Unreal Insights 同款）、csv（CSV Profiler）、memreport'))
   const p = ctx.project
   await sweep(ctx)
   const active = await readActive(p.id)
   if (active.length) {
     const cur = active[0]
     throw new BridgeError(
-      t('已经有一个 CSV 抓取在进行（{label}，已经 {s} 秒，id {id}）：先 stop 再开新的', {
+      t('已经有一个抓取在进行（{label}，已经 {s} 秒，id {id}）：先 stop 再开新的', {
         label: cur.label,
         s: elapsedOf(cur.startedAt),
         id: cur.id,
@@ -121,7 +165,8 @@ export async function startCapture(ctx: OpCtx, a: { kind?: string; seconds?: num
     )
   }
   const seconds = Math.min(Math.max(1, Math.round(Number(a.seconds) || DEFAULT_SECONDS)), MAX_SECONDS)
-  const label = (a.label || '').trim() || `csv-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
+  const label = (a.label || '').trim() || `${kind}-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
+  if (kind === 'trace') return startTrace(ctx, label, seconds, String(a.preset || 'standard'), String(a.channels || ''))
   const run = await allow(
     ctx,
     t('Agent 要开始性能抓取'),
@@ -191,7 +236,10 @@ export async function stopCapture(ctx: OpCtx, id?: string, auto = false) {
     activeFile(p.id),
     active.filter((x) => x.id !== item.id),
   )
-  const res = await runOp(granted({ ...ctx, target: { instance: item.pid } }), 'console', { command: 'CsvProfile Stop' })
+  if (item.kind === 'trace') return stopTrace(ctx, item, auto)
+  const res = await runOp(granted({ ...ctx, target: { instance: item.pid } }), 'console', {
+    command: 'CsvProfile Stop',
+  })
   const since = Date.parse(item.startedAt)
   const named = await fileFromOutput(res.output, 'csv')
   const cap = named ? await asCapture(p, named) : await waitNewFile(p, 'csv', item.before, since, 20000)
@@ -227,7 +275,9 @@ export async function markCapture(ctx: OpCtx, name: string) {
   const item = active[0]
   if (!item) throw new BridgeError(t('没有正在进行的抓取，书签要在 start 和 stop 之间打'))
   const at = elapsedOf(item.startedAt)
-  const res = await runOp(granted({ ...ctx, target: { instance: item.pid } }), 'console', { command: `CsvEvent ${label}` })
+  // trace 的书签进 trace 本身（时间轴上画竖线）；CSV 的进 CSV 事件
+  const command = item.kind === 'trace' ? `Trace.Bookmark ${label}` : `CsvEvent ${label}`
+  const res = await runOp(granted({ ...ctx, target: { instance: item.pid } }), 'console', { command })
   item.marks.push({ at, name: label })
   await writeJson(activeFile(ctx.project.id), active)
   return { marked: label, at, output: res.output }
@@ -253,10 +303,111 @@ async function memreport(ctx: OpCtx, label?: string) {
       }),
     )
   const name = (label || '').trim() || undefined
-  await setMeta(p.id, cap.id, { label: name, by: ctx.actor, startedAt: new Date(since).toISOString(), pid: (res.instance as { pid: number }).pid })
+  await setMeta(p.id, cap.id, {
+    label: name,
+    by: ctx.actor,
+    startedAt: new Date(since).toISOString(),
+    pid: (res.instance as { pid: number }).pid,
+  })
   return {
     captured: true,
     capture: { id: cap.id, kind: cap.kind, label: name, file: cap.file, sizeKB: Math.round(cap.size / 1024) },
     next: `用 ue_capture action=summary id=${cap.id} 看摘要；查泄漏就在同一个场景进出一次后再抓一份，用 action=compare 对比`,
+  }
+}
+
+/** 文件名里只留字母数字和 -_：Trace.File 的参数按空格切，路径里不能有空格 */
+const safeName = (s: string) =>
+  s
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'trace'
+
+async function startTrace(ctx: OpCtx, label: string, seconds: number, preset: string, custom: string) {
+  const p = ctx.project
+  const { channels, named } = traceChannels(preset, custom)
+  const run = await allow(
+    ctx,
+    t('Agent 要开始录 trace'),
+    t(
+      'Unreal Insights 同款录制（通道 {ch}{named}），最长 {s} 秒，到时间自动停；文件写在项目的 Saved/Profiling/AgentPanel',
+      {
+        ch: channels,
+        named: named ? t('，开命名事件') : '',
+        s: seconds,
+      },
+    ),
+  )
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  // 相对路径：引擎把它放在 Saved/Profiling 下（绝对路径里有空格时控制台参数会被切开）
+  const rel = `AgentPanel/${safeName(label)}-${stamp}.utrace`
+  const file = path.join(profilingDir(p), rel)
+  await mkdir(path.dirname(file), { recursive: true })
+  const before = (await filesOf(p, 'trace')).map((x) => x.file)
+  const res = await runOp(run, 'console', { command: `Trace.File ${rel} ${channels}` })
+  const pid = (res.instance as { pid: number }).pid
+  if (named) await runOp(granted({ ...run, target: { instance: pid } }), 'console', { command: 'stat namedevents' })
+  const item: ActiveCapture = {
+    id: uid(),
+    kind: 'trace',
+    preset,
+    named,
+    file,
+    label,
+    startedAt: now(),
+    deadline: new Date(Date.now() + seconds * 1000).toISOString(),
+    seconds,
+    pid,
+    by: ctx.actor,
+    marks: [],
+    before,
+  }
+  await writeJson(activeFile(p.id), [item])
+  arm(ctx, item)
+  return {
+    started: true,
+    id: item.id,
+    kind: 'trace',
+    preset,
+    channels,
+    label,
+    seconds,
+    pid,
+    output: res.output,
+    next: '触发要测的场景，需要分段就 action=mark，然后 action=stop；停止后用 ue_capture action=summary 看分析结果',
+  }
+}
+
+async function stopTrace(ctx: OpCtx, item: ActiveCapture, auto: boolean) {
+  const p = ctx.project
+  const run = granted({ ...ctx, target: { instance: item.pid } })
+  const res = await runOp(run, 'console', { command: 'Trace.Stop' })
+  // 命名事件是开关命令：开始时打开了，这里关回去，免得一直多一份开销
+  if (item.named) await runOp(run, 'console', { command: 'stat namedevents' }).catch(() => undefined)
+  const since = Date.parse(item.startedAt)
+  const expected = item.file && (await stat(item.file).catch(() => undefined))?.isFile() ? item.file : undefined
+  const cap = expected ? await asCapture(p, expected) : await waitNewFile(p, 'trace', item.before, since, 20000)
+  if (!cap)
+    throw new BridgeError(
+      t(
+        '已经让 UE 停止 trace，但 20 秒内没在 Saved/Profiling 里看到 .utrace 文件。可能 UE 已经在往 Unreal Insights 录（命令行带了 -trace），或者这个构建没编进 trace。UE 的输出：{out}',
+        { out: JSON.stringify(res.output ?? []) },
+      ),
+    )
+  await setMeta(p.id, cap.id, {
+    label: item.label,
+    by: item.by,
+    startedAt: item.startedAt,
+    marks: item.marks,
+    pid: item.pid,
+    preset: item.preset,
+  })
+  return {
+    stopped: true,
+    auto,
+    capture: { id: cap.id, kind: cap.kind, label: item.label, file: cap.file, sizeKB: Math.round(cap.size / 1024) },
+    seconds: elapsedOf(item.startedAt),
+    marks: item.marks,
+    next: `用 ue_capture action=summary id=${cap.id} 看分析结果（第一次要等后台编辑器分析几秒）`,
   }
 }

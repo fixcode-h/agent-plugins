@@ -11,9 +11,12 @@ export interface Capture {
   by?: string
   marks?: { at: number; name: string }[]
   imported?: boolean
+  preset?: string
 }
 export interface Active {
   id: string
+  kind: 'csv' | 'trace'
+  preset?: string
   label: string
   seconds: number
   elapsed: number

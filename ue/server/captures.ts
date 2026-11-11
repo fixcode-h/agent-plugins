@@ -23,6 +23,8 @@ export interface CaptureMeta {
   /** 面板这边记的书签：相对抓取开始的秒数。CSV 里的事件靠引擎写，这里是引擎没写进去时的后备 */
   marks?: { at: number; name: string }[]
   pid?: number
+  /** trace 的录制预设 */
+  preset?: string
 }
 
 export interface Capture extends CaptureMeta {
@@ -88,7 +90,15 @@ export async function listCaptures(p: UeProject): Promise<Capture[]> {
     if (!st?.isFile() || !kind) continue
     const id = captureId(file)
     if (out.some((x) => x.id === id)) continue
-    out.push({ id, kind, file, size: st.size, at: st.mtime.toISOString(), ...(imported ? { imported } : {}), ...store.meta[id] })
+    out.push({
+      id,
+      kind,
+      file,
+      size: st.size,
+      at: st.mtime.toISOString(),
+      ...(imported ? { imported } : {}),
+      ...store.meta[id],
+    })
   }
   return out.sort((a, b) => b.at.localeCompare(a.at))
 }
@@ -148,7 +158,9 @@ const cache = new Map<string, { key: string; parsed: Parsed }>()
 async function load(cap: Capture): Promise<Parsed> {
   if (cap.kind === 'trace')
     throw new BridgeError(
-      t('这是 Unreal Insights 的 trace（.utrace），这个版本还不能分析，只能登记和在 Insights 里打开；先用 CSV 和 memreport'),
+      t(
+        '这是 Unreal Insights 的 trace（.utrace），这个版本还不能分析，只能登记和在 Insights 里打开；先用 CSV 和 memreport',
+      ),
     )
   const key = `${cap.size}:${cap.at}`
   const hit = cache.get(cap.file)
@@ -161,7 +173,8 @@ async function load(cap: Capture): Promise<Parsed> {
   const text = cap.file.toLowerCase().endsWith('.gz') ? gunzipSync(buf).toString('utf8') : decode(buf)
   let parsed: Parsed
   try {
-    parsed = cap.kind === 'csv' ? { kind: 'csv', data: parseCsv(text) } : { kind: 'memreport', data: parseMemReport(text) }
+    parsed =
+      cap.kind === 'csv' ? { kind: 'csv', data: parseCsv(text) } : { kind: 'memreport', data: parseMemReport(text) }
   } catch (e) {
     throw new BridgeError(`${path.basename(cap.file)}：${(e as Error).message}`)
   }
@@ -186,6 +199,7 @@ const brief = (cap: Capture) => ({
   by: cap.by ? (cap.by.kind === 'user' ? 'user' : (cap.by.agent ?? 'agent')) : undefined,
   marks: cap.marks?.length ? cap.marks : undefined,
   imported: cap.imported,
+  preset: cap.preset,
 })
 
 export async function captureList(p: UeProject, kind?: string, limit = 30) {
@@ -213,7 +227,9 @@ function resolveTime(cap: Capture, data: CsvCapture, v: unknown): number | undef
   const n = Number(v)
   if (Number.isFinite(n)) return n
   const name = String(v).toLowerCase()
-  const ev = data.events.find((e) => e.name.toLowerCase() === name) ?? data.events.find((e) => e.name.toLowerCase().includes(name))
+  const ev =
+    data.events.find((e) => e.name.toLowerCase() === name) ??
+    data.events.find((e) => e.name.toLowerCase().includes(name))
   if (ev) return ev.time
   const mark = cap.marks?.find((m) => m.name.toLowerCase() === name)
   if (mark) return mark.at
@@ -255,7 +271,9 @@ export async function captureQuery(p: UeProject, id: string, q: Record<string, u
 export async function captureCompare(p: UeProject, a: string, b: string, top?: number) {
   const [ca, cb] = [await getCapture(p, a), await getCapture(p, b)]
   if (ca.kind !== cb.kind)
-    throw new BridgeError(t('两份抓取要是同一种才能对比：{a} 是 {ka}，{b} 是 {kb}', { a: ca.id, ka: ca.kind, b: cb.id, kb: cb.kind }))
+    throw new BridgeError(
+      t('两份抓取要是同一种才能对比：{a} 是 {ka}，{b} 是 {kb}', { a: ca.id, ka: ca.kind, b: cb.id, kb: cb.kind }),
+    )
   const [pa, pb] = [await load(ca), await load(cb)]
   try {
     const diff =

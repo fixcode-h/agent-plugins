@@ -86,4 +86,6 @@ namespace AgentPanelEd
 	void RegisterAssetOps();
 	void RegisterBlueprintReadOps();
 	void RegisterBlueprintEditOps();
+	/** trace 分析（AgentPanelTrace.cpp）：trace.query */
+	void RegisterTraceOps();
 }
