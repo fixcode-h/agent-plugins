@@ -36,7 +36,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogAgentPanelBridge, Log, All);
 
-static const TCHAR* BridgeVersion = TEXT("1.8.0");
+static const TCHAR* BridgeVersion = TEXT("1.9.0");
 
 FAgentPanelBridge& FAgentPanelBridge::Get()
 {

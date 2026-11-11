@@ -77,7 +77,23 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         { name: 'Character', path: '/Script/Engine.Character', parent: 'Pawn', actor: true },
         { name: 'BP_Hero_C', path: '/Game/BP_Hero.BP_Hero_C', parent: 'Character', actor: true },
         { name: 'GameInstance', path: '/Script/Engine.GameInstance', parent: 'Object', actor: false },
-      ].filter((c) => a.q && c.name.toLowerCase().includes(String(a.q).toLowerCase())),
+        {
+          name: 'MaterialInterface',
+          path: '/Script/Engine.MaterialInterface',
+          parent: 'Object',
+          actor: false,
+          mat: true,
+        },
+        {
+          name: 'MaterialInstanceConstant',
+          path: '/Script/Engine.MaterialInstanceConstant',
+          parent: 'MaterialInstance',
+          actor: false,
+          mat: true,
+        },
+      ]
+        .filter((c) => (a.base ? c.mat : a.q) && (!a.q || c.name.toLowerCase().includes(String(a.q).toLowerCase())))
+        .map(({ mat: _m, ...c }) => c),
       more: false,
     }),
     objects: (a) => {
@@ -100,6 +116,25 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
           kind: 'instance',
           is: ['', 'GameInstance'],
         },
+        // 给函数参数选材质：assets=true 时才列资源，没加载的标 unloaded
+        ...(a.assets
+          ? [
+              {
+                path: '/Game/Materials/MI_Tire.MI_Tire',
+                name: 'MI_Tire',
+                class: 'MaterialInstanceConstant',
+                kind: 'asset',
+                is: ['MaterialInterface', 'MaterialInstanceConstant'],
+              },
+              {
+                path: '/Game/Materials/MI_Tire_Wet.MI_Tire_Wet',
+                name: 'MI_Tire_Wet',
+                class: 'MaterialInstanceConstant',
+                kind: 'unloaded',
+                is: ['MaterialInterface', 'MaterialInstanceConstant'],
+              },
+            ]
+          : []),
       ]
       const cls = String(a.class ?? '')
         .split('.')
@@ -117,6 +152,92 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         partial: !cls,
       }
     },
+    // 函数执行弹窗：all=true 时列出受保护 / 私有、非蓝图函数；any=true 才能调非蓝图函数
+    functions: (a) => ({
+      items: [
+        {
+          name: 'SetMaterial',
+          owner: 'BP_Hero_C',
+          category: 'Rendering',
+          tooltip: '换身上的材质',
+          params: [
+            { name: 'ElementIndex', type: 'int32', out: false },
+            {
+              name: 'Material',
+              type: 'UMaterialInterface*',
+              out: false,
+              objectClass: 'MaterialInterface',
+              objectClassPath: '/Script/Engine.MaterialInterface',
+            },
+          ],
+          ret: '',
+          access: 'public',
+          blueprint: true,
+        },
+        {
+          name: 'GetHealth',
+          owner: 'BP_Hero_C',
+          category: 'Health',
+          tooltip: '',
+          params: [{ name: 'Percent', type: 'float', out: true }],
+          ret: 'float',
+          access: 'public',
+          blueprint: true,
+        },
+        {
+          name: 'OnDamaged',
+          owner: 'BP_Hero_C',
+          category: '',
+          tooltip: '',
+          params: [],
+          ret: '',
+          access: 'protected',
+          blueprint: false,
+        },
+        {
+          name: 'ResetCache',
+          owner: 'BP_Hero_C',
+          category: '',
+          tooltip: '',
+          params: [],
+          ret: 'bool',
+          access: 'private',
+          blueprint: false,
+        },
+      ].filter((f) => a.all || f.blueprint),
+    }),
+    call: (a) => {
+      if ((a.function === 'OnDamaged' || a.function === 'ResetCache') && !a.any)
+        throw new Error(`${a.function} 不是 BlueprintCallable / Exec 函数，也没标 AgentPanel，不开放调用`)
+      if (a.function === 'SetMaterial' && a.args?.Material && !String(a.args.Material).includes('/MI_'))
+        throw new Error(`参数 Material 要 MaterialInterface，${a.args.Material} 不是`)
+      state.calls.push(`${a.function}(${JSON.stringify(a.args ?? {})})`)
+      if (a.function === 'GetHealth')
+        return { ret: state.hero.Health, out: { Percent: state.hero.Health / state.hero.MaxHealth }, ms: 0.12 }
+      return { ret: a.function === 'ResetCache' ? true : undefined, out: {}, ms: 0.4 }
+    },
+    'object.refs': (a) => ({
+      items:
+        a.path === HERO
+          ? [
+              {
+                path: '/Game/Materials/MI_Tire.MI_Tire',
+                name: 'MI_Tire',
+                class: 'MaterialInstanceConstant',
+                kind: 'asset',
+                via: 'Mesh.OverrideMaterials[0]',
+              },
+              {
+                path: '/Game/Materials/MI_Body.MI_Body',
+                name: 'MI_Body',
+                class: 'MaterialInstanceConstant',
+                kind: 'asset',
+                via: 'BodyMaterial',
+              },
+            ]
+          : [],
+      more: false,
+    }),
     'asset.classes': (a) => ({
       items: [
         { name: 'Blueprint', path: '/Script/Engine.Blueprint', count: 1 },
