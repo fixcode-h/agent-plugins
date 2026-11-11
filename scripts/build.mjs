@@ -49,6 +49,13 @@ const HOST_MODULES = JSON.parse(readFileSync(path.join(ROOT, 'sdk', 'host-module
 const EXTS = ['', '.ts', '.tsx', '.js', '.mjs', '.json', '/index.ts', '/index.tsx', '/index.js']
 const findLocal = (p) => EXTS.map((e) => p + e).find((f) => existsSync(f) && !statSync(f).isDirectory())
 
+/**
+ * 这次构建实际接到面板的模块（按插件、按网页 / 服务端）：写进产物 plugin.json 的 hostModules，
+ * 面板安装和启动时逐项核对自己开放了没有（面板 server/plugins/store.ts），旧面板缺模块时安装就拒绝并说明要升级面板，
+ * 而不是装上以后运行到那里才报「面板没有开放模块」
+ */
+const usedModules = { web: new Set(), server: new Set() }
+
 function panelModules(dir, side) {
   const allowed = new Set(HOST_MODULES[side])
   // 要和面板共用同一份实例的第三方包（zod：面板开放模块里的 schema 要能和插件自己的拼在一起）
@@ -90,15 +97,18 @@ function panelModules(dir, side) {
           }
         return { path: key, namespace: `agent-panel-${side}` }
       })
-      b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => ({
-        // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
-        contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
+      b.onLoad({ filter: /.*/, namespace: `agent-panel-${side}` }, (a) => {
+        usedModules[side].add(a.path)
+        return {
+          // 用取值器转发：面板模块里后来才赋值的导出（let）也能取到最新的
+          contents: `const m = globalThis.${global}?.modules?.[${JSON.stringify(a.path)}]
 if (!m) throw new Error('面板没有开放模块 ${a.path}：要插件接口 4 及以上的面板')
 const o = { __esModule: true }
 for (const k of Object.keys(m)) Object.defineProperty(o, k, { enumerable: true, get: () => m[k] })
 module.exports = o`,
-        loader: 'js',
-      }))
+          loader: 'js',
+        }
+      })
     },
   }
 }
@@ -143,6 +153,8 @@ function pluginDirs(args) {
 
 async function buildPlugin(dir) {
   const manifest = JSON.parse(readFileSync(path.join(dir, 'plugin.json'), 'utf8'))
+  usedModules.web.clear()
+  usedModules.server.clear()
   const out = path.join(DIST, manifest.id)
   rmSync(out, { recursive: true, force: true })
   mkdirSync(out, { recursive: true })
@@ -199,6 +211,14 @@ async function buildPlugin(dir) {
   if (manifest.css) checkCssPrefix(manifest.id, path.join(dir, 'web', 'index.css'), path.join(out, manifest.css))
   const hook = path.join(dir, 'build.mjs')
   if (existsSync(hook)) await (await import(pathToFileURL(hook).href)).extra(out)
+
+  const hostModules = Object.fromEntries(
+    Object.entries(usedModules)
+      .filter(([, set]) => set.size)
+      .map(([side, set]) => [side, [...set].sort()]),
+  )
+  if (Object.keys(hostModules).length)
+    writeFileSync(path.join(out, 'plugin.json'), JSON.stringify({ ...manifest, hostModules }, null, 2) + '\n')
 
   for (const k of ['server', 'web', 'css'])
     if (manifest[k] && !existsSync(path.join(out, manifest[k])))
