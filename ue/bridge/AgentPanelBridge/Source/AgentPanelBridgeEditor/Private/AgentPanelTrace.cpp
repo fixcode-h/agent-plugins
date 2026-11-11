@@ -4,6 +4,7 @@
 // 放在编辑器模块：后台编辑器（-run=AgentPanel）和编辑器都加载它，游戏进程不加载，分析不拖慢要测的帧率。
 //
 // 只用最基础的几个接口（线程列表、时间线进出事件、计时器名字、帧、书签、计数器、日志），
+// TraceServices 的类型一律写全名（TraceServices::FFrame 等）：UObject 也有 FFrame（蓝图调用栈），只写短名在 5.8 上会撞名。
 // 计时器汇总和调用树都在这里自己按进出事件算，不用 CreateAggregation 之类各版本签名不一样的接口。
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
@@ -137,7 +138,7 @@ namespace
 		{
 			Out.Add(GpuLane);
 		}
-		ReadThreadProvider(S).EnumerateThreads([&](const FThreadInfo& T)
+		ReadThreadProvider(S).EnumerateThreads([&](const TraceServices::FThreadInfo& T)
 		{
 			uint32 TL = 0;
 			if (TP.GetCpuThreadTimelineIndex(T.Id, TL))
@@ -148,6 +149,9 @@ namespace
 		return Out;
 	}
 
+	inline const ITimingProfilerTimerReader* AsReader(const ITimingProfilerTimerReader& R) { return &R; }
+	inline const ITimingProfilerTimerReader* AsReader(const ITimingProfilerTimerReader* R) { return R; }
+
 	/** 计时器 id → 名字。带元数据的计时器（id 最高位是 1）换成原始计时器，和 Insights 一样合在一起算 */
 	struct FTimers
 	{
@@ -155,7 +159,12 @@ namespace
 
 		explicit FTimers(const ITimingProfilerProvider& TP)
 		{
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
+			// 5.8 起 ReadTimers 弃用，改 GetTimerReader()；返回引用还是指针都接得住
+			Reader = AsReader(TP.GetTimerReader());
+#else
 			TP.ReadTimers([this](const ITimingProfilerTimerReader& R) { Reader = &R; });
+#endif
 		}
 
 		uint32 Resolve(uint32 Index) const
@@ -169,7 +178,7 @@ namespace
 
 		FString Name(uint32 Id) const
 		{
-			const FTimingProfilerTimer* T = Reader ? Reader->GetTimer(Id) : nullptr;
+			const TraceServices::FTimingProfilerTimer* T = Reader ? Reader->GetTimer(Id) : nullptr;
 			return T && T->Name ? FString(T->Name) : FString::Printf(TEXT("<timer %u>"), Id);
 		}
 	};
@@ -199,7 +208,7 @@ namespace
 		{
 			TArray<FOpen> Stack;
 			double Last = T0;
-			TL.EnumerateEvents(T0, T1, [&](bool bStart, double Time, const FTimingProfilerEvent& Ev)
+			TL.EnumerateEvents(T0, T1, [&](bool bStart, double Time, const TraceServices::FTimingProfilerEvent& Ev)
 			{
 				Last = Time;
 				if (bStart)
@@ -266,7 +275,7 @@ namespace
 			G->SetStringField(TEXT("group"), TEXT("GPU"));
 			Threads.Add(MakeShared<FJsonValueObject>(G));
 		}
-		ReadThreadProvider(S).EnumerateThreads([&](const FThreadInfo& T)
+		ReadThreadProvider(S).EnumerateThreads([&](const TraceServices::FThreadInfo& T)
 		{
 			uint32 TL = 0;
 			if (!TP || !TP->GetCpuThreadTimelineIndex(T.Id, TL))
@@ -294,7 +303,8 @@ namespace
 		TArray<double> Dur;
 		Start.Reserve(End);
 		Dur.Reserve(End);
-		FP.EnumerateFrames(TraceFrameType_Game, 0, End, [&](const FFrame& F)
+		// 5.8 起 FrameProvider 另有按时间（double）取的重载：起点写成 uint64，不然 0 两边都能转、重载不明确
+		FP.EnumerateFrames(TraceFrameType_Game, uint64(0), End, [&](const TraceServices::FFrame& F)
 		{
 			Start.Add(FMath::RoundToDouble(F.StartTime * 100000.0) / 100000.0);
 			Dur.Add(Ms(F.EndTime - F.StartTime));
@@ -692,7 +702,7 @@ namespace
 		const int32 Px = FMath::Clamp(Int(A, TEXT("px"), 600), 10, 4000);
 		const double Step = FMath::Max(1e-9, (T1 - T0) / Px);
 		TArray<TSharedPtr<FJsonValue>> List;
-		CP.EnumerateCounters([&](uint32, const ICounter& C)
+		CP.EnumerateCounters([&](uint32, const TraceServices::ICounter& C)
 		{
 			const FString Name = C.GetName();
 			if (Names.Num() == 0)
@@ -744,7 +754,7 @@ namespace
 		const int32 Top = FMath::Clamp(Int(A, TEXT("top"), 500), 1, 5000);
 		TArray<TSharedPtr<FJsonValue>> Items;
 		int32 Total = 0;
-		ReadLogProvider(S).EnumerateMessages(T0, T1, [&](const FLogMessageInfo& M)
+		ReadLogProvider(S).EnumerateMessages(T0, T1, [&](const TraceServices::FLogMessageInfo& M)
 		{
 			const FString Text = M.Message ? M.Message : TEXT("");
 			const FString Cat = M.Category && M.Category->Name ? M.Category->Name : TEXT("");
@@ -771,7 +781,7 @@ namespace
 	void QueryBookmarks(const IAnalysisSession& S, TSharedPtr<FJsonObject>& Out)
 	{
 		TArray<TSharedPtr<FJsonValue>> Items;
-		ReadBookmarkProvider(S).EnumerateBookmarks(0, S.GetDurationSeconds(), [&](const FBookmark& B)
+		ReadBookmarkProvider(S).EnumerateBookmarks(0, S.GetDurationSeconds(), [&](const TraceServices::FBookmark& B)
 		{
 			if (Items.Num() >= 2000)
 			{
