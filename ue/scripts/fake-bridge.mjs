@@ -374,9 +374,12 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     'asset.dirty': () => ({
       items: [...state.bp.dirty].map((p) => ({ package: p, file: `${p}.uasset`, readOnly: false, isNew: false })),
     }),
-    'asset.save': () => {
+    'asset.save': (a) => {
+      // 真桥接回写回的磁盘文件；这里按 /Game → Content 拼出来
+      const pkgs = a.packages?.length ? a.packages : [...state.bp.dirty]
+      const saved = pkgs.map((p) => path.join(root, 'Content', ...String(p).replace(/^\/Game\//, '').split('.')[0].split('/')) + '.uasset')
       state.bp.dirty.clear()
-      return { saved: [] }
+      return { saved }
     },
     'asset.undo': (a) => {
       if (state.bp.tx.at(-1)?.id !== a.tx) throw new Error('这一步不在撤销栈顶')

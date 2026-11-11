@@ -54,7 +54,7 @@ user-invocable: true
 
 - `ue_asset action=rows path=/Game/Data/DT_Items filter=Sword` 分页读行；`action=row` 读一行全部字段。
 - 改：`action=set`（单元格）、`add / remove / duplicate / rename`（行）。改动只暂存在编辑器里（标脏）。
-- 保存：`action=dirty` 看改了哪些包，`action=save packages=[...]` 写回（P4 项目先签出，按权限请用户确认）。不需要了用 `revert` 放弃。
+- 保存：`action=dirty` 看改了哪些包，`ue_save packages=[...]` 写回（P4 项目先签出，按权限请用户确认）。不需要了用 `revert` 放弃。
 - 后台编辑器读到的是磁盘上保存的版本；编辑器开着时读写走编辑器。
 
 ## 看现象

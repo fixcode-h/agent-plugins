@@ -1,5 +1,5 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；17 个工具都在；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；19 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
@@ -84,7 +84,7 @@ try {
   )
   assert.match(runTools.hint, /ue_status/)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 17)
+  assert.equal(Object.keys(tools).length, 19)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
 
   const st = await call('ue_status', {})
@@ -356,6 +356,21 @@ try {
   assert.match(text(await call('ue_capture', { action: 'help' })), /hitches/)
   await api('POST', '/p/p1/settings', { perms: permsBefore })
 
+  // 保存和编译拆成单独的工具，带面板接口 3 的作用声明：编译报验证结论，保存报写回了哪些文件
+  assert.equal(tools.ue_save.effect, 'edit')
+  assert.equal(tools.ue_compile.effect, 'verify')
+  assert.equal(tools.ue_asset.effect, undefined)
+  const bpFile = path.join(proj, 'Content', ...bridge.bp.split('.')[0].replace(/^\/Game\//, '').split('/')) + '.uasset'
+  assert.deepEqual(tools.ue_save.targets({ packages: [bridge.bp.split('.')[0]] }), [bpFile])
+  const compiled = await call('ue_compile', { path: bridge.bp })
+  assert.ok(!compiled.isError, text(compiled))
+  assert.deepEqual(compiled.verified, { passed: true, name: '蓝图编译', files: [bpFile] })
+  assert.ok((await call('ue_blueprint', { action: 'compile', path: bridge.bp })).isError)
+  assert.ok((await call('ue_asset', { action: 'save' })).isError)
+  const savedRes = await call('ue_save', { packages: [bridge.bp.split('.')[0]] }, yes)
+  assert.ok(!savedRes.isError, text(savedRes))
+  assert.deepEqual(savedRes.changed, [bpFile])
+
   // 评审转 .uasset：临时文件在项目 Saved 下、用完删掉，包名按 Content 换成 /Game；同一内容不再调桥接
   assert.deepEqual(plugin.textify.exts, ['uasset'])
   const tx = (rel, body, side = 'new') => plugin.textify.text({ path: rel, cwd: proj, side, data: Buffer.from(body) })
@@ -369,7 +384,7 @@ try {
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
-  console.log(`ue 冒烟测试通过：17 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：19 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()
