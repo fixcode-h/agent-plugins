@@ -95,6 +95,17 @@ try {
   const found = await call('ue_find', { kind: 'actor', prefix: 'bp_he' })
   assert.match(text(found), /BP_Hero_C_1/)
 
+  // Object 页：类下拉搜类，再在选的类里按名字前缀找（Actor 也按显示名找）；资源页的类型从 UE 里取
+  const classes = await api('POST', '/p/p1/op', { op: 'classes', args: { q: 'char' } })
+  assert.equal(classes.items[0].path, '/Script/Engine.Character', JSON.stringify(classes))
+  const inClass = await api('POST', '/p/p1/op', {
+    op: 'objects',
+    args: { class: '/Script/Engine.Character', prefix: 'bp_hero' },
+  })
+  assert.equal(inClass.items[0].label, 'BP_Hero', JSON.stringify(inClass))
+  const assetTypes = await api('POST', '/p/p1/op', { op: 'asset.classes', args: { q: 'input' } })
+  assert.equal(assetTypes.items[0].name, 'InputAction', JSON.stringify(assetTypes))
+
   // 改属性 → 操作记录 → 撤回
   const set = await call('ue_set', { path: bridge.hero, prop: 'Health', value: 10 })
   assert.ok(!set.isError, text(set))
@@ -283,7 +294,6 @@ try {
   assert.equal(job.status, 'failed', JSON.stringify(job))
   assert.equal(job.hint?.kind, 'live-coding', JSON.stringify(job))
 
-
   // ---------- 性能和内存抓取（ue_perf / ue_capture） ----------
   const permsBefore = (await api('GET', '/p/p1/state')).project.perms
   await api('POST', '/p/p1/settings', { perms: { ...permsBefore, runtime: 'read' } })
@@ -321,8 +331,13 @@ try {
   assert.equal(csvSum.capture.id, stopped.capture.id)
   assert.equal(csvSum.summary.frames, 600)
   assert.equal(csvSum.summary.hitches.count, 3)
-  const hitches = JSON.parse(text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches' })))
-  assert.ok(hitches.worst[0].spikes.some((s) => s.column === 'Slate/Tick'), JSON.stringify(hitches.worst[0]))
+  const hitches = JSON.parse(
+    text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches' })),
+  )
+  assert.ok(
+    hitches.worst[0].spikes.some((s) => s.column === 'Slate/Tick'),
+    JSON.stringify(hitches.worst[0]),
+  )
   // from 可以写书签名（CSV 里的事件）
   const afterBag = JSON.parse(
     text(await call('ue_capture', { action: 'query', id: stopped.capture.id, what: 'hitches', from: 'close_bag' })),
@@ -348,7 +363,11 @@ try {
   const webPerf = await api('GET', '/p/p1/perf')
   assert.equal(webPerf.items.length, 3)
   assert.equal(webPerf.active.length, 0)
-  const noDel = await call('ue_capture', { action: 'delete', id: m1.capture.id }, { confirm: async () => ({ allow: false, message: 'no' }) })
+  const noDel = await call(
+    'ue_capture',
+    { action: 'delete', id: m1.capture.id },
+    { confirm: async () => ({ allow: false, message: 'no' }) },
+  )
   assert.ok(noDel.isError, text(noDel))
   assert.ok(existsSync(m1.capture.file))
   const del = await call('ue_capture', { action: 'delete', id: m1.capture.id }, yes)
@@ -360,7 +379,15 @@ try {
   assert.equal(tools.ue_save.effect, 'edit')
   assert.equal(tools.ue_compile.effect, 'verify')
   assert.equal(tools.ue_asset.effect, undefined)
-  const bpFile = path.join(proj, 'Content', ...bridge.bp.split('.')[0].replace(/^\/Game\//, '').split('/')) + '.uasset'
+  const bpFile =
+    path.join(
+      proj,
+      'Content',
+      ...bridge.bp
+        .split('.')[0]
+        .replace(/^\/Game\//, '')
+        .split('/'),
+    ) + '.uasset'
   assert.deepEqual(tools.ue_save.targets({ packages: [bridge.bp.split('.')[0]] }), [bpFile])
   const compiled = await call('ue_compile', { path: bridge.bp })
   assert.ok(!compiled.isError, text(compiled))
@@ -379,8 +406,14 @@ try {
   assert.equal(await tx('Content/Data/BP_Hero.uasset', 'v1', 'old'), t1)
   assert.equal(bridge.state.textify, 1)
   assert.match(await tx('Content/Data/BP_Hero.uasset', 'v2'), /v2$/)
-  assert.ok(!existsSync(path.join(proj, 'Saved', 'AgentPanel', 'textify')) || !hasEntries(path.join(proj, 'Saved', 'AgentPanel', 'textify')))
-  await assert.rejects(() => plugin.textify.text({ path: 'a.uasset', cwd: tmp, side: 'new', data: Buffer.from('x') }), /没在 UE 页接入/)
+  assert.ok(
+    !existsSync(path.join(proj, 'Saved', 'AgentPanel', 'textify')) ||
+      !hasEntries(path.join(proj, 'Saved', 'AgentPanel', 'textify')),
+  )
+  await assert.rejects(
+    () => plugin.textify.text({ path: 'a.uasset', cwd: tmp, side: 'new', data: Buffer.from('x') }),
+    /没在 UE 页接入/,
+  )
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)

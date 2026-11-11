@@ -25,7 +25,7 @@ export interface LocalState {
   console: string[]
   /** 监视：对象路径 + 属性路径 */
   watch: { path: string; prop: string; label?: string; target?: string }[]
-  /** Actor 页最近搜过的词和固定的 Actor */
+  /** Object 页最近搜过的（「类::名字开头」，UObject 时只有名字开头）和固定的对象 */
   recent: string[]
   pinned: { path: string; label: string }[]
 }
