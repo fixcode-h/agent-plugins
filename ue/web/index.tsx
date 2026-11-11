@@ -1,6 +1,7 @@
 import type { ActivateWeb, Task } from '../../sdk/web.ts'
 import type { UeProject } from '../server/types.ts'
 import { get } from './api.ts'
+import { AssetFile } from './AssetFile.tsx'
 import { setHost } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
@@ -16,7 +17,7 @@ async function refresh() {
 }
 
 /**
- * UE 插件的网页入口（agent-panel 插件 SDK，插件接口 2）：图标栏里的 UE 管理页、接入 UE 的项目里对话右栏的「UE」页签、
+ * UE 插件的网页入口（agent-panel 插件 SDK，插件接口 2）：图标栏里的 UE 管理页、接入 UE 的项目里对话右栏的「UE」页签、.uasset 文件的查看窗口、
  * 插件页上的运行状态。文案在 activate 之后才取：面板先读好包里的英文再调这里
  */
 const activate: ActivateWeb = (host) => {
@@ -34,6 +35,8 @@ const activate: ActivateWeb = (host) => {
         Panel: ({ task }) => <TaskPanel taskId={task.id} projectId={task.projectId} />,
       },
     ],
+    // 对话里的文件标记、文件浏览页点 .uasset：弹窗里看 DataTable、DataAsset、蓝图默认值（旧面板没有这一项，照旧交给系统打开）
+    fileViewers: [{ id: 'asset', exts: ['uasset'], icon: GamepadIcon, Viewer: AssetFile }],
     Status,
   }
 }

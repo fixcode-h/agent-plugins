@@ -5,6 +5,7 @@
 #include "AgentPanelGMLibrary.h"
 #include "AgentPanelLog.h"
 #include "AgentPanelLuaOps.h"
+#include "AgentPanelPerf.h"
 #include "AgentPanelUmg.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -928,4 +929,5 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 	// ---------- Lua（项目里有 UnLua 才编进来，见 AgentPanelLua.cpp） ----------
 	AgentPanelRegisterLuaOps(*this);
 	RegisterUmgOps(*this);
+	RegisterPerfOps(*this);
 }

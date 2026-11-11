@@ -8,6 +8,7 @@
   - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Lua（UnLua 项目）、Actor、运行时对象、资源 / DataTable、监视、性能、日志、操作记录、桥接与权限。
   - 添加项目的弹窗。
   - 对话右栏的「UE」页签。
+  - `.uasset` 的查看窗口（面板 SDK 的 `fileViewers`，`web/AssetFile.tsx`）：对话里的文件标记、文件浏览页点 `.uasset` 时弹出，DataTable 显示成表格，DataAsset 等显示属性，蓝图多一页大纲和图表伪代码，都有「摘要与引用」；只看不改，底栏可以跳到资源分区去改。旧面板没有这个扩展点，照旧交给系统打开。
   - Agent 工具。
 - **UE 端桥接插件**（`bridge/AgentPanelBridge/`，C++）：添加项目时复制到 `<项目>/Plugins/AgentPanelBridge/`。
   - 进程里起一个只听 127.0.0.1 的 HTTP 服务，名片写在 `Saved/AgentPanel/instances/<PID>.json`。
@@ -38,7 +39,8 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - 分析结果先摘要再下钻，不把整份文件给 Agent：帧数据看关键指标、卡顿帧和当时涨得最多的列、按书签分段；内存报告看按类的对象表和各分段；两份同类的可以对比（查内存泄漏用两份内存报告）。
 - Agent 的权限：看和分析不用确认；发起抓取按「运行时」权限，询问时一次抓取确认一次；删除抓取文件每次确认。
 - 网页上每份抓取有「让 Agent 分析」，把抓取交给对话。
-- Unreal Insights 的 `.utrace` 现在只登记、不能分析；实时数值、GPU 分阶段耗时也还没有，等桥接后续版本。
+- 实时读数（桥接 1.3.0 起）：桥接每帧记一条和 `stat unit` 同源的数（Frame / Game / Draw / RHI / GPU、Draw Calls、图元、已用内存、UObject 数），配色阈值取引擎的 `t.TargetFrameTimeThreshold`、`t.UnacceptableFrameTimeThreshold`。网页「性能」页一打开就有读数条、最近 300 帧的帧条和 60 秒线程曲线，「内存」看 10 分钟的内存曲线；Agent 用 `ue_perf action=live` 取最近几秒的摘要。只在有人看时采，最后一次取数 10 秒后自动停。
+- Unreal Insights 的 `.utrace` 现在只登记、不能分析；时间轴和函数调用堆栈在后续版本（性能页设计二期）。
 - 解析器按 UE 5.4 的文件格式写，测试数据是手写的样例（`scripts/perf-fixtures.mjs`），还没用真实项目的文件验证过。`node ue/scripts/perf-test.mjs` 跑解析器测试。
 
 ## 只认 Agent 模式里的项目
