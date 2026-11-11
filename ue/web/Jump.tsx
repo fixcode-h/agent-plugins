@@ -54,7 +54,7 @@ export function Jump({ onClose }: { onClose: () => void }) {
     kind = t('关卡里的对象路径')
     opts.push({
       icon: Cpu,
-      label: t('在运行时对象里打开'),
+      label: t('在 Object 页里打开'),
       run: () => {
         go('objects', s)
         onClose()
@@ -80,8 +80,8 @@ export function Jump({ onClose }: { onClose: () => void }) {
       })
   } else if (s) {
     opts.push(
-      { icon: Box, label: t('找名字以 {q} 开头的 Actor', { q: s }), run: to('actors', s) },
-      { icon: Cpu, label: t('找类名是 {q} 的运行时对象', { q: s }), run: to('objects', s) },
+      { icon: Box, label: t('找名字以 {q} 开头的 Actor', { q: s }), run: to('objects', `Actor::${s}`) },
+      { icon: Cpu, label: t('找类是 {q} 的对象', { q: s }), run: to('objects', `${s}::`) },
       { icon: Database, label: t('找名字以 {q} 开头的资源', { q: s }), run: to('assets', s) },
       { icon: Wand2, label: t('找名字以 {q} 开头的 GM', { q: s }), run: to('gm', s) },
       { icon: SquareTerminal, label: t('到控制台执行 {c}', { c: s }), run: to('console', s) },
@@ -136,8 +136,8 @@ export function Jump({ onClose }: { onClose: () => void }) {
         {!s && (
           <ul className="ue:flex ue:flex-col ue:gap-1 ue:px-1 ue:text-footnote ue:text-subtle">
             <li>{t('{p} 或 /Game/Data/DT_Items → 资源', { p: 'D:\\Proj\\Content\\Data\\DT_Items.uasset' })}</li>
-            <li>{t('…:PersistentLevel.BP_Hero_C_1 → 运行时对象')}</li>
-            <li>{t('BP_Hero → Actor、运行时对象、资源、GM 任选')}</li>
+            <li>{t('…:PersistentLevel.BP_Hero_C_1 → Object')}</li>
+            <li>{t('BP_Hero → Actor、按类找对象、资源、GM 任选')}</li>
             <li>{t('> stat unit → 控制台')}</li>
           </ul>
         )}

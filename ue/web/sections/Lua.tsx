@@ -149,7 +149,7 @@ export function Lua() {
                 size="sm"
                 className="ue:font-mono"
                 value={self}
-                placeholder={t('self 对象路径（可选，从运行时对象里复制）')}
+                placeholder={t('self 对象路径（可选，从 Object 页里复制）')}
                 onChange={(e: { target: { value: string } }) => setSelf(e.target.value)}
               />
               <ui.Textarea

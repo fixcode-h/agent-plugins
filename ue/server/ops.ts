@@ -36,6 +36,7 @@ export function isRuntimePath(p: string) {
 
 const ASSET_OPS = new Set([
   'assets',
+  'asset.classes',
   'datatable',
   'datatable.row',
   'datatable.set',
