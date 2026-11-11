@@ -5,9 +5,13 @@
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
 // 资源和蓝图：大纲、图表伪代码、搜节点；操作列表演练不留改动、正式修改能撤回、失败整批取消；另一个对话改同一个没保存的包会被拒绝；
 // 结构性操作按权限确认，删除每次确认；Python 默认关。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
+// 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+
+/** 目录里还剩下的东西 */
+const hasEntries = (d) => readdirSync(d).length > 0
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -351,6 +355,17 @@ try {
   assert.ok(!del.isError && !existsSync(m1.capture.file), text(del))
   assert.match(text(await call('ue_capture', { action: 'help' })), /hitches/)
   await api('POST', '/p/p1/settings', { perms: permsBefore })
+
+  // 评审转 .uasset：临时文件在项目 Saved 下、用完删掉，包名按 Content 换成 /Game；同一内容不再调桥接
+  assert.deepEqual(plugin.textify.exts, ['uasset'])
+  const tx = (rel, body, side = 'new') => plugin.textify.text({ path: rel, cwd: proj, side, data: Buffer.from(body) })
+  const t1 = await tx('Content/Data/BP_Hero.uasset', 'v1')
+  assert.equal(t1, '资源 /Game/Data/BP_Hero\nv1')
+  assert.equal(await tx('Content/Data/BP_Hero.uasset', 'v1', 'old'), t1)
+  assert.equal(bridge.state.textify, 1)
+  assert.match(await tx('Content/Data/BP_Hero.uasset', 'v2'), /v2$/)
+  assert.ok(!existsSync(path.join(proj, 'Saved', 'AgentPanel', 'textify')) || !hasEntries(path.join(proj, 'Saved', 'AgentPanel', 'textify')))
+  await assert.rejects(() => plugin.textify.text({ path: 'a.uasset', cwd: tmp, side: 'new', data: Buffer.from('x') }), /没在 UE 页接入/)
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)

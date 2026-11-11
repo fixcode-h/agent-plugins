@@ -1,6 +1,6 @@
 // 假的桥接（冒烟测试用）：在本进程里起一个 HTTP 服务，协议和 UE 里的 AgentPanelBridge 一样（GET /info、POST /rpc、令牌头），
 // 在 <项目>/Saved/AgentPanel/instances/<PID>.json 写名片。只实现冒烟测试用到的几个操作，状态放在内存里。
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
@@ -64,6 +64,13 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     Shield: { Name: '木盾', Price: 80, Icon: '/Game/UI/T_Shield.T_Shield', Tags: ['Armor'] },
   }
   const ops = {
+    // 资源转文本：真桥接在编辑器里加载那一版；这里只读临时文件（冒烟测试写的是文本），查参数和临时文件的位置
+    'asset.textify': (a) => {
+      state.textify = (state.textify ?? 0) + 1
+      if (!existsSync(a.file)) throw new Error(`没有这个文件：${a.file}`)
+      if (!String(a.file).startsWith(root.replaceAll('\\', '/'))) throw new Error('临时文件不在项目目录里')
+      return { text: `资源 ${a.package}\n${readFileSync(a.file, 'utf8')}` }
+    },
     'lua.objects': (a) => ({
       items:
         !a.module || 'Game.Core.GameInstance'.toLowerCase().includes(String(a.module).toLowerCase())

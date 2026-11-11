@@ -3,6 +3,7 @@ import { projectState } from './actions.ts'
 import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
 import { listProjects, projectForRun } from './registry.ts'
+import { ueTextifier } from './textify.ts'
 import { ueTools } from './tools.ts'
 import { setCtx } from './util.ts'
 
@@ -42,6 +43,9 @@ const activate: ActivateServer = async (ctx) => {
         hint: run.resume ? undefined : HINT,
       }
     },
+
+    // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
+    textify: ueTextifier,
 
     async status() {
       const projects = await listProjects()

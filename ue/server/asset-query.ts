@@ -17,7 +17,7 @@ export interface AssetQuery {
 const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
 
 /** 磁盘路径 → 包路径：项目 Content → /Game，插件 Content → /<插件名>；不在 Content 里的报错 */
-function diskToPackage(p: string, root: string): string {
+export function diskToPackage(p: string, root: string): string {
   const r = norm(root)
   const lower = p.toLowerCase()
   let rel = lower.startsWith(r.toLowerCase() + '/') ? p.slice(r.length + 1) : ''

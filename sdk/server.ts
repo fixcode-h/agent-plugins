@@ -1,6 +1,53 @@
 /** 插件参数：键是清单 settings 里的 key */
 export type PluginConfig = Record<string, string | number | boolean>
 
+/** 钩子的事件（面板 shared/hook-defs.ts 的 HookEventName）：前四个能影响这一轮，其余只通知 */
+export type HookEventName =
+  | 'turn.beforeEnd'
+  | 'tool.before'
+  | 'tool.after'
+  | 'context.restored'
+  | 'task.done'
+  | 'task.failed'
+  | 'task.waitingUser'
+  | 'task.wrapRequested'
+  | 'plan.stepDone'
+  | 'schedule.finished'
+
+/** 工具的类别：各家 CLI 的工具名对照到这几类；panel 是面板自己的工具 */
+export type ToolKind = 'shell' | 'edit' | 'read' | 'panel' | 'any'
+
+/** 钩子的输入（面板 shared/hook-defs.ts 的 HookInput）：没有模型回复的文字 */
+export interface HookInput {
+  event: HookEventName
+  task: { id: string; title: string; parent: boolean }
+  project: { id: string; path: string }
+  agent: { id: string; name: string }
+  cli: string
+  tool?: {
+    kind: ToolKind
+    name: string
+    input: Record<string, unknown>
+    /** 面板工具去掉前缀的名字（不是面板工具为空） */
+    panel?: string
+    /** 工具后才有：执行结果（截短）和是不是失败了（CLI 报不出失败时没有 failed） */
+    result?: { output: string; failed?: boolean }
+  }
+  plan?: { done: number; total: number; current: string }
+  /** 只通知的对话事件：对话现在的状态，做完的那一步或收尾说明 */
+  notice?: { status: string; step: string }
+  /** schedule.finished：计划这一轮的结果 */
+  schedule?: Record<string, string>
+}
+
+/** 钩子的输出：block 只对 turn.beforeEnd，deny 只对 tool.before，context 对其余三种 */
+export interface HookOutput {
+  block?: boolean
+  deny?: boolean
+  reason?: string
+  context?: string
+}
+
 /**
  * 插件服务端 SDK：插件包里 server 入口的约定。这是 agent-panel 的 server/plugins/sdk.ts 的副本（面板 ADR 0059），
  * 面板改了要同步过来；面板有不兼容的改动时会把 PLUGIN_API 加一，清单里的 api 跟着改。
@@ -13,7 +60,27 @@ export type McpContent = { type: 'text'; text: string } | { type: 'image'; data:
 export interface McpResult {
   content: McpContent[]
   isError?: boolean
+  /**
+   * 改文件类工具（effect: 'edit'）这次实际改了哪些文件（插件接口 3）：本机路径，绝对路径或相对对话工作目录。
+   * 面板据此把它们算进这一轮的改动、完成依据和改动归属；不交给 Agent
+   */
+  changed?: string[]
+  /**
+   * 验证类工具（effect: 'verify'）的结论（插件接口 3）：name 是验证的名字（例如「蓝图编译」），files 是验证覆盖的文件，
+   * 不写时算覆盖这一轮插件改过的全部文件。isError 为真时按没通过算。不交给 Agent
+   */
+  verified?: { passed: boolean; name?: string; files?: string[] }
 }
+
+/**
+ * 工具对项目做什么（插件接口 3）。面板的守卫、完成依据、改动归属都按工具类别判断，
+ * 插件工具在解析层一律是「其他」：不声明的话，写入资产绕过只读身份和 Bug 先诊断，改了资产也不算改动、编译通过也不算验证。
+ * - read：只读（默认）；
+ * - edit：会改项目里的文件。执行前过工具前守卫（targets 给出要改的文件），结果里用 changed 报实际改了哪些；
+ * - verify：验证（编译、检查），结果里用 verified 报通过没有。
+ * 和 confirm（用户同不同意）不重复：那是问用户，这是让面板的规则看得见
+ */
+export type McpToolEffect = 'read' | 'edit' | 'verify'
 
 /** 插件工具请用户确认的内容（插件接口 2）：对话里出一张「允许 / 拒绝」卡片 */
 export interface PluginConfirm {
@@ -40,6 +107,10 @@ export interface McpTool {
   description: string
   inputSchema: Record<string, unknown>
   call: (args: Record<string, unknown>, ctx: McpCallContext) => Promise<McpResult>
+  /** 对项目做什么（插件接口 3），不写按只读算 */
+  effect?: McpToolEffect
+  /** effect 为 edit 时：按参数算出这次要改的文件（本机路径），执行前交给工具前守卫判断；算不出返回空数组 */
+  targets?: (args: Record<string, unknown>) => string[]
 }
 
 /** 一轮对话的信息：插件据此决定给不给工具、给哪些 */
@@ -85,15 +156,38 @@ export interface PluginServerContext {
   t: (zh: string, vars?: Record<string, string | number>) => string
 }
 
+/**
+ * 把一版二进制文件转成可读文本（评审看语义差异用）：面板取改动前后两版的内容各调一次，再按行比较交给评审。
+ * 和网页 SDK 的 fileViewers 一样按扩展名认领；旧版本只在版本控制里，不在磁盘上，所以给的是内容不是路径。
+ * 出错就抛出，面板把错误原样写进评审看到的差异里
+ */
+export interface Textifier {
+  /** 认领的扩展名：小写、不带点（uasset） */
+  exts: string[]
+  /**
+   * file.path 是相对项目根的路径（判断类型、写提示用，那一版不一定在磁盘上），file.cwd 是项目目录，
+   * side 说明是改动前（old）还是改动后（new）的那一版。返回的文本按行比较，同一内容要给出同样的文本
+   */
+  text: (file: { path: string; cwd: string; side: 'old' | 'new'; data: Buffer }) => string | Promise<string>
+}
+
 export interface ServerPlugin {
   /** 插件的接口，挂在 /api/plugins/<id>/ 下：收到的请求地址已去掉这个前缀 */
   fetch?: (req: Request) => Response | Promise<Response>
   /** 每轮对话开始时问一次：返回 undefined 表示这轮不挂工具 */
   tools?: (run: PluginRun) => PluginRunTools | undefined | Promise<PluginRunTools | undefined>
+  /**
+   * 清单 hooks 里没写 script 的钩子触发时调用（插件接口 3）：id 是清单里钩子的 id，输入输出和用户钩子同一套格式
+   * （工具后补 context、工具前 deny、结束前 block，都要写 reason）。返回 undefined 表示不表态；
+   * 抛错、超时按清单里的 onError 处理。例：写入资产后编译，有错误时用 context 把错误交给模型
+   */
+  hook?: (id: string, input: HookInput) => HookOutput | undefined | Promise<HookOutput | undefined>
   /** 参数改了：返回 true 表示要重启（面板调 stop 再 activate） */
   onConfig?: (next: PluginConfig, prev: PluginConfig) => boolean | void | Promise<boolean | void>
   /** 插件页上的运行状态（自由的键值，界面原样列出；插件网页部分可以自己画） */
   status?: () => Promise<Record<string, unknown>>
+  /** 二进制文件转文本：评审拿到的改动里，认领了扩展名的文件按前后两版文本的差异给（没给就只在文件列表里） */
+  textify?: Textifier
   /** 关掉、删除、重启前：停后台进程、清定时器 */
   stop?: () => void | Promise<void>
 }

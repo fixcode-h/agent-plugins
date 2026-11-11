@@ -363,6 +363,7 @@ public:
 		RegisterBlueprintReadOps();
 		RegisterBlueprintEditOps();
 		RegisterTraceOps();
+		RegisterTextifyOps();
 	}
 };
 
