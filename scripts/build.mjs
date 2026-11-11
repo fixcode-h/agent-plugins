@@ -4,6 +4,7 @@
 // 包的布局（面板 ADR 0059）：plugin.json、server/index.js（服务端入口，依赖打进去）、web/index.js + web/index.css、
 // locales/en.json、skills/<分类>/<名字>/，再加插件自己的构建钩子（<插件>/build.mjs 的 extra）放进去的资源。
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -102,6 +103,37 @@ module.exports = o`,
   }
 }
 
+/**
+ * 插件样式的类名必须带插件自己的前缀（面板 ADR 0059 风险一节）：插件样式表在面板之后加载，不带前缀的 .flex-col
+ * 会盖掉面板的 md:flex-row，打开插件后面板整页布局乱掉（试装时出过）。以前只靠约定，这里在构建时拦：
+ * index.css 要用 prefix(<前缀>)，产物里的类选择器只能是 <前缀>:…（Tailwind 工具类）或 <前缀>-…（插件自己写的类）；
+ * dark 是面板主题的类（sdk/theme.css 用它判断深色），放行
+ */
+const UNPREFIXED_OK = new Set(['dark'])
+function checkCssPrefix(id, src, built) {
+  const m = /prefix\(([a-z][a-z0-9]*)\)/.exec(readFileSync(src, 'utf8'))
+  if (!m)
+    throw new Error(`${id}：web/index.css 的 tailwindcss/theme.css 要写 prefix(<前缀>)，不然插件的类会盖掉面板的同名类`)
+  const pre = m[1]
+  // 去掉注释、字符串和 url()：里面的「github.com」这类不是选择器
+  const css = readFileSync(built, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/url\([^)]*\)/g, '')
+    .replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '')
+  const bad = new Set()
+  // 只看选择器（{ 前面的部分），属性值里的小数（.5rem）不算
+  for (const sel of css.match(/[^{}]+(?=\{)/g) ?? [])
+    for (const [, cls] of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+      const name = cls.replace(/\\(.)/g, '$1')
+      if (/^\d/.test(name) || UNPREFIXED_OK.has(name)) continue
+      if (!name.startsWith(`${pre}:`) && !name.startsWith(`${pre}-`)) bad.add(name)
+    }
+  if (bad.size)
+    throw new Error(
+      `${id}：样式里有不带前缀 ${pre} 的类（${[...bad].slice(0, 10).join('、')}）。Tailwind 类写成 ${pre}:flex，自己写的类以 ${pre}- 开头`,
+    )
+}
+
 function pluginDirs(args) {
   if (args.length) return args.map((a) => path.resolve(ROOT, a))
   return readdirSync(ROOT, { withFileTypes: true })
@@ -164,6 +196,7 @@ async function buildPlugin(dir) {
       { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] },
     )
   }
+  if (manifest.css) checkCssPrefix(manifest.id, path.join(dir, 'web', 'index.css'), path.join(out, manifest.css))
   const hook = path.join(dir, 'build.mjs')
   if (existsSync(hook)) await (await import(pathToFileURL(hook).href)).extra(out)
 
@@ -172,7 +205,10 @@ async function buildPlugin(dir) {
       throw new Error(`${manifest.id}：构建后缺少 ${manifest[k]}`)
 
   const zip = path.join(DIST, `${manifest.id}-${manifest.version}.zip`)
-  writeFileSync(zip, zipDir(out))
+  const data = zipDir(out)
+  writeFileSync(zip, data)
+  // 校验文件和包一起发到 Release：面板下载后核对（面板 server/plugins/github.ts 的 verifySha），格式同 sha256sum
+  writeFileSync(`${zip}.sha256`, `${createHash('sha256').update(data).digest('hex')}  ${path.basename(zip)}\n`)
   console.log(`${manifest.id} ${manifest.version} → ${path.relative(ROOT, zip)}`)
   return { manifest, zip }
 }
