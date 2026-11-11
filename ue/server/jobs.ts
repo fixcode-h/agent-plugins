@@ -1,10 +1,12 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import type { Job } from './types.ts'
-import { now, uid } from './util.ts'
+import { now, run, t, uid } from './util.ts'
 
 /** 后台作业（编译、安装）：内存里留最近 30 个，网页轮询看输出 */
 const jobs = new Map<string, Job & { project: string }>()
 const MAX_LOG = 4000
+/** 正在跑的子进程，取消时用 */
+const children = new Map<string, ChildProcess>()
 
 export function newJob(project: string, kind: Job['kind'], title: string) {
   const job = { id: uid(), project, kind, title, status: 'running' as const, log: [], startedAt: now() }
@@ -41,6 +43,7 @@ export function spawnJob(job: Job, cmd: string, args: string[], cwd: string): Pr
     const child = bat
       ? spawn(`"${cmd}" ${args.map((a) => `"${a}"`).join(' ')}`, { cwd, shell: true, windowsHide: true })
       : spawn(cmd, args, { cwd, windowsHide: true })
+    children.set(job.id, child)
     child.stdout?.on('data', (d) => jobLog(job, String(d)))
     child.stderr?.on('data', (d) => jobLog(job, String(d)))
     child.on('error', (e) => {
@@ -49,8 +52,27 @@ export function spawnJob(job: Job, cmd: string, args: string[], cwd: string): Pr
       resolve(false)
     })
     child.on('close', (code) => {
-      endJob(job, code === 0, code ?? -1)
+      children.delete(job.id)
+      endJob(job, !job.canceled && code === 0, code ?? -1)
       resolve(code === 0)
     })
   })
+}
+
+/**
+ * 取消正在跑的作业（网页「取消编译」）。Windows 上 .bat 是经 cmd 起的，UBT 是孙进程，
+ * 只杀 cmd 的话 UBT 还在编、还占着输出文件，所以用 taskkill /T 连子进程一起结束。
+ */
+export async function cancelJob(id: string) {
+  const job = jobs.get(id)
+  if (!job || job.status !== 'running') return false
+  const child = children.get(id)
+  if (!child?.pid) return false
+  job.canceled = true
+  jobLog(job, t('已取消'))
+  if (process.platform === 'win32') {
+    const r = await run('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 15000 })
+    if (r.code !== 0 && children.has(id)) jobLog(job, t('没能结束编译进程：{msg}', { msg: (r.err || r.out).trim() }))
+  } else child.kill('SIGTERM')
+  return true
 }
