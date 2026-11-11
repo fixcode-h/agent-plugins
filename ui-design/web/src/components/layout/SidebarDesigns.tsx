@@ -50,7 +50,7 @@ import {
 import { t } from '@shared/i18n'
 
 /**
- * UI 设计插件的侧栏（面板设计模式下拉下面那一块，DesignMode.Sidebar）：UI 设计自己的项目（和 Agent 的项目分开），
+ * UI 设计整页左边的列表（web/src/plugin/UiDesignPage.tsx）：UI 设计自己的项目（和 Agent 的项目分开），
  * 展开后是这个项目的各个界面。原来是面板 web/src/components/layout/SidebarDesigns.tsx 的 UiDesignList，
  * 模式下拉和插件设计的列表留在面板。
  */

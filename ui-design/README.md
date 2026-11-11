@@ -4,19 +4,20 @@
 
 ## 组成
 
-- **设计模式**：侧栏的设计页里多一项「UI 设计 · 界面·原画·切图」，侧栏列 UI 项目和设计稿，右边是设计页（画布、层级、属性、动画、图片、标注、对话）。
+- **整页**：图标栏里的「UI 设计」（和 Blender 的模型设计一样，面板插件接口 5 起没有单独的设计模式），左边列 UI 项目和设计稿，右边是设计页（画布、层级、属性、动画、图片、标注、对话）。
 - **服务端**（`server/index.ts`）：设计稿的读写、出图、导出、无头截图；设计稿存在面板数据目录的 `plugin-data/ui-design/designs/`。第一次启用时把旧版面板的 `designs/` 搬过来（搬不动就复制一份，旧目录里留 `MOVED.txt`）。
 - **Agent 工具**：MCP 服务 `design`，29 个工具（看控件树、改控件、加图、动画、截图对比……），只在设计稿的对话里提供。
 - **无头截图页**：`#/pbare/ui-design/capture/<设计稿>`，服务端用无头浏览器打开它截图、比对还原效果。
 
 风格库、本机出图（ComfyUI）和浏览器扩展还在面板里，插件直接用。
 
-## 代码布局（插件接口 4）
+## 代码布局（插件接口 4 起）
 
 插件照面板源码的布局放文件：`web/src/…`、`server/…`、`shared/…`，`@/`、`@shared/` 别名和面板一样。插件里没有的模块（对话组件、`invokeCli`、出图、无头浏览器……）构建时接到面板开放的那一份（清单 `sdk/host-modules.json`），所以这些代码和在面板里时几乎一字不差。和面板不一样的地方：
 
-- `web/index.tsx`：插件入口，登记设计模式和无头截图页。
-- `web/src/plugin/nav.tsx`：面板路由 `#/pdesign/ui/<设计稿>/<子页>` 和原来设计页用的 `design/<设计稿>/<子页>` 互相转换，设计页代码不用改。
+- `web/index.tsx`：插件入口，登记图标栏的整页和无头截图页。
+- `web/src/plugin/UiDesignPage.tsx`：整页外壳，左边标题、「新建设计」和项目列表，右边设计页（新建和项目主页套卡片底，打开的设计自己分块）。
+- `web/src/plugin/nav.tsx`：面板路由 `#/plugin/ui-design/ui/<设计稿>/<子页>` 和原来设计页用的 `design/<设计稿>/<子页>` 互相转换，设计页代码不用改。
 - `web/src/lib/api.ts`：`/designs` 请求转到插件自己的接口 `/api/plugins/ui-design/api/designs`。
 - `web/src/lib/design-store.ts`：设计稿列表的状态，原来放在面板的全局数据里。
 - `web/src/lib/data.ts`：转出面板的 `@/lib/data`，导航类型里补回 `design` 页（面板删掉自带的设计后没有了），实际地址由 `nav.tsx` 换算。
@@ -27,7 +28,7 @@
 - `docs/design-module.md`：模块文档（数据流、关键文件、原画还原各期、回归记录），从面板仓库搬来。
 - `docs/umg-export.md`：导出给 UE 的控件树格式。
 - `docs/lessons/`：踩过的坑；`docs/bugs/`：用户报过的 Bug。
-- 面板这边留下的（设计模式的外壳、ComfyUI 工作流页、风格库、浏览器扩展）见面板仓库的 `docs/modules/design/README.md`。
+- 面板这边留下的（旧地址跳转、ComfyUI 工作流页、风格库、浏览器扩展）见面板仓库的 `docs/modules/design/README.md`。
 
 ## 开发
 

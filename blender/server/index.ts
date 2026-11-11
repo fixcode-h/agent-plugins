@@ -14,7 +14,7 @@ import { blenderStatus, initModel, readGlb, readModelMeta, stopModel } from './m
  *   网页右栏的「模型」页签实时预览。
  */
 
-/** 模型设计对话的 task.plugin（和网页部分的 DesignMode.id 一致） */
+/** 模型设计对话的 task.plugin（和网页部分模型设计页的 taskPlugin 一致） */
 const MODEL_MODE = 'blender.model'
 /** 用到这些技能的角色视为 Blender 角色：对话挂上 dsh 的工具 */
 const BLENDER_SKILLS = ['blender-modeling', 'blender', 'blender-model-animation-workflow']
