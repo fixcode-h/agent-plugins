@@ -274,7 +274,9 @@ export function RefValue({
         className={cn(
           FIELD,
           // 引用不能改时照样能点开看，只是底色按只读画
-          disabled ? 'ue:border-transparent ue:bg-hover ue:text-subtle' : 'ue:border-line ue:bg-card ue:text-fg ue:dark:bg-field',
+          disabled
+            ? 'ue:border-transparent ue:bg-hover ue:text-subtle'
+            : 'ue:border-line ue:bg-card ue:text-fg ue:dark:bg-field',
           'ue:w-56 ue:max-w-full ue:text-left ue:text-footnote',
           none && 'ue:text-subtle',
           !none && onOpen && 'ue:cursor-pointer ue:hover:border-line-strong ue:hover:text-accent-text',
