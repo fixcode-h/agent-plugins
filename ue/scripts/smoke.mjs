@@ -117,6 +117,10 @@ try {
   assert.ok(!undone.isError, text(undone))
   assert.equal(bridge.state.hero.Health, 80)
 
+  // 桥接比插件带的旧、又没有这个操作：统一提示更新桥接（插件框架改进 C1），不是只说「不支持」
+  const old = await api('POST', '/p/p1/op', { op: 'stat.nosuch', args: {} })
+  assert.match(JSON.stringify(old), /桥接是 1\.0\.0.*桥接与权限/, JSON.stringify(old))
+
   // 函数执行：网页列出非蓝图函数，网页（你自己点）能执行；Agent 带 any 也调不了
   const fnAll = await api('POST', '/p/p1/op', { op: 'functions', args: { path: bridge.hero, all: true } })
   assert.ok(

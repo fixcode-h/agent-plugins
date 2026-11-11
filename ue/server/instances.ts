@@ -75,8 +75,37 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
     | ({ ok?: boolean; error?: string } & Record<string, unknown>)
     | null
   if (!body) throw new BridgeError(t('桥接回了无法解析的内容（HTTP {code}）', { code: res.status }))
-  if (!body.ok) throw new BridgeError(body.error || t('桥接返回失败（HTTP {code}）', { code: res.status }))
+  if (!body.ok)
+    throw new BridgeError(
+      (await oldBridgeError(card, op, body.error)) ||
+        body.error ||
+        t('桥接返回失败（HTTP {code}）', { code: res.status }),
+    )
   return body
+}
+
+/** 版本号逐段比较（1.10.0 比 1.9.0 新）：a 比 b 旧返回 true */
+export function olderVersion(a: string, b: string) {
+  const pa = a.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
+  const pb = b.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++)
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0)
+  return false
+}
+
+/**
+ * 桥接没有这个操作、而且它比插件带的旧：按能力降级（插件框架改进 C1）。插件新版本只有用到新操作的功能要新桥接，
+ * 其余在旧桥接上照常用；用到时统一说清楚是桥接旧了、怎么更新，不再每个功能各写一遍「旧桥接」的提示。
+ * 同样的报错在游戏进程里也会出现（编辑器专用的操作），那种桥接不旧，原样报
+ */
+async function oldBridgeError(card: Card, op: string, error?: string) {
+  if (!error?.startsWith(`这个进程不支持 ${op}`) || !card.bridge) return ''
+  const bundled = await (await import('./install.ts')).bundledVersion()
+  if (!bundled || !olderVersion(card.bridge, bundled)) return ''
+  return t(
+    'UE 进程 {pid} 里的桥接是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新桥接，重新编译并重启 UE。用不到新操作的功能照常能用',
+    { pid: card.pid, old: card.bridge, op, new: bundled },
+  )
 }
 
 export async function info(card: Card): Promise<Instance> {
