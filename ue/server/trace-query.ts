@@ -12,7 +12,7 @@ import { c, exists, t } from './util.ts'
  * 这里只负责挑进程、转发、把结果裁成 Agent 读得动的大小。
  * 分析在编辑器开着时用编辑器，没开就用后台编辑器；游戏进程没有编辑器模块，也不该在被测的进程里分析。
  */
-export const TRACE_BRIDGE = '1.4.0'
+export const TRACE_BRIDGE = '1.5.0'
 
 const newer = (v: string, min: string) => {
   const a = v.split('.').map((x) => parseInt(x, 10) || 0)
@@ -281,6 +281,19 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
         note: '时间单位毫秒；callers 根是选中的计时器，往下是调用它的上一层、再上一层',
       }
     }
+    case 'instances': {
+      // 一个计时器每次调用的统计和最慢的几次：先看是「每次都慢」还是「偶尔一次特别慢」
+      const timer = await timerId(ctx, id, q.timer ?? q.name)
+      const res = (await wrap({ what: 'instances', timer, ...range, top: Math.min(top, 20) })) as TraceRes & {
+        items: { lane: number; start: number; ms: number; excl: number; depth: number }[]
+      }
+      const { analyzing: _a, duration: _d, ...rest } = res
+      return {
+        ...rest,
+        items: res.items.map((x) => ({ ...x, start: Math.round(x.start * 1e5) / 1e5 })),
+        note: '时间单位毫秒；items 是最慢的几次（lane 是线程 id，start 是秒），用 what=stack lane=… time=… 看那一次的调用堆栈',
+      }
+    }
     case 'stack': {
       const lane = await laneId(ctx, id, q.lane ?? q.thread)
       const time = Number(q.time ?? range.t0)
@@ -320,7 +333,7 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
     }
     default:
       throw new BridgeError(
-        t('trace 的 what：frames / timers / butterfly / stack / threads / log / bookmarks / counters'),
+        t('trace 的 what：frames / timers / butterfly / instances / stack / threads / log / bookmarks / counters'),
       )
   }
 }

@@ -1,4 +1,5 @@
 import { GitCompareArrows, MemoryStick, Trash2 } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import { h, t } from '../../host.ts'
 import { Badge, LinkBtn, fmtSize, fmtTime, type Tone } from '../../ui.tsx'
 import { nameOf, type Active, type Capture } from './types.ts'
@@ -32,6 +33,7 @@ export function Sessions({
   onPick,
   onCompare,
   onDelete,
+  onMenu,
   live,
 }: {
   items: Capture[]
@@ -42,6 +44,8 @@ export function Sessions({
   onPick: (c: Capture) => void
   onCompare: () => void
   onDelete: (c: Capture) => void
+  /** 行的右键菜单（Perf 里给，和页头标题的菜单是同一份） */
+  onMenu: (e: MouseEvent, c: Capture) => void
   live: { running: boolean; active?: Active; fps?: number; memGB?: number }
 }) {
   const { cn, ui } = h()
@@ -111,7 +115,12 @@ export function Sessions({
           <div key={g.day} className="ue:flex ue:flex-col">
             <div className="ue:mx-4 ue:mt-3 ue:mb-0.5 ue:text-caption ue:text-subtle">{g.day}</div>
             {g.list.map((c) => (
-              <div key={c.id} className={row(sel === c.id)} onClick={() => onSel(c.id)}>
+              <div
+                key={c.id}
+                className={row(sel === c.id)}
+                onClick={() => onSel(c.id)}
+                onContextMenu={(e) => onMenu(e, c)}
+              >
                 <span className="ue:flex ue:items-center ue:gap-2 ue:text-body">
                   <input
                     type="checkbox"

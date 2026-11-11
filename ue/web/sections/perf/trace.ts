@@ -29,6 +29,8 @@ export interface LaneBlocks {
   ms: number[]
   d: number[]
   t: number[]
+  /** 独占时间（毫秒）：桥接 1.5.0 起有 */
+  x?: number[]
   hidden: number
 }
 export interface Timing extends TraceBase {
@@ -58,6 +60,19 @@ export interface StackRes extends TraceBase {
   children: { id: number; name: string; count: number; incl: number; inclMax: number }[]
   selected?: number
 }
+/** 一个计时器在范围内每一次调用的统计和最慢的几次（桥接 1.5.0 的 instances） */
+export interface Instances extends TraceBase {
+  id: number
+  name: string
+  count: number
+  incl: number
+  excl: number
+  min: number
+  max: number
+  avg: number
+  median: number
+  items: { lane: number; start: number; ms: number; excl: number; depth: number }[]
+}
 export interface Bookmark {
   t: number
   text: string
@@ -74,6 +89,8 @@ export interface PickedBlock {
   timer: number
   ms: number
   name: string
+  /** 独占时间（毫秒），桥接旧时没有 */
+  excl?: number
 }
 
 export const traceQuery = <T>(project: string, id: string, args: Record<string, unknown>) =>
