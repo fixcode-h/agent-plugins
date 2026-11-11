@@ -2,6 +2,7 @@ import { Camera, Database, FileText, Plug, SquareTerminal, Star, Undo2, User, Wa
 import { useState } from 'react'
 import type { GmStore, HistoryItem } from '../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../api.ts'
+import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import {
@@ -130,14 +131,14 @@ export function Overview() {
       <PageHead title={t('概览')} desc={project.uproject}>
         <RunBar />
       </PageHead>
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
-        <div className="ue:grid ue:gap-4 ue:sm:grid-cols-2 ue:xl:grid-cols-4">
+      <div className={STACK}>
+        <div className="ue:grid ue:gap-px ue:bg-line ue:sm:grid-cols-2 ue:xl:grid-cols-4">
           {cards.map((c) => (
             <button
               type="button"
               key={c.title}
               onClick={c.to}
-              className="ue:flex ue:min-w-0 ue:cursor-pointer ue:flex-col ue:gap-1.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:p-4 ue:text-left ue:transition-colors ue:hover:border-line-strong ue:hover:bg-hover"
+              className="ue:flex ue:min-w-0 ue:cursor-pointer ue:flex-col ue:gap-1.5 ue:bg-card ue:p-4 ue:text-left ue:transition-colors ue:hover:bg-hover"
             >
               <div className="ue:flex ue:items-center ue:gap-1.5 ue:text-footnote ue:text-subtle">
                 <c.icon className="ue:h-3.5 ue:w-3.5" /> {c.title}
@@ -157,7 +158,7 @@ export function Overview() {
           ))}
         </div>
 
-        <div className="ue:grid ue:gap-4 ue:xl:grid-cols-[1.4fr_1fr]">
+        <div className="ue:grid ue:gap-px ue:bg-line ue:xl:grid-cols-[1.4fr_1fr]">
           <Card title={t('实例')} aside={t('点一行设为「目标」，控制台、GM、对象都对它操作')}>
             <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
               {live.flatMap((i) =>

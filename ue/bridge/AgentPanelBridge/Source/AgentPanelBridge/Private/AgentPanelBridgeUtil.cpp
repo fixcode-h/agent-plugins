@@ -393,6 +393,26 @@ namespace AgentPanel
 		return Cpp + Extended;
 	}
 
+	/** 枚举的值名和显示名（细节面板下拉里显示的是 DisplayName，例如 Axis1D (float)），编辑器里标了 Hidden 的值不列 */
+	static void AddEnumInfo(TSharedPtr<FJsonObject>& P, const UEnum* Enum)
+	{
+		TArray<TSharedPtr<FJsonValue>> Names;
+		TArray<TSharedPtr<FJsonValue>> Labels;
+		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		{
+#if WITH_EDITORONLY_DATA
+			if (Enum->HasMetaData(TEXT("Hidden"), i))
+			{
+				continue;
+			}
+#endif
+			Names.Add(MakeShared<FJsonValueString>(Enum->GetNameStringByIndex(i)));
+			Labels.Add(MakeShared<FJsonValueString>(Enum->GetDisplayNameTextByIndex(i).ToString()));
+		}
+		P->SetArrayField(TEXT("enum"), Names);
+		P->SetArrayField(TEXT("enumLabels"), Labels);
+	}
+
 	static TSharedPtr<FJsonObject> PropInfo(FProperty* Prop, const void* Container, int32 MaxChars, const UObject* Owner)
 	{
 		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
@@ -401,8 +421,13 @@ namespace AgentPanel
 #if WITH_EDITORONLY_DATA
 		P->SetStringField(TEXT("category"), Prop->GetMetaData(TEXT("Category")));
 		P->SetStringField(TEXT("tooltip"), Prop->GetMetaData(TEXT("ToolTip")).Left(300));
+		// 细节面板上显示的名字（bTriggerWhenPaused → Trigger when Paused，DisplayName 元数据优先）
+		P->SetStringField(TEXT("displayName"), Prop->GetDisplayNameText().ToString());
 #endif
 		P->SetBoolField(TEXT("replicated"), Prop->HasAnyPropertyFlags(CPF_Net));
+		// 细节面板的「高级」折叠区，和细节面板里根本不出现的内部状态（没有 EditAnywhere 这类标记），网页按这两个分组
+		P->SetBoolField(TEXT("advanced"), Prop->HasAnyPropertyFlags(CPF_AdvancedDisplay));
+		P->SetBoolField(TEXT("edit"), Prop->HasAnyPropertyFlags(CPF_Edit));
 		FString Why;
 		const bool bEditable = CanEditProp(Prop, Owner, &Why);
 		P->SetBoolField(TEXT("readOnly"), !bEditable);
@@ -412,26 +437,40 @@ namespace AgentPanel
 		}
 		if (const FEnumProperty* EP = CastField<FEnumProperty>(Prop))
 		{
-			TArray<TSharedPtr<FJsonValue>> Names;
-			for (int32 i = 0; i < EP->GetEnum()->NumEnums() - 1; ++i)
-			{
-				Names.Add(MakeShared<FJsonValueString>(EP->GetEnum()->GetNameStringByIndex(i)));
-			}
-			P->SetArrayField(TEXT("enum"), Names);
+			AddEnumInfo(P, EP->GetEnum());
 		}
 		else if (const FByteProperty* BP = CastField<FByteProperty>(Prop))
 		{
 			if (BP->Enum)
 			{
-				TArray<TSharedPtr<FJsonValue>> Names;
-				for (int32 i = 0; i < BP->Enum->NumEnums() - 1; ++i)
-				{
-					Names.Add(MakeShared<FJsonValueString>(BP->Enum->GetNameStringByIndex(i)));
-				}
-				P->SetArrayField(TEXT("enum"), Names);
+				AddEnumInfo(P, BP->Enum);
 			}
 		}
-		P->SetField(TEXT("value"), ToJson(Prop, Prop->ContainerPtrToValuePtr<void>(Container), MaxChars));
+		const void* Value = Prop->ContainerPtrToValuePtr<void>(Container);
+		// 容器：元素个数（值被截成摘要时网页也能显示「3 个元素」）、元素类型；EditFixedSize 的数组不能加删
+		if (const FArrayProperty* AP = CastField<FArrayProperty>(Prop))
+		{
+			FScriptArrayHelper H(AP, Value);
+			P->SetStringField(TEXT("container"), TEXT("array"));
+			P->SetNumberField(TEXT("count"), H.Num());
+			P->SetStringField(TEXT("inner"), TypeOf(AP->Inner));
+			P->SetBoolField(TEXT("fixedSize"), Prop->HasAnyPropertyFlags(CPF_EditFixedSize));
+		}
+		else if (const FSetProperty* SP = CastField<FSetProperty>(Prop))
+		{
+			FScriptSetHelper H(SP, Value);
+			P->SetStringField(TEXT("container"), TEXT("set"));
+			P->SetNumberField(TEXT("count"), H.Num());
+			P->SetStringField(TEXT("inner"), TypeOf(SP->ElementProp));
+		}
+		else if (const FMapProperty* MP = CastField<FMapProperty>(Prop))
+		{
+			FScriptMapHelper H(MP, Value);
+			P->SetStringField(TEXT("container"), TEXT("map"));
+			P->SetNumberField(TEXT("count"), H.Num());
+			P->SetStringField(TEXT("inner"), TypeOf(MP->ValueProp));
+		}
+		P->SetField(TEXT("value"), ToJson(Prop, Value, MaxChars));
 		return P;
 	}
 

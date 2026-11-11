@@ -43,9 +43,14 @@ export function usePane(key: string, def: string, min: number) {
 
 type Pane = ReturnType<typeof usePane>
 
-/** 分栏的外框：窄屏上下排、整块滚；lg 以上左右排，各栏自己滚（拖动条占掉卡片间距，所以 lg 上 gap 为 0） */
+/**
+ * 分栏的外框：栏和栏贴边、中间一道细线（用户 2026-11-11：不要圆角卡片和间距，细线分割，能拖动调大小）。
+ * 窄屏上下排、整块滚，栏之间横线；lg 以上左右排，各栏自己滚，竖线就是拖动条
+ */
 export const SPLIT_ROW =
-  'ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6 ue:lg:flex-row ue:lg:gap-0 ue:lg:overflow-hidden'
+  'ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:divide-y ue:divide-line ue:overflow-auto ue:lg:flex-row ue:lg:divide-y-0 ue:lg:overflow-hidden'
+/** 上下堆叠的几块（设置、概览、监视）：贴边排，块之间一道横线，整页滚 */
+export const STACK = 'ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:divide-y ue:divide-line ue:overflow-auto'
 /** 定宽的那一栏（宽度、上限来自 usePane().style） */
 export const PANE_FIXED = 'ue:shrink-0 ue:lg:w-(--ue-w) ue:lg:max-w-(--ue-max)'
 /** 占满剩下宽度的那一栏 */
@@ -53,7 +58,7 @@ export const PANE_FILL = 'ue:min-w-0 ue:lg:flex-1'
 
 /**
  * 两栏中间的拖动条。
- * - 默认放在两张卡片之间，自己占掉原来的间距（16px），中间一道 2px 的线，悬停变强调色；只在 lg 以上分栏时出现。
+ * - 默认放在两栏之间，就是那道 1px 的分隔线（左右各多 3px 好按住，用负边距不占位置），悬停、拖动时变强调色；只在 lg 以上分栏时出现。
  * - edge：贴在侧栏右边缘（父元素要 relative），md 以上出现，用于 UE 页最左边的分区栏。
  * paneRef 指向被拖的那一栏：开始拖时量它现在的实际宽度（默认值可能是百分比）。
  * side：被拖的栏在拖动条哪一边；在右边（例如控制台的变量栏）往左拖变宽。
@@ -128,14 +133,16 @@ export function SplitHandle({
         'ue:group ue:cursor-col-resize ue:outline-none',
         edge
           ? 'ue:absolute ue:inset-y-0 ue:-right-[3px] ue:z-20 ue:hidden ue:w-[6px] ue:md:block'
-          : 'ue:relative ue:hidden ue:w-4 ue:shrink-0 ue:self-stretch ue:lg:block',
+          : 'ue:relative ue:z-10 ue:-mx-[3px] ue:hidden ue:w-[7px] ue:shrink-0 ue:self-stretch ue:lg:block',
       )}
     >
       <span
         className={cn(
-          'ue:absolute ue:inset-y-0 ue:w-[2px] ue:transition-colors',
-          edge ? 'ue:right-[2px]' : 'ue:left-[7px] ue:rounded-full',
-          pane.dragging ? 'ue:bg-accent' : 'ue:group-hover:bg-accent/60 ue:group-focus-visible:bg-accent/60',
+          'ue:absolute ue:inset-y-0 ue:transition-colors',
+          edge ? 'ue:right-[2px] ue:w-[2px]' : 'ue:left-[3px] ue:w-px',
+          pane.dragging
+            ? 'ue:bg-accent'
+            : cn(!edge && 'ue:bg-line', 'ue:group-hover:bg-accent/60 ue:group-focus-visible:bg-accent/60'),
         )}
       />
       {/* 拖动时盖一层透明遮罩：鼠标经过属性表、截图时不丢事件，光标也一直是左右箭头 */}

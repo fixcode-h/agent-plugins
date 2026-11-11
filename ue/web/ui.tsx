@@ -5,7 +5,10 @@ import { useLaunch } from './launch.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 
-/** UE 页的小组件：卡片、标签、状态点、页头、终端框、目标选择。样式全用面板主题变量，类名带 ue: 前缀 */
+/**
+ * UE 页的小组件：卡片、标签、状态点、页头、终端框、目标选择。样式全用面板主题变量，类名带 ue: 前缀。
+ * 卡片不带圆角和外框（用户 2026-11-11：插件里各部分都用贴边细线分隔，像 UE 编辑器的面板），分隔线由外层的分栏 / 堆叠容器画
+ */
 
 export function Card({
   title,
@@ -26,13 +29,9 @@ export function Card({
 }) {
   const { cn } = h()
   return (
-    <section
-      ref={ref}
-      style={style}
-      className={cn('ue:flex ue:min-w-0 ue:flex-col ue:rounded-xl ue:border ue:border-line ue:bg-card', className)}
-    >
+    <section ref={ref} style={style} className={cn('ue:flex ue:min-w-0 ue:flex-col ue:bg-card', className)}>
       {(title || aside) && (
-        <header className="ue:flex ue:min-h-11 ue:items-center ue:gap-3 ue:border-b ue:border-line ue:px-4 ue:py-2">
+        <header className="ue:flex ue:min-h-10 ue:items-center ue:gap-3 ue:border-b ue:border-line ue:px-4 ue:py-1.5">
           <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2 ue:text-heading ue:font-medium ue:text-fg">
             {title}
           </div>
@@ -168,7 +167,7 @@ export function Term({ children, className, follow }: { children: ReactNode; cla
           : undefined
       }
       className={h().cn(
-        'ue:overflow-auto ue:rounded-xl ue:bg-term-bg ue:px-4 ue:py-3 ue:font-mono ue:text-footnote ue:leading-relaxed ue:text-term-fg',
+        'ue:overflow-auto ue:bg-term-bg ue:px-4 ue:py-3 ue:font-mono ue:text-footnote ue:leading-relaxed ue:text-term-fg',
         className,
       )}
     >

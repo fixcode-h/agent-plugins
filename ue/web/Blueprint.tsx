@@ -283,7 +283,7 @@ export function BlueprintView({
             </Term>
           )}
           {body.data?.nodes && (
-            <ul className="ue:min-h-40 ue:flex-1 ue:overflow-auto ue:rounded-xl ue:border ue:border-line ue:p-1.5 ue:text-footnote">
+            <ul className="ue:min-h-40 ue:flex-1 ue:overflow-auto ue:border ue:border-line ue:p-1.5 ue:text-footnote">
               {body.data.nodes.map((n) => (
                 <li key={n.id}>
                   <button
@@ -309,7 +309,7 @@ export function BlueprintView({
             </ul>
           )}
           {node && (
-            <section className="ue:max-h-64 ue:shrink-0 ue:overflow-auto ue:rounded-xl ue:border ue:border-line ue:text-footnote">
+            <section className="ue:max-h-64 ue:shrink-0 ue:overflow-auto ue:border ue:border-line ue:text-footnote">
               <header className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2">
                 <span className="ue:font-mono ue:text-subtle">#{node}</span>
                 <span className="ue:font-medium ue:text-fg">{detail.data?.node.title}</span>

@@ -1,6 +1,7 @@
 import { Pause, Play, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { op, pget, ppost, show, useLoad } from '../api.ts'
+import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, ErrorText, PageHead, useTargetInfo } from '../ui.tsx'
@@ -63,7 +64,7 @@ export function Watch() {
           {paused ? t('继续') : t('暂停')}
         </ui.Button>
       </PageHead>
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-6">
+      <div className={STACK}>
         <ErrorText>{values.error}</ErrorText>
         <Card title={t('固定的属性')} aside={items.length ? t('{n} 项', { n: items.length }) : undefined}>
           <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">

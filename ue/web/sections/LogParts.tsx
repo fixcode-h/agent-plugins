@@ -55,7 +55,7 @@ export function LineDetail({ line }: { line: Row }) {
   const { go } = useUe()
   const parts = line.text.split(PATH)
   return (
-    <div className="ue:flex ue:flex-col ue:gap-1 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:px-4 ue:py-2.5">
+    <div className="ue:flex ue:flex-col ue:gap-1 ue:border-b ue:border-line ue:bg-card ue:px-4 ue:py-2.5">
       <div className="ue:flex ue:items-center ue:gap-2 ue:text-caption ue:text-subtle">
         <span className="ue:font-mono">{clock(line.at ?? line.rx)}</span>
         <span className="ue:font-mono">{line.category}</span>
