@@ -521,6 +521,24 @@ namespace AgentPanel
 				}
 				P->SetArrayField(TEXT("enum"), Names);
 			}
+			// 对象参数（UObject*、TObjectPtr、接口）：带上能赋给它的类，面板的执行弹窗按它搜对象、只列能赋值的（桥接 1.9.0 起）
+			UClass* ObjClass = nullptr;
+			if (const FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(*It))
+			{
+				if (!CastField<FClassProperty>(*It) && !CastField<FSoftClassProperty>(*It))
+				{
+					ObjClass = OP->PropertyClass;
+				}
+			}
+			else if (const FInterfaceProperty* IP = CastField<FInterfaceProperty>(*It))
+			{
+				ObjClass = IP->InterfaceClass;
+			}
+			if (ObjClass)
+			{
+				P->SetStringField(TEXT("objectClass"), ObjClass->GetName());
+				P->SetStringField(TEXT("objectClassPath"), ObjClass->GetPathName());
+			}
 			Out.Add(MakeShared<FJsonValueObject>(P));
 		}
 		return Out;
@@ -561,6 +579,45 @@ namespace AgentPanel
 			{
 				continue; // 没给的参数用默认值（零值）
 			}
+			// 对象参数给的是路径：自己找（没加载的资源这时加载），并检查类型对不对，比 ImportText 报的错看得懂
+			if (V->Type == EJson::String && (CastField<FObjectProperty>(P) || CastField<FInterfaceProperty>(P)) && !CastField<FClassProperty>(P))
+			{
+				const FString Ref = V->AsString().TrimStartAndEnd();
+				void* Dest = P->ContainerPtrToValuePtr<void>(Buf.GetData());
+				UObject* Obj = nullptr;
+				if (!Ref.IsEmpty() && Ref != TEXT("None"))
+				{
+					Obj = FindObjectByPath(Ref, true, Error, true);
+					if (!Obj)
+					{
+						bOk = false;
+						break;
+					}
+				}
+				if (FObjectProperty* OP = CastField<FObjectProperty>(P))
+				{
+					if (Obj && !Obj->IsA(OP->PropertyClass))
+					{
+						Error = FString::Printf(TEXT("参数 %s 要 %s，%s 是 %s"), *P->GetName(), *OP->PropertyClass->GetName(), *Obj->GetName(), *Obj->GetClass()->GetName());
+						bOk = false;
+						break;
+					}
+					OP->SetObjectPropertyValue(Dest, Obj);
+				}
+				else if (FInterfaceProperty* IP = CastField<FInterfaceProperty>(P))
+				{
+					if (Obj && !Obj->GetClass()->ImplementsInterface(IP->InterfaceClass))
+					{
+						Error = FString::Printf(TEXT("参数 %s 要实现 %s 接口，%s 没实现"), *P->GetName(), *IP->InterfaceClass->GetName(), *Obj->GetName());
+						bOk = false;
+						break;
+					}
+					FScriptInterface* SI = static_cast<FScriptInterface*>(Dest);
+					SI->SetObject(Obj);
+					SI->SetInterface(Obj ? Obj->GetInterfaceAddress(IP->InterfaceClass) : nullptr);
+				}
+				continue;
+			}
 			if (!FromJson(P, P->ContainerPtrToValuePtr<void>(Buf.GetData()), V, Error))
 			{
 				bOk = false;
@@ -569,7 +626,9 @@ namespace AgentPanel
 		}
 		if (bOk)
 		{
+			const double Start = FPlatformTime::Seconds();
 			Target->ProcessEvent(Func, Buf.GetData());
+			Out->SetNumberField(TEXT("ms"), (FPlatformTime::Seconds() - Start) * 1000.0);
 			TSharedPtr<FJsonObject> OutParams = MakeShared<FJsonObject>();
 			for (TFieldIterator<FProperty> It(Func); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
 			{

@@ -62,7 +62,7 @@ const ASSET_OPS = new Set([
   'bp.compile',
   'python',
 ])
-const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call', 'umg.tree'])
+const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call', 'umg.tree', 'object.refs'])
 
 function kindOf(op: string, args: Record<string, unknown>): Kind {
   switch (op) {
@@ -324,6 +324,9 @@ export async function runOp(
 ): Promise<Record<string, unknown>> {
   const args = { ...rawArgs }
   const kind = kindOf(op, args)
+  // 非蓝图函数（受保护、私有、没标 BlueprintCallable）只让网页上你自己点的执行；Agent 的 ue_call 只能调蓝图开放的（用户 2026-11-11 定）
+  if (op === 'call' && args.any && ctx.actor.kind !== 'user')
+    throw new BridgeError(t('Agent 只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的）'))
   if (op === 'console') {
     const cmd = String(args.command ?? '').trim()
     const hit = dangerousMatch(cmd)
