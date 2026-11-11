@@ -1,16 +1,18 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { pget, ppost, useAction, useLoad } from '../api.ts'
 import { useToChat } from '../chat.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { SplitHandle, usePane } from '../split.tsx'
 import { Confirm, ErrorText, Note, PageHead, fmtSize, fmtTime, useTargetInfo } from '../ui.tsx'
+import { captureItems, RenameDialog } from './perf/CaptureMenu.tsx'
 import { Compare } from './perf/Compare.tsx'
 import { Detail } from './perf/Detail.tsx'
 import { recentAvg, useLive } from './perf/live.ts'
 import { LiveView } from './perf/LiveView.tsx'
 import { MemLive } from './perf/MemView.tsx'
-import { RecordControls, type RecordKind } from './perf/RecordControls.tsx'
+import { MenuHost, openMenu } from './perf/menu.tsx'
+import { RecordControls, type StartOpts } from './perf/RecordControls.tsx'
 import { Sessions } from './perf/Sessions.tsx'
 import { StatsBar, liveItems } from './perf/StatsBar.tsx'
 import { fileName, nameOf, type Capture, type PerfState } from './perf/types.ts'
@@ -29,6 +31,7 @@ export function Perf() {
   const { busy, run } = useAction()
   const [picked, setPicked] = useState<string[]>([])
   const [del, setDel] = useState<Capture>()
+  const [ren, setRen] = useState<Capture>()
   const pane = usePane('perf', '264px', 200)
   const paneRef = useRef<HTMLElement>(null)
   const state = useLoad(() => pget<PerfState>(project.id, 'perf'), [project.id], 2000)
@@ -41,7 +44,7 @@ export function Perf() {
   const setSel = (id: string) => go('perf', id === 'live' ? '' : id)
   const cur = items.find((c) => c.id === sel)
 
-  const start = (o: { kind: RecordKind | 'memreport'; preset?: string; seconds?: number }) =>
+  const start = (o: StartOpts | { kind: 'memreport' }) =>
     run(o.kind, async () => {
       const r = await ppost<{ capture?: { id: string } }>(project.id, 'perf/start', { ...o, target })
       // 内存报告马上出文件：直接打开；trace / CSV 录制中留在「实时」看着
@@ -72,6 +75,19 @@ export function Perf() {
       `请分析这份 UE ${c.kind === 'csv' ? '性能抓取（CSV Profiler）' : c.kind === 'memreport' ? '内存报告（memreport）' : 'trace（Unreal Insights 同款）'}：${nameOf(c)}（抓取 id ${c.id}）。\n先用 ue_capture action=summary 看摘要，再用 action=query 下钻${c.kind === 'trace' ? '（timers → butterfly → stack，定位到具体函数）' : ''}，告诉我瓶颈在哪、可能的原因，以及下一步怎么验证。${extra ? `\n${extra}` : ''}\n我看到的现象：`,
     )
   const frameNow = buf ? recentAvg(buf, 'frame', 1) : undefined
+  /** 一份抓取的右键菜单（列表行、页头标题、详情文件条共用） */
+  const menuFor = (e: MouseEvent, c: Capture) =>
+    openMenu(
+      e,
+      captureItems(project.id, c, {
+        onOpen: sel === c.id ? undefined : () => setSel(c.id),
+        onAgent: chat.available ? () => askAgent(c) : undefined,
+        onRename: () => setRen(c),
+        onDelete: () => setDel(c),
+        onPick: () => toggle(c),
+        picked: picked.includes(c.id),
+      }),
+    )
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -79,7 +95,10 @@ export function Perf() {
         title={t('性能')}
         desc={
           cur ? (
-            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
+            <span
+              className="ue:flex ue:min-w-0 ue:items-center ue:gap-2"
+              onContextMenu={(e) => menuFor(e, cur)}
+            >
               <span className="ue:truncate ue:font-medium ue:text-fg">{nameOf(cur)}</span>
               <span className="ue:truncate" title={cur.file}>
                 {fmtTime(cur.at)} · {fmtSize(cur.sizeKB * 1024)}
@@ -119,6 +138,7 @@ export function Perf() {
             onPick={toggle}
             onCompare={() => setSel('cmp')}
             onDelete={setDel}
+            onMenu={menuFor}
             live={{
               running: !!inst,
               active,
@@ -159,6 +179,7 @@ export function Perf() {
                 canAgent={chat.available}
                 onAgent={(extra) => askAgent(cur, extra)}
                 onDelete={() => setDel(cur)}
+                onMenu={(e) => menuFor(e, cur)}
               />
             )}
             {!cur && !['live', 'mem', 'cmp'].includes(sel) && state.data && (
@@ -189,6 +210,8 @@ export function Perf() {
         <div className={cn('ue:font-mono ue:text-footnote ue:break-all')}>{del?.file}</div>
         {del?.imported && <div className="ue:mt-2 ue:text-subtle">{t('导入的外部文件只取消登记，不删原文件。')}</div>}
       </Confirm>
+      <RenameDialog project={project.id} capture={ren} onClose={() => setRen(undefined)} onDone={reload} />
+      <MenuHost />
       {chat.dialog}
     </div>
   )

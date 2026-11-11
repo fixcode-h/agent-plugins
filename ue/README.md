@@ -35,13 +35,14 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 
 - 现在能抓两种：CSV Profiler 的帧数据（`CsvProfile Start / Stop`）和内存报告（`memreport -full`）。都走已有的控制台通道，桥接不用更新。
 - 文件由引擎写在 `<项目>/Saved/Profiling/` 下，面板不搬动；手动在 UE 里抓的、别人发来的（`ue_capture action=import`）也能分析。
-- 帧数据抓取有时长上限（默认 30 秒，最多 10 分钟），到时间自动停；面板重启后下次看状态时补停。
+- 网页上录制不限时长，点停止才停。Agent 发起时不给 `seconds` 默认 30 秒自动停（忘了停文件会一直涨），`seconds=0` 也是不限时长；有上限的抓取在面板重启后下次看状态时补停。
 - 分析结果先摘要再下钻，不把整份文件给 Agent：帧数据看关键指标、卡顿帧和当时涨得最多的列、按书签分段；内存报告看按类的对象表和各分段；两份同类的可以对比（查内存泄漏用两份内存报告）。
 - Agent 的权限：看和分析不用确认；发起抓取按「运行时」权限，询问时一次抓取确认一次；删除抓取文件每次确认。
 - 网页上每份抓取有「让 Agent 分析」，把抓取交给对话。
 - 实时读数（桥接 1.3.0 起）：桥接每帧记一条和 `stat unit` 同源的数（Frame / Game / Draw / RHI / GPU、Draw Calls、图元、已用内存、UObject 数），配色阈值取引擎的 `t.TargetFrameTimeThreshold`、`t.UnacceptableFrameTimeThreshold`。网页「性能」页一打开就有读数条、最近 300 帧的帧条和 60 秒线程曲线，「内存」看 10 分钟的内存曲线；Agent 用 `ue_perf action=live` 取最近几秒的摘要。只在有人看时采，最后一次取数 10 秒后自动停。
-- trace（桥接 1.4.0 起，性能页设计二期）：网页「录制」或 `ue_perf action=start kind=trace preset=…` 让 UE 执行 `Trace.File`，写到 `Saved/Profiling/AgentPanel/<名字>.utrace`；预设有标准（`cpu,gpu,frame,bookmark,counters,log`）、标准 + 命名事件（同时开 `stat namedevents`，看得到蓝图函数名）、加载、内存标签（要 `-llm` 启动）。停止后由编辑器（没开时后台编辑器）里的 `trace.query` 用 UE 自己的 TraceServices 分析，和 Unreal Insights 同一套代码。
-- trace 详情页照 Timing Insights 布局：帧条（拖选分析范围）、时间轴（滚轮缩放、拖动平移、点块看调用堆栈）、计时器表、调用者 / 被调用者、计数器、日志；可以在 Unreal Insights 里打开原文件。Agent 用 `ue_capture action=summary` / `query what=timers|butterfly|stack|frames|log|counters` 查同样的数据，结果限行数。
+- trace（桥接 1.5.0 起，性能页设计二期、三期）：网页「录制」或 `ue_perf action=start kind=trace preset=…` 让 UE 执行 `Trace.File`，写到 `Saved/Profiling/AgentPanel/<名字>.utrace`；预设有标准（`cpu,gpu,frame,bookmark,counters,log`）、标准 + 命名事件（同时开 `stat namedevents`，看得到蓝图函数名）、加载、内存标签（要 `-llm` 启动），以及自定义（勾选 cpu、gpu、frame、task、region、loadtime、file、net、memory 等通道，可同时开命名事件；Agent 用 `preset=custom channels=… named=true`）。停止后由编辑器（没开时后台编辑器）里的 `trace.query` 用 UE 自己的 TraceServices 分析，和 Unreal Insights 同一套代码。
+- trace 详情页照 Timing Insights 布局：帧条（fps 刻度，拖选分析范围）、时间轴（滚轮缩放、拖动平移、刻度条上拖选范围、双击块设为范围、点块看调用堆栈，悬浮提示有占父 / 占根、包含 / 独占时间、深度）、计时器表（按 GPU / CPU 分组，次数 / 包含 / 独占都按分析范围统计）、调用者 / 被调用者上下两棵树（次数、包含、占父、占根、独占）、计时器的每次调用（最短 / 平均 / 中位 / 最长、最慢的 50 次可跳过去）、计数器、日志；各处都有右键菜单。可以在 Unreal Insights 里打开原文件。Agent 用 `ue_capture action=summary` / `query what=timers|butterfly|instances|stack|frames|log|counters` 查同样的数据，结果限行数。
+- 桥接 1.4.x 录停在半帧的 trace，最后一帧的结束时间是无穷大，写成 JSON 是 `inf`，面板解析不了，帧条一直显示加载；1.5.0 起换成 trace 结尾，网页也会把读不到帧的错误显示出来。
 - trace 是录完再分析（停止后几秒到几十秒出结果），录制中看的是实时读数；边录边分析要等在真实引擎上验证过 TraceServices 的实时会话再做。分析服务的 C++ 还没在真实引擎上编译过。
 - 解析器按 UE 5.4 的文件格式写，测试数据是手写的样例（`scripts/perf-fixtures.mjs`），还没用真实项目的文件验证过。`node ue/scripts/perf-test.mjs` 跑解析器测试。
 
@@ -69,13 +70,17 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 
 - 运行时对象的搜索结果分「运行时实例 / 资源 / 类」三组。改资源只影响以后新建的对象，要看到正在显示的界面变化，改运行时实例。
 - UMG 控件（UserWidget 实例或里面的控件）左边显示控件树，选中控件右边看它的参数，不画样式预览。
-- 属性按 Category 分菜单，一次看一个分类；搜索时跨分类列出。
-- 不能改的属性只显示不给改：EditConst、编辑器和蓝图都看不见的内部状态、只能在类默认值或只能在实例上改的、类本身。桥接也会拒绝这些修改。
+- 属性页照 UE 的「细节」面板（`web/details/`）：Category 是折叠条（`A|B` 分两层），AdvancedDisplay 的收在每类最后的「高级」里，顶上「所有 / 各分类 / 内部 / 改过的」筛选按钮；搜索框打字就筛（属性列表已经在网页里，不发请求），匹配显示名、变量名和分类名。名字列和值列中间的线能拖。
+- 显示名、高级、内部、枚举显示名、容器个数是桥接 1.6.0 起给的（`displayName`、`advanced`、`edit`、`enumLabels`、`container` / `count` / `inner`）；旧桥接时网页自己把变量名拆成显示名，没有 Category 的当内部状态，数组不给加删按钮。
+- 没有 EditAnywhere 这类标记的属性（UE 细节面板里看不到的内部状态）收在最后的「内部状态」里，默认收起。
+- 数组的加一个 / 插入 / 复制 / 删除 / 清空走 `set` 的 `array` 参数，桥接直接改容器（`FScriptArrayHelper`），不整体替换：实例化子对象（Triggers、Modifiers）不会丢，复制时子对象也复制一份。这类修改不记原值，撤回用「放弃改动」或操作记录。
+- Actor 的细节面板最上面是「变换」：读写根组件的 RelativeLocation / RelativeRotation / RelativeScale3D。组件列表按挂接关系画成树，右边标 C++ / 蓝图 / 构造脚本 / 实例（`components` 的 `scene`、`created`，桥接 1.6.0 起）。
+- 不能改的属性照样画控件但是灰底灰字（能改的是深色输入框）：EditConst、编辑器和蓝图都看不见的内部状态、只能在类默认值或只能在实例上改的、类本身。桥接也会拒绝这些修改。
 - 改运行时对象时走属性的 setter（C++ Setter 或蓝图的 BlueprintSetter），再让 UMG 控件、组件刷新，改完界面马上变。
 
 ## 性能
 
-- 所有搜索都要按回车或点「搜索」才发请求。
+- 所有发请求的搜索都要按回车或点「搜索」；属性页的搜索只筛已经取到的列表，打字就筛。
 - Actor 按名字前缀搜，最多列 200 个。
 - 只写名字前缀、不写类名搜运行时对象时，在游戏线程上限时 50 毫秒，超时返回部分结果。
 - DataTable 只把当前页的行转成 JSON。

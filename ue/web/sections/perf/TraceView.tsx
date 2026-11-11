@@ -9,7 +9,9 @@ import { FrameStrip } from './FrameStrip.tsx'
 import { Empty, Section, Skeleton, Tabs, fmtAt, fmtMs } from './parts.tsx'
 import { StatsBar, type StatItem } from './StatsBar.tsx'
 import { Timeline } from './Timeline.tsx'
-import { CallTree, Counters, StackView, TimersTable, TraceLog } from './TracePanels.tsx'
+import { TimersTable } from './TimersTable.tsx'
+import { Counters, TraceLog } from './TraceExtras.tsx'
+import { CallTree, InstancesView, StackView, type PanelActions } from './TracePanels.tsx'
 import {
   orderLanes,
   traceQuery,
@@ -29,7 +31,8 @@ const BUDGET = { target: 33.9, unacceptable: 50 }
 
 /**
  * 一份 trace 的详情（性能页设计 4、效果图 2）：顶上摘要读数条，下面帧条（拖选分析范围）、时间轴（函数调用堆栈），
- * 右栏上半是计时器 / 计数器 / 日志，下半是点中块的调用堆栈或选中计时器的调用者 / 被调用者。
+ * 右栏上半是计时器 / 计数器 / 日志，下半是选中计时器的调用者 / 被调用者（上下两棵树，照 Insights）、点中块的调用堆栈、计时器的每次调用。
+ * 分析范围（帧条拖选、时间轴刻度条拖选、双击一块）一变，摘要、计时器、调用树、计数器、日志都只算这一段。
  * 第一次打开要等编辑器（或后台编辑器）用 TraceServices 分析完，分析中显示进度。
  */
 export function TraceView({ capture, onAgent }: { capture: Capture; onAgent?: (extra: string) => void }) {
@@ -76,11 +79,12 @@ function TraceBody({
   const [picked, setPicked] = useState<PickedBlock>()
   const [timer, setTimer] = useState<{ id: number; name: string }>()
   const [tab, setTab] = useState<'timers' | 'counters' | 'log'>('timers')
-  const [lower, setLower] = useState<'stack' | 'tree'>('stack')
+  const [lower, setLower] = useState<'stack' | 'tree' | 'inst'>('tree')
   const [showWorkers, setShowWorkers] = useState(false)
   const pane = usePane('perf-trace', '38%', 300)
   const paneRef = useRef<HTMLElement>(null)
 
+  // 帧和书签取不到时要把错误显示出来：以前只显示加载占位，桥接回了坏 JSON 时就一直「在加载」
   const frames = useLoad(() => traceQuery<TraceFrames>(project.id, id, { what: 'frames' }), [project.id, id])
   const marks = useLoad(
     () => traceQuery<TraceBase & { items: Bookmark[] }>(project.id, id, { what: 'bookmarks' }),
@@ -124,17 +128,34 @@ function TraceBody({
     setTimer({ id: tid, name })
     setLower('tree')
   }
+  const zoom = (t0: number, t1: number) => {
+    const pad = Math.max((t1 - t0) * 0.08, 1e-6)
+    setViewState({ t0: Math.max(0, t0 - pad), t1: t1 + pad })
+  }
+  const actions: PanelActions = {
+    pickTimer,
+    slowest: (tid, name) => {
+      setTimer({ id: tid, name })
+      setLower('inst')
+    },
+    zoom,
+    setRange,
+    pickBlock: (b) => {
+      setPicked(b)
+      setTimer({ id: b.timer, name: b.name })
+    },
+  }
   const laneName = (lane: number) => threads.find((x) => x.id === lane)?.name ?? String(lane)
 
   const items = useMemo(
-    () => summary(f, duration, threads.length, marks.data?.items.length ?? 0),
-    [f, duration, threads.length, marks.data],
+    () => summary(f, duration, threads.length, marks.data?.items.length ?? 0, range),
+    [f, duration, threads.length, marks.data, range],
   )
   const r = range ?? { t0: 0, t1: duration }
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-fade">
-      <StatsBar items={items} badge="trace" />
+      <StatsBar items={items} badge={range ? t('区间') : 'trace'} />
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:lg:flex-row">
         <div className="ue:flex ue:min-h-[420px] ue:min-w-0 ue:flex-1 ue:flex-col">
           <Section
@@ -155,7 +176,14 @@ function TraceBody({
             }
           >
             <div className="ue:px-3 ue:py-2">
-              {f ? (
+              {frames.error ? (
+                <div className="ue:flex ue:items-center ue:gap-2">
+                  <div className="ue:min-w-0 ue:flex-1">
+                    <ErrorText>{t('读不到帧：{msg}', { msg: frames.error })}</ErrorText>
+                  </div>
+                  <LinkBtn onClick={() => void frames.reload()}>{t('重试')}</LinkBtn>
+                </div>
+              ) : f ? (
                 <FrameStrip
                   start={f.start}
                   ms={f.ms}
@@ -165,6 +193,7 @@ function TraceBody({
                   marks={marks.data?.items ?? []}
                   budget={BUDGET}
                   onRange={pickRange}
+                  onZoom={(x) => zoom(x.t0, x.t1)}
                 />
               ) : (
                 <Skeleton rows={2} />
@@ -176,7 +205,9 @@ function TraceBody({
             title={t('时间轴')}
             aside={
               <span className="ue:flex ue:items-center ue:gap-3 ue:text-caption ue:text-subtle">
-                <span className="ue:hidden ue:xl:inline">{t('滚轮缩放 · 拖动平移 · F 缩放到选中')}</span>
+                <span className="ue:hidden ue:xl:inline">
+                  {t('滚轮缩放 · 拖动平移 · 刻度条上拖选范围 · F 缩放到选中 · 右键更多')}
+                </span>
                 <span className="ue:font-mono">{fmtMs((view.t1 - view.t0) * 1000)}</span>
                 <LinkBtn onClick={() => setViewState({ t0: 0, t1: duration })}>
                   <Maximize2 className="ue:h-3 ue:w-3" /> {t('看全部')}
@@ -197,11 +228,14 @@ function TraceBody({
               setView={setView}
               duration={duration}
               range={range}
+              onRange={setRange}
+              frames={f}
               marks={marks.data?.items ?? []}
               budget={BUDGET.target}
               timer={timer?.id}
               picked={picked}
               onPick={pickBlock}
+              actions={actions}
             />
           </Section>
         </div>
@@ -230,7 +264,7 @@ function TraceBody({
                   range={range}
                   seconds={r.t1 - r.t0}
                   picked={timer?.id}
-                  onPick={(x) => pickTimer(x.id, x.name)}
+                  actions={{ onPick: (x) => pickTimer(x.id, x.name), onSlowest: (x) => actions.slowest(x.id, x.name) }}
                 />
               )}
               {tab === 'counters' && <Counters id={id} range={range} duration={duration} />}
@@ -247,30 +281,47 @@ function TraceBody({
             </div>
           </div>
           <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:border-t ue:border-line">
-            {picked && timer && (
+            {timer && (
               <Tabs
-                value={lower}
+                value={lower === 'stack' && !picked ? 'tree' : lower}
                 onChange={setLower}
                 items={[
-                  { key: 'stack', label: t('调用堆栈') },
                   { key: 'tree', label: t('调用者 / 被调用者') },
+                  ...(picked ? [{ key: 'stack' as const, label: t('调用堆栈') }] : []),
+                  { key: 'inst', label: t('每次调用') },
                 ]}
               />
             )}
-            {lower === 'stack' && picked ? (
-              <StackView
-                key={`${picked.lane}-${picked.time}`}
-                id={id}
-                block={picked}
-                laneName={laneName(picked.lane)}
-                onDepth={(d) => setPicked({ ...picked, depth: d })}
-                onTimer={pickTimer}
-              />
-            ) : timer ? (
-              <CallTree id={id} range={range} timer={timer.id} name={timer.name} onTimer={pickTimer} />
-            ) : (
-              <Empty>{t('在时间轴上点一块看它的调用堆栈，或在计时器表里点一行看调用者 / 被调用者')}</Empty>
-            )}
+            <div
+              key={`${lower}-${timer?.id}`}
+              className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-fade"
+            >
+              {lower === 'stack' && picked ? (
+                <StackView
+                  key={`${picked.lane}-${picked.time}`}
+                  id={id}
+                  block={picked}
+                  laneName={laneName(picked.lane)}
+                  onDepth={(d) => setPicked({ ...picked, depth: d })}
+                  actions={actions}
+                />
+              ) : lower === 'inst' && timer ? (
+                <InstancesView
+                  id={id}
+                  range={range}
+                  timer={timer.id}
+                  name={timer.name}
+                  laneName={laneName}
+                  actions={actions}
+                />
+              ) : timer ? (
+                <CallTree id={id} range={range} timer={timer.id} name={timer.name} actions={actions} />
+              ) : (
+                <Empty>
+                  {t('选一段时间（帧条或时间轴刻度条上拖），再在计时器表里点一行看调用者 / 被调用者；在时间轴上点一块看它的调用堆栈')}
+                </Empty>
+              )}
+            </div>
             {onAgent && (
               <div className="ue:border-t ue:border-line ue:px-3 ue:py-2">
                 <LinkBtn
@@ -315,8 +366,18 @@ function WidthProbe({ onWidth }: { onWidth: (w: number) => void }) {
 }
 
 /** 摘要读数条：帧数、平均 / P95 / 最慢、FPS、卡顿帧数、时长、线程、书签 */
-function summary(f: TraceFrames | undefined, duration: number, threads: number, marks: number): StatItem[] {
-  const ms = f?.ms ?? []
+function summary(
+  f: TraceFrames | undefined,
+  duration: number,
+  threads: number,
+  marks: number,
+  range?: Range,
+): StatItem[] {
+  // 有分析范围时只算和范围有重叠的帧（一帧比范围还长时也算上它）
+  const ms =
+    range && f
+      ? f.ms.filter((m, i) => f.start[i] < range.t1 && f.start[i] + m / 1000 > range.t0)
+      : (f?.ms ?? [])
   const sorted = [...ms].sort((a, b) => a - b)
   const avg = ms.length ? ms.reduce((s, x) => s + x, 0) / ms.length : undefined
   const p95 = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : undefined
@@ -354,8 +415,10 @@ function summary(f: TraceFrames | undefined, duration: number, threads: number, 
       level: hitches ? 'bad' : 'ok',
       title: t('超过 {n} ms 的帧', { n: BUDGET.unacceptable }),
     },
-    { key: 'frames', label: t('帧数'), value: f ? f.total.toLocaleString() : undefined },
-    { key: 'dur', label: t('时长'), value: duration.toFixed(1), unit: 's' },
+    { key: 'frames', label: t('帧数'), value: f ? (range ? ms.length : f.total).toLocaleString() : undefined },
+    range
+      ? { key: 'dur', label: t('区间'), value: fmtMs((range.t1 - range.t0) * 1000) }
+      : { key: 'dur', label: t('时长'), value: duration.toFixed(1), unit: 's' },
     { key: 'threads', label: t('线程'), value: String(threads) },
     { key: 'marks', label: t('书签'), value: String(marks) },
   ]

@@ -12,14 +12,14 @@ const FIELD =
   'ue:flex ue:h-7 ue:min-w-0 ue:items-center ue:rounded-[3px] ue:border ue:px-2 ue:transition-colors ue:focus-within:border-focus'
 /**
  * 能改和只读分开画（用户 2026-11-11：照 UE，两种要一眼分得清）：能改的是深色输入框、亮字、悬停边框变亮；
- * 只读的是灰底、灰字、没有边框，鼠标是禁止符号。改过的值左边一道强调色竖条（不用红框，看着像校验失败）
+ * 只读的是灰底、灰字、没有边框，鼠标是禁止符号。浅色主题里输入框底色（field）本身就偏灰，能改的改用白底（card），深色还是 field。改过的值左边一道强调色竖条（不用红框，看着像校验失败）
  */
 const fieldTone = (disabled?: boolean, changed?: boolean) =>
   disabled
     ? 'ue:cursor-not-allowed ue:border-transparent ue:bg-hover ue:text-subtle'
     : changed
-      ? 'ue:border-line-strong ue:bg-field ue:text-fg ue:shadow-[inset_2px_0_0_var(--accent)]'
-      : 'ue:border-line ue:bg-field ue:text-fg ue:hover:border-line-strong'
+      ? 'ue:border-line-strong ue:bg-card ue:text-fg ue:shadow-[inset_2px_0_0_var(--accent)] ue:dark:bg-field'
+      : 'ue:border-line ue:bg-card ue:text-fg ue:hover:border-line-strong ue:dark:bg-field'
 const INPUT =
   'ue:min-w-0 ue:flex-1 ue:bg-transparent ue:font-mono ue:text-footnote ue:text-fg ue:outline-none ue:disabled:cursor-not-allowed ue:disabled:text-subtle'
 
@@ -52,7 +52,7 @@ export function Checkbox({
           ? 'ue:cursor-not-allowed ue:border-transparent ue:bg-hover'
           : cn(
               'ue:cursor-pointer ue:hover:border-focus',
-              checked ? 'ue:border-accent ue:bg-accent/15' : 'ue:border-line-strong ue:bg-field',
+              checked ? 'ue:border-accent ue:bg-accent/15' : 'ue:border-line-strong ue:bg-card ue:dark:bg-field',
             ),
       )}
     >
@@ -274,7 +274,7 @@ export function RefValue({
         className={cn(
           FIELD,
           // 引用不能改时照样能点开看，只是底色按只读画
-          disabled ? 'ue:border-transparent ue:bg-hover ue:text-subtle' : 'ue:border-line ue:bg-field ue:text-fg',
+          disabled ? 'ue:border-transparent ue:bg-hover ue:text-subtle' : 'ue:border-line ue:bg-card ue:text-fg ue:dark:bg-field',
           'ue:w-56 ue:max-w-full ue:text-left ue:text-footnote',
           none && 'ue:text-subtle',
           !none && onOpen && 'ue:cursor-pointer ue:hover:border-line-strong ue:hover:text-accent-text',
