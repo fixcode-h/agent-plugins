@@ -4,7 +4,7 @@ import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { badges } from './badges.ts'
 import { clearHistory } from './history.ts'
 import { build, install, uninstall } from './install.ts'
-import { getJob } from './jobs.ts'
+import { cancelJob, getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
@@ -77,6 +77,10 @@ export async function handle(req: Request): Promise<Response> {
       const b = await body(req)
       return json(await detect(String(b.path ?? ''), String(b.engineDir ?? '')))
     }
+    if (parts[0] === 'jobs' && parts[1] && parts[2] === 'cancel' && post) {
+      if (!(await cancelJob(parts[1]))) return json({ error: t('这个作业已经结束了') }, 409)
+      return json({ ok: true })
+    }
     if (parts[0] === 'jobs' && parts[1]) {
       const job = getJob(parts[1])
       return job ? json(job) : json({ error: t('作业不存在（面板重启后作业记录会清空）') }, 404)
@@ -119,7 +123,7 @@ export async function handle(req: Request): Promise<Response> {
         return json({ job: job.id })
       }
       case 'POST build':
-        return json({ job: (await build(project, b.force === true)).id })
+        return json({ job: (await build(project, { force: b.force === true, kill: b.kill === true })).id })
       case 'POST op':
         return json(await runOp(ctx, String(b.op), (b.args as Body) ?? {}, Number(b.timeout) || 30000))
       case 'POST console': {

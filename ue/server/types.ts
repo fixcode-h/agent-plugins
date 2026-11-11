@@ -159,6 +159,8 @@ export interface Job {
   code?: number
   /** 编译被开着的编辑器挡住（Live Coding）：网页按它给出处理方式，不只显示失败 */
   hint?: { kind: 'live-coding'; blockers: BuildBlocker[] }
+  /** 用户在网页上取消的 */
+  canceled?: boolean
 }
 
 /** 挡住编译的编辑器进程（server/procs.ts） */
@@ -170,6 +172,8 @@ export interface BuildBlocker {
   same: boolean
   /** -game 跑的游戏 */
   game: boolean
+  /** 读不到路径和命令行（管理员权限打开的），看不出是不是这个引擎的 */
+  unknown?: boolean
 }
 
 /** 一个项目的连接概况（项目切换、概览、对话右栏用） */

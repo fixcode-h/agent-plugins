@@ -1,7 +1,7 @@
-import { Download, Hammer, Loader2, Trash2 } from 'lucide-react'
+import { Download, Hammer, Loader2, Square, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Job, UeProject } from '../../server/types.ts'
-import { get, ppost, useAction, useLoad } from '../api.ts'
+import { get, post, ppost, useAction, useLoad } from '../api.ts'
 import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
@@ -92,15 +92,35 @@ export function Bridge() {
                 <div className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
                   {job.data.status === 'running' ? <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" /> : null}
                   <span className="ue:text-fg">{job.data.title}</span>
-                  <Badge tone={job.data.status === 'done' ? 'ok' : job.data.status === 'failed' ? 'danger' : 'run'}>
-                    {job.data.status === 'done' ? t('完成') : job.data.status === 'failed' ? t('失败') : t('进行中')}
-                  </Badge>
+                  {job.data.canceled && job.data.status !== 'running' ? (
+                    <Badge>{t('已取消')}</Badge>
+                  ) : (
+                    <Badge tone={job.data.status === 'done' ? 'ok' : job.data.status === 'failed' ? 'danger' : 'run'}>
+                      {job.data.status === 'done' ? t('完成') : job.data.status === 'failed' ? t('失败') : t('进行中')}
+                    </Badge>
+                  )}
+                  {job.data.status === 'running' && job.data.kind === 'build' && !job.data.canceled && (
+                    <ui.Button
+                      size="sm"
+                      variant="ghost"
+                      className="ue:ml-auto"
+                      disabled={busy === 'cancel'}
+                      onClick={() =>
+                        void run('cancel', async () => {
+                          await post(`/jobs/${job.data!.id}/cancel`)
+                          job.reload()
+                        })
+                      }
+                    >
+                      <Square className="ue:h-3.5 ue:w-3.5" /> {t('取消编译')}
+                    </ui.Button>
+                  )}
                 </div>
                 {job.data.hint && (
                   <BuildHint
                     hint={job.data.hint}
                     busy={!!busy}
-                    onBuild={(force) => void act('build', force ? { force: true } : undefined)}
+                    onBuild={(mode) => void act('build', mode === 'normal' ? undefined : { [mode]: true })}
                   />
                 )}
                 {/* 换了作业就重新挂载，跟随状态回到「跟到底」 */}
