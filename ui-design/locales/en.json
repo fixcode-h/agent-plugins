@@ -695,7 +695,6 @@
   "画风": "Art style",
   "界面": "UI",
   "界面 · {n}": "Screens · {n}",
-  "界面 · 原画 · 切图": "Screens · concepts · slices",
   "登录后停在聊天页面，之后就能在对话框下面选这个标签页。": "Sign in and stay on the chat page. Then pick that tab below the chat box.",
   "直接搭界面（点一下改成先出原画；右键设置一次出几张）": "Builds the UI directly (click to draw concepts first; right-click to set how many per round)",
   "相似度": "Similarity",

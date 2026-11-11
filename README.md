@@ -15,7 +15,7 @@
 
 - `plugin.json`：清单。名字、版本、参数（在插件页上生成表单）、技能触发说明、角色、工作流、MCP 服务名、工具显示名、入口；
 - `server/index.js`：服务端入口，默认导出 `activate(ctx)`，返回插件接口（`fetch`）、每轮对话挂哪些 MCP 工具（`tools`）、参数变化（`onConfig`）、状态和停止；
-- `web/index.js`、`web/index.css`：网页入口，默认导出 `activate(host)`，返回设计模式、对话右栏页签、插件页状态面板；
+- `web/index.js`、`web/index.css`：网页入口，默认导出 `activate(host)`，返回图标栏里的整页、对话右栏页签、插件页状态面板；
 - `skills/<分类>/<名字>/`、`locales/en.json` 和插件自己的资源。
 
 接口的类型在 `sdk/`（面板 `server/plugins/sdk.ts`、`web/src/plugins/sdk.ts` 的副本）。网页部分和面板共用 React：

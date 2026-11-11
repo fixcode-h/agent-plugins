@@ -118,7 +118,7 @@ export interface PluginRun {
   taskId: string
   /** 子对话的父对话 id */
   parentTaskId?: string
-  /** 对话归哪个插件的设计模式（新建时写的 task.plugin，例如 'blender.model'），普通对话为空 */
+  /** 对话归哪个插件（新建时写的 task.plugin，例如 'blender.model'），普通对话为空 */
   pluginTask?: string
   /** 对话所在的项目和工作目录（插件接口 2）：按项目挂工具的插件据此决定挂不挂、连哪个项目 */
   projectId?: string
