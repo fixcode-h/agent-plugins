@@ -243,13 +243,22 @@ namespace
 		return true;
 	}
 
+	/**
+	 * 无穷大 / NaN 换成 0：UE 的 JSON 写出来是 inf / nan，不是合法 JSON，面板整个回复都解析不了。
+	 * 录制停在半帧时最后一帧的 EndTime 就是无穷大（帧条一直显示加载，就是这一帧把 frames 的回复弄坏了）
+	 */
+	inline double Fin(double X)
+	{
+		return FMath::IsFinite(X) ? X : 0.0;
+	}
+
 	TSharedPtr<FJsonValue> NumArr(const TArray<double>& V)
 	{
 		TArray<TSharedPtr<FJsonValue>> Out;
 		Out.Reserve(V.Num());
 		for (double X : V)
 		{
-			Out.Add(MakeShared<FJsonValueNumber>(X));
+			Out.Add(MakeShared<FJsonValueNumber>(Fin(X)));
 		}
 		return MakeShared<FJsonValueArray>(Out);
 	}
@@ -257,7 +266,7 @@ namespace
 	/** 毫秒保留 3 位小数：JSON 小一半，网页也用不到更细 */
 	double Ms(double Seconds)
 	{
-		return FMath::RoundToDouble(Seconds * 1000000.0) / 1000.0;
+		return Fin(FMath::RoundToDouble(Seconds * 1000000.0) / 1000.0);
 	}
 
 	// ---------- 各个查询 ----------
@@ -304,10 +313,17 @@ namespace
 		Start.Reserve(End);
 		Dur.Reserve(End);
 		// 5.8 起 FrameProvider 另有按时间（double）取的重载：起点写成 uint64，不然 0 两边都能转、重载不明确
+		const double Last = S.GetDurationSeconds();
 		FP.EnumerateFrames(TraceFrameType_Game, uint64(0), End, [&](const TraceServices::FFrame& F)
 		{
+			if (!FMath::IsFinite(F.StartTime))
+			{
+				return;
+			}
+			// 还没结束的帧（录制停在半帧）EndTime 是无穷大：按 trace 结尾收
+			const double FrameEnd = FMath::IsFinite(F.EndTime) ? F.EndTime : FMath::Max(F.StartTime, Last);
 			Start.Add(FMath::RoundToDouble(F.StartTime * 100000.0) / 100000.0);
-			Dur.Add(Ms(F.EndTime - F.StartTime));
+			Dur.Add(Ms(FrameEnd - F.StartTime));
 		});
 		Out->SetField(TEXT("start"), NumArr(Start));
 		Out->SetField(TEXT("ms"), NumArr(Dur));
@@ -333,9 +349,9 @@ namespace
 		bool bCut = false;
 		for (int32 Lane : Want)
 		{
-			TArray<double> St, Du, De, Ti;
+			TArray<double> St, Du, De, Ti, Ex;
 			int32 Hidden = 0;
-			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32 Depth, uint32 Timer, double, const TArray<FOpen>&)
+			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32 Depth, uint32 Timer, double Child, const TArray<FOpen>&)
 			{
 				if (End - Start < MinDur)
 				{
@@ -352,6 +368,8 @@ namespace
 				Du.Add(Ms(End - Start));
 				De.Add(Depth);
 				Ti.Add(Timer);
+				// 独占时间（悬浮提示要的 Exclusive Time）：子块再短、没回给网页也算在里面，网页自己减不准
+				Ex.Add(Ms(FMath::Max(0.0, End - Start - Child)));
 				Used.Add(Timer);
 			});
 			TSharedPtr<FJsonObject> L = MakeShared<FJsonObject>();
@@ -360,6 +378,7 @@ namespace
 			L->SetField(TEXT("ms"), NumArr(Du));
 			L->SetField(TEXT("d"), NumArr(De));
 			L->SetField(TEXT("t"), NumArr(Ti));
+			L->SetField(TEXT("x"), NumArr(Ex));
 			L->SetNumberField(TEXT("hidden"), Hidden);
 			LanesOut.Add(MakeShared<FJsonValueObject>(L));
 		}
@@ -477,6 +496,7 @@ namespace
 	{
 		int64 Count = 0;
 		double Incl = 0;
+		double Excl = 0;
 		TMap<uint32, TUniquePtr<FNode>> Kids;
 
 		FNode& Kid(uint32 Id)
@@ -500,6 +520,7 @@ namespace
 		O->SetStringField(TEXT("name"), Timers.Name(Id));
 		O->SetNumberField(TEXT("count"), static_cast<double>(N.Count));
 		O->SetNumberField(TEXT("incl"), Ms(N.Incl));
+		O->SetNumberField(TEXT("excl"), Ms(N.Excl));
 		if (Depth >= MaxDepth || N.Kids.Num() == 0)
 		{
 			if (N.Kids.Num() > 0)
@@ -552,9 +573,10 @@ namespace
 		FNode Callees;
 		for (int32 Lane : Want)
 		{
-			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32, uint32 Timer, double, const TArray<FOpen>& Parents)
+			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32, uint32 Timer, double Child, const TArray<FOpen>& Parents)
 			{
 				const double Dur = End - Start;
+				const double Self = FMath::Max(0.0, Dur - Child);
 				// 外面最近一层的选中计时器在栈里的位置：有就说明这一块是它的子孙
 				int32 Outer = INDEX_NONE;
 				for (int32 i = 0; i < Parents.Num(); ++i)
@@ -568,16 +590,20 @@ namespace
 				if (Timer == Target && Outer == INDEX_NONE)
 				{
 					// 选中的计时器本身（最外层那次）：调用者树沿父链往外走
+					// 调用者树里每一层的独占时间写的都是选中计时器自己的独占时间（Insights 的 Callers 也这么读）
 					++Callers.Count;
 					Callers.Incl += Dur;
+					Callers.Excl += Self;
 					++Callees.Count;
 					Callees.Incl += Dur;
+					Callees.Excl += Self;
 					FNode* N = &Callers;
 					for (int32 i = Parents.Num() - 1; i >= 0; --i)
 					{
 						N = &N->Kid(Parents[i].Timer);
 						++N->Count;
 						N->Incl += Dur;
+						N->Excl += Self;
 					}
 				}
 				else if (Outer != INDEX_NONE)
@@ -591,12 +617,88 @@ namespace
 					N = &N->Kid(Timer);
 					++N->Count;
 					N->Incl += Dur;
+					N->Excl += Self;
 				}
 			});
 		}
 		// 子块比父块先结束，被调用者树里路径上的中间节点是在子块回调里建的：计数和时间以它自己结束时加的为准
 		Out->SetObjectField(TEXT("callers"), TreeJson(Target, Callers, Timers, 0));
 		Out->SetObjectField(TEXT("callees"), TreeJson(Target, Callees, Timers, 0));
+		return true;
+	}
+
+	/**
+	 * 一个计时器在范围内的每一次调用（Insights 计时器悬浮提示里的统计 + 「找最慢的一次」）：
+	 * 次数、总和、最短 / 平均 / 中位 / 最长，和最慢的 top 次（泳道、开始、耗时、深度），网页点一下跳到那一块
+	 */
+	bool QueryInstances(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+	{
+		double TimerNum = -1;
+		if (!A->TryGetNumberField(TEXT("timer"), TimerNum) || TimerNum < 0)
+		{
+			Error = TEXT("要给 timer（计时器 id，从 timers 查询里拿）");
+			return false;
+		}
+		const uint32 Target = static_cast<uint32>(TimerNum);
+		const double T0 = Num(A, TEXT("t0"), 0);
+		const double T1 = Num(A, TEXT("t1"), S.GetDurationSeconds());
+		const int32 Top = FMath::Clamp(Int(A, TEXT("top"), 50), 1, 500);
+		TArray<int32> Want = Lanes(A);
+		if (Want.Num() == 0)
+		{
+			Want = AllLanes(S, TP);
+		}
+		FTimers Timers(TP);
+		struct FHit
+		{
+			int32 Lane;
+			double Start;
+			double Dur;
+			double Self;
+			int32 Depth;
+		};
+		TArray<FHit> Hits;
+		for (int32 Lane : Want)
+		{
+			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32 Depth, uint32 Timer, double Child, const TArray<FOpen>&)
+			{
+				if (Timer == Target && End > T0 && Start < T1)
+				{
+					Hits.Add({ Lane, Start, End - Start, FMath::Max(0.0, End - Start - Child), Depth });
+				}
+			});
+		}
+		Hits.Sort([](const FHit& X, const FHit& Y) { return X.Dur > Y.Dur; });
+		double Sum = 0;
+		double SelfSum = 0;
+		for (const FHit& H : Hits)
+		{
+			Sum += H.Dur;
+			SelfSum += H.Self;
+		}
+		const int32 N = Hits.Num();
+		Out->SetNumberField(TEXT("id"), Target);
+		Out->SetStringField(TEXT("name"), Timers.Name(Target));
+		Out->SetNumberField(TEXT("count"), N);
+		Out->SetNumberField(TEXT("incl"), Ms(Sum));
+		Out->SetNumberField(TEXT("excl"), Ms(SelfSum));
+		Out->SetNumberField(TEXT("min"), N ? Ms(Hits.Last().Dur) : 0);
+		Out->SetNumberField(TEXT("max"), N ? Ms(Hits[0].Dur) : 0);
+		Out->SetNumberField(TEXT("avg"), N ? Ms(Sum / N) : 0);
+		Out->SetNumberField(TEXT("median"), N ? Ms(Hits[N / 2].Dur) : 0);
+		TArray<TSharedPtr<FJsonValue>> Items;
+		for (int32 i = 0; i < N && i < Top; ++i)
+		{
+			const FHit& H = Hits[i];
+			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetNumberField(TEXT("lane"), H.Lane);
+			O->SetNumberField(TEXT("start"), H.Start);
+			O->SetNumberField(TEXT("ms"), Ms(H.Dur));
+			O->SetNumberField(TEXT("excl"), Ms(H.Self));
+			O->SetNumberField(TEXT("depth"), H.Depth);
+			Items.Add(MakeShared<FJsonValueObject>(O));
+		}
+		Out->SetArrayField(TEXT("items"), Items);
 		return true;
 	}
 
@@ -863,7 +965,11 @@ namespace AgentPanelEd
 			{
 				return QueryStack(S, *TP, A, Out, Error);
 			}
-			Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / counters / log / bookmarks）"), *What);
+			if (What == TEXT("instances"))
+			{
+				return QueryInstances(S, *TP, A, Out, Error);
+			}
+			Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / instances / counters / log / bookmarks）"), *What);
 			return false;
 		});
 	}

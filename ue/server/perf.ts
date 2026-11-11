@@ -20,7 +20,8 @@ import { c, now, readJson, t, uid, writeJson } from './util.ts'
  * - memreport：memreport -full，文件写在 Saved/Profiling/MemReports。
  * 引擎不告诉我们文件写到哪了，所以开始前记下已有的文件，结束后找新出现的那个。
  * - trace（性能页二期）：Trace.File 写到 Saved/Profiling/AgentPanel/<名字>.utrace，Trace.Stop 停；分析见 trace-query.ts。
- * 每次抓取都有时长上限，到了自己停：Agent 开了忘关的话 CSV / trace 会一直涨。
+ * 时长：网页上录制不限时长（用户 2026-11-11），点停止才停；Agent 不给 seconds 时默认 30 秒自动停（开了忘关文件会一直涨），
+ * 给 seconds=0 也是不限时长。
  */
 export interface ActiveCapture {
   id: string
@@ -32,8 +33,9 @@ export interface ActiveCapture {
   file?: string
   label: string
   startedAt: string
-  /** 到这个时间自动停 */
-  deadline: string
+  /** 到这个时间自动停；不限时长时没有 */
+  deadline?: string
+  /** 时长上限（秒），0 = 不限 */
   seconds: number
   pid: number
   by: Actor
@@ -47,7 +49,43 @@ const readActive = (project: string) => readJson<ActiveCapture[]>(activeFile(pro
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export const DEFAULT_SECONDS = 30
-export const MAX_SECONDS = 600
+
+/** 时长：明确给 0 = 不限；没给（Agent 忘了写）按默认；其余按给的，不设上限 */
+const secondsOf = (v: unknown) => {
+  if (v === 0 || v === '0') return 0
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_SECONDS
+}
+const limitText = (s: number) => (s ? t('最长 {s} 秒，到时间自动停', { s }) : t('不限时长，停止前一直录'))
+const deadlineOf = (s: number) => (s ? new Date(Date.now() + s * 1000).toISOString() : undefined)
+
+/**
+ * 可以勾的 trace 通道（自定义录制用；名字是引擎的 Trace 通道名，大小写不敏感）。网页 RecordControls 照这份列勾选框。
+ * memory 是 memalloc + callstack + module 的合称，要 UE 带 -trace=memory 启动才录得到分配（中途开只有之后的）
+ */
+export const TRACE_CHANNELS = [
+  'cpu',
+  'gpu',
+  'frame',
+  'bookmark',
+  'log',
+  'counters',
+  'stats',
+  'task',
+  'region',
+  'loadtime',
+  'assetloadtime',
+  'file',
+  'net',
+  'object',
+  'animation',
+  'rhicommands',
+  'rendercommands',
+  'memtag',
+  'memory',
+  'screenshot',
+  'contextswitch',
+] as const
 
 /**
  * trace 录制预设（性能页设计 3.4，默认「标准」）。命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，
@@ -61,12 +99,12 @@ export const TRACE_PRESETS: Record<string, { channels: string; named?: boolean }
   memtag: { channels: `${STANDARD},memtag` },
 }
 
-function traceChannels(preset: string, custom: string) {
+function traceChannels(preset: string, custom: string, namedEvents?: boolean) {
   if (preset === 'custom') {
     const ch = custom.replace(/\s+/g, '')
     if (!/^[A-Za-z0-9_]+(,[A-Za-z0-9_]+)*$/.test(ch))
       throw new BridgeError(t('自定义通道要写成逗号分隔的通道名，例如 cpu,gpu,frame'))
-    return { channels: ch, named: false }
+    return { channels: ch, named: !!namedEvents }
   }
   const p = TRACE_PRESETS[preset]
   if (!p)
@@ -145,7 +183,7 @@ const elapsedOf = (startedAt: string) => Math.round((Date.now() - Date.parse(sta
 
 export async function startCapture(
   ctx: OpCtx,
-  a: { kind?: string; seconds?: number; label?: string; preset?: string; channels?: string },
+  a: { kind?: string; seconds?: unknown; label?: string; preset?: string; channels?: string; named?: boolean },
 ) {
   const kind = String(a.kind || 'csv')
   if (kind === 'memreport') return memreport(ctx, a.label)
@@ -164,13 +202,14 @@ export async function startCapture(
       }),
     )
   }
-  const seconds = Math.min(Math.max(1, Math.round(Number(a.seconds) || DEFAULT_SECONDS)), MAX_SECONDS)
+  const seconds = secondsOf(a.seconds)
   const label = (a.label || '').trim() || `${kind}-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
-  if (kind === 'trace') return startTrace(ctx, label, seconds, String(a.preset || 'standard'), String(a.channels || ''))
+  if (kind === 'trace')
+    return startTrace(ctx, label, seconds, String(a.preset || 'standard'), String(a.channels || ''), a.named)
   const run = await allow(
     ctx,
     t('Agent 要开始性能抓取'),
-    t('CSV Profiler（每帧各项耗时），最长 {s} 秒，到时间自动停；文件写在项目的 Saved/Profiling/CSV', { s: seconds }),
+    t('CSV Profiler（每帧各项耗时），{limit}；文件写在项目的 Saved/Profiling/CSV', { limit: limitText(seconds) }),
   )
   const before = (await filesOf(p, 'csv')).map((x) => x.file)
   const res = await runOp(run, 'console', { command: 'CsvProfile Start' })
@@ -180,7 +219,7 @@ export async function startCapture(
     kind: 'csv',
     label,
     startedAt: now(),
-    deadline: new Date(Date.now() + seconds * 1000).toISOString(),
+    deadline: deadlineOf(seconds),
     seconds,
     pid,
     by: ctx.actor,
@@ -197,12 +236,15 @@ export async function startCapture(
     seconds,
     pid,
     output: res.output,
-    next: '触发要测的场景（ue_gm / ue_console），需要分段就 action=mark，然后 action=stop；不 stop 到时间也会自动停',
+    next: seconds
+      ? '触发要测的场景（ue_gm / ue_console），需要分段就 action=mark，然后 action=stop；不 stop 到时间也会自动停'
+      : '触发要测的场景（ue_gm / ue_console），需要分段就 action=mark，测完一定要 action=stop（不限时长，不停会一直录）',
   }
 }
 
 function arm(ctx: OpCtx, item: ActiveCapture) {
   clearTimeout(timers.get(item.id))
+  if (!item.deadline) return
   const ms = Math.max(0, Date.parse(item.deadline) - Date.now())
   // 自动停不在对话里，没有确认卡片可弹：开始时已经确认过这一次抓取
   const auto = granted({ ...ctx, confirm: undefined })
@@ -217,7 +259,7 @@ function arm(ctx: OpCtx, item: ActiveCapture) {
 /** 过了时限还没停的（面板重启过、定时器丢了）补停 */
 async function sweep(ctx: OpCtx) {
   for (const item of await readActive(ctx.project.id))
-    if (Date.parse(item.deadline) < Date.now() - 1000 && !timers.has(item.id))
+    if (item.deadline && Date.parse(item.deadline) < Date.now() - 1000 && !timers.has(item.id))
       await stopCapture(granted({ ...ctx, confirm: undefined }), item.id, true).catch(async () => {
         // 当时的进程已经退了：没什么可停的，清掉登记
         await writeJson(activeFile(ctx.project.id), [])
@@ -323,18 +365,25 @@ const safeName = (s: string) =>
     .replace(/^_+|_+$/g, '')
     .slice(0, 40) || 'trace'
 
-async function startTrace(ctx: OpCtx, label: string, seconds: number, preset: string, custom: string) {
+async function startTrace(
+  ctx: OpCtx,
+  label: string,
+  seconds: number,
+  preset: string,
+  custom: string,
+  namedEvents?: boolean,
+) {
   const p = ctx.project
-  const { channels, named } = traceChannels(preset, custom)
+  const { channels, named } = traceChannels(preset, custom, namedEvents)
   const run = await allow(
     ctx,
     t('Agent 要开始录 trace'),
     t(
-      'Unreal Insights 同款录制（通道 {ch}{named}），最长 {s} 秒，到时间自动停；文件写在项目的 Saved/Profiling/AgentPanel',
+      'Unreal Insights 同款录制（通道 {ch}{named}），{limit}；文件写在项目的 Saved/Profiling/AgentPanel',
       {
         ch: channels,
         named: named ? t('，开命名事件') : '',
-        s: seconds,
+        limit: limitText(seconds),
       },
     ),
   )
@@ -355,7 +404,7 @@ async function startTrace(ctx: OpCtx, label: string, seconds: number, preset: st
     file,
     label,
     startedAt: now(),
-    deadline: new Date(Date.now() + seconds * 1000).toISOString(),
+    deadline: deadlineOf(seconds),
     seconds,
     pid,
     by: ctx.actor,
@@ -374,7 +423,7 @@ async function startTrace(ctx: OpCtx, label: string, seconds: number, preset: st
     seconds,
     pid,
     output: res.output,
-    next: '触发要测的场景，需要分段就 action=mark，然后 action=stop；停止后用 ue_capture action=summary 看分析结果',
+    next: `触发要测的场景，需要分段就 action=mark，然后 action=stop${seconds ? '' : '（不限时长，不停会一直录）'}；停止后用 ue_capture action=summary 看分析结果`,
   }
 }
 

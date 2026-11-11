@@ -38,13 +38,14 @@ user-invocable: true
 7. 对到代码：列名里的分类和名字（如 `Slate/Tick`、`Exclusive/GameThread/Animation`）在工程和引擎里搜 `CSV_SCOPED_TIMING_STAT`、`CSV_CUSTOM_STAT`。
 8. 改完再抓一份，`action=compare id=<改前> other=<改后>` 验证。
 
-CSV 只能说明「哪些帧慢、哪一类慢」。要知道具体哪个函数慢，录 trace（桥接 1.4.0 以上）：
+CSV 只能说明「哪些帧慢、哪一类慢」。要知道具体哪个函数慢，录 trace（桥接 1.5.0 以上）：
 
 1. `ue_perf action=start kind=trace seconds=20 label=<名字>`；要看蓝图函数名加 `preset=named`，查加载慢用 `preset=loading`。操作前后照样 `mark`。
 2. `ue_perf action=stop`，再 `ue_capture action=summary id=<id>`。第一次查要等编辑器或后台编辑器分析，返回 `analyzing` 就过几秒再查。
 3. 看 `topTimers`（按独占时间排）和 `worstFrames`，然后：
    - `query what=timers frame=<最慢那帧>` 或 `from` / `to` 写书签名，只看那一段；
    - `query what=butterfly timer=<名字>`：`callers` 是谁调了它，`callees` 是它里面调了谁、各花多少；
+   - `query what=instances timer=<名字>`：它每次调用的次数、最短 / 平均 / 中位 / 最长和最慢的几次在哪，区分「每次都慢」和「偶尔一次特别慢」；
    - `query what=stack lane=GameThread time=<秒>`：那一刻从线程根到最深一层的调用堆栈。
 4. 独占时间很长、又没有子调用的块，说明它里面的代码没加计时宏，告诉用户该在哪个函数里加 `TRACE_CPUPROFILER_EVENT_SCOPE` 再录一次。
 
