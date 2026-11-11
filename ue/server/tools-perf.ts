@@ -8,6 +8,7 @@ import {
   importCapture,
 } from './captures.ts'
 import { BridgeError } from './instances.ts'
+import { liveSummary } from './perf-live.ts'
 import { captureStatus, DEFAULT_SECONDS, markCapture, MAX_SECONDS, startCapture, stopCapture } from './perf.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { t } from './util.ts'
@@ -19,6 +20,7 @@ import { t } from './util.ts'
  */
 const PERF_HELP = `ue_perf：对着正在运行的 UE 抓性能和内存数据。抓到的文件用 ue_capture 分析。
 
+action=live   不抓文件，直接看最近 seconds 秒（默认 5，最多 60）的实时读数：帧时间、各线程时间、GPU、Draw Calls、内存，和游戏里 stat unit 同源。先用它判断有没有问题、瓶颈在哪个线程
 action=start  开始抓取
   kind=csv        CSV Profiler：每帧的帧时间、各线程时间和各项统计。seconds 是时长上限（默认 ${DEFAULT_SECONDS}，最多 ${MAX_SECONDS}），到时间自动停
   kind=memreport  执行 memreport -full，马上得到一份内存报告（游戏会卡几秒），不用 stop
@@ -30,7 +32,8 @@ action=status 看有没有正在进行的抓取
 怎么选：
 - 卡顿、帧率低：kind=csv。start → 用 ue_gm / ue_console 触发场景（前后各 mark 一下）→ stop → ue_capture summary。
 - 内存高、怀疑泄漏：kind=memreport。在同一个场景进出一次，前后各抓一份，用 ue_capture compare 看哪些类只涨不回。
-- 这个版本还不能抓 Unreal Insights 的 trace、GPU 分阶段耗时，也没有实时数值；CSV 只说明「哪些帧、哪一类慢」，定位不到具体函数。
+- 先看大概：action=live，看帧率、哪个线程最慢、内存多少，不留文件。
+- 这个版本还不能抓 Unreal Insights 的 trace、GPU 分阶段耗时；CSV 只说明「哪些帧、哪一类慢」，定位不到具体函数。
 
 注意：Shipping 构建里没有 CSV Profiler；PIE 里客户端和服务器在同一个进程，抓到的是整个进程的数据。`
 
@@ -62,9 +65,9 @@ trace（.utrace）这个版本只能登记，不能分析。
 export const PERF_DEFS = [
   tool(
     'ue_perf',
-    '性能和内存抓取（对着正在运行的 UE）。action=start 开始：kind=csv 是 CSV Profiler（每帧耗时，seconds 时长上限，到时间自动停），kind=memreport 抓一份内存报告（马上完成）；action=mark 打书签（name）；action=stop 停止 CSV 抓取并返回抓取 id；action=status 看进行中的抓取；action=help 看用法和怎么选。抓到的文件用 ue_capture 分析。',
+    '性能和内存抓取（对着正在运行的 UE）。action=live 看最近几秒的实时读数（seconds，和 stat unit 同源，不留文件）；action=start 开始：kind=csv 是 CSV Profiler（每帧耗时，seconds 时长上限，到时间自动停），kind=memreport 抓一份内存报告（马上完成）；action=mark 打书签（name）；action=stop 停止 CSV 抓取并返回抓取 id；action=status 看进行中的抓取；action=help 看用法和怎么选。抓到的文件用 ue_capture 分析。',
     {
-      action: { type: 'string', enum: ['start', 'stop', 'mark', 'status', 'help'] },
+      action: { type: 'string', enum: ['live', 'start', 'stop', 'mark', 'status', 'help'] },
       kind: { type: 'string', enum: ['csv', 'memreport'] },
       seconds: { type: 'number' },
       label: { type: 'string' },
@@ -75,6 +78,8 @@ export const PERF_DEFS = [
     ['action'],
     async (a, ctx) => {
       switch (a.action) {
+        case 'live':
+          return out(await liveSummary(ctx, Number(a.seconds) || 5))
         case 'start':
           return out(await startCapture(ctx, { kind: str(a.kind), seconds: Number(a.seconds), label: str(a.label) }))
         case 'stop':
