@@ -765,7 +765,6 @@
   "没找到 {f}：这个引擎没有编译 Unreal Insights（源码版要先编一下 UnrealInsights 目标）": "{f} not found: this engine has no Unreal Insights build (for a source engine, build the UnrealInsights target first)",
   "实时读数和 stat unit 同源；录 trace 看时间轴和函数调用堆栈，抓帧数据和内存报告，或者交给 Agent 分析": "Live readings come from the same source as stat unit; record a trace to see the timeline and function call stacks, capture frame data and memory reports, or hand them to the Agent",
   "在 Unreal Insights 里打开": "Open in Unreal Insights",
-  "拖选一段设为分析范围，点一下选中一帧，双击回到整段": "Drag to set the analysis range, click to pick a frame, double-click to go back to the whole trace",
   "第 {n} 帧": "Frame {n}",
   "标准": "Standard",
   "标准 + 命名事件": "Standard + named events",
@@ -987,5 +986,14 @@
   "位置": "Location",
   "旋转": "Rotation",
   "缩放": "Scale",
-  "构造脚本": "Construction Script"
+  "构造脚本": "Construction Script",
+  "拖选一段设为分析范围，点一下选中一帧，双击回到整段；滚轮缩放，右键拖动或 Shift + 滚轮左右平移": "Drag to set the analysis range, click to pick a frame, double-click to go back to the whole trace; scroll to zoom, right-drag or Shift + scroll to pan",
+  "帧条放大到分析范围": "Zoom frame strip to analysis range",
+  "帧条放大到时间轴窗口": "Zoom frame strip to timeline window",
+  "帧条看整段": "Show whole trace in frame strip",
+  "滚轮缩放 · 右键拖动平移": "Scroll to zoom · right-drag to pan",
+  "帧条放大倍数": "Frame strip zoom level",
+  "缩小（滚轮向下）": "Zoom out (scroll down)",
+  "放大（滚轮向上）": "Zoom in (scroll up)",
+  "拖动左右平移": "Drag to pan"
 }
