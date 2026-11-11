@@ -26,6 +26,7 @@ export function ClassPicker({
   common,
   load,
   placeholder,
+  free = true,
 }: {
   value: ClassOpt
   onChange: (c: ClassOpt) => void
@@ -34,6 +35,8 @@ export function ClassPicker({
   /** 按输入的字从 UE 里搜；不给就只有常用的和手输的 */
   load?: (q: string) => Promise<ClassOpt[]>
   placeholder: string
+  /** 输入的字本身能不能当一项选（false：只能选列出来的，函数参数只许选能赋值的类） */
+  free?: boolean
 }) {
   const { cn } = h()
   const [open, setOpen] = useState(false)
@@ -85,10 +88,10 @@ export function ClassPicker({
     for (const r of remote)
       if (hit(r) && !out.some((o) => o.name === r.name && (!o.path || o.path === r.path))) out.push(r)
     // 列表里没有一模一样的名字时，输入的字自己也是一项：没加载的蓝图类、旧桥接搜不到的类照样能选
-    if (s && !out.some((o) => o.name.toLowerCase() === s || o.label?.toLowerCase() === s))
+    if (free && s && !out.some((o) => o.name.toLowerCase() === s || o.label?.toLowerCase() === s))
       out.push({ name: q.trim(), note: t('按输入的类名') })
     return out
-  }, [q, common, remote])
+  }, [q, common, remote, free])
   const at = Math.min(cur, Math.max(0, opts.length - 1))
 
   useEffect(() => {
