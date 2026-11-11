@@ -19,7 +19,15 @@
 - `web/src/plugin/nav.tsx`：面板路由 `#/pdesign/ui/<设计稿>/<子页>` 和原来设计页用的 `design/<设计稿>/<子页>` 互相转换，设计页代码不用改。
 - `web/src/lib/api.ts`：`/designs` 请求转到插件自己的接口 `/api/plugins/ui-design/api/designs`。
 - `web/src/lib/design-store.ts`：设计稿列表的状态，原来放在面板的全局数据里。
+- `web/src/lib/data.ts`：转出面板的 `@/lib/data`，导航类型里补回 `design` 页（面板删掉自带的设计后没有了），实际地址由 `nav.tsx` 换算。
 - 类名一律带前缀 `ud:`（`web/index.css` 的 `prefix(ud)`）；面板自定义的几个工具类（`panel`、`frost-card`……）在 `web/index.css` 里抄了一份。
+
+## 文档
+
+- `docs/design-module.md`：模块文档（数据流、关键文件、原画还原各期、回归记录），从面板仓库搬来。
+- `docs/umg-export.md`：导出给 UE 的控件树格式。
+- `docs/lessons/`：踩过的坑；`docs/bugs/`：用户报过的 Bug。
+- 面板这边留下的（设计模式的外壳、ComfyUI 工作流页、风格库、浏览器扩展）见面板仓库的 `docs/modules/design/README.md`。
 
 ## 开发
 

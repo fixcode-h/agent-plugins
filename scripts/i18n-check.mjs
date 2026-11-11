@@ -17,13 +17,20 @@ function walk(dir, out = []) {
   return out
 }
 
+const unescape = (s, q) => s.replace(/\\(.)/g, (m, c) => (c === 'n' ? '\n' : c === q || c === '\\' ? c : m))
+const RE = /\bt\(\s*(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"|`((?:\\.|[^`\\$])*)`)/g
+
 function codeStrings(dir) {
   const out = new Set()
   // shared/：照面板源码布局搬过来的插件（插件接口 4）前后端共用的代码也有界面文案
   for (const f of ['server', 'web', 'shared'].flatMap((s) => walk(path.join(dir, s)))) {
+    // 和面板 scripts/i18n-check.mjs 一样：单引号、双引号、不带插值的反引号都算，整行注释里举例的不算
     const src = readFileSync(f, 'utf8')
-    for (const m of src.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g))
-      out.add(m[1].replace(/\\'/g, "'").replace(/\\n/g, '\n'))
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+      .join('\n')
+    for (const m of src.matchAll(RE))
+      out.add(m[1] !== undefined ? unescape(m[1], "'") : m[2] !== undefined ? unescape(m[2], '"') : unescape(m[3], '`'))
   }
   return out
 }

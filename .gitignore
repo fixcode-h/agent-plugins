@@ -3,3 +3,5 @@ dist/
 .tmp/
 blender/dsh/lib/
 .panel
+# 单测里起的面板模块会在工作目录写日志
+logs/
