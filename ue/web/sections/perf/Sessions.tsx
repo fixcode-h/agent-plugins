@@ -47,7 +47,7 @@ export function Sessions({
   const { cn, ui } = h()
   const row = (on: boolean) =>
     cn(
-      'ue:group ue:mx-2 ue:flex ue:cursor-pointer ue:flex-col ue:gap-0.5 ue:rounded-lg ue:px-2.5 ue:py-2 ue:text-left',
+      'ue:group ue:mx-2 ue:flex ue:cursor-pointer ue:flex-col ue:gap-0.5 ue:rounded-lg ue:px-2.5 ue:py-2 ue:text-left ue:transition-colors ue:duration-150',
       on ? 'ue:bg-sel' : 'ue:hover:bg-hover',
     )
   const groups: { day: string; list: Capture[] }[] = []

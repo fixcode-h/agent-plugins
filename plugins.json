@@ -13,11 +13,11 @@
     {
       "id": "ue",
       "name": "UE",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按名字找 Actor、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
       "icon": "gamepad",
-      "tag": "ue-v0.3.0",
-      "asset": "ue-0.3.0.zip",
+      "tag": "ue-v0.4.0",
+      "asset": "ue-0.4.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
     }
   ]

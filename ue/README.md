@@ -40,7 +40,9 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - Agent 的权限：看和分析不用确认；发起抓取按「运行时」权限，询问时一次抓取确认一次；删除抓取文件每次确认。
 - 网页上每份抓取有「让 Agent 分析」，把抓取交给对话。
 - 实时读数（桥接 1.3.0 起）：桥接每帧记一条和 `stat unit` 同源的数（Frame / Game / Draw / RHI / GPU、Draw Calls、图元、已用内存、UObject 数），配色阈值取引擎的 `t.TargetFrameTimeThreshold`、`t.UnacceptableFrameTimeThreshold`。网页「性能」页一打开就有读数条、最近 300 帧的帧条和 60 秒线程曲线，「内存」看 10 分钟的内存曲线；Agent 用 `ue_perf action=live` 取最近几秒的摘要。只在有人看时采，最后一次取数 10 秒后自动停。
-- Unreal Insights 的 `.utrace` 现在只登记、不能分析；时间轴和函数调用堆栈在后续版本（性能页设计二期）。
+- trace（桥接 1.4.0 起，性能页设计二期）：网页「录制」或 `ue_perf action=start kind=trace preset=…` 让 UE 执行 `Trace.File`，写到 `Saved/Profiling/AgentPanel/<名字>.utrace`；预设有标准（`cpu,gpu,frame,bookmark,counters,log`）、标准 + 命名事件（同时开 `stat namedevents`，看得到蓝图函数名）、加载、内存标签（要 `-llm` 启动）。停止后由编辑器（没开时后台编辑器）里的 `trace.query` 用 UE 自己的 TraceServices 分析，和 Unreal Insights 同一套代码。
+- trace 详情页照 Timing Insights 布局：帧条（拖选分析范围）、时间轴（滚轮缩放、拖动平移、点块看调用堆栈）、计时器表、调用者 / 被调用者、计数器、日志；可以在 Unreal Insights 里打开原文件。Agent 用 `ue_capture action=summary` / `query what=timers|butterfly|stack|frames|log|counters` 查同样的数据，结果限行数。
+- trace 是录完再分析（停止后几秒到几十秒出结果），录制中看的是实时读数；边录边分析要等在真实引擎上验证过 TraceServices 的实时会话再做。分析服务的 C++ 还没在真实引擎上编译过。
 - 解析器按 UE 5.4 的文件格式写，测试数据是手写的样例（`scripts/perf-fixtures.mjs`），还没用真实项目的文件验证过。`node ue/scripts/perf-test.mjs` 跑解析器测试。
 
 ## 只认 Agent 模式里的项目
