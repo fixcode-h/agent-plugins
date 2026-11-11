@@ -154,7 +154,7 @@ const DEFS = [
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。数组加删元素用 array（add 末尾加一个默认元素、insert 在 index 前插入、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；集合和映射只能 clear），这时不写 value；实例化子对象数组（Instanced）也这样改，不用整体替换。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_asset save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。数组加删元素用 array（add 末尾加一个默认元素、insert 在 index 前插入、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；集合和映射只能 clear），这时不写 value；实例化子对象数组（Instanced）也这样改，不用整体替换。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -221,7 +221,7 @@ const DEFS = [
       '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验）。' +
       '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
-      '保存：dirty 列出改了没保存的；save 保存 packages（P4 先签出、新文件 add，按权限确认）；revert 放弃改动；open 在编辑器里打开。' +
+      '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
       'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器。',
     {
       action: { type: 'string', enum: ASSET_ACTIONS },
@@ -262,8 +262,9 @@ const DEFS = [
           return out(await runOp(ctx, 'datatable.rows', { path: a.path, action: a.action, row: a.row, to: a.to }))
         case 'dirty':
           return out(await runOp(ctx, 'asset.dirty', {}))
+        // 保存拆成了 ue_save（面板据此把写回的文件算进改动）；老会话里还按旧说明调的，指过去
         case 'save':
-          return out(await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000))
+          return mcpText('保存改用 ue_save 工具（packages 参数不变）', true)
         case 'revert':
           return out(await runOp(ctx, 'asset.revert', { packages: a.packages ?? [] }, 120000))
         case 'open':
@@ -432,11 +433,13 @@ DEFS.push(...PERF_DEFS)
 export const TOOL_NAMES = DEFS.map((d) => d.name)
 
 /** 这一轮对话的工具：项目按对话所在的项目找（每次调用时重新读，登记改了不用重启对话） */
-export function ueTools(projectId: string, agent: string): McpTool[] {
+export function ueTools(projectId: string, root: string, agent: string): McpTool[] {
   return DEFS.map((d) => ({
     name: d.name,
     description: d.description,
     inputSchema: { type: 'object', properties: d.properties, required: d.required },
+    ...(d.effect && { effect: d.effect }),
+    ...(d.targets && { targets: (args: Record<string, unknown>) => d.targets!(args, root) }),
     call: async (args: Record<string, unknown>, mctx: McpCallContext) => {
       const project = await getProject(projectId)
       if (!project) return mcpText('这个项目已经从 UE 页移除了', true)

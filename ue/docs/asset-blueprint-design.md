@@ -221,7 +221,7 @@ Event BeginPlay                                  #a1b2c3d4
 2. `node_search` 查要放的节点。
 3. `edit` 带 `dryRun=true` 演练，看操作结果和编译错误。
 4. 没问题后正式 `edit`；有编译错误就按节点 id 继续修。
-5. `ue_asset save` 保存，按权限请用户确认。
+5. `ue_compile` 确认编译通过，`ue_save` 保存，按权限请用户确认（0.7.0 起保存和编译拆成单独的工具，面板据此记改动和验证）。
 
 ### 边界
 

@@ -8,7 +8,7 @@ user-invocable: true
 
 面板「UE」页接入的项目里，对话有 `ue_*` 工具。资源和蓝图的读写不需要 PIE：编辑器开着就发给编辑器，没开时自动起后台编辑器（不开窗口，首次 30–60 秒）。
 
-所有修改只改内存并标脏，`ue_asset action=save` 才写回磁盘（按权限请用户确认，P4 项目先签出）。
+所有修改只改内存并标脏，`ue_save` 才写回磁盘（按权限请用户确认，P4 项目先签出）。
 
 ## 地址
 
@@ -37,7 +37,8 @@ user-invocable: true
 2. 要放的节点不是 `call / get / set / branch / sequence / cast / self / event / custom_event / macro` 这几种时，先 `action=node_search query=<关键字>` 拿 `spawner`。
 3. `edit` 带 `dryRun=true` 演练：真实执行并编译，返回每步结果和编译错误，然后取消。
 4. 演练没问题再正式 `edit`。返回里 `compile.nodes` 是挂在节点上的错误（带图名和节点 id），`compile.messages` 是编译器原话，`compile.affected` 是受影响的子类和调用方。有错按节点 id 接着修，不要重来一遍。
-5. 给用户说明改了什么，再 `ue_asset action=save`。
+5. 保存前 `ue_compile path=<蓝图>` 确认编译通过（结果算进对话的完成依据，没通过时对话不能结束）。
+6. 给用户说明改了什么，再 `ue_save packages=[...]`。
 
 一批操作的例子（BeginPlay 时把 HP 设成 MaxHP，再打印一句）：
 

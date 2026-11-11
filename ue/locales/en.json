@@ -998,5 +998,8 @@
   "找不到拿着锁的进程（可能是管理员权限打开的，面板看不到它加载的模块）：在任务管理器里结束 UnrealEditor 和 LiveCodingConsole，或者重启电脑": "Could not find the process holding the lock (it may run as administrator, so the panel cannot see its modules). End UnrealEditor and LiveCodingConsole in Task Manager, or restart the computer.",
   "Live Coding 的锁已释放，开始编译": "Live Coding lock released; starting the build",
   "开始编译": "Starting the build",
-  "会直接结束这个引擎开着的所有编辑器（包括开着别的项目的），以及还占着 Live Coding 的进程。": "Every open editor of this engine will be ended immediately, including ones with other projects open, along with any process still holding Live Coding."
+  "会直接结束这个引擎开着的所有编辑器（包括开着别的项目的），以及还占着 Live Coding 的进程。": "Every open editor of this engine will be ended immediately, including ones with other projects open, along with any process still holding Live Coding.",
+  "这个项目没在 UE 页接入，转不了 .uasset": "This project isn't connected on the UE page, so .uasset files can't be converted to text",
+  "这个 UE 里的桥接插件是旧版本，不能把资源转成文本：到「桥接与权限」更新到 {v}，重新编译并重启 UE": "The bridge plugin in this UE is outdated and can't convert assets to text: update it to {v} under \"Bridge & permissions\", rebuild and restart UE",
+  "编译蓝图": "Compile Blueprint"
 }

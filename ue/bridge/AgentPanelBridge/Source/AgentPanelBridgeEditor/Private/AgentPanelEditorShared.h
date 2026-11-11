@@ -1,6 +1,7 @@
 // 编辑器模块各组操作共用的东西：资源寻址（蓝图资源本身）、事务与演练、图表节点的 id 和查找、编译回读。
 // 操作分文件登记：AgentPanelBridgeEditor.cpp（DataTable、保存、PIE）、AgentPanelAssetOps.cpp（资源通用层）、
-// AgentPanelBlueprintRead.cpp（蓝图大纲、图表、搜节点）、AgentPanelBlueprintEdit.cpp（节点候选、操作列表、编译）。
+// AgentPanelBlueprintRead.cpp（蓝图大纲、图表、搜节点）、AgentPanelBlueprintEdit.cpp（节点候选、操作列表、编译）、
+// AgentPanelTextify.cpp（一版资源文件转文本，评审用）。
 #pragma once
 
 #include "AgentPanelBridge.h"
@@ -86,6 +87,8 @@ namespace AgentPanelEd
 	void RegisterAssetOps();
 	void RegisterBlueprintReadOps();
 	void RegisterBlueprintEditOps();
+	/** 一版 .uasset 文件转成文本（AgentPanelTextify.cpp）：asset.textify，评审看二进制资产的差异用 */
+	void RegisterTextifyOps();
 	/** trace 分析（AgentPanelTrace.cpp）：trace.query */
 	void RegisterTraceOps();
 }
