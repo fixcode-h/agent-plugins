@@ -303,7 +303,7 @@ try {
   assert.equal(perfAsked, 1)
   assert.ok(bridge.state.calls.includes('CsvProfile Start'))
   const again = await call('ue_perf', { action: 'start', kind: 'csv' }, yes)
-  assert.ok(again.isError && /已经有一个 CSV 抓取在进行/.test(text(again)), text(again))
+  assert.ok(again.isError && /已经有一个抓取在进行/.test(text(again)), text(again))
   assert.match(text(await call('ue_perf', { action: 'status' })), /开背包/)
   const marked = await call('ue_perf', { action: 'mark', name: 'open bag' })
   assert.ok(!marked.isError && bridge.state.calls.includes('CsvEvent open_bag'), text(marked))
