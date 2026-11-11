@@ -20,7 +20,8 @@ const activate: ActivateWeb = () => ({
       name: t('UI 设计'),
       desc: t('界面 · 原画 · 切图'),
       icon: LayoutTemplate,
-      tone: 'bg-run',
+      // 面板侧栏下拉里图标底色：用插件自己的样式表生成的类（面板不再有 bg-run 这个类）
+      tone: 'ud:bg-run',
       empty: t('还没有 UI 项目。UI 设计的项目和 Agent 的项目是分开的。'),
       newLabel: t('新建设计'),
       Sidebar: () => (
