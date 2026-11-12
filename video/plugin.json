@@ -1,0 +1,21 @@
+{
+  "id": "video",
+  "name": "视频截帧",
+  "version": "1.0.0",
+  "icon": "film",
+  "description": "把视频拖进对话输入框就能截帧：播放器里手动截、按画面变化 / 录屏 / 均匀自动截，选段、标注、去重、看前后变化，用 FFmpeg 或 ComfyUI 做画面增强，发送时换成选好的帧图片；Agent 也能自己调工具从视频里截帧来看。原来是面板自带的视频截帧。",
+  "author": "fixcode-h",
+  "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/video",
+  "api": 6,
+  "settings": [],
+  "skillGuide": {},
+  "agents": [],
+  "workflows": [],
+  "mcpServers": ["video"],
+  "toolNames": {
+    "video_frames": "从视频截帧"
+  },
+  "server": "server/index.js",
+  "web": "web/index.js",
+  "css": "web/index.css"
+}
