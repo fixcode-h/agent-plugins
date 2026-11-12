@@ -23,12 +23,32 @@
     {
       "id": "ui-design",
       "name": "UI 设计",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "用对话设计游戏界面和网页：AI 改控件树、加图片和动画，出整屏原画、抠切图和还原，标注、版本和导出（UE 控件树、React 网页、ZIP）。原来是面板自带的「设计」模式。",
       "icon": "palette",
-      "tag": "ui-design-v1.1.0",
-      "asset": "ui-design-1.1.0.zip",
+      "tag": "ui-design-v1.1.1",
+      "asset": "ui-design-1.1.1.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ui-design"
+    },
+    {
+      "id": "video",
+      "name": "视频截帧",
+      "version": "1.0.0",
+      "description": "把视频拖进对话输入框就能截帧：播放器里手动截、按画面变化 / 录屏 / 均匀自动截，选段、标注、去重、看前后变化，用 FFmpeg 或 ComfyUI 做画面增强，发送时换成选好的帧图片；Agent 也能自己调工具从视频里截帧来看。原来是面板自带的视频截帧。",
+      "icon": "film",
+      "tag": "video-v1.0.0",
+      "asset": "video-1.0.0.zip",
+      "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/video"
+    },
+    {
+      "id": "tables",
+      "name": "表格",
+      "version": "1.0.0",
+      "description": "游戏配置表这类 xlsx / CSV 表格的管理：按目录浏览、搜索、在线改单元格（文件仍是原来的 Excel / WPS 格式），结构信息存在表格之外；版本差异、提交和冲突合并、跨项目对比、导表脚本、AI 分析表格风格；Agent 能按主键查改，评审里的表格改动按格子比。原来是面板自带的表格页。",
+      "icon": "table",
+      "tag": "tables-v1.0.0",
+      "asset": "tables-1.0.0.zip",
+      "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/tables"
     }
   ]
 }

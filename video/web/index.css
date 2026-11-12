@@ -1,0 +1,10 @@
+/*
+ * 视频截帧插件的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 vd:（写成 vd:flex、vd:group-hover:opacity-100）：插件的样式表在面板之后加载，同名的工具类
+ * 会排在面板的响应式类后面把它盖掉；加了前缀两边的类名不会重叠。主题变量是面板的（sdk/theme.css）。
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(vd);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';

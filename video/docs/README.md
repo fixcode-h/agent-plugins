@@ -1,0 +1,25 @@
+<!-- 从面板仓库 docs/modules/web/conversation.md 搬来（2026-11-12 视频截帧拆成插件）。文中的路径相对插件目录 video/；搬过来的文件位置不变。和以前不一样的地方见下面「拆成插件后」。 -->
+
+# video：视频截帧
+
+- 状态：documented
+- 职责：输入框里的视频卡片和截帧弹窗、FFmpeg 查找与下载、手动 / 自动截帧、画面增强、标注去重帧差、给 Agent 的截帧工具
+- 源码：`web/index.tsx`, `web/src/components/video/`, `web/src/lib/video-api.ts`, `server/index.ts`, `server/video/`, `shared/video.ts`, `shared/video-tools.ts`
+- 入口：`web/index.tsx`、`server/index.ts`
+- 关键词：视频、截帧、FFmpeg、自动截帧、画面增强、标注、video_frames
+- 更新：2026-11-12
+
+## 拆成插件后
+
+- 输入框认领视频走面板插件接口 6 的 `WebPlugin.attachmentIntakes`（`web/index.tsx`）：面板的附件条目只记 `intake: 'video:frames'` 和选好的 `picks`，卡片状态「n 帧 / 点击选帧」、发送前没选帧的提示都由插件给。下文里的 `videoHost`、`video: true`、`frames`、`withVideoFrames`、`useVideoIntake` 是拆之前面板里的名字，现在在面板分别是 `intakeHost`、`intake`、`picks`、`withIntakePicks`、`web/src/plugins/attachment-intake.tsx` 的 `useAttachmentIntake`。
+- 认领的扩展名不含 `ts`（`shared/video.ts` 的 `VIDEO_EXTS`）：以前按名字认，把 TypeScript 文件也当成了视频；真的 .ts 视频按浏览器给的 `video/` 类型照样认得出。
+- 接口从面板的 `/api/video/…` 挪到 `/api/plugins/video/api/video/…`（`web/src/lib/video-api.ts`）。
+- 给 Agent 的截帧工具 `video_frames` 是插件的 MCP 服务 `video`（`server/index.ts`），只在用户在聊的对话里给（`PluginRun.conversation`，和以前 `app: orch && !orch.helper` 一样）；以前收在面板 `more_tools` 里延后加载，现在直接列出。
+- 数据还在面板数据目录原来的位置（`video/`、`video-frames/`），已经下载的 FFmpeg 和截帧记录接着用。
+- 在线演示不装插件，所以演示里没有视频截帧。
+- 类名一律带前缀 `vd:`（`web/index.css` 的 `prefix(vd)`）。
+
+## 拆之前的说明（面板 docs/modules/web/conversation.md）
+
+- 视频截帧（2026-11-05 用户定的：不把视频发给 Agent，发截出来的帧图片；不拷视频到对话目录，不改原视频）：输入框收到视频（拖进来、粘贴文件、选文件、粘贴视频路径）时，`useAttachments` 的 `videoHost` 有人接就把它作为视频卡片放进输入框（`video: true`，只引用原路径，不拷、不上传；浏览器拿不到路径的按名字找回，找不到提示「选择视频」）。点视频卡片打开截帧弹窗（`web/src/components/video/useVideoIntake.tsx`，挂在 `useComposerChips` 的 `viewer` 里，任务对话和新建任务的输入框都有；没挂弹窗的输入框照旧当文件），选好的帧记在卡片上（卡片状态显示「n 帧」，没选时「点击选帧」），再打开时按上次选的勾。发送时 `files.prepare` 用 `withVideoFrames` 把视频卡片原位换成帧图片卡片、`sendAttachments` 换成帧图片附件，Agent 拿到的是帧图片路径；还有没选帧的视频时先打开弹窗、不发。弹窗 `web/src/components/video/VideoFramesDialog.tsx`（`size="full"`；布局见下一条「2026-11-07 重新设计」）：画面区是播放器（`/api/video/stream` 支持 Range；浏览器放不了的 mkv / avi、解不了的编码改用 `/api/video/preview` 取的画面；缓冲时播放键转圈，`play()` 被暂停打断的 AbortError 不提示，见 [bugs/video-play-interrupted.md](bugs/video-play-interrupted.md)），上一帧 / 下一帧在截下来的帧之间走；进度条上方标出帧的位置（手动强调色、自动白色）。「截取当前帧」（K）是手动帧，自动截帧（画面变化 / 录屏 / 均匀，数量 4~24）整批换掉自动帧、手动帧一直保留，「清除手动帧」「清除自动帧」分开清。截帧范围（2026-11-07 用户要的）：「起点 / 终点」（I / O）或拖进度条上的两个把手选一段，自动截帧只在这一段里分析和挑点（服务端 `-ss`/`-t` 只解码这一段，`shared/video.ts` 的 `clampRange`、`rangePickTimes`），只换掉范围里的自动帧、范围外截过的留着（分几段各截几张），范围外的帧标记变淡；范围记成命名范围落盘（见下一条）。自动截帧的进度轮询 `/video/frames/progress`（先「分析画面 n%」，ffmpeg 分出一路每秒一帧输出到 null 取 `time=`，再「截取第 i/n 张」），底部 `WorkBar.tsx` 画进度条、能停止。画面增强（`EnhanceBar.tsx`，服务端 `server/video/enhance.ts`）分三组：FFmpeg 的「放大锐化」「去噪点（nlmeans）」；面板内置的 ComfyUI 画质工作流（`shared/comfy-restore.ts`：Real-ESRGAN 提升清晰度 2 倍 / 4 倍、去噪点尺寸不变，SeedVR2 画质修复，模型和接法照官方模板 utility-gan_upscaler、utility_seedvr2_3b_int8_upscale_image），ComfyUI 没装或模型没下载时标「未就绪」，弹窗里直接点下载（复用 `/local-image/models/:id/download`）或去设置装 ComfyUI；用户自己的吃一张图的工作流 / 工作流链。内置的去背景、图生图不列（前者没用，后者会重画画面内容）。只处理勾选的帧，一次交给服务端（`enhanceFrames` 3 路并行，ComfyUI 那边一起排队），进度走 `/video/frames/progress`（`stage: 'enhance'`，`running` / `finished` 帧 id），帧条上正在做的盖转圈、排队的标「等待」、做完的打勾，处理完默认显示增强图，画面右上角「原图 / 增强」切换；帧双击全屏看大图（`Lightbox` + `zoom-image.tsx`：滚轮缩放、拖动、双击放大 / 还原）。增强过的发增强图（文件名带 `-enhanced`），名字带时间（`录屏-00m12.3s.png`）；帧是普通图片附件，发送时照图片的规矩拷进对话目录。服务端 `server/video/`：`ffmpeg.ts` 找 / 下载 FFmpeg（环境变量 → 用户填的路径 → 数据目录 `video/ffmpeg` → PATH；下载 ffmpeg-static 的单文件，可选 npmmirror），`frames.ts` 按「路径 + 大小 + 修改时间」记一份截帧记录在数据目录 `video-frames/<key>/`，自动截帧在每个时间点前后 0.25 秒挑最清楚的一帧（`shared/video.ts` 的 `sharpestIndex`），`routes.ts` 挂在 `/video`。演示版的 `/video` 接口直接报「在线演示不能读本机视频」。回归：`shared/video.test.ts`（解析、挑点、清晰度、手动帧保留、文件名）、`server/video/frames.test.ts`（本机有 ffmpeg 时真跑一遍截帧、自动截帧三种方式、增强、清除，并校验原视频哈希不变）。这次不处理声音。
+- 视频截帧 2026-11-07 重新设计和进阶工具（用户要的：画面太小、按钮太丑，控制做成视频播放器那样悬浮在画面下方）：左边 `VideoStage.tsx` 是画面（黑底占满，帧图片按 object-contain 算出实际矩形，标注、变化框、对比滑块都叠在这个矩形里），`PlayerBar`（`VideoControls.tsx`）浮在画面下方，垫一层渐变：上面是自绘的进度条（帧刻度、范围底色、两端把手、悬停时间），下面是上一帧 · 播放 · 下一帧 · 时间 · I 起点 / O 终点 · 范围标签 · 帧播放 · 截取当前帧；播放或看帧时鼠标停 2.5 秒控制条藏起来。画面下方是一行 `FrameStrip.tsx`（左上勾选、悬停删除、全选 / 全不选）。右栏 `SidePanel.tsx`：截帧范围（整段 + 最多 12 段命名范围，点选、改名、删除；没选范围时按 I / O 新建一段）、自动截帧（方式、张数、「去掉相似帧」、清除）、画面增强（`EnhanceBar.tsx` 竖排）。看某一帧时画面右上角是这一帧的工具：原图 / 增强、对比（左右拖的分割线）、标注（`annotate.tsx`：框 · 箭头 · 文字备注，四种颜色、撤销、清空，Esc 在 window 捕获阶段接住只退出标注不关弹窗）、变化（和时间上的前一张比，`diffBoxes` 黄色虚线框，「标到图上」转成红框标注）、看大图。服务端 `server/video/frame-tools.ts`：`saveMeta`（命名范围和弹窗设置 mode / count / method / range 记进 state.json，重新打开读回）、`setShapes` / `saveAnnotated`（标注存比例坐标，浏览器用 canvas 画好标注图传上来，记下画在哪张底图上 `annotated.from`；增强、去掉增强会删掉标注图，发送时底图对不上就重画）、`dedupeFrames`（9×8 灰度 dHash，相邻差 ≤6 位归一组，有手动帧留手动帧，否则留最清楚的，只删自动帧）、`frameDiff`（192 宽灰度逐格比，大半张都变了给整图框）；纯逻辑在 `shared/video-tools.ts`。画了标注的帧发标注图（文件名带 `-annotated`）。给 Agent 的受控截帧工具 `video_frames`（用户 2026-11-07 拍板，推翻 11-05「不给 Agent 视频」）：面板 MCP 延后加载的工具（`server/video/agent-tool.ts`、`agent-frames.ts`），给视频绝对路径和 times 或 start/end/count/mode，最多 12 张，PNG 写进这个对话的 attachments/video-<哈希>/，返回时间和路径；只读视频，不碰弹窗的截帧记录。回归：`shared/video-tools.test.ts`、`server/video/frames.test.ts`（标注、去重、帧差、范围记忆、`callVideoTool`）。

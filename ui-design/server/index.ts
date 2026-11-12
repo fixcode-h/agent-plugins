@@ -3,7 +3,7 @@ import path from 'node:path'
 import { Hono } from 'hono'
 import type { ActivateServer } from '../../sdk/server.ts'
 import type { Project } from '../shared/schema.ts'
-import { DATA_DIR, readJson } from './store.ts'
+import { DATA_DIR, dataPath, readJson } from './store.ts'
 import { designsApi, setDesignsDir } from './designs.ts'
 
 /**
@@ -36,9 +36,13 @@ async function migrate(dir: string, log: (msg: string, data?: Record<string, unk
   }
 }
 
-/** 面板的项目（只读）：第一版的设计挂在 Agent 项目下，迁移成 UI 项目时按名字和目录建同名的 */
+/**
+ * 面板的项目（只读）：第一版的设计挂在 Agent 项目下，迁移成 UI 项目时按名字和目录建同名的。
+ * 文件位置交给面板的 dataPath（现在是数据目录下的 projects/projects.json）：以前拼的是数据目录根下的 projects.json，
+ * 那个文件面板早就搬走了，读出来一直是空列表
+ */
 const projects = {
-  list: async () => ((await readJson(path.join(DATA_DIR, 'projects.json'))) as Project[] | null) ?? [],
+  list: async () => ((await readJson(dataPath('projects.json'))) as Project[] | null) ?? [],
   get: async (id: string) => (await projects.list()).find((p) => p.id === id) ?? null,
 }
 

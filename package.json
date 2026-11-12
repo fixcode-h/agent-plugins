@@ -10,7 +10,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "panel": "node scripts/panel.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p ui-design",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p ui-design && tsc --noEmit -p video && tsc --noEmit -p tables",
     "test": "node scripts/test.mjs",
     "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs && node scripts/check-sdk.mjs"
   },
