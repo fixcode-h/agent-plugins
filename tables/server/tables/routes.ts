@@ -5,13 +5,17 @@
 import path from 'node:path'
 import { stat } from 'node:fs/promises'
 import { Hono, type Context, type MiddlewareHandler } from 'hono'
+import { z } from 'zod'
 import { compress } from 'hono/compress'
 import { t } from '../../shared/i18n.ts'
 import { TableSchema, TablesConfig, tablesOf, tablesOn } from '../../shared/tables.ts'
 import type { Project } from '../../shared/schema.ts'
 import { resolvePath } from '../fs.ts'
 import { revealItem } from '../open.ts'
-import { absPath, listTables, openTable, safeRel, searchTables } from './files.ts'
+import { absPath, listTables, openTable, safeRel } from './files.ts'
+import { MAX_HITS, searchTables } from './search.ts'
+import { replaceTables } from './bulk-replace.ts'
+import { TableReplaceBody } from '../../shared/table-search.ts'
 import { readSchema, schemaDir, writeSchema } from './schema-store.ts'
 import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
@@ -31,12 +35,15 @@ import { dropProposal, getProposal, putProposal } from './proposals.ts'
 import { markResolved, mergeSources, submitTable, vcsStatus } from './vcs-ops.ts'
 import type { EnumRename } from '../../shared/table-enum-rename.ts'
 import { stream } from 'hono/streaming'
+import type { TableWatcher } from './watch.ts'
 import { withPromptLangRules } from '../../shared/prompt-lang.ts'
 import { buildTablesBody } from '../../shared/tables-assist.ts'
 import type { ExportEvent } from '../../shared/table-export.ts'
 
 export interface TablesDeps {
   projects: { get(id: string): Promise<Project | null> }
+  /** 外部改动检测（fs.watch + 推送，watch.ts）；单测里不给 */
+  watcher?: TableWatcher
 }
 
 /** 项目、项目目录、表格配置；没开表格功能也给（列表为空） */
@@ -64,6 +71,12 @@ const p4Edit = (dir: string) => async (full: string) => {
 
 const vcsPath = (dir: string, p: { rel: string; full: string }) =>
   absPath(p.rel) ? { cwd: path.dirname(p.full), rel: path.basename(p.full) } : { cwd: dir, rel: p.rel }
+
+/** 页面登记要盯的文件：连接 id 是面板页面事件流给的 */
+const WatchBody = z.object({
+  conn: z.string().min(1).max(100),
+  files: z.array(z.object({ path: z.string().min(1).max(600), mtime: z.string().max(40) })).max(500),
+})
 
 export const fail = (c: Context, e: unknown) =>
   c.json({ error: (e as Error).message }, e instanceof HttpError ? e.status : 400)
@@ -110,7 +123,26 @@ export function tablesApi(deps: TablesDeps) {
           return fail(c, e)
         }
       })
-      // 打开着的文件现在的修改时间：页面几秒看一次，被 Excel 或别人改了就提示重新载入
+      // 页面登记要盯的文件（这个页面在这个项目里打开着的全部表）：外面改了经推送通知（watch.ts），不再轮询 /stat
+      .post('/:id/watch', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const body = WatchBody.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('要盯的文件格式不对'))
+          const list = body.data.files.flatMap((f) => {
+            try {
+              return [{ full: safeRel(dir, f.path, cfg).full, rel: f.path, mtime: f.mtime }]
+            } catch {
+              // 表格目录外的路径不盯
+              return []
+            }
+          })
+          return c.json(deps.watcher?.set(body.data.conn, c.req.param('id'), list) ?? { watching: 0 })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 打开着的文件现在的修改时间：连上推送时、自己保存前后对一下（外面改动平时靠 /watch 的推送）
       .get('/:id/stat', async (c) => {
         try {
           const { dir, cfg } = await projectOf(deps, c.req.param('id'))
@@ -127,7 +159,15 @@ export function tablesApi(deps: TablesDeps) {
           if (!tablesOn(cfg)) return c.json({ hits: [], files: 0 })
           const { files } = await listTables(dir, cfg)
           const schema = await readSchema(schemaAt).catch(() => undefined)
-          return c.json(await searchTables(dir, files, c.req.query('q') ?? '', c.req.raw.signal, schema))
+          const flag = (k: string) => c.req.query(k) === '1'
+          const opts = {
+            q: c.req.query('q') ?? '',
+            caseSensitive: flag('case'),
+            whole: flag('whole'),
+            regex: flag('regex'),
+          }
+          const limit = Math.min(5000, Math.max(1, Number(c.req.query('limit')) || MAX_HITS))
+          return c.json(await searchTables(dir, files, opts, c.req.raw.signal, schema, limit))
         } catch (e) {
           return fail(c, e)
         }
@@ -138,7 +178,12 @@ export function tablesApi(deps: TablesDeps) {
           const { project, dir, cfg } = await projectOf(deps, c.req.param('id'))
           const body = TableSave.safeParse(await c.req.json().catch(() => null))
           if (!body.success) throw new HttpError(t('要保存的改动格式不对'))
-          return c.json(await saveTable(dir, project.id, cfg, body.data, { p4Edit: p4Edit(dir) }))
+          const saved = await saveTable(dir, project.id, cfg, body.data, { p4Edit: p4Edit(dir) })
+          // 自己写的不算外面改的：watcher 记下新的修改时间，这次的文件事件不推给页面
+          const full = safeRel(dir, body.data.path, cfg).full
+          const st = await stat(full).catch(() => null)
+          if (st) deps.watcher?.saw(full, st.mtime.toISOString())
+          return c.json(saved)
         } catch (e) {
           return fail(c, e)
         }
@@ -339,6 +384,26 @@ export function tablesApi(deps: TablesDeps) {
               { dir, projectId: project.id, cfg, files, schema },
               renames.slice(0, 200),
               body.apply === true,
+              { p4Edit: p4Edit(dir) },
+              c.req.raw.signal,
+            ),
+          )
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 跨表批量替换：apply=false 只预览（每个文件改几格、会不会被拒绝），apply=true 只写勾选的文件
+      .post('/:id/replace', async (c) => {
+        try {
+          const { project, dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
+          const body = TableReplaceBody.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('替换的参数格式不对'))
+          const { files } = await listTables(dir, cfg)
+          const schema = await readSchema(schemaAt)
+          return c.json(
+            await replaceTables(
+              { dir, projectId: project.id, cfg, files, schema },
+              body.data,
               { p4Edit: p4Edit(dir) },
               c.req.raw.signal,
             ),
