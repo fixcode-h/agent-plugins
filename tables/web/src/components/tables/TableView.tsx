@@ -12,14 +12,16 @@ import {
   Tags,
   ListChecks,
   Lock,
+  PanelRight,
   Plus,
+  Columns3,
   Redo2,
   Save,
   Undo2,
 } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { TYPE_NAMES, schemaHeader, styleHeaders, type TableDoc, type TableHit, type TableSchema } from '@shared/tables'
-import type { CellSet, RowOp, SheetEdit } from '@shared/table-edit'
+import type { CellSet, ColOp, RowOp, SheetEdit } from '@shared/table-edit'
 import type { SheetHeader } from '@shared/sheet-header'
 import type { TableExport } from '@shared/table-export'
 import { colCount, colName as colLetter, type CellHit } from '@/lib/sheet'
@@ -98,6 +100,10 @@ import { TableQuickFilter, useSavedViews, type QuickFilter } from './TableQuickF
 import { ScrollMarks } from './ScrollMarks'
 import { ShortcutsHelp } from '@/components/layout/ShortcutsHelp'
 import { tablesShortcuts } from './shortcuts'
+import { useColEdit } from './use-col-edit'
+import { RowForm, type RowFormField } from './RowForm'
+
+const NO_COLS: ColOp[] = []
 
 /** 从内容搜索跳过来：切到这张表、滚到这一格 */
 export interface TableJump {
@@ -432,6 +438,52 @@ export function TableView({
     go({ row: jump.row, col: jump.col })
   }, [jump, sheet?.name, go])
 
+  // 增删列：右键菜单、插列弹窗、删列确认；插删以后本机按列号记的东西跟着挪
+  const colEdit = useColEdit({
+    projectId,
+    doc,
+    sheet,
+    rows,
+    header: view?.header,
+    readOnly,
+    cols: (sheet && edits?.sheets[sheet.name]?.cols) || NO_COLS,
+    fields: struct.infos.map((i) => i.field),
+    optionsFor: (i) => {
+      const role = view?.header.roles[i]
+      const name = role ? schema.style.roleEnums?.[role] : undefined
+      return name ? struct.enumOpts.get(name) : undefined
+    },
+    selectedCols: () => grid.selection()?.cols ?? [],
+    onEdits,
+    layout,
+    setLayout,
+    view: view ?? null,
+    widthKey: `${projectId}:${fileKey}`,
+  })
+  // 一行的表单（右边的抽屉）：每列一个字段，说明取表头的注释行
+  const [rowForm, setRowForm] = useLocalFlag('table-row-form')
+  const formFields = useMemo<RowFormField[]>(() => {
+    if (!rowForm || !rows || !view) return []
+    const noteRow = view.header.roles.indexOf('comment')
+    const notes = noteRow >= 0 ? (rows[view.header.start + noteRow] ?? []) : []
+    return Array.from({ length: colCount(rows) }, (_, c) => {
+      const info = struct.infos[c]
+      return {
+        col: c,
+        info,
+        head: colHeads[c],
+        note: notes[c] ?? '',
+        options: info?.enumName
+          ? struct.enumOpts.get(info.enumName)
+          : info?.ref
+            ? struct.refOpts.get(info.ref)
+            : undefined,
+      }
+    })
+    // 只看表头那几行：改数据格子时字段列表不重算
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowForm, struct.infos, colHeads, struct.enumOpts, struct.refOpts, view?.header, rows?.length && colCount(rows)])
+
   if (doc.kind === 'xls')
     return (
       <p className="tb:p-6 tb:text-body tb:leading-relaxed tb:text-subtle">
@@ -441,7 +493,7 @@ export function TableView({
   if (!sheet || !rows || !view) return <p className="tb:p-6 tb:text-body tb:text-subtle">{t('这个文件里没有工作表')}</p>
   const canUndo = !!edits?.undo.length
   const canRedo = !!edits?.redo.length
-  const pendingCount = pending.reduce((n, p) => n + p.cells.length + p.rows.length, 0)
+  const pendingCount = pending.reduce((n, p) => n + p.cells.length + p.rows.length + (p.cols?.length ?? 0), 0)
   const sel = grid.selection()
   const scrollLayers = [
     { rows: quickRows.dirty, color: '--c-grid-edited' },
@@ -499,7 +551,7 @@ export function TableView({
           <span className="tb:mr-auto">
             {t('文件在外面被改过了（Excel / WPS、版本控制或别人），页面上还有没保存的改动。')}
           </span>
-          {pending.every((p) => !p.rows.length) && (
+          {pending.every((p) => !p.rows.length && !p.cols?.length) && (
             <Button size="sm" variant="secondary" className="tb:h-6" onClick={() => onReload(true)}>
               {t('载入新内容，保留我改的格子')}
             </Button>
@@ -538,6 +590,13 @@ export function TableView({
             aria-pressed={editBar}
             className={cn(editBar && 'tb:bg-active tb:text-fg')}
             onClick={() => setEditBar(!editBar)}
+          />
+          <IconButton
+            icon={PanelRight}
+            label={t('一行的表单：竖着看、改当前这一行')}
+            aria-pressed={rowForm}
+            className={cn(rowForm && 'tb:bg-active tb:text-fg')}
+            onClick={() => setRowForm(!rowForm)}
           />
           {struct.refOpts.size > 0 && (
             <IconButton
@@ -655,6 +714,13 @@ export function TableView({
             <IconButton icon={Undo2} label={t('撤销（Ctrl+Z）')} disabled={!canUndo} onClick={() => onEdits(undoIn)} />
             <IconButton icon={Redo2} label={t('重做（Ctrl+Y）')} disabled={!canRedo} onClick={() => onEdits(redoIn)} />
             <IconButton icon={Plus} label={t('在末尾加一行')} onClick={() => insertRow(rows.length)} />
+            <IconButton
+              icon={Columns3}
+              label={t('插入一列（加字段）')}
+              onClick={() =>
+                grid.focus ? colEdit.openInsert(grid.focus.col, 'right') : colEdit.openInsert(colEdit.end - 1, 'end')
+              }
+            />
             <Button
               size="sm"
               className="tb:relative tb:ml-1 tb:h-7"
@@ -732,101 +798,139 @@ export function TableView({
           setQuick(v.quick)
         }}
       />
-      <CellMenu
-        at={(e) => {
-          const el = (e.target as HTMLElement).closest('[data-r]') as HTMLElement | null
-          if (!el) return null
-          const r = Number(el.dataset.r)
-          const c = Number(el.dataset.c)
-          // 右键选区外的格子先选中它（和 Excel 一样），批量修改、让 AI 改才按眼前这一格算
-          const s = grid.selection()
-          if (!s || !s.rows.includes(r) || !s.cols.includes(c)) grid.go({ row: r, col: c })
-          return { r, c }
-        }}
-        opts={({ r, c }) => {
-          const info = r >= view.from ? struct.infos[c] : undefined
-          const v = rows[r]?.[c] ?? ''
-          const values =
-            info?.ref && v ? (info.list ? v.split(info.sep) : [v]).map((x) => x.trim()).filter(Boolean) : []
-          return {
-            ref: info?.ref ? { ref: info.ref, values } : undefined,
-            backRefs: hasBackRefs && r >= view.from,
-            history: !!info?.field,
-            readOnly,
-          }
-        }}
-        onJump={onRefJump}
-        onBackRefs={showBackRefs}
-        onHistory={({ r, c }) => {
-          if (!sheet) return
-          // 按主键找同一行：没设主键时用第一列有字段名的（配置表的习惯）
-          const kc = keyCol >= 0 ? keyCol : struct.infos.findIndex((i) => !!i.field)
-          const key = kc >= 0 ? (rows[r]?.[kc] ?? '').trim() : ''
-          const field = struct.infos[c].field
-          setCellHist({
-            at: { sheet: sheet.name, field, row: r, ...(key ? { keyField: struct.infos[kc].field, key } : {}) },
-            title: t('{field} 这一格的历史', { field: key ? `${field} · ${key}` : field }),
-          })
-        }}
-        onFill={grid.fill}
-        onFind={() => setFinding({ sel: grid.selection() })}
-        onStats={({ c }) => setStatsCol(c)}
-        onBatch={() => {
-          const s = dataSel()
-          if (s) setBatch(s.rows.flatMap((r) => s.cols.map((c) => ({ r, c }))))
-        }}
-        onAiRegion={() => setAiRegion(dataSel())}
-      >
-        <div className="tb:relative tb:min-h-0 tb:flex-1">
-          <div
-            ref={grid.box}
-            tabIndex={0}
-            aria-label={t('表格内容')}
-            onKeyDown={grid.onKeyDown}
-            onPaste={grid.onPaste}
-            onMouseDownCapture={(e) => {
-              // Ctrl / ⌘ + 点击引用格：跳到被引用的那一行（不改选中）
-              if (!(e.ctrlKey || e.metaKey)) return
-              const el = (e.target as HTMLElement).closest('[data-r]') as HTMLElement | null
-              if (!el) return
-              const r = Number(el.dataset.r)
-              const info = r >= view.from ? struct.infos[Number(el.dataset.c)] : undefined
-              const v = (rows[r]?.[Number(el.dataset.c)] ?? '').trim()
-              if (!info?.ref || !v) return
-              e.preventDefault()
-              e.stopPropagation()
-              onRefJump(info.ref, info.list ? (v.split(info.sep)[0] ?? '').trim() : v)
-            }}
-            className="thin-scroll tb:h-full tb:overflow-auto tb:outline-none"
-          >
-            <SheetTable
-              colHead={(c) => colHeads[c]}
-              headCollapsed={headCollapsed}
-              rowHeight={DENSITY_ROW_H[density]}
-              onHeadCollapse={setHeadCollapsed}
-              rows={rows}
-              scrollEl={grid.box}
-              hits={findHits.length ? findHits : hit}
-              header={view.header}
+      <div className="tb:flex tb:min-h-0 tb:flex-1">
+        <CellMenu
+          at={(e) => {
+            const el = (e.target as HTMLElement).closest('[data-r]') as HTMLElement | null
+            if (!el) return null
+            const r = Number(el.dataset.r)
+            const c = Number(el.dataset.c)
+            // 右键选区外的格子先选中它（和 Excel 一样），批量修改、让 AI 改才按眼前这一格算
+            const s = grid.selection()
+            if (!s || !s.rows.includes(r) || !s.cols.includes(c)) grid.go({ row: r, col: c })
+            return { r, c }
+          }}
+          opts={({ r, c }) => {
+            const info = r >= view.from ? struct.infos[c] : undefined
+            const v = rows[r]?.[c] ?? ''
+            const values =
+              info?.ref && v ? (info.list ? v.split(info.sep) : [v]).map((x) => x.trim()).filter(Boolean) : []
+            return {
+              ref: info?.ref ? { ref: info.ref, values } : undefined,
+              backRefs: hasBackRefs && r >= view.from,
+              history: !!info?.field,
+              readOnly,
+            }
+          }}
+          onJump={onRefJump}
+          onBackRefs={showBackRefs}
+          onHistory={({ r, c }) => {
+            if (!sheet) return
+            // 按主键找同一行：没设主键时用第一列有字段名的（配置表的习惯）
+            const kc = keyCol >= 0 ? keyCol : struct.infos.findIndex((i) => !!i.field)
+            const key = kc >= 0 ? (rows[r]?.[kc] ?? '').trim() : ''
+            const field = struct.infos[c].field
+            setCellHist({
+              at: { sheet: sheet.name, field, row: r, ...(key ? { keyField: struct.infos[kc].field, key } : {}) },
+              title: t('{field} 这一格的历史', { field: key ? `${field} · ${key}` : field }),
+            })
+          }}
+          onFill={grid.fill}
+          onFind={() => setFinding({ sel: grid.selection() })}
+          onStats={({ c }) => setStatsCol(c)}
+          onBatch={() => {
+            const s = dataSel()
+            if (s) setBatch(s.rows.flatMap((r) => s.cols.map((c) => ({ r, c }))))
+          }}
+          onAiRegion={() => setAiRegion(dataSel())}
+          extra={({ r, c }) => (
+            <>
+              {colEdit.menu(c)}
+              {r >= view.from && !rowForm && (
+                <ContextMenuItem onSelect={() => setRowForm(true)}>
+                  <PanelRight className="tb:h-3.5 tb:w-3.5 tb:text-subtle" />
+                  {t('在表单里看这一行')}
+                </ContextMenuItem>
+              )}
+            </>
+          )}
+        >
+          <div className="tb:relative tb:min-h-0 tb:min-w-0 tb:flex-1">
+            <div
+              ref={grid.box}
+              tabIndex={0}
+              aria-label={t('表格内容')}
+              onKeyDown={grid.onKeyDown}
+              onPaste={grid.onPaste}
+              onMouseDownCapture={(e) => {
+                // Ctrl / ⌘ + 点击引用格：跳到被引用的那一行（不改选中）
+                if (!(e.ctrlKey || e.metaKey)) return
+                const el = (e.target as HTMLElement).closest('[data-r]') as HTMLElement | null
+                if (!el) return
+                const r = Number(el.dataset.r)
+                const info = r >= view.from ? struct.infos[Number(el.dataset.c)] : undefined
+                const v = (rows[r]?.[Number(el.dataset.c)] ?? '').trim()
+                if (!info?.ref || !v) return
+                e.preventDefault()
+                e.stopPropagation()
+                onRefJump(info.ref, info.list ? (v.split(info.sep)[0] ?? '').trim() : v)
+              }}
+              className="thin-scroll tb:h-full tb:overflow-auto tb:outline-none"
+            >
+              <SheetTable
+                key={colEdit.epoch}
+                colMenu={colEdit.menu}
+                colHead={(c) => colHeads[c]}
+                headCollapsed={headCollapsed}
+                rowHeight={DENSITY_ROW_H[density]}
+                onHeadCollapse={setHeadCollapsed}
+                rows={rows}
+                scrollEl={grid.box}
+                hits={findHits.length ? findHits : hit}
+                header={view.header}
+                order={order}
+                filters={view.filters}
+                sort={view.sort}
+                onFilter={view.setFilter}
+                onSort={view.setSort}
+                edit={grid.edit}
+                fill
+                widthKey={`${projectId}:${fileKey}`}
+                layout={layout}
+                onLayout={setLayout}
+              />
+            </div>
+            <ScrollMarks
               order={order}
-              filters={view.filters}
-              sort={view.sort}
-              onFilter={view.setFilter}
-              onSort={view.setSort}
-              edit={grid.edit}
-              fill
-              widthKey={`${projectId}:${fileKey}`}
-              layout={layout}
-              onLayout={setLayout}
+              layers={scrollLayers}
+              onJump={(row) => grid.go({ row, col: grid.focus?.col ?? Math.max(0, keyCol) })}
             />
           </div>
-          <ScrollMarks
+        </CellMenu>
+        {rowForm && (
+          <RowForm
+            row={grid.focus?.row ?? null}
+            rows={rows}
+            from={view.from}
             order={order}
-            layers={scrollLayers}
-            onJump={(row) => grid.go({ row, col: grid.focus?.col ?? Math.max(0, keyCol) })}
+            fields={formFields}
+            focusCol={grid.focus?.col}
+            hidden={hiddenSet}
+            problemAt={struct.problemAt}
+            dirty={dirty}
+            readOnly={readOnly}
+            keyCol={keyCol}
+            onCommit={setCells}
+            onGo={(row, col) => grid.go({ row, col })}
+            onRefJump={onRefJump}
+            onClose={() => {
+              setRowForm(false)
+              grid.box.current?.focus({ preventScroll: true })
+            }}
           />
-        </div>
-      </CellMenu>
+        )}
+      </div>
+      {colEdit.dialogs}
       {importing && (
         <ImportDialog
           rows={rows}

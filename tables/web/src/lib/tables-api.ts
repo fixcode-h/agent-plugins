@@ -23,6 +23,9 @@ export const tablesApi = {
   probe: (projectId: string, path: string, tables: TablesConfig) =>
     request<TablesProbe>(`${BASE}/${projectId}/probe`, json('POST', { path, tables })),
   open: (projectId: string, path: string) => request<TableDoc>(`${BASE}/${projectId}/file?path=${q(path)}`),
+  /** 每张表不能在中间插删行列的原因（xlsx 有公式、合并单元格这些；空数组 = 可以）和用到的最后一列；CSV 返回 {} */
+  shiftCheck: (projectId: string, path: string) =>
+    request<Record<string, { why: string[]; last: number }>>(`${BASE}/${projectId}/shift-check?path=${q(path)}`),
   /** 文件现在的修改时间（外部改动检测） */
   stat: (projectId: string, path: string) =>
     request<{ mtime?: string; size?: number; missing?: boolean }>(`${BASE}/${projectId}/stat?path=${q(path)}`),

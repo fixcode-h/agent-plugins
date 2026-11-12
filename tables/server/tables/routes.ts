@@ -3,11 +3,11 @@
  * 列表、打开、内容搜索、结构文件读写；保存、版本、对比、AI 分析在各自的文件里挂到同一组路由上。
  */
 import path from 'node:path'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { compress } from 'hono/compress'
 import { t } from '../../shared/i18n.ts'
-import { TableSchema, TablesConfig, tablesOf, tablesOn } from '../../shared/tables.ts'
+import { TableSchema, TablesConfig, tableKind, tablesOf, tablesOn } from '../../shared/tables.ts'
 import type { Project } from '../../shared/schema.ts'
 import { resolvePath } from '../fs.ts'
 import { revealItem } from '../open.ts'
@@ -15,6 +15,7 @@ import { absPath, listTables, openTable, safeRel, searchTables } from './files.t
 import { readSchema, schemaDir, writeSchema } from './schema-store.ts'
 import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
+import { shiftReasons } from './xlsx-write.ts'
 import { SheetEdit, TableSave } from '../../shared/table-edit.ts'
 import { detectVcs } from '../projects-analyze.ts'
 import { p4Runner } from '../p4-split.ts'
@@ -106,6 +107,17 @@ export function tablesApi(deps: TablesDeps) {
         try {
           const { dir, cfg } = await projectOf(deps, c.req.param('id'))
           return c.json(await openTable(dir, c.req.query('path') ?? '', cfg))
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 每张表能不能在中间插删行列（xlsx 有公式、合并单元格、数据验证这些就不能）：页面插列删列前先问
+      .get('/:id/shift-check', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const { full, rel } = safeRel(dir, c.req.query('path') ?? '', cfg)
+          if (tableKind(rel) !== 'xlsx') return c.json({})
+          return c.json(shiftReasons(await readFile(full)))
         } catch (e) {
           return fail(c, e)
         }
