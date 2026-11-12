@@ -28,7 +28,13 @@ export const tablesApi = {
   probe: (projectId: string, path: string, tables: TablesConfig) =>
     request<TablesProbe>(`${BASE}/${projectId}/probe`, json('POST', { path, tables })),
   open: (projectId: string, path: string) => request<TableDoc>(`${BASE}/${projectId}/file?path=${q(path)}`),
-  /** 文件现在的修改时间（外部改动检测） */
+  /** 每张表不能在中间插删行列的原因（xlsx 有公式、合并单元格这些；空数组 = 可以）和用到的最后一列；CSV 返回 {} */
+  shiftCheck: (projectId: string, path: string) =>
+    request<Record<string, { why: string[]; last: number }>>(`${BASE}/${projectId}/shift-check?path=${q(path)}`),
+  /** 登记这个页面（推送连接 conn）在这个项目里打开着的文件：外面改了服务端推 file-changed 过来 */
+  watch: (projectId: string, conn: string, files: { path: string; mtime: string }[]) =>
+    request<{ watching: number }>(`${BASE}/${projectId}/watch`, json('POST', { conn, files })),
+  /** 文件现在的修改时间（外部改动检测：忙完后再对一次） */
   stat: (projectId: string, path: string) =>
     request<{ mtime?: string; size?: number; missing?: boolean }>(`${BASE}/${projectId}/stat?path=${q(path)}`),
   /** 跨表搜索：「字段名:值」只在那一列找；三个开关和表格里的查找替换一样 */

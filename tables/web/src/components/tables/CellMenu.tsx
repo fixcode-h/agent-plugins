@@ -50,7 +50,10 @@ export function CellMenu({
   onStats,
   onBatch,
   onAiRegion,
+  extra,
 }: {
+  /** 菜单最后另加的几项（插入列、删除列、在表单里看这一行） */
+  extra?: (cell: { r: number; c: number }) => React.ReactNode
   /** 统计这一列、推断规则 */
   onStats?: (cell: { r: number; c: number }) => void
   /** 批量修改选中的格子 */
@@ -69,6 +72,7 @@ export function CellMenu({
 }) {
   const [cell, setCell] = useState<{ r: number; c: number } | null>(null)
   const o = cell ? opts(cell) : null
+  const more = cell && extra ? extra(cell) : null
   return (
     <ContextMenu onOpenChange={(open) => !open && setCell(null)}>
       <ContextMenuTrigger asChild onContextMenu={(e) => setCell(at(e))}>
@@ -133,6 +137,12 @@ export function CellMenu({
                   {t('让 AI 改这一片…')}
                 </ContextMenuItem>
               )}
+            </>
+          )}
+          {more && (
+            <>
+              <ContextMenuSeparator />
+              {more}
             </>
           )}
         </ContextMenuContent>

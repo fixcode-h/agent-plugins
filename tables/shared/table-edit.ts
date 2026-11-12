@@ -17,6 +17,18 @@ export const RowOp = z.object({
 })
 export type RowOp = z.infer<typeof RowOp>
 
+/** 一个列操作：在 at 列处插入 n 列（n > 0）或从 at 列起删掉 -n 列（n < 0）；xlsx 最多 16384 列 */
+export const ColOp = z.object({
+  at: z.number().int().min(0).max(16_383),
+  n: z
+    .number()
+    .int()
+    .min(-16_384)
+    .max(16_384)
+    .refine((n) => n !== 0),
+})
+export type ColOp = z.infer<typeof ColOp>
+
 export const CellSet = z.object({
   r: z.number().int().min(0).max(1_048_575),
   c: z.number().int().min(0).max(16_383),
@@ -26,8 +38,10 @@ export type CellSet = z.infer<typeof CellSet>
 
 export const SheetEdit = z.object({
   name: z.string().max(200),
-  /** 先按顺序做行操作，格子的行号是做完行操作之后的 */
+  /** 先按顺序做行操作，再按顺序做列操作；格子的行列号是都做完之后的 */
   rows: z.array(RowOp).max(1000).default([]),
+  /** 列操作（加字段、删字段）：和行操作互不影响，先做哪个结果都一样。没有列操作时不写（老的调用方不用管） */
+  cols: z.array(ColOp).max(200).optional(),
   cells: z.array(CellSet).max(200_000).default([]),
 })
 export type SheetEdit = z.infer<typeof SheetEdit>
@@ -37,7 +51,7 @@ export const TableSave = z.object({
   /** 打开时文件的修改时间：对不上说明外面改过 */
   mtime: z.string().max(40),
   sheets: z.array(SheetEdit).min(1).max(100),
-  /** 外面改过也照样把这些格子写进去（只改格子、没有行操作时才允许） */
+  /** 外面改过也照样把这些格子写进去（只改格子、没有行列操作时才允许） */
   force: z.boolean().optional(),
 })
 export type TableSave = z.infer<typeof TableSave>
@@ -52,6 +66,41 @@ export function applyRowOps(rows: string[][], ops: RowOp[]): string[][] {
     } else out.splice(op.at, -op.n)
   }
   return out
+}
+
+/**
+ * 做列操作（不改原数组）：插入的是空列。每一行单独挪，行比插入位置短的不用补空格子
+ * （行尾的空格子本来就不存），所以和行操作谁先谁后结果一样
+ */
+export function applyColOps(rows: string[][], ops: ColOp[]): string[][] {
+  if (!ops.length) return rows.map((r) => [...r])
+  return rows.map((r) => {
+    const out = [...r]
+    for (const op of ops) {
+      if (op.at >= out.length) continue
+      if (op.n > 0) out.splice(op.at, 0, ...Array.from({ length: op.n }, () => ''))
+      else out.splice(op.at, -op.n)
+    }
+    return out
+  })
+}
+
+/** 行操作、列操作都做完（不改原数组） */
+export const applyOps = (rows: string[][], ops: RowOp[], cols: ColOp[] = []) =>
+  cols.length ? applyColOps(applyRowOps(rows, ops), cols) : applyRowOps(rows, ops)
+
+/** 一个格子在做完列操作之后到了哪一列；被删掉了返回 -1（草稿恢复、外部改动对位用） */
+export function mapCol(c: number, ops: ColOp[]): number {
+  let x = c
+  for (const op of ops) {
+    if (op.n > 0) {
+      if (x >= op.at) x += op.n
+    } else if (x >= op.at) {
+      if (x < op.at - op.n) return -1
+      x += op.n
+    }
+  }
+  return x
 }
 
 /** 把格子写进去（改原数组） */
@@ -89,9 +138,9 @@ export function gridDiff(a: string[][], b: string[][]): { r: number; c: number; 
   return null
 }
 
-/** 页面上：原表做完行操作后和现在的表比，哪些格子变了 */
-export function changedCells(base: string[][], ops: RowOp[], now: string[][]): CellSet[] {
-  const before = applyRowOps(base, ops)
+/** 页面上：原表做完行列操作后和现在的表比，哪些格子变了 */
+export function changedCells(base: string[][], ops: RowOp[], now: string[][], cols: ColOp[] = []): CellSet[] {
+  const before = applyOps(base, ops, cols)
   const out: CellSet[] = []
   for (let r = 0; r < Math.max(before.length, now.length); r++) {
     const a = before[r] ?? []

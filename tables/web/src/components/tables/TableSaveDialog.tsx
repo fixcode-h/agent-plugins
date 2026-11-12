@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
 import { t } from '@shared/i18n'
-import { applyRowOps, cellRef, type SheetEdit } from '@shared/table-edit'
+import { applyOps, cellRef, type SheetEdit } from '@shared/table-edit'
 import type { SheetData } from '@shared/files'
 import type { TableDoc } from '@shared/tables'
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,8 @@ export function TableSaveDialog({
     setError(null)
     const err = await onSave(force)
     setBusy(false)
-    if (err) setError({ text: err, canForce: /被改过/.test(err) && pending.every((s) => !s.rows.length) })
+    if (err)
+      setError({ text: err, canForce: /被改过/.test(err) && pending.every((s) => !s.rows.length && !s.cols?.length) })
   }
   return (
     <Modal
@@ -117,17 +118,21 @@ export function TableSaveDialog({
         )}
         <div className="tb:max-h-[50vh] tb:overflow-auto tb:rounded-lg tb:border">
           {pending.map((s) => {
-            // 旧值按做完行操作之后的位置取：插删过行时行号对得上
-            const old = applyRowOps(base(s.name)?.rows ?? [], s.rows)
+            // 旧值按做完行列操作之后的位置取：插删过行列时行号、列号对得上
+            const old = applyOps(base(s.name)?.rows ?? [], s.rows, s.cols)
             const now = sheets[s.name] ?? []
             const ins = s.rows.filter((o) => o.n > 0).reduce((n, o) => n + o.n, 0)
             const del = s.rows.filter((o) => o.n < 0).reduce((n, o) => n - o.n, 0)
+            const colIns = (s.cols ?? []).filter((o) => o.n > 0).reduce((n, o) => n + o.n, 0)
+            const colDel = (s.cols ?? []).filter((o) => o.n < 0).reduce((n, o) => n - o.n, 0)
             return (
               <section key={s.name} className="tb:border-b tb:last:border-b-0">
                 <header className="tb:flex tb:items-center tb:gap-2 tb:bg-panel tb:px-3 tb:py-1.5 tb:text-footnote tb:font-medium">
                   {s.name}
                   {ins > 0 && <Badge tone="accent">{t('插入 {n} 行', { n: ins })}</Badge>}
                   {del > 0 && <Badge tone="warning">{t('删除 {n} 行', { n: del })}</Badge>}
+                  {colIns > 0 && <Badge tone="accent">{t('插入 {n} 列', { n: colIns })}</Badge>}
+                  {colDel > 0 && <Badge tone="warning">{t('删除 {n} 列', { n: colDel })}</Badge>}
                 </header>
                 <table className="tb:w-full tb:text-footnote">
                   <tbody>

@@ -28,6 +28,9 @@ import { TableTabs } from '@/components/tables/TableTabs'
 import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
+import { useTableDrafts } from '@/components/tables/use-table-drafts'
+import { DraftBar } from '@/components/tables/DraftBar'
+import { firstShownSheet } from '@/components/files/SheetTable'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
@@ -161,6 +164,16 @@ function Workbench({
       return d && 'sheets' in d && pendingOf(edits[p], d.sheets).length > 0
     }),
   )
+  // 没保存的改动存进浏览器（草稿）：刷新、重启、崩了以后打开文件能恢复
+  const drafts = useTableDrafts({ projectId, docs, edits, setEdits })
+  // 文件树、页签上的「有没保存的改动」：页面上的，加上浏览器里存着草稿、还没打开（或还没决定恢复）的
+  const markedDirty = useMemo(() => {
+    const out = new Set(dirtyPaths)
+    for (const p of drafts.stored) if (!docs[p] || drafts.asks[p]) out.add(p)
+    return out
+    // dirtyPaths 每次渲染都是新的 Set：按内容比
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [[...dirtyPaths].join('\n'), drafts.stored, drafts.asks, docs])
   // 有没保存的改动时关页面、刷新先提醒
   const anyDirty = dirtyPaths.size > 0
   useEffect(() => {
@@ -237,14 +250,17 @@ function Workbench({
   const busy = useRef(false)
   // 被外面改过、页面上又有没保存改动的文件：表格上方提示，用户决定怎么办
   const [stale, setStale] = useState<Record<string, true>>({})
-  const activeDoc = active ? docs[active] : undefined
-  // 藏起来（切到别的页面）时不看外部改动，切回来再接着看
-  useExternalChange(projectId, shown && activeDoc && 'sheets' in activeDoc ? activeDoc : undefined, busy, (path) => {
+  // 打开着的表都盯着（服务端 fs.watch 加推送）；藏起来（切到别的页面）时收到的先记着，切回来再处理
+  const watched = Object.values(docs).flatMap((d) =>
+    'sheets' in d && d.mtime ? [{ path: d.path, mtime: d.mtime }] : [],
+  )
+  useExternalChange(projectId, watched, shown, busy, (path) => {
     const d = docs[path]
     if (d && 'sheets' in d && pendingOf(edits[path], d.sheets).length) return setStale((m) => ({ ...m, [path]: true }))
-    // 没有没保存的改动：直接载入新内容
+    // 没有没保存的改动：直接载入新内容；正看着的这张才提示，后台页签悄悄换成新的
     reloadDoc(path, false)
-    toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
+    if (path === active)
+      toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
   })
   /** 重新载入：keep 时把页面上改过的格子按位置写回新内容上（只改格子、没插删行时才行） */
   const reloadDoc = (path: string, keep: boolean) => {
@@ -438,7 +454,7 @@ function Workbench({
               files={files}
               query={query}
               active={active}
-              dirty={dirtyPaths}
+              dirty={markedDirty}
               problems={problemCounts}
               readOnly={readOnlyPaths}
               onOpen={open}
@@ -516,30 +532,42 @@ function Workbench({
         ) : !schema ? (
           <TableSkeleton />
         ) : (
-          <TableView
-            projectId={projectId}
-            key={doc.path}
-            doc={doc}
-            schema={schema}
-            onSchema={saveSchema}
-            jump={jump}
-            sheetIndex={sheetOf[doc.path] ?? 0}
-            onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
-            edits={edits[doc.path]}
-            onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
-            onSave={(pending, force) => saveDoc(doc, pending, force)}
-            onCheckout={(rev) => checkoutDoc(doc, rev)}
-            exports={exports}
-            onExport={(i) => runExport(i, [doc.path])}
-            onRefJump={jumpRef}
-            stale={!!stale[doc.path]}
-            onReload={(keep) => reloadDoc(doc.path, keep)}
-            onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
-            onFilesChanged={filesChanged}
-            onOpenHit={openHit}
-            loadDoc={loadDoc}
-            files={files.map((f) => f.path)}
-          />
+          <>
+            {drafts.asks[doc.path] && (
+              <DraftBar
+                draft={drafts.asks[doc.path]}
+                doc={doc}
+                editing={dirtyPaths.has(doc.path)}
+                onRestore={(keep) => drafts.restore(doc.path, keep)}
+                onDiscard={() => drafts.discard(doc.path)}
+              />
+            )}
+            <TableView
+              projectId={projectId}
+              key={doc.path}
+              doc={doc}
+              schema={schema}
+              onSchema={saveSchema}
+              jump={jump}
+              // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
+              sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
+              onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
+              edits={edits[doc.path]}
+              onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
+              onSave={(pending, force) => saveDoc(doc, pending, force)}
+              onCheckout={(rev) => checkoutDoc(doc, rev)}
+              exports={exports}
+              onExport={(i) => runExport(i, [doc.path])}
+              onRefJump={jumpRef}
+              stale={!!stale[doc.path]}
+              onReload={(keep) => reloadDoc(doc.path, keep)}
+              onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
+              onFilesChanged={filesChanged}
+              onOpenHit={openHit}
+              loadDoc={loadDoc}
+              files={files.map((f) => f.path)}
+            />
+          </>
         )}
         {runs.length > 0 && (
           <TableOutputPanel
