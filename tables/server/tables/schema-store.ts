@@ -1,14 +1,18 @@
 /**
- * 表格的结构文件：表头规则、枚举、列的结构、单文件的表头覆盖。全部存在表格之外——
+ * 表格的结构文件：表头、枚举、列的结构。全部存在表格之外——
  * 项目目录 .agentpanel/tables/（能提交给团队）或数据目录 tables/<项目 id>/（只在本机），由项目设置决定。
- * 拆成 4 个文件，多人各改各的部分不容易冲突；JSON 两格缩进，版本控制里看得出改了什么。
+ * 拆成 3 个文件，多人各改各的部分不容易冲突；JSON 两格缩进，版本控制里看得出改了什么。
+ * 旧版还有 files.json（单张表的表头覆盖）：读的时候并进 style 的「按文件指定」，下次保存时删掉。
  */
 import path from 'node:path'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { TableSchema, type TablesConfig } from '../../shared/tables.ts'
+import { upgradeSchemaRaw } from '../../shared/table-schema-upgrade.ts'
 import { DATA_DIR } from '../store.ts'
 
-const PARTS = ['style', 'enums', 'columns', 'files'] as const
+const PARTS = ['style', 'enums', 'columns'] as const
+/** 旧版的单表表头覆盖，只读不写 */
+const LEGACY = 'files'
 
 export function schemaDir(projectDir: string, projectId: string, cfg: Pick<TablesConfig, 'store'>) {
   return cfg.store === 'data'
@@ -18,7 +22,7 @@ export function schemaDir(projectDir: string, projectId: string, cfg: Pick<Table
 
 export async function readSchema(dir: string): Promise<TableSchema> {
   const raw: Record<string, unknown> = {}
-  for (const p of PARTS) {
+  for (const p of [...PARTS, LEGACY]) {
     const text = await readFile(path.join(dir, `${p}.json`), 'utf8').catch(() => '')
     if (!text) continue
     try {
@@ -33,7 +37,7 @@ export async function readSchema(dir: string): Promise<TableSchema> {
       // 手改坏了的文件当没有，不让整个表格页打不开
     }
   }
-  const got = TableSchema.safeParse(raw)
+  const got = TableSchema.safeParse(upgradeSchemaRaw(raw))
   return got.success ? got.data : TableSchema.parse({})
 }
 
@@ -51,7 +55,6 @@ export async function writeSchema(dir: string, s: TableSchema) {
     style: next.analyzedAt ? { ...next.style, analyzedAt: next.analyzedAt } : next.style,
     enums: next.enums,
     columns: next.columns,
-    files: next.files,
   }
   for (const p of PARTS) {
     const file = path.join(dir, `${p}.json`)
@@ -62,5 +65,7 @@ export async function writeSchema(dir: string, s: TableSchema) {
     if (old === null && (text === '{}\n' || text === '[]\n')) continue
     await writeAtomic(file, text)
   }
+  // 旧版的单表覆盖已经并进 style 写下去了：留着的话下次读又会并一遍，用户在设置里删掉的又回来
+  await rm(path.join(dir, `${LEGACY}.json`), { force: true })
   return next
 }

@@ -3,7 +3,7 @@
  * 硬约束：表格文件本身只在用户保存改动时原地改写单元格，结构信息一律存在表格之外（见设计稿 designs/表格管理与在线编辑-设计稿.md）。
  */
 import { z } from 'zod'
-import { SHEET_ROLES, pickHeader, type SheetHeader } from './sheet-header.ts'
+import { HeaderException, HeaderRule, emptyRule } from './table-header.ts'
 import type { SheetData } from './files.ts'
 import { TableExport } from './table-export.ts'
 
@@ -154,12 +154,6 @@ export interface TableSearch {
 
 // ---------- 结构文件 ----------
 
-const HeaderRule = z.object({
-  start: z.number().int().min(0).max(1000),
-  roles: z.array(z.enum(SHEET_ROLES)).max(20),
-  labels: z.array(z.string().trim().max(20)).max(20).optional(),
-})
-
 /** 一个枚举值 */
 export const EnumValue = z.object({
   name: z.string().trim().min(1).max(200),
@@ -217,13 +211,11 @@ export const TYPE_NAMES = '@types'
 
 /** 项目的表格风格 */
 export const TableStyle = z.object({
-  /** 旧版只能设一套表头；读的时候当 headers 的第一套（见 styleHeaders），保存时仍写上第一套，旧版本也认得 */
-  header: HeaderRule.optional(),
   /**
-   * 项目的几套表头：各表表头行数不一样时设多套，每张表按内容挑最合的一套（pickHeader）；
-   * 空数组 = 每张表自动识别
+   * 项目的表头：一个「行」的数组，每项对应表格表头的一行（见 table-header.ts）。表格页完全按它显示，
+   * 不按内容猜；rows 为空 = 还没配置，整张表都当数据
    */
-  headers: z.array(HeaderRule).max(20).default([]),
+  header: HeaderRule.default(emptyRule),
   /** 主键列的字段名 */
   key: z.string().trim().max(100).default('ID'),
   /** repeated 列表的分隔符 */
@@ -232,11 +224,6 @@ export const TableStyle = z.object({
   arrayMarks: z.array(z.string().trim().max(40)).max(20).default(['repeated']),
   /** 类型行里算基础类型的名字（其余的大驼峰名字当枚举 / 结构） */
   primitives: z.array(z.string().max(40)).max(80).default([]),
-  /**
-   * 表头每种行能填什么：值是通用枚举名，或 TYPE_NAMES（基础类型 + 通用枚举名，给类型行用）。
-   * 例如修饰行 = 枚举 Modifier（optional / repeated），导出端行 = 枚举 Side（Public / Server / Client / Editor）
-   */
-  roleEnums: z.partialRecord(z.enum(SHEET_ROLES), z.string().max(200)).default({}),
   /** 组合唯一：这些文件（通配）里几列合起来不能重复（比如 RoleID + Level） */
   uniques: z
     .array(z.object({ glob: z.string().max(300), fields: z.array(z.string().max(100)).min(2).max(8) }))
@@ -244,11 +231,8 @@ export const TableStyle = z.object({
     .default([]),
   /** 保存前检查：off 不查；warn 有不合规的格子时提醒但能保存；block 有不合规时不让保存 */
   saveCheck: z.enum(['off', 'warn', 'block']).default('warn'),
-  /** 例外：这些文件（通配）用另一套表头 */
-  exceptions: z
-    .array(z.object({ glob: z.string().max(300), header: HeaderRule }))
-    .max(100)
-    .default([]),
+  /** 按文件指定的表头：这些文件（通配，可以细到工作表）用另一份表头，排在前面的优先 */
+  exceptions: z.array(HeaderException).max(100).default([]),
 })
 export type TableStyle = z.infer<typeof TableStyle>
 
@@ -260,29 +244,27 @@ export const TableSchema = z.object({
   style: TableStyle.default(() => TableStyle.parse({})),
   enums: z.record(z.string().max(200), TableEnum).default({}),
   columns: z.record(z.string().max(700), TableColumn).default({}),
-  /** 单个文件 / 工作表的表头覆盖，键是「相对路径#工作表」 */
-  files: z.record(z.string().max(600), HeaderRule).default({}),
   analyzedAt: z.string().max(40).optional(),
 })
 export type TableSchema = z.infer<typeof TableSchema>
 
 export const emptySchema = (): TableSchema => TableSchema.parse({})
 
-/** 项目风格里的几套表头：新的 headers 优先，没有就用旧版的单套 header */
-export function styleHeaders(style: Pick<TableStyle, 'header' | 'headers'>): SheetHeader[] {
-  if (style.headers?.length) return style.headers
-  return style.header ? [style.header] : []
+/** 一张表用的表头从哪来：按文件指定的第几条（只管这个工作表的 / 按通配的），或项目表头 */
+export type HeaderSource = { kind: 'sheet' | 'file'; index: number } | { kind: 'project' }
+
+/** 这条「按文件指定」管不管这张表：glob 为空的还没填，不生效 */
+export function exceptionHits(e: HeaderException, file: string, sheet: string) {
+  if (!e.glob.trim() || (e.sheet !== undefined && e.sheet !== sheet)) return false
+  return e.glob === file || globHit(file, [e.glob])
 }
 
-/**
- * 一张表的表头：单文件覆盖 > 例外规则 > 项目风格（多套时按 rows 的内容挑最合的）> undefined（交给自动识别）。
- * 不传 rows 时多套里取第一套
- */
-export function schemaHeader(s: TableSchema, file: string, sheet: string, rows?: string[][]): SheetHeader | undefined {
-  const own = s.files[`${file}#${sheet}`]
-  if (own) return own
-  const ex = s.style.exceptions.find((e) => globHit(file, [e.glob]))
-  return ex?.header ?? pickHeader(styleHeaders(s.style), rows)
+/** 一张表的表头：按文件指定（排在前面的优先）> 项目表头。只看配置，不看表格内容 */
+export function schemaHeader(s: TableSchema, file: string, sheet: string): { rule: HeaderRule; source: HeaderSource } {
+  const i = s.style.exceptions.findIndex((e) => exceptionHits(e, file, sheet))
+  if (i < 0) return { rule: s.style.header, source: { kind: 'project' } }
+  const e = s.style.exceptions[i]
+  return { rule: e.header, source: { kind: e.sheet !== undefined ? 'sheet' : 'file', index: i } }
 }
 
 /** 一列的结构：先找本工作表的，再找「每张表」的 */

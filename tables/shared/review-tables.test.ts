@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { workbookDiffText } from './review-tables.ts'
 import { TableSchema } from './tables.ts'
+import { ruleOf } from './table-header.ts'
 
-const schema = TableSchema.parse({})
+const schema = TableSchema.parse({ style: { header: ruleOf(['modifier', 'type', 'name']) } })
 const head = [
   ['optional', 'optional', 'optional'],
   ['uint32', 'string', 'uint32'],

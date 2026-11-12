@@ -3,12 +3,12 @@
  * 列表、打开、内容搜索、结构文件读写；保存、版本、对比、AI 分析在各自的文件里挂到同一组路由上。
  */
 import path from 'node:path'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { z } from 'zod'
 import { compress } from 'hono/compress'
 import { t } from '../../shared/i18n.ts'
-import { TableSchema, TablesConfig, tablesOf, tablesOn } from '../../shared/tables.ts'
+import { TableSchema, TablesConfig, tableKind, tablesOf, tablesOn } from '../../shared/tables.ts'
 import type { Project } from '../../shared/schema.ts'
 import { resolvePath } from '../fs.ts'
 import { revealItem } from '../open.ts'
@@ -19,6 +19,7 @@ import { TableReplaceBody } from '../../shared/table-search.ts'
 import { readSchema, schemaDir, writeSchema } from './schema-store.ts'
 import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
+import { shiftReasons } from './xlsx-write.ts'
 import { SheetEdit, TableSave } from '../../shared/table-edit.ts'
 import { detectVcs } from '../projects-analyze.ts'
 import { p4Runner } from '../p4-split.ts'
@@ -38,6 +39,8 @@ import { stream } from 'hono/streaming'
 import type { TableWatcher } from './watch.ts'
 import { withPromptLangRules } from '../../shared/prompt-lang.ts'
 import { buildTablesBody } from '../../shared/tables-assist.ts'
+import { TableCreate } from '../../shared/table-create.ts'
+import { createTable } from './create.ts'
 import type { ExportEvent } from '../../shared/table-export.ts'
 
 export interface TablesDeps {
@@ -119,6 +122,17 @@ export function tablesApi(deps: TablesDeps) {
         try {
           const { dir, cfg } = await projectOf(deps, c.req.param('id'))
           return c.json(await openTable(dir, c.req.query('path') ?? '', cfg))
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 每张表能不能在中间插删行列（xlsx 有公式、合并单元格、数据验证这些就不能）：页面插列删列前先问
+      .get('/:id/shift-check', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const { full, rel } = safeRel(dir, c.req.query('path') ?? '', cfg)
+          if (tableKind(rel) !== 'xlsx') return c.json({})
+          return c.json(shiftReasons(await readFile(full)))
         } catch (e) {
           return fail(c, e)
         }
@@ -502,6 +516,17 @@ export function tablesApi(deps: TablesDeps) {
           return c.json({
             results: await syncTables(await side(l), await side(r), body, { p4Edit: p4Edit(r.dir) }),
           })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 新建表格：按项目表头配置拼好的表头行写成新文件（见 create.ts）
+      .post('/:id/create', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const body = TableCreate.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('新建表格的内容格式不对'))
+          return c.json(await createTable(dir, cfg, body.data))
         } catch (e) {
           return fail(c, e)
         }

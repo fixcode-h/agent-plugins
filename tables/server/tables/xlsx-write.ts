@@ -1,15 +1,17 @@
 /**
  * 原地改 xlsx 的单元格：只动改了的 <c>（和需要时新加的 <row>），样式号 s 留着，共享字符串在末尾追加，
  * 其余 XML 一个字节不改；没改的工作表、样式、图片、宏等 zip 条目整段照搬（见 zip.ts）。
- * 公式格不让改（改了缓存值和公式就对不上）；有公式、合并单元格、条件格式、数据验证、超链接、表格对象、
- * 名称定义的表不让在中间插删行（这些东西里的引用要跟着挪，这里不做）——都直接报错，交给表格软件。
+ * 公式格不让改（改了缓存值和公式就对不上）；有公式、合并单元格、数据验证这些会跟着位置走的东西的表
+ * 不让在中间插删行列（规则在 xlsx-shift.ts 的 shiftBlocked）——都直接报错，交给表格软件。
+ * 插删列时每格的列号、`<cols>` 的列宽区间一起挪。
  * 改完由调用方重新解析、和预期逐格比对（write.ts）。
  */
 import path from 'node:path'
 import { t } from '../../shared/i18n.ts'
-import { cellRef, type CellSet, type RowOp, type SheetEdit } from '../../shared/table-edit.ts'
+import { cellRef, type CellSet, type ColOp, type RowOp, type SheetEdit } from '../../shared/table-edit.ts'
+import { FORMULA, lastCol, otherParts, shiftBlocked, shiftCells, shiftColDefs } from './xlsx-shift.ts'
 import { attr, colOf, dateStyles, xmlText } from '../xlsx.ts'
-import { entryText, readZip, writeZip } from './zip.ts'
+import { entryText, readZip, writeZip, type RawZip } from './zip.ts'
 
 const PREFIXED = /<\w+:(worksheet|sst|workbook)\b/
 
@@ -77,6 +79,8 @@ interface Ctx {
   sst: Sst | null
   dates: boolean[]
   date1904: boolean
+  /** 别的部件的 XML（查跨表引用），懒取 */
+  others: (part: string) => () => Iterable<string>
 }
 
 interface Cell {
@@ -149,6 +153,30 @@ function aboveCell(rows: Row[], r: number, col: number): string | undefined {
   return undefined
 }
 
+/** 做完列操作以后哪些列是新插进来的 */
+function freshCols(ops: ColOp[]) {
+  let fresh: number[] = []
+  for (const op of ops) {
+    if (op.n > 0)
+      fresh = [...fresh.map((c) => (c >= op.at ? c + op.n : c)), ...Array.from({ length: op.n }, (_, i) => op.at + i)]
+    else fresh = fresh.filter((c) => c < op.at || c >= op.at - op.n).map((c) => (c >= op.at ? c + op.n : c))
+  }
+  return new Set(fresh)
+}
+
+/**
+ * 新格子照着谁的样式：一般是同一列上面最近的一格（追加行时和上面的行一个样）；
+ * 新插的列上面没有可照的，就照同一行左边那格的样式（和 Excel 插列一样：表头行还是表头的底色），
+ * 但不照它的类型——左边是数字列不代表新列也是，按值本身判断
+ */
+function likeCell(rows: Row[], row: Row, r: number, col: number, fresh: Set<number>): string | undefined {
+  if (!fresh.has(col)) return aboveCell(rows, r, col)
+  const left = cellsOf(row)
+    .filter((x) => x.col < col && !fresh.has(x.col))
+    .pop()
+  return left?.raw.replace(/^(<c\b[^>]*?)\st="[^"]*"/, '$1')
+}
+
 function newCell(ref: string, v: string, old: string | undefined, like: string | undefined, ctx: Ctx): string | null {
   const head = (old ?? like ?? '').match(/^<c\b([^>]*?)\/?>/)?.[1] ?? ''
   const s = attr(head, 's')
@@ -170,20 +198,7 @@ function newCell(ref: string, v: string, old: string | undefined, like: string |
   return `${open('inlineStr')}><is>${tText(v)}</is></c>`
 }
 
-/** 这张表能不能在中间插删行 */
-function rowOpsBlocked(xml: string, book: string) {
-  const why: string[] = []
-  if (/<(\w+:)?f[\s>/]/.test(xml)) why.push(t('公式'))
-  if (/<mergeCell\b/.test(xml)) why.push(t('合并单元格'))
-  if (/<conditionalFormatting\b/.test(xml)) why.push(t('条件格式'))
-  if (/<dataValidation\b/.test(xml)) why.push(t('数据验证'))
-  if (/<hyperlink\b/.test(xml)) why.push(t('超链接'))
-  if (/<tablePart\b/.test(xml)) why.push(t('表格对象'))
-  if (/<definedName\b/.test(book)) why.push(t('名称定义'))
-  return why
-}
-
-function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string {
+function editSheet(xml: string, edit: SheetEdit, book: string, part: string, ctx: Ctx): string {
   if (PREFIXED.test(xml)) unsupported(t('这个表格的写法比较少见（带命名空间前缀）'))
   const open = /<sheetData\b[^>]*?(\/?)>/.exec(xml)
   if (!open) unsupported(t('表格里没有单元格区'))
@@ -197,7 +212,7 @@ function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string
   // 行操作：追加在末尾的总可以；其余的要表里没有会跟着挪的引用
   const ops: RowOp[] = edit.rows
   if (ops.some((op) => op.at <= last)) {
-    const why = rowOpsBlocked(xml, book)
+    const why = shiftBlocked(xml, book, edit.name, ctx.others(part))
     if (why.length) unsupported(t('这张表有{what}，不能在中间插入或删除行，请在表格软件里做', { what: why.join('、') }))
   }
   let list = rows
@@ -210,6 +225,33 @@ function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string
       for (const row of list) if (row.r >= end) moveRow(row, row.r + op.n)
     }
   }
+
+  // 列操作：追加在最后一列后面的总可以（加字段最常见的做法）；其余的规则和插删行一样
+  const colOps = edit.cols ?? []
+  let headXml = xml.slice(0, open!.index)
+  if (colOps.length) {
+    const used = lastCol(list.map(cellsOf))
+    if (colOps.some((op) => op.at <= used)) {
+      const why = shiftBlocked(xml, book, edit.name, ctx.others(part))
+      if (why.length)
+        unsupported(t('这张表有{what}，不能在中间插入或删除列，请在表格软件里做', { what: why.join('、') }))
+    }
+    for (const row of list) {
+      let moved: Cell[] | null
+      try {
+        moved = shiftCells(cellsOf(row), row.r, colOps)
+      } catch (e) {
+        return unsupported((e as Error).message)
+      }
+      if (!moved) continue
+      row.cells = moved
+      row.raw = undefined
+      // spans 是「这一行用到第几列到第几列」的提示，挪了列就不准了
+      row.attrs = row.attrs.replace(/\sspans="[^"]*"/, '')
+    }
+    headXml = shiftColDefs(headXml, colOps)
+  }
+  const fresh = freshCols(colOps)
 
   // 改格子：按行分组
   const byRow = new Map<number, CellSet[]>()
@@ -234,8 +276,8 @@ function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string
       const ref = cellRef(r, c)
       const i = cells.findIndex((x) => x.col === c)
       const old = i >= 0 ? cells[i].raw : undefined
-      if (old && /<(\w+:)?f[\s>/]/.test(old)) unsupported(t('{ref} 是公式格，不能在这里改', { ref }))
-      const made = newCell(ref, v, old, old ? undefined : aboveCell(list, r, c), ctx)
+      if (old && FORMULA.test(old)) unsupported(t('{ref} 是公式格，不能在这里改', { ref }))
+      const made = newCell(ref, v, old, old ? undefined : likeCell(list, row, r, c, fresh), ctx)
       if (i >= 0) {
         if (made) cells[i].raw = made
         else cells.splice(i, 1)
@@ -257,7 +299,7 @@ function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string
       return cells.length ? `<row${attrs}>${cells.map((c) => c.raw).join('')}</row>` : `<row${attrs}/>`
     })
     .join('')
-  const head = open![1] ? xml.slice(0, open!.index) + open![0].replace(/\/>$/, '>') : xml.slice(0, start)
+  const head = headXml + (open![1] ? open![0].replace(/\/>$/, '>') : open![0])
   const tail = open![1] ? `</sheetData>${xml.slice(start)}` : xml.slice(close)
   return fixDimension(head, list) + out + tail
 }
@@ -280,39 +322,71 @@ function fixDimension(head: string, rows: Row[]) {
   return head.replace(m[0], m[0].replace(/ref="[^"]*"/, `ref="${m[1] === to ? to : `${m[1]}:${to}`}"`))
 }
 
-/** 改一个 xlsx：返回新文件的字节。表格写法不支持、改公式格、不能插删行时抛错（错误信息给用户看） */
-export function editXlsx(buf: Buffer, edits: SheetEdit[]): Buffer {
-  const zip = readZip(buf)
-  const book = entryText(zip, 'xl/workbook.xml')
-  if (!book) unsupported(t('不是 xlsx 文件'))
-  if (PREFIXED.test(book!)) unsupported(t('这个表格的写法比较少见（带命名空间前缀）'))
+/** 工作表名 → zip 里的部件路径 */
+function sheetParts(zip: RawZip, book: string) {
   const rels = new Map<string, string>()
   for (const m of (entryText(zip, 'xl/_rels/workbook.xml.rels') ?? '').matchAll(/<Relationship\b([^>]*)>/g)) {
     const target = attr(m[1], 'Target') ?? ''
     rels.set(attr(m[1], 'Id') ?? '', target.startsWith('/') ? target.slice(1) : path.posix.join('xl', target))
   }
   const sheets = new Map<string, string>()
-  for (const m of book!.matchAll(/<sheet\b([^>]*)>/g)) {
+  for (const m of book.matchAll(/<sheet\b([^>]*)>/g)) {
     const part = rels.get(attr(m[1], 'r:id') ?? attr(m[1], 'id') ?? '')
     if (part) sheets.set(xmlText(attr(m[1], 'name') ?? ''), part)
   }
+  return sheets
+}
+
+/**
+ * 每张表能不能在中间插删行列：不能的给出原因（页面上插列、删列前先问一下，免得改了半天保存时才被拒），
+ * 以及表里实际用到的最后一列（带样式的空格子也算，页面上「加在末尾」从它后面加，保存时才不算「中间」）。
+ * 只是提前告诉用户，真正把关的还是保存时 editSheet 里的同一套规则
+ */
+export function shiftReasons(buf: Buffer): Record<string, { why: string[]; last: number }> {
+  const zip = readZip(buf)
+  const book = entryText(zip, 'xl/workbook.xml') ?? ''
+  const out: Record<string, { why: string[]; last: number }> = {}
+  const names = zip.entries.map((x) => x.name)
+  for (const [name, part] of sheetParts(zip, book)) {
+    const xml = entryText(zip, part) ?? ''
+    const others = otherParts(names, new Set([part, 'xl/workbook.xml']), (n) => entryText(zip, n))
+    let last = -1
+    for (const m of xml.matchAll(/<c\b[^>]*?\sr="([A-Z]+)\d+"/g)) last = Math.max(last, colOf(m[1]))
+    out[name] = { why: shiftBlocked(xml, book, name, others), last }
+  }
+  return out
+}
+
+/** 改一个 xlsx：返回新文件的字节。表格写法不支持、改公式格、不能插删行时抛错（错误信息给用户看） */
+export function editXlsx(buf: Buffer, edits: SheetEdit[]): Buffer {
+  const zip = readZip(buf)
+  const book = entryText(zip, 'xl/workbook.xml')
+  if (!book) unsupported(t('不是 xlsx 文件'))
+  if (PREFIXED.test(book!)) unsupported(t('这个表格的写法比较少见（带命名空间前缀）'))
+  const sheets = sheetParts(zip, book!)
   const sstText = entryText(zip, 'xl/sharedStrings.xml')
   if (sstText && PREFIXED.test(sstText)) unsupported(t('这个表格的写法比较少见（带命名空间前缀）'))
   const ctx: Ctx = {
     sst: sstText ? new Sst(sstText) : null,
     dates: dateStyles(entryText(zip, 'xl/styles.xml') ?? ''),
     date1904: /<workbookPr\b[^>]*\bdate1904="(1|true)"/.test(book!),
+    others: (part) =>
+      otherParts(
+        zip.entries.map((x) => x.name),
+        new Set([part, 'xl/workbook.xml']),
+        (name) => entryText(zip, name),
+      ),
   }
   const replace = new Map<string, string>()
   let formulas = false
   for (const e of edits) {
-    if (!e.cells.length && !e.rows.length) continue
+    if (!e.cells.length && !e.rows.length && !e.cols?.length) continue
     const part = sheets.get(e.name)
     if (!part) unsupported(t('找不到工作表：{name}', { name: e.name }))
     const xml = entryText(zip, part!)
     if (xml === null) unsupported(t('找不到工作表：{name}', { name: e.name }))
-    replace.set(part!, editSheet(xml!, e, book!, ctx))
-    if (/<(\w+:)?f[\s>/]/.test(xml!)) formulas = true
+    replace.set(part!, editSheet(xml!, e, book!, part!, ctx))
+    if (FORMULA.test(xml!)) formulas = true
   }
   if (ctx.sst?.changed) replace.set('xl/sharedStrings.xml', ctx.sst.out())
   // 有公式的表改了值：让 Excel / WPS 打开时重算一遍，公式的缓存值不会停在旧数上

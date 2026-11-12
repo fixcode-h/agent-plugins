@@ -375,14 +375,7 @@ function ProposalDialog({
         <p className="tb:text-body tb:text-danger">{error}</p>
       ) : diff && sides ? (
         <div className="tb:flex tb:h-[420px] tb:min-h-0 tb:flex-col">
-          <SheetDiffView
-            a={sides.a.rows}
-            b={sides.b.rows}
-            diff={diff}
-            names={sides.b.names}
-            onlyChanges
-            both={both}
-          />
+          <SheetDiffView a={sides.a.rows} b={sides.b.rows} diff={diff} names={sides.b.names} onlyChanges both={both} />
         </div>
       ) : null}
     </Modal>

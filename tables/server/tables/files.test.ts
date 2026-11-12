@@ -91,7 +91,7 @@ test('内容搜索：不分大小写，跨文件给出工作表、行列和那�
   assert.equal(r.files, 2)
   assert.deepEqual((await searchTables(dir, files, { q: '  ' })).hits, [])
   // 给了结构文件：数据行的命中带上字段名（按表头的字段名行），表头里的命中不带
-  const schema = TableSchema.parse({ style: { header: { start: 0, roles: ['name'] } } })
+  const schema = TableSchema.parse({ style: { header: { start: 0, rows: [{ kind: 'name' }] } } })
   const named = await searchTables(dir, files, { q: 'name' }, undefined, schema)
   assert.equal(named.hits[0].field, undefined)
   assert.deepEqual(

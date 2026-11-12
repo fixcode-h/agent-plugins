@@ -17,7 +17,7 @@ const { gameBook } = await import('./xlsx-fixture.ts')
 
 const cfg = TablesConfig.parse({ dirs: ['Config'] })
 
-async function setup(schema = TableSchema.parse({ style: { header: { start: 0, roles: ['name'] } } })) {
+async function setup(schema = TableSchema.parse({ style: { header: { start: 0, rows: [{ kind: 'name' }] } } })) {
   const dir = mkdtempSync(path.join(tmpdir(), 'agent-panel-tables-replace-'))
   mkdirSync(path.join(dir, 'Config'))
   writeFileSync(path.join(dir, 'Config', 'Item.csv'), 'ID,Name,Drop\n1001,木剑,1001;1002\n1002,铁剑,1001\n')
@@ -82,13 +82,13 @@ test('xlsx：公式格在预览里就标出拒绝原因；保存前检查「不�
   mkdirSync(path.join(dir, 'Config'))
   writeFileSync(path.join(dir, 'Config', 'Book.xlsx'), gameBook({ formulaSheet1: true }))
   const { files } = await listTables(dir, cfg, true)
-  const schema = TableSchema.parse({ style: { header: { start: 2, roles: ['name'] } } })
+  const schema = TableSchema.parse({ style: { header: { start: 2, rows: [{ kind: 'name' }] } } })
   const ctx = { dir, projectId: 'p', cfg, files, schema }
   // 道具表 C6 是公式（=A6*2，存的结果是 6）
   const p = await replaceTables(ctx, TableReplaceBody.parse({ q: '6', whole: true, replace: '7' }), {})
   assert.match(p.files[0].blocked ?? '', /公式/)
   const strict = TableSchema.parse({
-    style: { header: { start: 2, roles: ['name'] }, saveCheck: 'block' },
+    style: { header: { start: 2, rows: [{ kind: 'name' }] }, saveCheck: 'block' },
     enums: { Weapon: { values: [{ name: 'Sword' }] } },
     columns: { 'Config/Book.xlsx#道具#Kind': { enum: 'Weapon' } },
   })
@@ -101,7 +101,9 @@ test('xlsx：公式格在预览里就标出拒绝原因；保存前检查「不�
 })
 
 test('替换后主键和后面已有的行重复：预览里算出不合规（重复记在没改的那一行上也算）', async () => {
-  const { run } = await setup(TableSchema.parse({ style: { header: { start: 0, roles: ['name'] }, key: 'ID' } }))
+  const { run } = await setup(
+    TableSchema.parse({ style: { header: { start: 0, rows: [{ kind: 'name' }] }, key: 'ID' } }),
+  )
   const p = await run({ q: 'ID:1001', whole: true, replace: '1002' })
   assert.equal(p.files[0].path, 'Config/Item.csv')
   assert.equal(p.files[0].problems, 1)

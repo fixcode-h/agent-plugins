@@ -3,6 +3,7 @@
  */
 import type { TableDoc, TableRoot, TableSchema, TableSearch, TablesConfig, TablesIndex } from '@shared/tables'
 import type { SheetEdit, TableSave } from '@shared/table-edit'
+import type { TableCreate } from '@shared/table-create'
 import type { SheetProblems } from '@shared/table-struct'
 import type { SheetData } from '@shared/files'
 import type { ExportEvent } from '@shared/table-export'
@@ -27,6 +28,9 @@ export const tablesApi = {
   probe: (projectId: string, path: string, tables: TablesConfig) =>
     request<TablesProbe>(`${BASE}/${projectId}/probe`, json('POST', { path, tables })),
   open: (projectId: string, path: string) => request<TableDoc>(`${BASE}/${projectId}/file?path=${q(path)}`),
+  /** 每张表不能在中间插删行列的原因（xlsx 有公式、合并单元格这些；空数组 = 可以）和用到的最后一列；CSV 返回 {} */
+  shiftCheck: (projectId: string, path: string) =>
+    request<Record<string, { why: string[]; last: number }>>(`${BASE}/${projectId}/shift-check?path=${q(path)}`),
   /** 登记这个页面（推送连接 conn）在这个项目里打开着的文件：外面改了服务端推 file-changed 过来 */
   watch: (projectId: string, conn: string, files: { path: string; mtime: string }[]) =>
     request<{ watching: number }>(`${BASE}/${projectId}/watch`, json('POST', { conn, files })),
@@ -44,6 +48,9 @@ export const tablesApi = {
     request<TableSchema>(`${BASE}/${projectId}/schema`, json('PUT', s)),
   /** 保存改动：返回保存后的文件 */
   save: (projectId: string, body: TableSave) => request<TableDoc>(`${BASE}/${projectId}/save`, json('POST', body)),
+  /** 新建表格：返回新文件在表格页里的路径 */
+  create: (projectId: string, body: TableCreate) =>
+    request<{ path: string }>(`${BASE}/${projectId}/create`, json('POST', body)),
   /** AI 分析表格风格用的样本 */
   sample: (projectId: string) => request<{ text: string; files: number }>(`${BASE}/${projectId}/sample`),
   /** AI 分析表格风格的第一句话（服务端读好样本、按面板的回复语言拼好） */

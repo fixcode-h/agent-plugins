@@ -2,7 +2,18 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SheetData } from '@shared/files'
-import { dirtyCells, noEdits, pendingOf, redoIn, rowOpIn, rowOpsIn, rowsOf, setCellsIn, undoIn } from './table-edits'
+import {
+  colOpIn,
+  dirtyCells,
+  noEdits,
+  pendingOf,
+  redoIn,
+  rowOpIn,
+  rowOpsIn,
+  rowsOf,
+  setCellsIn,
+  undoIn,
+} from './table-edits'
 
 const S: SheetData = {
   name: 'S',
@@ -57,4 +68,34 @@ test('一次删几行（从下往上）：一步撤销全回来', () => {
   ])
   assert.deepEqual(rowsOf(e, T), [['ID'], ['2'], ['4']])
   assert.equal(rowsOf(undoIn(e), T), T.rows)
+})
+
+test('插列填表头、删列：一次撤销退掉；删掉的列不算改过的格子，后面的改格子保留列操作', () => {
+  let e = colOpIn(noEdits(), S, { at: 1, n: 1 }, [{ r: 0, c: 1, v: 'Price' }])
+  assert.deepEqual(rowsOf(e, S), [
+    ['ID', 'Price', 'Name'],
+    ['1', '', 'a'],
+  ])
+  e = setCellsIn(e, S, [{ r: 1, c: 1, v: '9' }])
+  assert.deepEqual(pendingOf(e, [S]), [
+    {
+      name: 'S',
+      rows: [],
+      cols: [{ at: 1, n: 1 }],
+      cells: [
+        { r: 0, c: 1, v: 'Price' },
+        { r: 1, c: 1, v: '9' },
+      ],
+    },
+  ])
+  e = colOpIn(e, S, { at: 2, n: -1 })
+  assert.deepEqual(rowsOf(e, S), [
+    ['ID', 'Price'],
+    ['1', '9'],
+  ])
+  assert.deepEqual([...dirtyCells(e, S)], ['0:1', '1:1'])
+  e = undoIn(e)
+  assert.deepEqual(rowsOf(e, S)[0], ['ID', 'Price', 'Name'])
+  e = undoIn(undoIn(e))
+  assert.deepEqual(pendingOf(e, [S]), [])
 })

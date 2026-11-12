@@ -8,7 +8,7 @@ import path from 'node:path'
 import { access, constants, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
 import { csvFormat, parseCsv, writeCsv } from '../../shared/csv.ts'
-import { applyRowOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
+import { applyOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
 import { tableKind, type TableDoc, type TablesConfig } from '../../shared/tables.ts'
 import { DATA_DIR } from '../store.ts'
 import {
@@ -55,7 +55,7 @@ function expected(sheets: { name: string; rows: string[][] }[], body: TableSave)
   for (const e of body.sheets) {
     const s = sheets.find((x) => x.name === e.name)
     if (!s) throw new HttpError(t('找不到工作表：{name}', { name: e.name }))
-    out.set(e.name, setCells(applyRowOps(s.rows, e.rows), e.cells))
+    out.set(e.name, setCells(applyOps(s.rows, e.rows, e.cols), e.cells))
   }
   return out
 }
@@ -115,7 +115,8 @@ export async function prepareSave(
   if (await lockedByOffice(full))
     throw new HttpError(t('文件正在 Excel / WPS 里打开，先在那边关掉再保存（不然那边保存时会把这里的改动盖掉）'), 409)
   const moved = info.mtime.toISOString() !== body.mtime
-  if (moved && (!body.force || body.sheets.some((s) => s.rows.length)))
+  // 插删过行列时格子位置是按打开时的内容算的，外面改过就对不上了，不能硬写
+  if (moved && (!body.force || body.sheets.some((s) => s.rows.length || s.cols?.length)))
     throw new HttpError(t('打开之后文件在外面被改过了：重新载入看看最新的内容，或者只把改了的格子写进去'), 409)
 
   const buf = await readFile(full)

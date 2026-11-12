@@ -1,13 +1,23 @@
 /**
- * 表格页一个文件的改动：每张表现在的样子（rows）和做过的行操作（ops），撤销 / 重做按「改之前那张表的快照」记。
+ * 表格页一个文件的改动：每张表现在的样子（rows）和做过的行操作（ops）、列操作（cols），撤销 / 重做按「改之前那张表的快照」记。
  * 快照是浅拷贝：只复制改到的那几行，一万行的表改一格也只多一个外层数组。全是纯函数，页面拿 state 存。
  */
-import { applyRowOps, changedCells, type CellSet, type RowOp, type SheetEdit } from '@shared/table-edit'
+import {
+  applyColOps,
+  applyRowOps,
+  changedCells,
+  type CellSet,
+  type ColOp,
+  type RowOp,
+  type SheetEdit,
+} from '@shared/table-edit'
 import type { SheetData } from '@shared/files'
 
 export interface SheetState {
   rows: string[][]
   ops: RowOp[]
+  /** 插删列：没有时不写 */
+  cols?: ColOp[]
 }
 
 export interface Edits {
@@ -45,20 +55,20 @@ export function setCellsIn(e: Edits, s: SheetData, cells: CellSet[]): Edits {
     while (row.length <= c) row.push('')
     row[c] = v
   }
-  return commit(e, s.name, { rows, ops: cur.ops })
+  return commit(e, s.name, { ...cur, rows })
 }
 
 /** 插行（n > 0）或删行（n < 0） */
 export function rowOpIn(e: Edits, s: SheetData, op: RowOp): Edits {
   const cur = e.sheets[s.name] ?? { rows: s.rows, ops: [] }
-  return commit(e, s.name, { rows: applyRowOps(cur.rows, [op]), ops: [...cur.ops, op] })
+  return commit(e, s.name, { ...cur, rows: applyRowOps(cur.rows, [op]), ops: [...cur.ops, op] })
 }
 
 /** 一次做几步插删行（删选中的几行）：一次撤销退掉 */
 export function rowOpsIn(e: Edits, s: SheetData, ops: RowOp[]): Edits {
   if (!ops.length) return e
   const cur = e.sheets[s.name] ?? { rows: s.rows, ops: [] }
-  return commit(e, s.name, { rows: applyRowOps(cur.rows, ops), ops: [...cur.ops, ...ops] })
+  return commit(e, s.name, { ...cur, rows: applyRowOps(cur.rows, ops), ops: [...cur.ops, ...ops] })
 }
 
 /** 插一行并填上几格（自动编号、复制行）：一次撤销退掉 */
@@ -72,13 +82,29 @@ export function rowOpWithCells(e: Edits, s: SheetData, op: RowOp, cells: CellSet
     row[c] = v
     rows[r] = row
   }
-  return commit(e, s.name, { rows, ops: [...cur.ops, op] })
+  return commit(e, s.name, { ...cur, rows, ops: [...cur.ops, op] })
+}
+
+/**
+ * 插列（n > 0，顺便填上新列的格子：表头几行的字段名、类型）或删列（n < 0）：一次撤销退掉。
+ * 删列时那几列原来的格子一起去掉，不会算成「改了的格子」
+ */
+export function colOpIn(e: Edits, s: SheetData, op: ColOp, cells: CellSet[] = []): Edits {
+  const cur = e.sheets[s.name] ?? { rows: s.rows, ops: [] }
+  const rows = applyColOps(cur.rows, [op])
+  for (const { r, c, v } of cells) {
+    while (rows.length <= r) rows.push([])
+    const row = rows[r]
+    while (row.length <= c) row.push('')
+    row[c] = v
+  }
+  return commit(e, s.name, { ...cur, rows, cols: [...(cur.cols ?? []), op] })
 }
 
 /** 整张表换成算好的样子（冲突合并的结果）：rows 是做完 ops 之后的样子，一次撤销退掉 */
 export function replaceIn(e: Edits, s: SheetData, rows: string[][], ops: RowOp[]): Edits {
   const cur = e.sheets[s.name] ?? { rows: s.rows, ops: [] }
-  return commit(e, s.name, { rows, ops: [...cur.ops, ...ops] })
+  return commit(e, s.name, { ...cur, rows, ops: [...cur.ops, ...ops] })
 }
 
 export function undoIn(e: Edits): Edits {
@@ -101,15 +127,17 @@ export function redoIn(e: Edits): Edits {
   return { sheets, undo: [...e.undo, { sheet: last.sheet, before: now }], redo: e.redo.slice(0, -1) }
 }
 
-/** 要保存的：每张改过的表的行操作和改了的格子（改了又改回去的不算） */
+/** 要保存的：每张改过的表的行列操作和改了的格子（改了又改回去的不算） */
 export function pendingOf(e: Edits | undefined, sheets: SheetData[]): SheetEdit[] {
   if (!e) return []
   const out: SheetEdit[] = []
   for (const s of sheets) {
     const st = e.sheets[s.name]
     if (!st) continue
-    const cells = changedCells(s.rows, st.ops, st.rows)
-    if (cells.length || st.ops.length) out.push({ name: s.name, rows: st.ops, cells })
+    const cells = changedCells(s.rows, st.ops, st.rows, st.cols)
+    const cols = st.cols ?? []
+    if (cells.length || st.ops.length || cols.length)
+      out.push({ name: s.name, rows: st.ops, ...(cols.length ? { cols } : {}), cells })
   }
   return out
 }
@@ -118,5 +146,5 @@ export function pendingOf(e: Edits | undefined, sheets: SheetData[]): SheetEdit[
 export function dirtyCells(e: Edits | undefined, s: SheetData): Set<string> {
   const st = e?.sheets[s.name]
   if (!st) return new Set()
-  return new Set(changedCells(s.rows, st.ops, st.rows).map((c) => `${c.r}:${c.c}`))
+  return new Set(changedCells(s.rows, st.ops, st.rows, st.cols).map((c) => `${c.r}:${c.c}`))
 }

@@ -167,7 +167,9 @@ export function ProjectTablesSection({
             <ProjectTablesHeader projectId={project.id} />
           ) : (
             <p className="tb:text-footnote tb:leading-relaxed tb:text-subtle">
-              {t('设好表格目录并点「确认」保存后，可以设整个项目的表头从第几行开始、共几行、每行是什么。')}
+              {t(
+                '设好表格目录并点「确认」保存后，可以配置项目的表头：从第几行开始，下面一行一项，每行叫什么、是什么、能填什么。',
+              )}
             </p>
           )}
         </FormSection>

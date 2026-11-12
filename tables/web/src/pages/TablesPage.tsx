@@ -5,6 +5,7 @@ import { tablesOf, type TableDoc, type TableHit, type TableSchema, type TablesIn
 import { useNav } from '@/lib/data'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, useTableSchema } from '@/lib/table-schema'
+import { NewTableDialog } from '@/components/tables/NewTableDialog'
 import { rememberTablesProject, TABLES_SECTION, tablesRoute, useTablesEntry, useTablesProjects } from '@/lib/tables-nav'
 import { toast, toastError } from '@/lib/toast'
 import { parseRef } from '@shared/table-struct'
@@ -26,6 +27,8 @@ import { TableTabs } from '@/components/tables/TableTabs'
 import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
+import { useTableDrafts } from '@/components/tables/use-table-drafts'
+import { DraftBar } from '@/components/tables/DraftBar'
 import { firstShownSheet } from '@/components/files/SheetTable'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
@@ -104,6 +107,7 @@ function Workbench({
   /** 存了表格或结构文件后加一：「检查」重新查 */
   const [checkSeq, setCheckSeq] = useState(0)
   const [comparing, setComparing] = useState(false)
+  const [creating, setCreating] = useState(false)
   const others = projects.filter((p) => p.value !== projectId)
   const [query, setQuery] = useState('')
   const [tabs, setTabs] = useState<string[]>([])
@@ -162,6 +166,16 @@ function Workbench({
       return d && 'sheets' in d && pendingOf(edits[p], d.sheets).length > 0
     }),
   )
+  // 没保存的改动存进浏览器（草稿）：刷新、重启、崩了以后打开文件能恢复
+  const drafts = useTableDrafts({ projectId, docs, edits, setEdits })
+  // 文件树、页签上的「有没保存的改动」：页面上的，加上浏览器里存着草稿、还没打开（或还没决定恢复）的
+  const markedDirty = useMemo(() => {
+    const out = new Set(dirtyPaths)
+    for (const p of drafts.stored) if (!docs[p] || drafts.asks[p]) out.add(p)
+    return out
+    // dirtyPaths 每次渲染都是新的 Set：按内容比
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [[...dirtyPaths].join('\n'), drafts.stored, drafts.asks, docs])
   // 有没保存的改动时关页面、刷新先提醒
   const anyDirty = dirtyPaths.size > 0
   useEffect(() => {
@@ -366,8 +380,9 @@ function Workbench({
       <ListPane
         title={t('表格')}
         count={files.length}
-        onNew={() => {}}
-        hideNew
+        // 新建表格：按项目的表头配置填每一列（表格目录还没有时不给）
+        onNew={() => setCreating(true)}
+        hideNew={!index?.dirs.length || !schema}
         compact
         resizeKey="tables-list"
         query={query}
@@ -442,7 +457,7 @@ function Workbench({
               files={files}
               query={query}
               active={active}
-              dirty={dirtyPaths}
+              dirty={markedDirty}
               problems={problemCounts ?? NO_COUNTS}
               readOnly={readOnlyPaths}
               onOpen={open}
@@ -526,31 +541,42 @@ function Workbench({
         ) : !schema ? (
           <TableSkeleton />
         ) : (
-          <TableView
-            projectId={projectId}
-            key={doc.path}
-            doc={doc}
-            schema={schema}
-            onSchema={saveSchema}
-            jump={jump}
-            // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
-            sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
-            onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
-            edits={edits[doc.path]}
-            onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
-            onSave={(pending, force) => saveDoc(doc, pending, force)}
-            onCheckout={(rev) => checkoutDoc(doc, rev)}
-            exports={exports}
-            onExport={(i) => runExport(i, [doc.path])}
-            onRefJump={jumpRef}
-            stale={!!stale[doc.path]}
-            onReload={(keep) => reloadDoc(doc.path, keep)}
-            onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
-            onFilesChanged={filesChanged}
-            onOpenHit={openHit}
-            loadDoc={loadDoc}
-            files={files.map((f) => f.path)}
-          />
+          <>
+            {drafts.asks[doc.path] && (
+              <DraftBar
+                draft={drafts.asks[doc.path]}
+                doc={doc}
+                editing={dirtyPaths.has(doc.path)}
+                onRestore={(keep) => drafts.restore(doc.path, keep)}
+                onDiscard={() => drafts.discard(doc.path)}
+              />
+            )}
+            <TableView
+              projectId={projectId}
+              key={doc.path}
+              doc={doc}
+              schema={schema}
+              onSchema={saveSchema}
+              jump={jump}
+              // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
+              sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
+              onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
+              edits={edits[doc.path]}
+              onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
+              onSave={(pending, force) => saveDoc(doc, pending, force)}
+              onCheckout={(rev) => checkoutDoc(doc, rev)}
+              exports={exports}
+              onExport={(i) => runExport(i, [doc.path])}
+              onRefJump={jumpRef}
+              stale={!!stale[doc.path]}
+              onReload={(keep) => reloadDoc(doc.path, keep)}
+              onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
+              onFilesChanged={filesChanged}
+              onOpenHit={openHit}
+              loadDoc={loadDoc}
+              files={files.map((f) => f.path)}
+            />
+          </>
         )}
         {runs.length > 0 && (
           <TableOutputPanel
@@ -566,6 +592,19 @@ function Workbench({
           />
         )}
       </main>
+      {creating && schema && index && (
+        <NewTableDialog
+          projectId={projectId}
+          schema={schema}
+          dirs={index.dirs}
+          files={fileSet}
+          onCreated={(path) => {
+            reload(true)
+            open(path)
+          }}
+          onClose={() => setCreating(false)}
+        />
+      )}
       {replacing && (
         <ReplaceAllDialog
           projectId={projectId}

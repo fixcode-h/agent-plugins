@@ -22,6 +22,11 @@ writeFileSync(
   path.join(dir, '.agentpanel', 'tables', 'enums.json'),
   JSON.stringify({ Quality: { values: [{ name: 'Common' }, { name: 'Rare' }] } }),
 )
+// 表头按配置：类型、字段名两行
+writeFileSync(
+  path.join(dir, '.agentpanel', 'tables', 'style.json'),
+  JSON.stringify({ header: { start: 0, rows: [{ kind: 'type' }, { kind: 'name' }] } }),
+)
 const project = { id: 'p1', name: 'g', path: dir, plugins: { tables: { dirs: ['Config'] } } }
 const app = new Hono().route(
   '/api/plugins/tables/api/tables',

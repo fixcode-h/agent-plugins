@@ -8,6 +8,7 @@ import path from 'node:path'
 import { emptySchema } from '../../shared/tables.ts'
 import { mergeSources, markResolved, submitTable, vcsStatus } from './vcs-ops.ts'
 import { cellHistory } from './cell-history.ts'
+import { ruleOf } from '../../shared/table-header.ts'
 
 const git = (dir: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir }).toString()
@@ -36,7 +37,8 @@ test('只提交这一个文件，别的改动留着', async () => {
   assert.equal((await vcsStatus(dir, 'Other.csv')).changed, true)
   await assert.rejects(submitTable(dir, 'Item.csv', 'x'), /没有改动|no changes/)
   // 一格的历史：1 号的 HP 在两次提交里各是一个值
-  const h = await cellHistory(dir, 'Item.csv', emptySchema(), 'Item.csv', {
+  const schema = { ...emptySchema(), style: { ...emptySchema().style, header: ruleOf(['name']) } }
+  const h = await cellHistory(dir, 'Item.csv', schema, 'Item.csv', {
     sheet: 'Item',
     field: 'HP',
     keyField: 'ID',
