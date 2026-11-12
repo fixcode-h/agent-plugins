@@ -13,5 +13,5 @@
   },
   "include": ["sdk", "*/server", "*/web"],
   // ui-design、video 照面板源码布局放文件、类型从面板取，各自用自己的 tsconfig 检查
-  "exclude": ["ui-design", "video"]
+  "exclude": ["ui-design", "video", "tables"]
 }

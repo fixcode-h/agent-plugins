@@ -1,0 +1,34 @@
+// 表格插件的类型检查：照面板源码的布局放文件，插件里没有的模块用面板的（构建时接到面板开放的那一份，见 scripts/build.mjs）。
+// 类型从面板源码取：仓库根的 .panel 是面板的检出（本机可以是指向 agent-panel 的链接，CI 里现拉 dev 分支并 npm ci）。
+// rootDirs 让 ./server/x.ts 里的 '../shared/i18n.ts' 在插件里找不到时去 .panel 里找；第三方包都先用面板的那一份，
+// 和面板组件的 React、zod 类型是同一套，不然两份 @types/react 互相不认。
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "preserveSymlinks": true,
+    "rootDirs": [".", "../.panel"],
+    "paths": {
+      "@/*": ["./web/src/*", "../.panel/web/src/*"],
+      "@shared/*": ["./shared/*", "../.panel/shared/*"],
+      "@panel/*": ["../.panel/*"],
+      "*": [
+        "../.panel/node_modules/@types/*",
+        "../.panel/node_modules/*",
+        "../node_modules/@types/*",
+        "../node_modules/*"
+      ]
+    }
+  },
+  "include": ["web", "server", "shared"]
+}
