@@ -37,6 +37,9 @@ export const tablesApi = {
   /** 文件现在的修改时间（外部改动检测：忙完后再对一次） */
   stat: (projectId: string, path: string) =>
     request<{ mtime?: string; size?: number; missing?: boolean }>(`${BASE}/${projectId}/stat?path=${q(path)}`),
+  /** 面板文件弹窗里的表格文件归不归表格页：rel 是表格页用的路径；same 为 false 是独立分支里的副本 */
+  claim: (projectId: string, path: string, root: string) =>
+    request<{ rel: string | null; same: boolean }>(`${BASE}/${projectId}/claim?path=${q(path)}&root=${q(root)}`),
   /** 跨表搜索：「字段名:值」只在那一列找；三个开关和表格里的查找替换一样 */
   search: (projectId: string, o: TableSearchOpts, signal?: AbortSignal) =>
     request<TableSearch>(`${BASE}/${projectId}/search?${searchQuery(o)}`, { signal }),

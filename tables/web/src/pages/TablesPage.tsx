@@ -56,6 +56,8 @@ export function TablesPage({ path, active = true }: { path: string; active?: boo
   const shown = active
   const id = path.split('/')[0]
   const projectId = projects.some((p) => p.id === id) ? id : fallback
+  // 地址里项目后面的部分是要打开的文件（面板文件弹窗的「在表格页打开」）：<项目>/<文件>#<工作表>
+  const want = projectId === id ? path.slice(id.length + 1) : ''
   useEffect(() => {
     if (projectId) rememberTablesProject(projectId)
   }, [projectId])
@@ -69,6 +71,8 @@ export function TablesPage({ path, active = true }: { path: string; active?: boo
       projects={projects.map((p) => ({ value: p.id, label: p.name }))}
       exports={tablesOf(projects.find((p) => p.id === projectId))?.exports ?? []}
       readOnlyProject={!!tablesOf(projects.find((p) => p.id === projectId))?.readOnly}
+      want={want}
+      onOpened={() => go(tablesRoute(projectId))}
       onProject={(id) => go(tablesRoute(id))}
       onSettings={() => openProject(projectId, TABLES_SECTION)}
     />
@@ -84,7 +88,13 @@ function Workbench({
   onSettings,
   exports,
   readOnlyProject,
+  want,
+  onOpened,
 }: {
+  /** 地址带来的要打开的文件（<文件>#<工作表>），空串没有 */
+  want: string
+  /** 打开了 want：地址换回只有项目的，下次从弹窗再点同一个文件也能再跳过来 */
+  onOpened: () => void
   /** 表格页正在显示；切到别的页面时藏起来但不卸载，回来时不重新加载 */
   shown: boolean
   projectId: string
@@ -219,6 +229,23 @@ function Workbench({
     if (i >= 0) setSheetOf((m) => ({ ...m, [h.path]: i }))
     setJump((j) => ({ sheet: h.sheet, row: h.row, col: h.col, seq: (j?.seq ?? 0) + 1 }))
   }
+  // 从面板文件弹窗「在表格页打开」跳过来：打开这个文件，切到弹窗里正在看的那张表
+  useEffect(() => {
+    if (!want) return
+    const k = want.lastIndexOf('#')
+    const file = k >= 0 ? want.slice(0, k) : want
+    const sheet = k >= 0 ? want.slice(k + 1) : ''
+    open(file)
+    if (sheet) {
+      const doc = docs[file]
+      const i = doc && 'sheets' in doc ? doc.sheets.findIndex((s) => s.name === sheet) : -1
+      pendingSheet.current = { path: file, sheet }
+      if (i >= 0) setSheetOf((m) => ({ ...m, [file]: i }))
+    }
+    onOpened()
+    // 只在地址带来新的文件时跑；open、docs 每次渲染都是新的
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [want])
   // 读到文件后补上搜索跳转要切的表
   useEffect(() => {
     const p = pendingSheet.current

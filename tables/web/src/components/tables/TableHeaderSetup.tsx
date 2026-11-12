@@ -26,18 +26,21 @@ export function useTableHeader(
   sheet: string,
   onSchema: (s: TableSchema) => void,
 ): { rule: HeaderRule; header: TableHeader; source: HeaderSource; store: SheetHeaderStore } {
-  return useMemo(() => {
-    const { rule, source } = schemaHeader(schema, file, sheet)
-    const header = toSheetHeader(rule)
-    const has = rule.rows.length > 0
-    const store: SheetHeaderStore = {
-      own: source.kind === 'sheet' && has ? header : undefined,
-      style: source.kind !== 'sheet' && has ? header : undefined,
-      // 旧版面板自带的「调整表头」只给 SheetHeader：换回配置时照留每行能填什么
-      save: (h: SheetHeader | null) => onSchema(putSheetRule(schema, file, sheet, h && fromSheetHeader(h, rule))),
-    }
-    return { rule, header, source, store }
-  }, [schema, file, sheet, onSchema])
+  return useMemo(() => tableHeaderOf(schema, file, sheet, onSchema), [schema, file, sheet, onSchema])
+}
+
+/** useTableHeader 的纯函数版：面板文件弹窗里认领的表格（lib/sheet-claim.ts）不在 React 里也要同一套表头 */
+export function tableHeaderOf(schema: TableSchema, file: string, sheet: string, onSchema: (s: TableSchema) => void) {
+  const { rule, source } = schemaHeader(schema, file, sheet)
+  const header = toSheetHeader(rule)
+  const has = rule.rows.length > 0
+  const store: SheetHeaderStore = {
+    own: source.kind === 'sheet' && has ? header : undefined,
+    style: source.kind !== 'sheet' && has ? header : undefined,
+    // 旧版面板自带的「调整表头」只给 SheetHeader：换回配置时照留每行能填什么
+    save: (h: SheetHeader | null) => onSchema(putSheetRule(schema, file, sheet, h && fromSheetHeader(h, rule))),
+  }
+  return { rule, header, source, store }
 }
 
 /**

@@ -7,6 +7,7 @@ import { tablesOf } from '@shared/tables'
 import { TableIcon } from '@/components/layout/rail-icons'
 import { ProjectTablesSection } from '@/components/projects/ProjectTablesSection'
 import { setTablesHost } from '@/lib/tables-host'
+import { sheetClaimer } from './src/lib/sheet-claim'
 
 // 表格页和组件示例带着整套表格编辑器：第一次打开时才执行（esbuild 把 import() 打进同一个文件，但模块到用时才初始化）
 const TablesPage = lazy(() => import('./src/pages/TablesPage').then((m) => ({ default: m.TablesPage })))
@@ -65,6 +66,8 @@ const plugin = (): WebPlugin => ({
       ),
     },
   ],
+  // 面板文件弹窗里的表格文件：表格目录里的多「在表格页打开」，表头按项目的表格设置
+  sheets: sheetClaimer,
   specimens: [
     {
       id: 'editors',

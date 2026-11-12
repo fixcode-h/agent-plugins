@@ -16,6 +16,7 @@ import { absPath, listTables, openTable, safeRel } from './files.ts'
 import { MAX_HITS, searchTables } from './search.ts'
 import { replaceTables } from './bulk-replace.ts'
 import { TableReplaceBody } from '../../shared/table-search.ts'
+import { claimTableFile } from './claim.ts'
 import { readSchema, schemaDir, writeSchema } from './schema-store.ts'
 import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
@@ -133,6 +134,15 @@ export function tablesApi(deps: TablesDeps) {
           const { full, rel } = safeRel(dir, c.req.query('path') ?? '', cfg)
           if (tableKind(rel) !== 'xlsx') return c.json({})
           return c.json(shiftReasons(await readFile(full)))
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 面板文件弹窗问：这个文件（本机完整路径）归不归表格页；root 是弹窗读文件的根目录（独立分支时是 worktree）
+      .get('/:id/claim', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          return c.json(claimTableFile(dir, cfg, c.req.query('path') ?? '', c.req.query('root')))
         } catch (e) {
           return fail(c, e)
         }
