@@ -12,6 +12,7 @@ import {
 import { useNav } from '@/lib/data'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, useTableSchema } from '@/lib/table-schema'
+import { NewTableDialog } from '@/components/tables/NewTableDialog'
 import { rememberTablesProject, TABLES_SECTION, tablesRoute, useTablesEntry, useTablesProjects } from '@/lib/tables-nav'
 import { toast, toastError } from '@/lib/toast'
 import { parseRef } from '@shared/table-struct'
@@ -101,6 +102,7 @@ function Workbench({
   /** 存了表格或结构文件后加一：「检查」重新查 */
   const [checkSeq, setCheckSeq] = useState(0)
   const [comparing, setComparing] = useState(false)
+  const [creating, setCreating] = useState(false)
   const others = projects.filter((p) => p.value !== projectId)
   const [query, setQuery] = useState('')
   const [tabs, setTabs] = useState<string[]>([])
@@ -343,8 +345,9 @@ function Workbench({
       <ListPane
         title={t('表格')}
         count={files.length}
-        onNew={() => {}}
-        hideNew
+        // 新建表格：按项目的表头配置填每一列（表格目录还没有时不给）
+        onNew={() => setCreating(true)}
+        hideNew={!index?.dirs.length || !schema}
         compact
         resizeKey="tables-list"
         query={query}
@@ -538,6 +541,19 @@ function Workbench({
           />
         )}
       </main>
+      {creating && schema && index && (
+        <NewTableDialog
+          projectId={projectId}
+          schema={schema}
+          dirs={index.dirs}
+          files={fileSet}
+          onCreated={(path) => {
+            reload(true)
+            open(path)
+          }}
+          onClose={() => setCreating(false)}
+        />
+      )}
       {comparing && (
         <TablesCompareDialog
           open

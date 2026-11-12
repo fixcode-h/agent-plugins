@@ -6,8 +6,8 @@
 - 职责：按项目设置的表格目录浏览、搜索、查看、在线修改 xlsx / CSV 表格；表头、枚举等结构信息存在表格之外
 - 源码：`web/index.tsx`、`server/index.ts`、`server/tables/`、`server/actions.ts`、`server/review.ts`、`shared/tables.ts`、`shared/table-*.ts`、`web/src/pages/TablesPage.tsx`、`web/src/components/tables/`
 - 入口：`web/index.tsx`、`server/index.ts`
-- 关键词：表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
-- 更新：2026-11-12
+- 关键词：表格、表头配置、新建表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
+- 更新：2026-11-12（表头改成按配置的行数组、新建表格）
 
 设计稿在项目共享目录 `designs/表格管理与在线编辑-设计稿.md`。硬约束：**表格文件只在用户保存改动时原地改单元格，结构信息一律不写进表格**。
 
@@ -61,13 +61,20 @@
 
 ## 表头从哪来
 
-`schemaHeader`：单文件覆盖（`files.json` 的「路径#工作表」）> 例外规则（`style.exceptions` 按通配）> 项目风格 > 自动识别（`shared/sheet-header.ts`）。
-项目风格是**几套表头**（`style.headers` 数组，各表表头行数不一样时设多套）：每张表用 `pickHeader` 按内容打分（`headerFit`：每行认出的角色和设定的一样加分、像数据扣分）挑最合的一套，一样合取前面的；只有一套时不看内容直接用。
-旧版只有单套 `style.header`，读的时候当第一套（`styleHeaders`）；保存时 `header` 仍写第一套，旧版本面板也认得。
-表格页里「调整表头」写的是单文件覆盖（项目有多套时弹层里能一键套用其中一套）；文件弹窗（不在表格页）仍记在浏览器 localStorage。
+**表头只按配置，不按内容猜**（用户 2026-11-12 定）。配置在 `shared/table-header.ts`：表头是一个「行」的数组 `HeaderRule = { start, rows: [{ kind, label?, values? }] }`，
+数组里每一项对应表格表头的一行，从第 `start` 行往下排，能加、删、挪；`kind` 是 6 种角色之一（决定底色和用途：字段名行当列标题、类型行定参数类型……），
+`label` 是这行的名字，`values` 是这行能填什么（通用枚举名或 `@types`），表头格子改的时候下拉、填错标红。
+
+`schemaHeader`：`style.exceptions` 里第一条命中的（`exceptionHits`：通配命中、写了 `sheet` 时工作表也对得上、通配空着的不生效）> 项目表头 `style.header`。
+返回 `{ rule, source }`，`headerOf` 换成面板组件认的 `TableHeader`（`SheetHeader` + 每行的 `values`），配置的起点超出这张表时当没有表头。没配置（`rows` 空）就整张表当数据，状态栏提示去配置。
+
+- 项目设置 → 表格「表头」：项目表头 + 按文件指定的几条，都用 `HeaderRowsEditor`（设置 → 组件里有示例）。
+- 表格页「调整表头」（`TableHeaderSetup`，通过 `SheetHeaderBar` 的 `setup` 换掉面板自带的）：「只改这张表」写一条只管这个工作表的按文件指定（放最前面）；「改项目的表头 / 改这条按文件指定」直接改它现在用的那份；单独设过的能「改回按项目设置」。
+- 文件弹窗（不在表格页）不属于哪个项目的配置，仍是面板的自动识别 + 浏览器 localStorage。
+- 旧格式（几套 `style.headers` 按内容挑、按种类的 `roleEnums`、单表覆盖 `files.json`）在 `readSchema` 入口由 `table-schema-upgrade.ts` 换成新的：第一套当项目表头，其余几套变成通配空着的按文件指定（不丢，用户填上通配才生效），`files.json` 的每条变成只管那个工作表的按文件指定、排最前；下次保存写新格式并删掉 `files.json`。不放进 zod：结构文件跟着项目提交，同事用旧版写的随时会再出现。
 
 结构文件在页面里只留一份（`web/src/lib/table-schema.ts`）：项目设置的「表头」「通用枚举」「校验」「AI 分析」和表格页共用，谁保存都先重读最新的再改（`saveTableSchema`），其它地方跟着更新；设置表单用 `useSchemaDraft`，没改过的跟着新内容走，改了一半的留着。
-AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、表头行能填什么；不认识的角色改成「其它」并把原词留作行名，不整份作废。还没应用的结果存在浏览器 localStorage，刷新后还能接着应用。
+AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式：AI 自己读样本表的开头几行，总结出项目表头（每行 kind / label / values）和按文件指定的几条；不认识的 kind 改成「其它」并把原词留作行名，还按旧格式（roles、几套 headers、roleEnums）回答的也换过来，不整份作废。还没应用的结果存在浏览器 localStorage，刷新后还能接着应用。
 
 ## 结构化（枚举、引用、检查）
 
@@ -76,7 +83,8 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 检查（`checkSheet`）：类型、枚举（名字和值都算）、引用（被引用的表读到了才查）、范围、主键重复；空格子不查。表格页标红和左栏「检查」、服务端 `/check` 都用它。
 - 列结构面板列出这一列在表头里的每一行（`ColInfo.head`）；结构文件 `columns` 里的 `type` 覆盖类型行（表头写错、没写时用），表格不改。
 - 通用枚举：结构文件 `enums.json` 就是整个项目共用的枚举库，项目设置 → 表格「通用枚举」和表格页「枚举」管的是同一份。
-- 项目级表头：项目设置 → 表格「表头」写 `style.header`（`HeaderRuleEditor`，表格页「调整表头」也用它）；单张表的覆盖在表格页改。
+- 项目级表头：见上面「表头从哪来」。
+- 新建表格：表格页左栏「新建」（`NewTableDialog`）选表格目录、文件名（.xlsx / .csv / .tsv），每一列按项目表头的每一行填（设了能填什么的是下拉，修饰、导出端照前一列）；`newTableIssues` 查文件名、工作表名、字段名空 / 重复。服务端 `POST /create`（`server/tables/create.ts`）只写在设置的表格目录里、不覆盖已有文件（`wx`），xlsx 是从头拼的最小工作簿（共享字符串、表头冻结），之后照常原地改格子。
 - AI 分析：页面先取 `/sample`——**只是挑出来的几张表的清单**（按目录轮着挑，最多 8 张），放进 `subject.sample` 交给配置助手（`kind: 'tables'`）；CLI 再用面板动作 `table.sample`（`/sample?path=`：一张表的表头 + 前 3 行数据 + 这张表里类型名出现过的值，最多 6000 字）一张一张看。提示词只放清单，不会超过任务提示词 20000 字的上限；多轮对话太长时只留最近的。在项目里开分析对话（记成 `run`，右侧不出项目设置面板）；结果暂存在页面模块里，回到项目设置 → 表格逐项勾选后 `applyTablesDraft` 写进结构文件。
 
 ## 校验规则

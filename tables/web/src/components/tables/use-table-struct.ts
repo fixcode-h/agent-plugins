@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SheetData } from '@shared/files'
-import type { SheetHeader } from '@shared/sheet-header'
+import type { TableHeader } from '@shared/table-header'
 import type { TableDoc, TableSchema } from '@shared/tables'
 import {
   checkHeader,
@@ -31,7 +31,8 @@ export function useTableStruct({
   doc: TableDoc
   sheet: SheetData | undefined
   rows: string[][] | null
-  header: SheetHeader | undefined
+  /** 这张表用的表头（带每行能填什么）；没有表头时不传 */
+  header: TableHeader | undefined
   from: number
   /** 读别的表格文件（枚举表、被引用的表）；读不到给 undefined */
   loadDoc: (path: string) => Promise<TableDoc | undefined>
@@ -71,7 +72,7 @@ export function useTableStruct({
     () =>
       rows
         ? [
-            ...(header ? checkHeader(rows, header, infos, schema, opts.ctx) : []),
+            ...(header ? checkHeader(rows, header, infos, opts.ctx) : []),
             ...checkSheet(rows, from, infos, schema.style.key, opts.ctx, 2000, rowCache, uniquesFor(schema, doc.path)),
           ]
         : [],

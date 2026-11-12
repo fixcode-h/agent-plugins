@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { TablesConfig, emptySchema } from '../../shared/tables.ts'
 import { syncTables } from './sync.ts'
+import { ruleOf } from '../../shared/table-header.ts'
 
 function project(files: Record<string, string>) {
   const dir = mkdtempSync(path.join(tmpdir(), 'agent-panel-table-sync-'))
@@ -14,7 +15,9 @@ function project(files: Record<string, string>) {
   return dir
 }
 const cfg = TablesConfig.parse({ dirs: ['Config'] })
-const side = (dir: string, id: string) => ({ projectId: id, dir, cfg, schema: emptySchema() })
+/** 第一行是字段名 */
+const schema = { ...emptySchema(), style: { ...emptySchema().style, header: ruleOf(['name']) } }
+const side = (dir: string, id: string) => ({ projectId: id, dir, cfg, schema })
 
 test('整文件同步：预览不写，确认后替换、新建，一样的跳过', async () => {
   const l = project({ 'Config/A.csv': 'ID,HP\r\n1,10\r\n', 'Config/B.csv': 'ID\r\n1\r\n', 'Config/C.csv': 'x\r\n' })

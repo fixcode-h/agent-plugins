@@ -3,6 +3,7 @@
  */
 import type { TableDoc, TableRoot, TableSchema, TableSearch, TablesConfig, TablesIndex } from '@shared/tables'
 import type { SheetEdit, TableSave } from '@shared/table-edit'
+import type { TableCreate } from '@shared/table-create'
 import type { SheetProblems } from '@shared/table-struct'
 import type { SheetData } from '@shared/files'
 import type { ExportEvent } from '@shared/table-export'
@@ -33,6 +34,9 @@ export const tablesApi = {
     request<TableSchema>(`${BASE}/${projectId}/schema`, json('PUT', s)),
   /** 保存改动：返回保存后的文件 */
   save: (projectId: string, body: TableSave) => request<TableDoc>(`${BASE}/${projectId}/save`, json('POST', body)),
+  /** 新建表格：返回新文件在表格页里的路径 */
+  create: (projectId: string, body: TableCreate) =>
+    request<{ path: string }>(`${BASE}/${projectId}/create`, json('POST', body)),
   /** AI 分析表格风格用的样本 */
   sample: (projectId: string) => request<{ text: string; files: number }>(`${BASE}/${projectId}/sample`),
   /** AI 分析表格风格的第一句话（服务端读好样本、按面板的回复语言拼好） */

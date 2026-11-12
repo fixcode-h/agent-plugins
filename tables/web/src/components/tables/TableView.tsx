@@ -18,15 +18,14 @@ import {
   Undo2,
 } from 'lucide-react'
 import { t } from '@shared/i18n'
-import { TYPE_NAMES, schemaHeader, styleHeaders, type TableDoc, type TableHit, type TableSchema } from '@shared/tables'
+import { TYPE_NAMES, type TableDoc, type TableHit, type TableSchema } from '@shared/tables'
 import type { CellSet, RowOp, SheetEdit } from '@shared/table-edit'
-import type { SheetHeader } from '@shared/sheet-header'
 import type { TableExport } from '@shared/table-export'
 import { colCount, colName as colLetter, type CellHit } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
 import { SheetTable, SheetTabs } from '@/components/files/SheetTable'
 import { headerSummary, SheetHeaderBar } from '@/components/files/SheetHeaderBar'
-import { useSheetView, type SheetHeaderStore } from '@/components/files/use-sheet-view'
+import { useSheetView } from '@/components/files/use-sheet-view'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ToolGroup } from '@/components/ui/tool-group'
@@ -51,6 +50,7 @@ import { findEnumRenames, type EnumRename } from '@shared/table-enum-rename'
 import { ListEditor } from './ListEditor'
 import { ProblemsBar } from './ProblemsBar'
 import { useTableStruct } from './use-table-struct'
+import { TableHeaderSetup, useTableHeader } from './TableHeaderSetup'
 import { TableSaveDialog } from './TableSaveDialog'
 import { TableHistoryDialog } from './TableHistoryDialog'
 import {
@@ -173,20 +173,9 @@ export function TableView({
   const sheet = doc.sheets[index]
   const rows = useMemo(() => (sheet ? rowsOf(edits, sheet) : null), [edits, sheet])
   const fileKey = `${doc.path}#${sheet?.name ?? ''}`
-  const store = useMemo<SheetHeaderStore>(
-    () => ({
-      own: schema.files[fileKey],
-      style: sheet ? schemaHeader({ ...schema, files: {} }, doc.path, sheet.name, sheet.rows) : undefined,
-      save: (h: SheetHeader | null) => {
-        const files = { ...schema.files }
-        if (h) files[fileKey] = { start: h.start, roles: h.roles, ...(h.labels ? { labels: h.labels } : {}) }
-        else delete files[fileKey]
-        onSchema({ ...schema, files })
-      },
-    }),
-    [schema, fileKey, sheet, doc.path, onSchema],
-  )
-  const view = useSheetView(fileKey, rows, store)
+  // 表头只按项目的表头配置（项目设置 → 表格 → 表头），不按内容猜
+  const head = useTableHeader(schema, doc.path, sheet?.name ?? '', onSchema)
+  const view = useSheetView(fileKey, rows, head.store)
   const [layout, setLayout] = useColLayout(`${projectId}:${fileKey}`)
   const hiddenSet = useMemo(() => new Set(layout.hidden), [layout.hidden])
   const readOnly = !!doc.readOnly
@@ -219,7 +208,8 @@ export function TableView({
     doc,
     sheet,
     rows,
-    header: view?.header,
+    // 配置的起点超出这张表时 view 里没有表头，也就不按配置查表头行
+    header: view?.header.roles.length ? head.header : undefined,
     from: view?.from ?? 0,
     loadDoc,
   })
@@ -320,11 +310,10 @@ export function TableView({
     editor: (p, init, done) => {
       const info = p.row >= (view?.from ?? 0) ? struct.infos[p.col] : undefined
       // 表头格子：这一行在设置里选了取值（通用枚举 / 类型名）就下拉选
-      const head =
+      const headEnum =
         view && p.row >= view.header.start && p.row < view.from
-          ? view.header.roles[p.row - view.header.start]
+          ? head.header.values[p.row - view.header.start]
           : undefined
-      const headEnum = head ? schema.style.roleEnums?.[head] : undefined
       const headOpts = headEnum ? struct.enumOpts.get(headEnum) : undefined
       if (headEnum && headOpts?.length)
         return (
@@ -515,9 +504,18 @@ export function TableView({
       <SheetHeaderBar
         view={view}
         rows={rows}
-        presets={styleHeaders(schema.style)}
         compact
-        where={t('记在项目的表格结构文件里（项目设置 → 表格），表格文件一个字节都不改。')}
+        setup={
+          <TableHeaderSetup
+            schema={schema}
+            file={doc.path}
+            sheet={sheet?.name ?? ''}
+            rows={rows}
+            rule={head.rule}
+            source={head.source}
+            onSchema={onSchema}
+          />
+        }
       >
         <ToolGroup label={t('查看')} first>
           {layout.hidden.length > 0 && (

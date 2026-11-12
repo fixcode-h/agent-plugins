@@ -33,6 +33,8 @@ import type { EnumRename } from '../../shared/table-enum-rename.ts'
 import { stream } from 'hono/streaming'
 import { withPromptLangRules } from '../../shared/prompt-lang.ts'
 import { buildTablesBody } from '../../shared/tables-assist.ts'
+import { TableCreate } from '../../shared/table-create.ts'
+import { createTable } from './create.ts'
 import type { ExportEvent } from '../../shared/table-export.ts'
 
 export interface TablesDeps {
@@ -437,6 +439,17 @@ export function tablesApi(deps: TablesDeps) {
           return c.json({
             results: await syncTables(await side(l), await side(r), body, { p4Edit: p4Edit(r.dir) }),
           })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 新建表格：按项目表头配置拼好的表头行写成新文件（见 create.ts）
+      .post('/:id/create', async (c) => {
+        try {
+          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const body = TableCreate.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('新建表格的内容格式不对'))
+          return c.json(await createTable(dir, cfg, body.data))
         } catch (e) {
           return fail(c, e)
         }

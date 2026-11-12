@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { TableSchema } from './tables.ts'
 import { enumRenameCells, findEnumRenames } from './table-enum-rename.ts'
+import { ruleOf } from './table-header.ts'
 
 const schema = TableSchema.parse({
-  style: { listSep: ';' },
+  style: { listSep: ';', header: ruleOf(['type', 'name']) },
   enums: { Size: { values: [{ name: 'Small' }, { name: 'Big' }] } },
 })
 

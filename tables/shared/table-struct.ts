@@ -4,7 +4,8 @@
  * 页面（改格子时的下拉、标红）和服务端（全表检查）用同一份。
  */
 import { t } from './i18n.ts'
-import { detectSheetHeader, validHeader, type SheetHeader, type SheetRole } from './sheet-header.ts'
+import { validHeader, type SheetHeader, type SheetRole } from './sheet-header.ts'
+import { toSheetHeader, type TableHeader } from './table-header.ts'
 import { TYPE_NAMES, globHit, schemaColumn, schemaHeader, type TableEnum, type TableSchema } from './tables.ts'
 import type { SheetData } from './files.ts'
 
@@ -318,17 +319,10 @@ export const uniquesFor = (schema: TableSchema, file: string) =>
  * 表头行按设置里定的取值查（修饰行只能 optional / repeated 这类）：只查有字段名的列，
  * 没字段名的是备注列，随便写
  */
-export function checkHeader(
-  rows: string[][],
-  header: SheetHeader,
-  infos: ColInfo[],
-  schema: TableSchema,
-  ctx: CheckCtx,
-): Problem[] {
+export function checkHeader(rows: string[][], header: TableHeader, infos: ColInfo[], ctx: CheckCtx): Problem[] {
   const out: Problem[] = []
-  const roleEnums = schema.style.roleEnums ?? {}
-  header.roles.forEach((role, i) => {
-    const name = roleEnums[role]
+  header.roles.forEach((_, i) => {
+    const name = header.values[i]
     const set = name ? ctx.enums.get(name) : undefined
     if (!name || !set?.size) return
     const r = header.start + i
@@ -350,18 +344,16 @@ export function checkHeader(
   return out
 }
 
-/** 一张表用哪套表头：结构文件里的（单文件 > 例外 > 项目风格），没有就自动识别 */
-export function headerOf(schema: TableSchema, file: string, sheet: SheetData): SheetHeader {
-  const own = schemaHeader(schema, file, sheet.name, sheet.rows)
-  if (own && validHeader(own, sheet.rows.length)) return own
-  const d = detectSheetHeader(sheet.rows)
-  return { start: d.start, roles: d.roles }
+/** 一张表的表头：只按配置（按文件指定 > 项目表头），不看内容；配置的起点超出这张表时当没有表头 */
+export function headerOf(schema: TableSchema, file: string, sheet: SheetData): TableHeader {
+  const h = toSheetHeader(schemaHeader(schema, file, sheet.name).rule)
+  return h.roles.length && validHeader(h, sheet.rows.length) ? h : { start: 0, roles: [], values: [] }
 }
 
-/** 搜索结果里显示字段名：这张表数据从第几行开始、每列的字段名（没有结构文件时自动识别表头） */
+/** 搜索结果里显示字段名：这张表数据从第几行开始、每列的字段名（读不到结构文件就是没有表头） */
 export function sheetFieldNames(schema: TableSchema | undefined, file: string, sheet: SheetData) {
-  const d = schema ? headerOf(schema, file, sheet) : detectSheetHeader(sheet.rows)
-  const h = { start: d.start, roles: d.roles }
+  if (!schema) return { from: 0, names: [] as string[] }
+  const h = headerOf(schema, file, sheet)
   return { from: h.start + h.roles.length, names: roleRow(sheet.rows, h, 'name').map((x) => x.trim()) }
 }
 
@@ -433,6 +425,14 @@ export function neededFiles(schema: TableSchema, infos: ColInfo[]) {
   return [...files]
 }
 
+/** 项目表头和按文件指定的表头里，各行选过的取值（通用枚举名 / TYPE_NAMES） */
+function headerValueNames(schema: TableSchema) {
+  const out = new Set<string>()
+  for (const rule of [schema.style.header, ...schema.style.exceptions.map((e) => e.header)])
+    for (const r of rule.rows) if (r.values) out.add(r.values)
+  return out
+}
+
 /** 下拉的选项和检查用的集合：sheetsOf 给出已经读到的别的文件（没读到的引用先不查） */
 export function columnOptions(
   schema: TableSchema,
@@ -442,8 +442,8 @@ export function columnOptions(
   const enumOpts = new Map<string, EnumOption[]>()
   const refOpts = new Map<string, EnumOption[]>()
   const ctx: CheckCtx = { listSep: schema.style.listSep || ';', enums: new Map(), refs: new Map() }
-  // 表头行的取值（设置里给每种表头行选的通用枚举）也一起准备好
-  for (const name of Object.values(schema.style.roleEnums ?? {})) {
+  // 表头行的取值（设置里给表头每行选的通用枚举）也一起准备好
+  for (const name of headerValueNames(schema)) {
     if (!name || enumOpts.has(name)) continue
     const opts: EnumOption[] =
       name === TYPE_NAMES
@@ -501,7 +501,7 @@ export function checkWorkbook(
     if (!infos.some((i) => i.field)) return
     const { ctx } = columnOptions(schema, infos, (f) => (f === file ? sheets : sheetsOf(f)))
     const problems = [
-      ...checkHeader(sheet.rows, header, infos, schema, ctx),
+      ...checkHeader(sheet.rows, header, infos, ctx),
       ...checkSheet(
         sheet.rows,
         header.start + header.roles.length,

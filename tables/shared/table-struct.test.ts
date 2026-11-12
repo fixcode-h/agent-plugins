@@ -17,6 +17,7 @@ import {
   type RowProblems,
 } from './table-struct.ts'
 import { groupFixes, groupProblems } from './table-problems.ts'
+import { ruleOf } from './table-header.ts'
 
 const CONFIG = 'data/Config.xlsx'
 const ENUMS = 'data/enum/E.xlsx'
@@ -58,7 +59,16 @@ const roles: SheetData = {
   ],
 }
 const schema = TableSchema.parse({
-  style: { key: 'ID', listSep: ';' },
+  style: {
+    key: 'ID',
+    listSep: ';',
+    header: ruleOf(['modifier', 'side', 'type', 'name', 'comment']),
+    // 枚举表、角色表只有类型 / 字段名 / 注释三行
+    exceptions: [
+      { glob: 'data/enum/*.xlsx', header: ruleOf(['type', 'name', 'comment']) },
+      { glob: ROLES, header: ruleOf(['type', 'name', 'comment']) },
+    ],
+  },
   enums: {
     Mount: {
       values: [

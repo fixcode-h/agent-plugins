@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { mergeSheets, opsFor } from './table-merge.ts'
 import { applyRowOps, changedCells } from './table-edit.ts'
 import { emptySchema } from './tables.ts'
+import { ruleOf } from './table-header.ts'
 
-const schema = emptySchema()
+const schema = { ...emptySchema(), style: { ...emptySchema().style, header: ruleOf(['name', 'type', 'comment']) } }
 const head = [
   ['ID', 'Name', 'HP'],
   ['int', 'string', 'int'],

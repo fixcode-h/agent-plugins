@@ -2,8 +2,9 @@ import { useMemo, useState, useSyncExternalStore } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { extractJson } from '@shared/assist'
-import { applyTablesDraft, draftHeaders, draftItemIds, resolveTablesProposal, TablesDraft } from '@shared/tables-assist'
+import { applyTablesDraft, draftItemIds, resolveTablesProposal, type TablesDraft } from '@shared/tables-assist'
 import { TYPE_NAMES } from '@shared/tables'
+import type { HeaderRule } from '@shared/table-header'
 import { runPromptInProject } from '@/lib/assist-conv'
 import { tablesApi } from '@/lib/tables-api'
 import { saveTableSchema, useTableSchema } from '@/lib/table-schema'
@@ -31,8 +32,9 @@ function loadPending(): [string, TablesDraft][] {
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, unknown>
     return Object.entries(raw).flatMap(([id, d]) => {
-      const p = TablesDraft.safeParse(d)
-      return p.success ? [[id, p.data] as [string, TablesDraft]] : []
+      // 旧版存下的结果（几套表头的旧格式）也按 AI 的输出理一遍，换成新格式
+      const p = resolveTablesProposal(d).proposal
+      return p ? [[id, p.draft] as [string, TablesDraft]] : []
     })
   } catch {
     return []
@@ -101,7 +103,7 @@ export function TablesAnalyze({ projectId, projectName }: { projectId: string; p
                 time: new Date(schema.analyzedAt).toLocaleString(),
               })
             : t(
-                '让 AI 读几张表的开头几行，总结有几套表头、每套几行每行是什么、主键、列表分隔符、哪些类型是枚举、哪些列引用别的表。',
+                '让 AI 读几张表的开头几行，自己总结出项目的表头配置（共几行、每行是什么、叫什么、能填什么）、主键、列表分隔符、哪些类型是枚举、哪些列引用别的表，你勾选确认后才写进去。',
               )}
         </p>
         <Button size="sm" onClick={() => void start()} disabled={busy}>
@@ -137,6 +139,20 @@ export function TablesAnalyze({ projectId, projectName }: { projectId: string; p
   )
 }
 
+/** 表头的一句话，带上每行能填什么：「从第 1 行开始：修饰（Modifier）/ 类型（基础类型和通用枚举名）/ 字段」 */
+function headerDetail(h: HeaderRule) {
+  return t('从第 {n} 行开始：{roles}', {
+    n: h.start + 1,
+    roles: h.rows
+      .map((r) => {
+        const name = r.label || roleShort(r.kind)
+        if (!r.values) return name
+        return `${name}（${r.values === TYPE_NAMES ? t('基础类型和通用枚举名') : r.values}）`
+      })
+      .join(' / '),
+  })
+}
+
 /** 一项一行：勾上的才写进去 */
 function DraftReview({
   draft,
@@ -151,32 +167,10 @@ function DraftReview({
   const [picked, setPicked] = useState(() => new Set(ids))
   const [saving, setSaving] = useState(false)
   const s = draft.style
-  const header = (h: { start: number; roles: Parameters<typeof roleShort>[0][]; labels?: string[] }) =>
-    t('从第 {n} 行开始：{roles}', {
-      n: h.start + 1,
-      roles: h.roles.map((r, i) => h.labels?.[i] || roleShort(r)).join(' / '),
-    })
   const items: { id: string; label: string; detail: string }[] = ids.map((id) => {
-    if (id === 'headers') {
-      const hs = draftHeaders(s)
-      return {
-        id,
-        label: hs.length > 1 ? t('表头（{n} 套，按内容自动挑）', { n: hs.length }) : t('表头'),
-        detail: hs.map((h) => t('{n} 行', { n: h.roles.length }) + ' · ' + header(h)).join('；'),
-      }
-    }
+    if (id === 'header')
+      return { id, label: t('表头（{n} 行）', { n: s.header!.rows.length }), detail: headerDetail(s.header!) }
     if (id === 'arrayMarks') return { id, label: t('表示数组的修饰'), detail: s.arrayMarks!.join(', ') }
-    if (id === 'roleEnums')
-      return {
-        id,
-        label: t('表头行能填什么'),
-        detail: Object.entries(s.roleEnums!)
-          .map(
-            ([r, e]) =>
-              `${roleShort(r as Parameters<typeof roleShort>[0])} = ${e === TYPE_NAMES ? t('基础类型和通用枚举名') : e}`,
-          )
-          .join(' · '),
-      }
     if (id === 'key') return { id, label: t('主键'), detail: s.key! }
     if (id === 'listSep') return { id, label: t('列表分隔符'), detail: s.listSep! }
     if (id === 'primitives') return { id, label: t('基础类型'), detail: s.primitives!.join(', ') }
@@ -184,8 +178,8 @@ function DraftReview({
       const e = s.exceptions![Number(id.slice(3))]
       return {
         id,
-        label: t('例外：{glob}', { glob: e.glob }),
-        detail: [header(e.header), e.why].filter(Boolean).join(' · '),
+        label: t('按文件指定：{glob}', { glob: e.sheet ? `${e.glob} · ${e.sheet}` : e.glob }),
+        detail: [headerDetail(e.header), e.why].filter(Boolean).join(' · '),
       }
     }
     if (id.startsWith('enum:')) {

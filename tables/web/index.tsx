@@ -12,6 +12,9 @@ const TablesPage = lazy(() => import('./src/pages/TablesPage').then((m) => ({ de
 const TableEditorsSpecimen = lazy(() =>
   import('./src/components/settings/TableEditorsSpecimen').then((m) => ({ default: m.TableEditorsSpecimen })),
 )
+const HeaderRowsSpecimen = lazy(() =>
+  import('./src/components/settings/HeaderRowsSpecimen').then((m) => ({ default: m.HeaderRowsSpecimen })),
+)
 
 /**
  * 表格插件的网页入口（面板插件接口 6，ADR 0059；原来是面板自带的表格页，重构文档第 15 条拆出来）：
@@ -61,6 +64,16 @@ const activate: ActivateWeb = () => ({
       Specimen: () => (
         <Suspense fallback={null}>
           <TableEditorsSpecimen />
+        </Suspense>
+      ),
+    },
+    {
+      id: 'header-rows',
+      label: 'HeaderRowsEditor',
+      tune: ['input', 'button'],
+      Specimen: () => (
+        <Suspense fallback={null}>
+          <HeaderRowsSpecimen />
         </Suspense>
       ),
     },
