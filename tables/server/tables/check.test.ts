@@ -14,7 +14,7 @@ test('按结构文件查每个表格，引用的表从磁盘读', async () => {
   writeFileSync(path.join(dir, 'Config/Item.csv'), 'uint32,uint32\nID,Owner\n1,1001\n2,1002\nx,\n')
   writeFileSync(path.join(dir, 'Config/Bad.xlsx'), 'not a zip')
   const schema = TableSchema.parse({
-    style: { header: { start: 0, roles: ['type', 'name'] } },
+    style: { header: { start: 0, rows: [{ kind: 'type' }, { kind: 'name' }] } },
     columns: { 'Config/Item.csv#*#Owner': { ref: 'Config/Role.csv#ID' } },
   })
   const r = await checkTables(

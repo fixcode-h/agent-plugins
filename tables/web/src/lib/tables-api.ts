@@ -3,15 +3,20 @@
  */
 import type { TableDoc, TableRoot, TableSchema, TableSearch, TablesConfig, TablesIndex } from '@shared/tables'
 import type { SheetEdit, TableSave } from '@shared/table-edit'
+import type { TableCreate } from '@shared/table-create'
 import type { SheetProblems } from '@shared/table-struct'
 import type { SheetData } from '@shared/files'
 import type { ExportEvent } from '@shared/table-export'
 import type { EnumRename } from '@shared/table-enum-rename'
+import type { ReplaceResult, TableReplaceBody, TableSearchOpts } from '@shared/table-search'
 import type { CellAt, CellChange } from '@shared/table-blame'
 import { failure, json, request } from './api'
 import { trackedFetch } from './connection'
 
 const q = encodeURIComponent
+
+const searchQuery = (o: TableSearchOpts) =>
+  `q=${q(o.q)}${o.caseSensitive ? '&case=1' : ''}${o.whole ? '&whole=1' : ''}${o.regex ? '&regex=1' : ''}`
 
 /** 表格插件的接口挂在面板给插件的 /api/plugins/tables/api/ 下（服务端 server/index.ts 把表格页那组接口挂在 /tables） */
 const BASE = '/plugins/tables/api/tables'
@@ -23,16 +28,32 @@ export const tablesApi = {
   probe: (projectId: string, path: string, tables: TablesConfig) =>
     request<TablesProbe>(`${BASE}/${projectId}/probe`, json('POST', { path, tables })),
   open: (projectId: string, path: string) => request<TableDoc>(`${BASE}/${projectId}/file?path=${q(path)}`),
-  /** 文件现在的修改时间（外部改动检测） */
+  /** 每张表不能在中间插删行列的原因（xlsx 有公式、合并单元格这些；空数组 = 可以）和用到的最后一列；CSV 返回 {} */
+  shiftCheck: (projectId: string, path: string) =>
+    request<Record<string, { why: string[]; last: number }>>(`${BASE}/${projectId}/shift-check?path=${q(path)}`),
+  /** 登记这个页面（推送连接 conn）在这个项目里打开着的文件：外面改了服务端推 file-changed 过来 */
+  watch: (projectId: string, conn: string, files: { path: string; mtime: string }[]) =>
+    request<{ watching: number }>(`${BASE}/${projectId}/watch`, json('POST', { conn, files })),
+  /** 文件现在的修改时间（外部改动检测：忙完后再对一次） */
   stat: (projectId: string, path: string) =>
     request<{ mtime?: string; size?: number; missing?: boolean }>(`${BASE}/${projectId}/stat?path=${q(path)}`),
-  search: (projectId: string, query: string, signal?: AbortSignal) =>
-    request<TableSearch>(`${BASE}/${projectId}/search?q=${q(query)}`, { signal }),
+  /** 面板文件弹窗里的表格文件归不归表格页：rel 是表格页用的路径；same 为 false 是独立分支里的副本 */
+  claim: (projectId: string, path: string, root: string) =>
+    request<{ rel: string | null; same: boolean }>(`${BASE}/${projectId}/claim?path=${q(path)}&root=${q(root)}`),
+  /** 跨表搜索：「字段名:值」只在那一列找；三个开关和表格里的查找替换一样 */
+  search: (projectId: string, o: TableSearchOpts, signal?: AbortSignal) =>
+    request<TableSearch>(`${BASE}/${projectId}/search?${searchQuery(o)}`, { signal }),
+  /** 跨表批量替换：apply=false 只预览；apply=true 只写 files 里勾选的文件（带预览时的修改时间） */
+  replace: (projectId: string, body: TableReplaceBody, signal?: AbortSignal) =>
+    request<ReplaceResult>(`${BASE}/${projectId}/replace`, { ...json('POST', body), signal }),
   schema: (projectId: string) => request<TableSchema>(`${BASE}/${projectId}/schema`),
   saveSchema: (projectId: string, s: TableSchema) =>
     request<TableSchema>(`${BASE}/${projectId}/schema`, json('PUT', s)),
   /** 保存改动：返回保存后的文件 */
   save: (projectId: string, body: TableSave) => request<TableDoc>(`${BASE}/${projectId}/save`, json('POST', body)),
+  /** 新建表格：返回新文件在表格页里的路径 */
+  create: (projectId: string, body: TableCreate) =>
+    request<{ path: string }>(`${BASE}/${projectId}/create`, json('POST', body)),
   /** AI 分析表格风格用的样本 */
   sample: (projectId: string) => request<{ text: string; files: number }>(`${BASE}/${projectId}/sample`),
   /** AI 分析表格风格的第一句话（服务端读好样本、按面板的回复语言拼好） */

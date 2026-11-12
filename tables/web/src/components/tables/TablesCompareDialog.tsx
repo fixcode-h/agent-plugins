@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { SheetTabs } from '@/components/files/SheetTable'
-import { DiffSummary, SheetDiffView, type DiffOnly } from './SheetDiffView'
+import { DiffBothToggle, DiffSummary, SheetDiffView, useDiffBoth, type DiffOnly } from './SheetDiffView'
 import { BatchSyncDialog } from './BatchSyncDialog'
 import { diffReport, pairsReport } from './compare-report'
 import { saveText } from '@/lib/save-file'
@@ -234,6 +234,7 @@ function PairView({
   const [error, setError] = useState('')
   const [sheetIndex, setSheetIndex] = useState(0)
   const [only, setOnly] = useState(true)
+  const [both, setBoth] = useDiffBoth()
   // 摘要里点了「改 / 加 / 删」：只看那一种行
   const [diffOnly, setDiffOnly] = useState<DiffOnly | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
@@ -328,6 +329,7 @@ function PairView({
           {t('绿色是只在左边（{l}）的，红色是只在右边（{r}）的', { l: left.name, r: right.name })}
         </span>
         <span className="tb:flex-1" />
+        <DiffBothToggle on={both} onChange={setBoth} />
         <Segmented
           label={t('显示')}
           size="sm"
@@ -374,6 +376,7 @@ function PairView({
           diff={view.diff}
           names={view.l.names.length ? view.l.names : view.r.names}
           onlyChanges={only}
+          both={both}
           only={diffOnly}
           pick={{
             can: pickable,

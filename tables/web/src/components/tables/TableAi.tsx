@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Field, Input, Textarea } from '@/components/ui/input'
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/menu'
-import { DiffSummary, SheetDiffView } from './SheetDiffView'
+import { DiffBothToggle, DiffSummary, SheetDiffView, useDiffBoth } from './SheetDiffView'
 
 /** 在项目里开一个对话做这件事，过程在 AI 窗口里看；结束后 onDone（取 AI 提的改动） */
 function startAi(projectId: string, title: string, prompt: string, onDone?: () => void) {
@@ -332,6 +332,7 @@ function ProposalDialog({
   onClose: () => void
 }) {
   const sheet = doc.sheets.find((s) => s.name === proposal.sheet)
+  const [both, setBoth] = useDiffBoth()
   const after = useMemo(
     () => (sheet ? setCells(applyRowOps(sheet.rows, proposal.edit.rows), proposal.edit.cells) : null),
     [sheet, proposal],
@@ -354,6 +355,7 @@ function ProposalDialog({
       footer={
         <>
           {diff && <DiffSummary diff={diff} />}
+          {diff && <DiffBothToggle on={both} onChange={setBoth} />}
           <span className="tb:mr-auto" />
           {dirty && <span className="tb:text-footnote tb:text-warning">{t('先保存或撤掉页面上的改动')}</span>}
           <Button variant="secondary" onClick={onClose}>
@@ -373,7 +375,7 @@ function ProposalDialog({
         <p className="tb:text-body tb:text-danger">{error}</p>
       ) : diff && sides ? (
         <div className="tb:flex tb:h-[420px] tb:min-h-0 tb:flex-col">
-          <SheetDiffView a={sides.a.rows} b={sides.b.rows} diff={diff} names={sides.b.names} onlyChanges />
+          <SheetDiffView a={sides.a.rows} b={sides.b.rows} diff={diff} names={sides.b.names} onlyChanges both={both} />
         </div>
       ) : null}
     </Modal>

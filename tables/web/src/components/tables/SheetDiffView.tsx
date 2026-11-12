@@ -1,18 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRightLeft } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { foldSame, type DiffRow, type SheetDiff } from '@shared/sheet-diff'
 import { colName } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useRowH } from '@/components/files/SheetTable'
+import { IconButton } from '@/components/ui/icon-button'
+import { useLocalFlag } from './col-head'
 
 /** 差异里只看哪一种：改了格子的行、新增的行、删掉的行 */
 export type DiffOnly = 'mod' | 'add' | 'del'
 
 /** 看得见的行上下再多画几行 */
 const OVER = 20
-/** 每列宽度（固定列宽：只画看得见的行，列宽不能跟着内容跳） */
+/** 每列宽度（固定列宽：只画看得见的行，列宽不能跟着内容跳）；同时看旧值和新值时宽一些 */
 const COL_W = 150
+const COL_W_BOTH = 210
+
+/** 改过的格子同时显示「旧 → 新」：版本差异、跨项目对比、AI 改动预览共用一个开关，记在本机 */
+export const useDiffBoth = () => useLocalFlag('table-diff-both')
+
+/** 「旧 → 新」开关：打开后改过的格子里写 ~~旧~~ → 新，审改动时不用一格格悬停 */
+export function DiffBothToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <IconButton
+      icon={ArrowRightLeft}
+      label={on ? t('改过的格子只显示新值') : t('改过的格子同时显示旧值和新值')}
+      aria-pressed={on}
+      className={cn(on && 'tb:bg-active tb:text-fg')}
+      onClick={() => onChange(!on)}
+    />
+  )
+}
 
 /**
  * 两版表格的格子级差异（版本差异、跨项目对比共用）：改过的格子旧值划掉、新值绿色，新增的行整行绿底、
@@ -29,7 +49,10 @@ export function SheetDiffView({
   pick,
   rowAction,
   only,
+  both,
 }: {
+  /** 改过的格子同时显示旧值和新值（~~旧~~ → 新）；不开时只显示新值、悬停看旧值 */
+  both?: boolean
   /** 摘要里点了某个标签：只列这一种行 */
   only?: DiffOnly | null
   a: string[][]
@@ -92,17 +115,18 @@ export function SheetDiffView({
   const shown = lines.slice(win.from, win.to)
   const old = (r: number, c: number) => (diff.colMap[c] < 0 ? '' : (a[r]?.[diff.colMap[c]] ?? ''))
   const span = cols + 1 + (pick ? 1 : 0) + (rowAction ? 1 : 0)
+  const colW = both ? COL_W_BOTH : COL_W
   return (
     <div ref={box} className="thin-scroll tb:min-h-0 tb:flex-1 tb:overflow-auto">
       <table
         className="sheet-diff tb:table-fixed tb:text-footnote"
-        style={{ width: (pick ? 32 : 0) + 56 + cols * COL_W + (rowAction ? 64 : 0) }}
+        style={{ width: (pick ? 32 : 0) + 56 + cols * colW + (rowAction ? 64 : 0) }}
       >
         <colgroup>
           {pick && <col style={{ width: 32 }} />}
           <col style={{ width: 56 }} />
           {Array.from({ length: cols }, (_, c) => (
-            <col key={c} style={{ width: COL_W }} />
+            <col key={c} style={{ width: colW }} />
           ))}
           {rowAction && <col style={{ width: 64 }} />}
         </colgroup>
@@ -174,7 +198,7 @@ export function SheetDiffView({
                         {v}
                       </td>
                     )
-                  // 改过的格子默认只显示新值（底色标出来），悬停看「旧 / 新」
+                  // 改过的格子默认只显示新值（底色标出来），悬停看「旧 / 新」；打开「旧 → 新」时两个都写在格子里
                   const was = old(row.a!, c)
                   return (
                     <td
@@ -182,6 +206,16 @@ export function SheetDiffView({
                       className="sheet-diff-cell tb:truncate tb:px-2"
                       title={t('旧：{was}\n新：{now}', { was: was || t('（空）'), now: v || t('（空）') })}
                     >
+                      {both && (
+                        <>
+                          <del className={cn('sheet-diff-old', !was && 'tb:text-subtle tb:no-underline')}>
+                            {was || t('（空）')}
+                          </del>
+                          <span aria-hidden className="tb:mx-1 tb:text-subtle">
+                            →
+                          </span>
+                        </>
+                      )}
                       <ins className="sheet-diff-new">{v || t('（清空）')}</ins>
                     </td>
                   )

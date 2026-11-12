@@ -159,3 +159,72 @@ export function writeZip(zip: RawZip, replace: Map<string, string>): Buffer {
   end.writeUInt16LE(zip.comment.length, 20)
   return Buffer.concat([...parts, cd, end, zip.comment])
 }
+
+export interface ZipPart {
+  name: string
+  data: Buffer
+  /** 不压缩直接存 */
+  stored?: boolean
+  /** 用数据描述符（大小和校验写在数据后面，WPS 存出来的有这种） */
+  descriptor?: boolean
+}
+
+/**
+ * 从头拼一个 zip（新建 xlsx 用；测试也用它照 Excel / WPS 的样子拼样本）。
+ * stored / descriptor 只有测试用得到：模拟不压缩、带数据描述符的条目
+ */
+export function buildZip(parts: ZipPart[]) {
+  const out: Buffer[] = []
+  const dir: Buffer[] = []
+  let offset = 0
+  for (const p of parts) {
+    const data = p.stored ? p.data : deflateRawSync(p.data)
+    const crc = crc32(p.data)
+    const name = Buffer.from(p.name, 'utf8')
+    const flags = p.descriptor ? 8 : 0
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(flags, 6)
+    local.writeUInt16LE(p.stored ? 0 : 8, 8)
+    local.writeUInt16LE(0x6000, 10)
+    local.writeUInt16LE(0x5a6b, 12)
+    if (!p.descriptor) {
+      local.writeUInt32LE(crc, 14)
+      local.writeUInt32LE(data.length, 18)
+      local.writeUInt32LE(p.data.length, 22)
+    }
+    local.writeUInt16LE(name.length, 26)
+    const desc = Buffer.alloc(p.descriptor ? 16 : 0)
+    if (p.descriptor) {
+      desc.writeUInt32LE(0x08074b50, 0)
+      desc.writeUInt32LE(crc, 4)
+      desc.writeUInt32LE(data.length, 8)
+      desc.writeUInt32LE(p.data.length, 12)
+    }
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(flags, 8)
+    central.writeUInt16LE(p.stored ? 0 : 8, 10)
+    central.writeUInt16LE(0x6000, 12)
+    central.writeUInt16LE(0x5a6b, 14)
+    central.writeUInt32LE(crc, 16)
+    central.writeUInt32LE(data.length, 20)
+    central.writeUInt32LE(p.data.length, 24)
+    central.writeUInt16LE(name.length, 28)
+    central.writeUInt32LE(offset, 42)
+    out.push(local, name, data, desc)
+    dir.push(central, name)
+    offset += 30 + name.length + data.length + desc.length
+  }
+  const cd = Buffer.concat(dir)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(parts.length, 8)
+  end.writeUInt16LE(parts.length, 10)
+  end.writeUInt32LE(cd.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...out, cd, end])
+}

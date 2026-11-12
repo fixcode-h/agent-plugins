@@ -64,6 +64,17 @@ export interface WebHost {
     get: <T>(path: string) => Promise<T>
     post: <T>(path: string, body?: unknown) => Promise<T>
   }
+  /**
+   * 服务端推来的事件（插件接口 7，服务端 ctx.pages.push）：要跟着服务端变的界面用它，不定时拉接口。
+   * on / useEvent 订阅，onConnect 在每次连上（含断线重连）时向服务端登记这个页面要什么，连接 id 填进 push 的 to。
+   * 接口 7 才有：清单 api 写 7 的插件可以直接用
+   */
+  events: {
+    on: (event: string, fn: (data: unknown) => void) => () => void
+    useEvent: (event: string, fn: (data: unknown) => void) => void
+    conn: () => string
+    onConnect: (fn: (conn: string) => void) => () => void
+  }
   /** 插件包里的文件地址 */
   fileUrl: (rel: string) => string
   panel: {
@@ -266,10 +277,57 @@ export interface Specimen {
   Specimen: ComponentType
 }
 
+/** 表格的表头（面板 shared/sheet-header.ts 的 SheetHeader）：从第 start 行起，roles 有几项就是几行 */
+export interface SheetHeaderLike {
+  start: number
+  roles: ('modifier' | 'side' | 'type' | 'name' | 'comment' | 'other')[]
+  labels?: string[]
+}
+
+/** 两行列头的一列（面板 SheetTable.tsx 的 SheetColHead）：字段名 + 类型标签 */
+export interface SheetColHeadLike {
+  field: string
+  tags: { text: string; tone: 'type' | 'enum' | 'ref' | 'list' | 'req'; title?: string }[]
+}
+
+/**
+ * 插件接管的表格文件（面板 2026-11-12 加的，旧面板没有这一项时不会来问）：文件弹窗打开 xlsx / CSV 时问一遍开着的插件，
+ * 认领了的话标题栏多一个按钮（例如表格插件的「在表格页打开」），表头和两行列头按插件给的来，「调整表头」也写回插件那边
+ */
+export interface SheetClaimer {
+  /** 认领就返回 SheetClaim；不归自己管返回 undefined。弹窗每打开一个表格文件问一次 */
+  claim: (file: SheetFile) => Promise<SheetClaim | undefined>
+}
+
+export interface SheetFile {
+  /** 本机上的完整路径 */
+  path: string
+  /** 文件所在的面板项目 */
+  projectId: string
+  /** 弹窗读文件的根目录：对话的工作目录（独立分支时是 worktree）、文件浏览页是项目目录 */
+  root: string
+}
+
+export interface SheetClaim {
+  /** 标题栏按钮：悬停文字、跳去插件的哪个整页（PluginPage 的 id）和子位置；sheet 是正在看的工作表名，CSV 为空串 */
+  open?: { label: string; page: string; path: (sheet: string) => string }
+  /** 一张表的表头从哪来：own 这张表自己设的、style 项目统一的；save 是弹窗里「调整表头」后写回 */
+  header?: (
+    sheet: string,
+    rows: string[][],
+  ) => { own?: SheetHeaderLike; style?: SheetHeaderLike; save: (h: SheetHeaderLike | null) => void }
+  /** 两行列头：每列的字段名 + 类型标签 */
+  colHeads?: (sheet: string, rows: string[][], header: SheetHeaderLike) => (SheetColHeadLike | undefined)[]
+  /** 表头、列结构在别处变了时叫一声，弹窗重新取；返回取消订阅 */
+  subscribe?: (onChange: () => void) => () => void
+}
+
 export interface WebPlugin {
   pages?: PluginPage[]
   taskTabs?: TaskTab[]
   fileViewers?: FileViewer[]
+  /** 面板文件弹窗里的表格文件归不归这个插件（2026-11-12 加的，旧面板不会来问） */
+  sheets?: SheetClaimer
   attachmentIntakes?: AttachmentIntake[]
   /** 项目设置里加的分页（插件接口 6）：设置存在 project.plugins[<插件 id>] */
   projectSections?: ProjectSection[]

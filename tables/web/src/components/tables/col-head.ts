@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { t } from '@shared/i18n'
-import type { ColInfo } from '@shared/table-struct'
-import type { SheetColHead, SheetColTag } from '@/components/files/SheetTable'
+import type { ColInfo, EnumOption } from '@shared/table-struct'
+import type { SheetColHead, SheetColKind, SheetColTag, SheetTip } from '@/components/files/SheetTable'
 
 /**
  * 表格页两行列头的内容：字段名 + 类型标签（类型、枚举、引用、数组、必填）。
@@ -29,6 +29,41 @@ export function colHeadOf(info: ColInfo): SheetColHead | undefined {
   if (info.list) tags.push({ text: '[ ]', tone: 'list', title: t('数组，分隔符 {sep}', { sep: info.sep }) })
   if (info.required) tags.push({ text: '*', tone: 'req', title: t('必填') })
   return { field: info.field, tags }
+}
+
+/**
+ * 格子怎么显示：整数 / 浮点右对齐，布尔画小勾，枚举画胶囊（枚举数组每项一个）。
+ * 备注列、引用列照原样；数字数组（「1;2;3」）不右对齐，读起来是一串文字
+ */
+export function colKindOf(info: ColInfo | undefined): SheetColKind | undefined {
+  if (!info?.field || info.remark || info.ref) return undefined
+  if (info.kind === 'enum' || info.enumName) return { kind: 'enum', sep: info.list ? info.sep : undefined }
+  if (info.list) return undefined
+  if (info.kind === 'int' || info.kind === 'uint' || info.kind === 'float') return { kind: 'num' }
+  if (info.kind === 'bool') return { kind: 'bool' }
+  return undefined
+}
+
+/** 「允许的值」最多列这么多个，再多写「等 N 个」 */
+const ALLOW_SHOW = 12
+
+/**
+ * 不合规格子的悬停说明，分三行：原因（这一格错在哪）、规则（这一列的约束）、允许的值（枚举 / 引用的取值、额外允许的写法）。
+ * 取值太多只列前面一些，提示框不至于铺满屏幕
+ */
+export function problemTip(msg: string, info: ColInfo | undefined, opts: EnumOption[] | undefined): SheetTip {
+  const lines = [{ label: t('原因'), text: msg }]
+  const rule = ruleText(info)
+  if (rule) lines.push({ label: t('规则'), text: rule })
+  const names = [...(opts ?? []).map((o) => o.name), ...(info?.allow ?? [])]
+  if (names.length) {
+    const head = names.slice(0, ALLOW_SHOW).join(' / ')
+    lines.push({
+      label: t('允许的值'),
+      text: names.length > ALLOW_SHOW ? t('{list} 等 {n} 个', { list: head, n: names.length }) : head,
+    })
+  }
+  return { title: info?.field ? t('{field} 不合规', { field: info.field }) : t('不合规'), tone: 'danger', lines }
 }
 
 /** 一列的规则写成一句（编辑栏右边显示）：「枚举 Size · 0~4 · 必填」 */

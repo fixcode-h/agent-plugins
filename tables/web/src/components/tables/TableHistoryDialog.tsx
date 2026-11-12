@@ -16,7 +16,7 @@ import { Modal, ModalHeader } from '@/components/ui/modal'
 import { Segmented } from '@/components/ui/segmented'
 import { Select } from '@/components/ui/input'
 import { IconButton } from '@/components/ui/icon-button'
-import { DiffSummary, SheetDiffView, type DiffOnly } from './SheetDiffView'
+import { DiffBothToggle, DiffSummary, SheetDiffView, useDiffBoth, type DiffOnly } from './SheetDiffView'
 
 /** 选中的是「本地改动」还是第几个提交 */
 type Pick = 'local' | number
@@ -59,6 +59,7 @@ export function TableHistoryDialog({
   const [error, setError] = useState('')
   const [pick, setPick] = useState<Pick>('local')
   const [only, setOnly] = useState(true)
+  const [both, setBoth] = useDiffBoth()
   // 摘要里点了「改 / 加 / 删」：只看那一种行
   const [diffOnly, setDiffOnly] = useState<DiffOnly | null>(null)
   const [pair, setPair] = useState<{ key: string; a: SheetData[]; b: SheetData[] | null } | null>(null)
@@ -219,6 +220,7 @@ export function TableHistoryDialog({
                 {pick === 'local' ? t('本地文件换回最近一次提交') : t('本地文件切换到这一版')}
               </Button>
             )}
+            <DiffBothToggle on={both} onChange={setBoth} />
             <Segmented
               label={t('显示')}
               size="sm"
@@ -246,6 +248,7 @@ export function TableHistoryDialog({
                 diff={diff}
                 names={sides.b.names}
                 onlyChanges={only}
+                both={both}
                 only={diffOnly}
                 rowAction={
                   pick === 'local' && onRestore

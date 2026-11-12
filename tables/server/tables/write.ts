@@ -8,11 +8,20 @@ import path from 'node:path'
 import { access, constants, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
 import { csvFormat, parseCsv, writeCsv } from '../../shared/csv.ts'
-import { applyRowOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
+import { applyOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
 import { tableKind, type TableDoc, type TablesConfig } from '../../shared/tables.ts'
 import { DATA_DIR } from '../store.ts'
-import { readXlsx } from '../xlsx.ts'
-import { forgetLists, forgetTable, lockedByOffice, openTable, safeRel } from './files.ts'
+import {
+  forgetLists,
+  forgetTable,
+  lockedByOffice,
+  openTable,
+  parseTable,
+  primeTable,
+  readTableXlsx,
+  safeRel,
+} from './files.ts'
+import type { SheetData } from '../../shared/files.ts'
 import { editXlsx } from './xlsx-write.ts'
 import { HttpError } from './http-error.ts'
 
@@ -46,7 +55,7 @@ function expected(sheets: { name: string; rows: string[][] }[], body: TableSave)
   for (const e of body.sheets) {
     const s = sheets.find((x) => x.name === e.name)
     if (!s) throw new HttpError(t('找不到工作表：{name}', { name: e.name }))
-    out.set(e.name, setCells(applyRowOps(s.rows, e.rows), e.cells))
+    out.set(e.name, setCells(applyOps(s.rows, e.rows, e.cols), e.cells))
   }
   return out
 }
@@ -58,63 +67,7 @@ export async function saveTable(
   body: TableSave,
   deps: SaveDeps = {},
 ): Promise<TableDoc> {
-  if (cfg.readOnly) throw new HttpError(t('项目设置里把表格设成了只读'), 409)
-  const { rel, full } = safeRel(dir, body.path, cfg)
-  const kind = tableKind(rel)
-  if (kind !== 'xlsx' && kind !== 'csv')
-    throw new HttpError(t('老的 .xls / .et 格式只能用表格软件打开，另存为 .xlsx 后能在这里看和改'))
-  const info = await stat(full).catch(() => null)
-  if (!info?.isFile()) throw new HttpError(t('文件不存在，可能已删除或路径写错：{path}', { path: rel }), 404)
-  if (await lockedByOffice(full))
-    throw new HttpError(t('文件正在 Excel / WPS 里打开，先在那边关掉再保存（不然那边保存时会把这里的改动盖掉）'), 409)
-  const moved = info.mtime.toISOString() !== body.mtime
-  if (moved && (!body.force || body.sheets.some((s) => s.rows.length)))
-    throw new HttpError(t('打开之后文件在外面被改过了：重新载入看看最新的内容，或者只把改了的格子写进去'), 409)
-
-  const buf = await readFile(full)
-  let next: Buffer
-  let want: Map<string, string[][]>
-  if (kind === 'csv') {
-    const text = buf.toString('utf8')
-    const f = csvFormat(text, /\.tsv$/i.test(rel))
-    const sheets = [{ name: path.basename(rel).replace(/\.[^.]+$/, ''), rows: parseCsv(text, f.delimiter) }]
-    // CSV 只有一张表：页面上表名就是文件名
-    want = expected(sheets, { ...body, sheets: body.sheets.map((s) => ({ ...s, name: sheets[0].name })) })
-    next = Buffer.from(writeCsv(want.get(sheets[0].name)!, f), 'utf8')
-  } else {
-    const sheets = readXlsx(buf)
-    if (sheets.some((s) => s.truncated)) throw new HttpError(t('表格太大，只读了前面一部分，不能在这里改'))
-    want = expected(sheets, body)
-    try {
-      next = editXlsx(buf, body.sheets)
-    } catch (e) {
-      throw new HttpError((e as Error).message)
-    }
-  }
-
-  // 写之前先验：新文件重新解析出来要和预期逐格一样，不一样就不写
-  const got =
-    kind === 'csv'
-      ? [
-          {
-            name: [...want.keys()][0],
-            rows: parseCsv(next.toString('utf8'), csvFormat(next.toString('utf8')).delimiter),
-          },
-        ]
-      : readXlsx(next)
-  for (const [name, rows] of want) {
-    const diff = gridDiff(got.find((s) => s.name === name)?.rows ?? [], rows)
-    if (diff)
-      throw new HttpError(
-        t('保存后读回来的内容和预期不一样（{sheet} 的 {ref}：「{a}」应为「{b}」），没有写入，原文件没动', {
-          sheet: name,
-          ref: cellRef(diff.r, diff.c),
-          a: diff.a,
-          b: diff.b,
-        }),
-      )
-  }
-
+  const { rel, full, next, sheets } = await prepareSave(dir, cfg, body)
   // P4 管着的文件是只读的：先签出
   const writable = await access(full, constants.W_OK).then(
     () => true,
@@ -135,8 +88,81 @@ export async function saveTable(
     await rm(tmp, { force: true })
     throw new HttpError(t('写入失败：{err}', { err: (e as Error).message }), 409)
   }
-  forgetTable(full)
+  // xlsx 读回来比对时已经解析过新内容：直接放进缓存，下面重新打开不用再解析一遍（大表一次要一秒多）
+  if (sheets) await primeTable(full, sheets)
+  else forgetTable(full)
   // 列表里的大小、修改时间也变了
   forgetLists()
   return openTable(dir, rel, cfg)
+}
+
+/**
+ * 保存前的全部检查，不写文件：只读、锁、外面改过、原地改写做不做得了、读回来对不对得上。
+ * 跨表替换的预览用它先试一遍，把会被拒绝的文件和原因提前列出来
+ */
+export async function prepareSave(
+  dir: string,
+  cfg: TablesConfig,
+  body: TableSave,
+): Promise<{ rel: string; full: string; next: Buffer; sheets?: SheetData[] }> {
+  if (cfg.readOnly) throw new HttpError(t('项目设置里把表格设成了只读'), 409)
+  const { rel, full } = safeRel(dir, body.path, cfg)
+  const kind = tableKind(rel)
+  if (kind !== 'xlsx' && kind !== 'csv')
+    throw new HttpError(t('老的 .xls / .et 格式只能用表格软件打开，另存为 .xlsx 后能在这里看和改'))
+  const info = await stat(full).catch(() => null)
+  if (!info?.isFile()) throw new HttpError(t('文件不存在，可能已删除或路径写错：{path}', { path: rel }), 404)
+  if (await lockedByOffice(full))
+    throw new HttpError(t('文件正在 Excel / WPS 里打开，先在那边关掉再保存（不然那边保存时会把这里的改动盖掉）'), 409)
+  const moved = info.mtime.toISOString() !== body.mtime
+  // 插删过行列时格子位置是按打开时的内容算的，外面改过就对不上了，不能硬写
+  if (moved && (!body.force || body.sheets.some((s) => s.rows.length || s.cols?.length)))
+    throw new HttpError(t('打开之后文件在外面被改过了：重新载入看看最新的内容，或者只把改了的格子写进去'), 409)
+
+  const buf = await readFile(full)
+  let next: Buffer
+  let want: Map<string, string[][]>
+  if (kind === 'csv') {
+    const text = buf.toString('utf8')
+    const f = csvFormat(text, /\.tsv$/i.test(rel))
+    const sheets = [{ name: path.basename(rel).replace(/\.[^.]+$/, ''), rows: parseCsv(text, f.delimiter) }]
+    // CSV 只有一张表：页面上表名就是文件名
+    want = expected(sheets, { ...body, sheets: body.sheets.map((s) => ({ ...s, name: sheets[0].name })) })
+    next = Buffer.from(writeCsv(want.get(sheets[0].name)!, f), 'utf8')
+  } else {
+    // 打开时已经解析过（缓存按修改时间 + 大小认），不用再解析一遍
+    const { sheets } = await parseTable(full)
+    if (sheets.some((s) => s.truncated)) throw new HttpError(t('表格太大，只读了前面一部分，不能在这里改'))
+    want = expected(sheets, body)
+    try {
+      next = editXlsx(buf, body.sheets)
+    } catch (e) {
+      throw new HttpError((e as Error).message)
+    }
+  }
+
+  // 写之前先验：新文件重新解析出来要和预期逐格一样，不一样就不写
+  const got =
+    kind === 'csv'
+      ? [
+          {
+            name: [...want.keys()][0],
+            rows: parseCsv(next.toString('utf8'), csvFormat(next.toString('utf8')).delimiter),
+          },
+        ]
+      : readTableXlsx(next)
+  for (const [name, rows] of want) {
+    const diff = gridDiff(got.find((s) => s.name === name)?.rows ?? [], rows)
+    if (diff)
+      throw new HttpError(
+        t('保存后读回来的内容和预期不一样（{sheet} 的 {ref}：「{a}」应为「{b}」），没有写入，原文件没动', {
+          sheet: name,
+          ref: cellRef(diff.r, diff.c),
+          a: diff.a,
+          b: diff.b,
+        }),
+      )
+  }
+
+  return { rel, full, next, ...(kind === 'xlsx' ? { sheets: got } : {}) }
 }

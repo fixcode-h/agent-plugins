@@ -6,8 +6,8 @@
 - 职责：按项目设置的表格目录浏览、搜索、查看、在线修改 xlsx / CSV 表格；表头、枚举等结构信息存在表格之外
 - 源码：`web/index.tsx`、`server/index.ts`、`server/tables/`、`server/actions.ts`、`server/review.ts`、`shared/tables.ts`、`shared/table-*.ts`、`web/src/pages/TablesPage.tsx`、`web/src/components/tables/`
 - 入口：`web/index.tsx`、`server/index.ts`
-- 关键词：表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
-- 更新：2026-11-12
+- 关键词：表格、表头配置、新建表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
+- 更新：2026-11-12（表头改成按配置的行数组、新建表格）
 
 设计稿在项目共享目录 `designs/表格管理与在线编辑-设计稿.md`。硬约束：**表格文件只在用户保存改动时原地改单元格，结构信息一律不写进表格**。
 
@@ -28,7 +28,9 @@
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `shared/tables.ts`                                         | 项目设置里的 `TablesConfig`、表格页的数据结构、结构文件 `TableSchema`、通配和表头优先级       |
 | `shared/csv.ts`                                            | CSV 的读、写回（保持分隔符 / 换行 / BOM / 结尾换行）                                          |
-| `server/tables/files.ts`                                   | 列表格文件、解析（按 mtime + 大小缓存）、锁文件检查、跨文件内容搜索、路径越界检查             |
+| `server/tables/files.ts`                                   | 列表格文件、解析（按 mtime + 大小缓存）、锁文件检查、路径越界检查                             |
+| `server/tables/search.ts`、`shared/table-search.ts`        | 跨表搜索（`/search`）：「字段名:值」、区分大小写 / 整格 / 正则，匹配规则和替换共用            |
+| `server/tables/bulk-replace.ts`                            | 跨表批量替换（`/replace`）：预览时试一遍保存、列出拒绝原因，勾选后逐个文件原地保存            |
 | `server/tables/schema-store.ts`                            | 结构文件读写：`.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，拆成 4 个 json            |
 | `server/tables/routes.ts`                                  | `/api/plugins/tables/api/tables/:id`（列表）、`/probe`、`/file`、`/search`、`/schema`         |
 | `web/src/lib/tables-api.ts`                                | 页面调接口                                                                                    |
@@ -44,7 +46,8 @@
 | `shared/sheet-diff.ts`                                     | 格子级差异（版本差异、跨项目对比共用）、只看变化的折叠、跨项目「拷到另一边」                  |
 | `server/tables/history.ts`                                 | 版本记录（`/history`：git log / p4 filelog / svn log）、取某一版（`/at`：show / print / cat） |
 | `server/tables/compare.ts`                                 | 跨项目对比（`/compare?other=`）：按相对路径配对，比解析出来的格子                             |
-| `shared/table-agent.ts`、`server/app-actions/tables.ts`    | 给 Agent 的动作 `table.list / query / edit / check`（经 app_actions / app_do）                |
+| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / search / schema / edit / propose / check`      |
+| `shared/table-describe.ts`                                 | `table.schema` 的列结构：类型、数组分隔符、枚举值、引用、范围和校验规则                       |
 
 ## 表格目录
 
@@ -61,13 +64,20 @@
 
 ## 表头从哪来
 
-`schemaHeader`：单文件覆盖（`files.json` 的「路径#工作表」）> 例外规则（`style.exceptions` 按通配）> 项目风格 > 自动识别（`shared/sheet-header.ts`）。
-项目风格是**几套表头**（`style.headers` 数组，各表表头行数不一样时设多套）：每张表用 `pickHeader` 按内容打分（`headerFit`：每行认出的角色和设定的一样加分、像数据扣分）挑最合的一套，一样合取前面的；只有一套时不看内容直接用。
-旧版只有单套 `style.header`，读的时候当第一套（`styleHeaders`）；保存时 `header` 仍写第一套，旧版本面板也认得。
-表格页里「调整表头」写的是单文件覆盖（项目有多套时弹层里能一键套用其中一套）；文件弹窗（不在表格页）仍记在浏览器 localStorage。
+**表头只按配置，不按内容猜**（用户 2026-11-12 定）。配置在 `shared/table-header.ts`：表头是一个「行」的数组 `HeaderRule = { start, rows: [{ kind, label?, values? }] }`，
+数组里每一项对应表格表头的一行，从第 `start` 行往下排，能加、删、挪；`kind` 是 6 种角色之一（决定底色和用途：字段名行当列标题、类型行定参数类型……），
+`label` 是这行的名字，`values` 是这行能填什么（通用枚举名或 `@types`），表头格子改的时候下拉、填错标红。
+
+`schemaHeader`：`style.exceptions` 里第一条命中的（`exceptionHits`：通配命中、写了 `sheet` 时工作表也对得上、通配空着的不生效）> 项目表头 `style.header`。
+返回 `{ rule, source }`，`headerOf` 换成面板组件认的 `TableHeader`（`SheetHeader` + 每行的 `values`），配置的起点超出这张表时当没有表头。没配置（`rows` 空）就整张表当数据，状态栏提示去配置。
+
+- 项目设置 → 表格「表头」：项目表头 + 按文件指定的几条，都用 `HeaderRowsEditor`（设置 → 组件里有示例）。
+- 表格页「调整表头」（`TableHeaderSetup`，通过 `SheetHeaderBar` 的 `setup` 换掉面板自带的）：「只改这张表」写一条只管这个工作表的按文件指定（放最前面）；「改项目的表头 / 改这条按文件指定」直接改它现在用的那份；单独设过的能「改回按项目设置」。
+- 文件弹窗（不在表格页）不属于哪个项目的配置，仍是面板的自动识别 + 浏览器 localStorage。
+- 旧格式（几套 `style.headers` 按内容挑、按种类的 `roleEnums`、单表覆盖 `files.json`）在 `readSchema` 入口由 `table-schema-upgrade.ts` 换成新的：第一套当项目表头，其余几套变成通配空着的按文件指定（不丢，用户填上通配才生效），`files.json` 的每条变成只管那个工作表的按文件指定、排最前；下次保存写新格式并删掉 `files.json`。不放进 zod：结构文件跟着项目提交，同事用旧版写的随时会再出现。
 
 结构文件在页面里只留一份（`web/src/lib/table-schema.ts`）：项目设置的「表头」「通用枚举」「校验」「AI 分析」和表格页共用，谁保存都先重读最新的再改（`saveTableSchema`），其它地方跟着更新；设置表单用 `useSchemaDraft`，没改过的跟着新内容走，改了一半的留着。
-AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、表头行能填什么；不认识的角色改成「其它」并把原词留作行名，不整份作废。还没应用的结果存在浏览器 localStorage，刷新后还能接着应用。
+AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式：AI 自己读样本表的开头几行，总结出项目表头（每行 kind / label / values）和按文件指定的几条；不认识的 kind 改成「其它」并把原词留作行名，还按旧格式（roles、几套 headers、roleEnums）回答的也换过来，不整份作废。还没应用的结果存在浏览器 localStorage，刷新后还能接着应用。
 
 ## 结构化（枚举、引用、检查）
 
@@ -76,7 +86,8 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 检查（`checkSheet`）：类型、枚举（名字和值都算）、引用（被引用的表读到了才查）、范围、主键重复；空格子不查。表格页标红和左栏「检查」、服务端 `/check` 都用它。
 - 列结构面板列出这一列在表头里的每一行（`ColInfo.head`）；结构文件 `columns` 里的 `type` 覆盖类型行（表头写错、没写时用），表格不改。
 - 通用枚举：结构文件 `enums.json` 就是整个项目共用的枚举库，项目设置 → 表格「通用枚举」和表格页「枚举」管的是同一份。
-- 项目级表头：项目设置 → 表格「表头」写 `style.header`（`HeaderRuleEditor`，表格页「调整表头」也用它）；单张表的覆盖在表格页改。
+- 项目级表头：见上面「表头从哪来」。
+- 新建表格：表格页左栏「新建」（`NewTableDialog`）选表格目录、文件名（.xlsx / .csv / .tsv），每一列按项目表头的每一行填（设了能填什么的是下拉，修饰、导出端照前一列）；`newTableIssues` 查文件名、工作表名、字段名空 / 重复。服务端 `POST /create`（`server/tables/create.ts`）只写在设置的表格目录里、不覆盖已有文件（`wx`），xlsx 是从头拼的最小工作簿（共享字符串、表头冻结），之后照常原地改格子。
 - AI 分析：页面先取 `/sample`——**只是挑出来的几张表的清单**（按目录轮着挑，最多 8 张），放进 `subject.sample` 交给配置助手（`kind: 'tables'`）；CLI 再用面板动作 `table.sample`（`/sample?path=`：一张表的表头 + 前 3 行数据 + 这张表里类型名出现过的值，最多 6000 字）一张一张看。提示词只放清单，不会超过任务提示词 20000 字的上限；多轮对话太长时只留最近的。在项目里开分析对话（记成 `run`，右侧不出项目设置面板）；结果暂存在页面模块里，回到项目设置 → 表格逐项勾选后 `applyTablesDraft` 写进结构文件。
 
 ## 校验规则
@@ -119,13 +130,20 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 查找替换（Ctrl+H、工具栏「替换」）：范围是选中区域 / 当前列 / 整张表，只算筛选后看得见的数据行，跳过表头和隐藏的列；实时预览，「全部替换」一次撤销。
 - 列名右键冻结到某列、隐藏列（`use-col-layout.ts`，按「项目:文件#工作表」记在 localStorage，表格文件不动）。冻结列在列虚拟化之外一直画，`sticky` 钉在行号列右边，底色换成不透明色（`sheet-frozen`）。
 - 格子右键（整个表格只挂一个菜单，`CellMenu`）：引用列跳到被引用表的那一行（`findRefTarget`），被引用的表可以查「谁引用了这一行」（`findBackRefs`：结构文件里 ref 指向这张表的列，数组列按分隔符拆开整项比）。
-- 快捷键（`use-grid-edit.tsx`）：Ctrl+方向键跳到这一段数据的边缘、Ctrl+Home / End、Shift+空格 / Ctrl+空格选整行整列、Ctrl+Shift+= 在上方插行、Ctrl+- 删选中的行（`rowOpsIn` 一次撤销）。F1 / Ctrl+/ 打开共用的快捷键一览（`web/src/components/tables/shortcuts.ts` 的「表格」组，经 `ShortcutsHelp` 的 `first` 排最前；全局的 `?` 在格子里是打字，`useShortcuts` 跳过已经 `preventDefault` 的键）。
+- 快捷键（`grid-keys.ts`，由 `use-grid-edit.tsx` 调）：Ctrl+方向键跳到这一段数据的边缘、Ctrl+Home / End、Shift+空格 / Ctrl+空格选整行整列、PageUp / PageDown 按实际行高（`rowH`，跟着紧凑 / 宽松和设置）和数据区高度翻一屏、Ctrl+Shift+= 在上方插行（选中几行插几行，主键依次编号，`shared/table-rows.ts`）、Ctrl+- 删选中的行（`rowOpsIn` 一次撤销；选的是整列时拒绝）、Alt+↑ / ↓ 把选中的连续几行上移下移。F1 / Ctrl+/ 打开共用的快捷键一览（`web/src/components/tables/shortcuts.ts` 的「表格」组，经 `ShortcutsHelp` 的 `first` 排最前；全局的 `?` 在格子里是打字，`useShortcuts` 跳过已经 `preventDefault` 的键）。
+- 整行整列：点行号选整行、点列名选整列（`SheetEditing.onRowDown / onColDown`），Shift 点击扩大、按住拖动多选。选区多一个 `whole`：整行时列铺满，整列时只铺满数据行（表头不跟着被清空、批量改）；当前格停在看得见的格子上，不把表格滚走。右键行号时点在选区里就按选中的几行出菜单（`RowMenu.tsx`：插 N 行、上移下移、删 N 行）。
+- 拖动（`use-drag-select.ts`）：拖格子、行号、列名、填充柄都走这一份。每帧按鼠标坐标问浏览器是哪一格（`grid-dom.ts`，不用自己按行高列宽算，冻结列、隐藏列、筛选都不用管）；拖到数据区边上按离边的距离加速滚（按时间算，高刷新率屏幕不会更快）。只认整格露出来的格子，否则 SheetTable 会为了让当前格露全一下子滚半屏。
+- 移动行只改格子（几行内容轮换，`moveRowsCells`），不做行操作：xlsx 的行样式、公式表的结构都不动，外面改过文件时也能按「只改格子」保存。筛选或排序后看到的相邻两行在表里不一定挨着，这时拒绝并提示先清掉。
+- 填充柄（`grid-fill-drag.ts`，规律在 `shared/table-fill.ts`）：选区右下角的小方块（大小在设置 → 组件 → 数据表格的「填充柄大小」），往下 / 上 / 右 / 左拖，看离选区哪个方向更远。规律照 Excel：两格以上数字按步长递增、一格数字复制、结尾带数字的文字往后数（保留补的 0），按住 Ctrl 复制和递增对调；拖的时候选区跟着变大、鼠标旁提示最远那格的值，松手一次提交（一次撤销）。往下往上只填数据行，筛掉的行、隐藏的列不填。
+- 读屏：能聚焦的表格容器是 `role="grid"`（`boxProps`：行列总数、多选、只读），`aria-activedescendant` 指向当前格（SheetTable 只给当前格加 id）；SheetTable 在编辑模式下是 `rowgroup`，格子是 `gridcell` 带 `aria-colindex`，行号是 `rowheader`。
 - 查找条（Ctrl+F，`TableFindBar`）：只查筛选后显示的行和没隐藏的列，打字防抖 120ms，最多 5000 处；可以只查当前列。Ctrl+G 跳转：先按主键找，找不到再当行号。
 - 编辑栏（工具栏「查看」里开关，`TableEditBar`，localStorage `table-edit-bar`）：看全、修改长文本，右边是这一列的规则（`ruleText`）。
 - 快速筛选（`TableQuickFilter`）：只看不合规 / 改过的 / 引用缺失 / 空着的必填，几个一起是「或」，只过滤行号数组；当前的筛选、排序、快速筛选能存成视图（localStorage `table-views:<项目>:<文件#工作表>`）。
 - 引用列「ID · 名称」（localStorage `table-ref-names`）：只改显示（`SheetEditing.display`），名称取被引用表同一行里像名字的列（`refOptions` 的 desc）。
 - 检查结果（`ProblemsBar`）按「列 + 种类」分组（`shared/table-problems.ts`；种类是 `Problem.rule`，同一列「引用的表里没有 X / Y」算一组）。每组批量修：超出范围改成边界值、改成「也允许」的值、清空（必填 / 主键不给），先预览再一次放进表格；或让 AI 修这一组。滚动条右边一条 canvas 标出不合规、改过、查找命中的位置（`ScrollMarks`，按像素合并，点一下跳到最近的一处）。
 - 内容搜索结果（`TableHits`）每条带字段名（服务端 `searchTables` 按结构文件的表头算，`sheetFieldNames`，只在这张表有命中时算一次），按文件分组、组头吸顶能折叠，上下键在结果里走、表格跟着跳。
+- 跨表搜索的选项（`TableSearchOptions`，开关记在 localStorage `agent-panel.tables.search-flags`）：区分大小写、整格（数组列 `1001;1002` 里某一项整项相同也算，分隔符用项目的 `listSep`）、正则，和表格里的查找替换同一套（`findRe`）。查询写成「字段名:值」（冒号前像字段名才算：字母 / 汉字 / 下划线开头、没有空格；全角冒号也认）只在叫这个名字的列（不分大小写）的数据行里找；没有哪张表有这个字段时按整串再找一遍并提示（`fieldMissing`），所以 `12:30`、`http://…` 这类值照样能找。命中位置由服务端给（`TableHit.at`），正则、长格子都能准确高亮。
+- 跨表批量替换（`ReplaceAllDialog` → `POST /replace`，`server/tables/bulk-replace.ts`）：`apply:false` 预览每个文件改几格、前 5 处改前改后、替换后有几处不合规；预览时对每个文件跑一遍 `prepareSave`（保存前的全部检查，不写），会被拒绝的标出原因、不能勾，页面上有没保存改动的文件也不能勾。`apply:true` 只写勾选的文件，带预览时的修改时间，对不上（预览之后被改过）就不写这个文件；改了查找、替换或开关后要重新预览才能替换。只改数据行，表头不动。拒绝的情况：项目只读（整个请求）；老 .xls、表格太大只读了一部分、正被 Excel / WPS 打开、预览后被改过、公式格或少见写法（原地改写做不了）、读回比对不上、「保存前检查」是「不让保存」且替换后不合规（单个文件）。每个文件写之前备份。
 - 行高三档（工具栏「查看」→ 行高，localStorage `table-density`）：紧凑 22、标准跟着设置、宽松 32，通过 `SheetTable` 的 `rowHeight` 传。双击列边线按看得见的 200 行 + 表头量宽（`fitWidth`），不扫整列。
 - 导表输出在表格页底部的「输出」面板（`TableOutput.tsx`），不再是弹窗：每次执行一个 `ExportRun` 一直挂着（切去看别的一次只是藏起来，不会停），留最近 20 次；关面板才停掉在跑的。
 - 版本差异、跨项目对比：改过的格子只显示新值，悬停看旧 / 新；摘要里「改 / 加 / 删」能点，只看那一种行（`DiffOnly`）。
@@ -136,7 +154,8 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 「让 AI 改这一片…」（`AiRegionDialog`，提示词 `editRegionPrompt`）：只把选中的行列交给 AI，结果仍走 `table.propose` 先看差异。
 - 提交时「按改动生成说明」（`diff-side.ts` 的 `submitSummary` → `shared/table-summary.ts`）：和上一次提交比，写成「C_Item：改 3 格（Name ×2、Level ×1），加 1 行」。还有不合规时按「保存前检查」提醒或拦下提交。
 - 导表脚本可勾「保存后自动导这张表」（`TableExport.onSave`）：表格页保存后对这张表跑一次，输出进底部面板。输出里的 `文件:行:列`、`Sheet!A1` 能点，跳到对应的表和格子（`outputLocs`）。
-- 外部改动：当前打开的文件每 4 秒（页面在前台时）看一次修改时间（`/stat`），变了且没有没保存的改动就直接重新载入；有改动时表格上方提示，可以载入新内容并把改过的格子按位置写回（只改格子、没插删行时）、丢掉改动、或先不管（保存时仍有修改时间检查）。
+- 外部改动：打开着的表都盯着（`server/tables/watch.ts`，2026-11-12 从每 4 秒请求 `/stat` 的轮询换掉）：页面每次连上面板的推送（插件接口 7 的 `host.events.onConnect`，含断线重连）用 `POST /watch` 把这个项目里打开着的文件和打开时的修改时间整份登记一遍；服务端 `fs.watch` 盯文件所在的目录（Excel / WPS 先写临时文件再改名的保存方式盯文件会盯丢），事件停 300ms 后看修改时间，变了才经 `ctx.pages.push('file-changed')` 推给登记了的页面，同一次只推一次；自己保存后 `saw` 记下新时间不推；页面断开时面板回调 `onClose` 清掉登记，没人盯的目录关掉 watcher（最多 256 个目录）。页面收到后：变了且没有没保存的改动就直接重新载入（正看着的才提示）；有改动时表格上方提示，可以载入新内容并把改过的格子按位置写回（只改格子、没插删行时）、丢掉改动、或先不管（保存时仍有修改时间检查）；页面藏起来时先记着、切回来再处理，正在保存时等忙完再对一次修改时间。
+- xlsx 还原显示：合并单元格、批注、超链接、整行底色、隐藏的工作表由面板读出、面板的 SheetTable 画（见面板 `docs/modules/web/ui-kit.md`）；表格页把它们按没保存的插删行挪位置（`shared/table-look.ts`），表内链接（`Sheet2!A1`）切表并选中那一格。
 
 ## 导表脚本
 
@@ -145,7 +164,7 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 
 ## Agent 改表格
 
-动作在 `server/app-actions/tables.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
+动作在 `server/actions.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.search` 走 `/search`（同样认「字段名:值」和三个开关），每处带 Excel 位置、字段名和这一行的主键；`table.schema` 用 `describeSheet` 列出每一列的类型、数组分隔符、枚举能填的值（最多 80 个）、引用、范围和校验规则，枚举表、被引用的表经 `/file` 读。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
 
 ## AI（表格页工具栏「AI」）
 
@@ -153,6 +172,53 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - `table.propose`（`server/app-actions/tables.ts`）：参数同 `table.edit`，同样 `planEdit` + `checkTouched`，不合规拦下交给模型；通过后不写文件，`POST /proposal` 存进内存（`server/tables/proposals.ts`，每个文件只留最新一份，重启就没）。
 - 表格页打开文件、AI 对话结束时取 `GET /proposal`：上方提示条「看差异」按表头和主键出差异，「放进表格」用 `replaceIn` 成为一次改动（还要用户保存），然后 `DELETE /proposal`。提出之后文件 mtime 变了或页面上有没保存的改动时不让放（行号对不上）。状态只看工具调用存下的提议，不读模型回复的文字。
 - 解释一列 / 这张表：只读提示词，结果就在 AI 窗口的对话里。
+
+## 增删列
+
+- 改动除了「行操作 + 格子」还有「列操作」（`shared/table-edit.ts` 的 `ColOp`、`SheetEdit.cols`）：先做行操作、再做列操作，格子的行列号是都做完以后的；行列操作互不影响。页面和服务端共用 `applyOps` / `applyColOps`，保存后照样重新解析逐格比对。
+- 入口：列名右键、格子右键「在左边 / 右边插入一列…」「删除 X 列」（选中几列时删选中的），工具栏「插入一列」。插列弹窗（`ColumnInsertDialog`）顺便填表头每一行（修饰、导出端照左边那列预填，类型行有下拉建议，字段名查重），还能给已有的数据行填默认值（只填有内容的行）。删列先确认，说清几格有内容。
+- xlsx 写入（`server/tables/xlsx-write.ts` + `xlsx-shift.ts`）：每格的列号跟着挪（没写 `r` 的格子补上），`<cols>` 的列宽 / 隐藏 / 样式区间跟着挪（插在区间里面时区间变宽，和 Excel 一样），挪过的行去掉 `spans`，`<dimension>` 重算。新插的列里的格子照同一行左边那格的样式（表头行还是表头底色），类型按值判断。
+- 插删以后本机按列号记的东西跟着挪（`col-shift.ts`）：隐藏的列、冻结、拖过的列宽、列筛选和排序；撤销重做时反着挪。
+
+### 插删行列的拒绝规则（xlsx）
+
+位置写在里面、挪了行列不会自己跟着变的东西，这里不去改写（改错了比拒绝更糟），表里有就**不能在中间插删行列**，提示用户去 Excel / WPS 做（`shiftBlocked`）：
+
+| 有这些就拒绝                                                | 为什么                         |
+| ----------------------------------------------------------- | ------------------------------ |
+| 公式（这张表里的任何 `<f>`）                                | 公式里的 A1、B2:C9 不会跟着挪  |
+| 别的工作表的公式、图表的数据区、数据透视表的来源指到这张表  | 同上，跨表引用                 |
+| 合并单元格、数据验证、条件格式（含 `extLst` 里的 x14 写法） | 都按「A1:C3」记范围            |
+| 超链接、表格对象、自动筛选                                  | 同上                           |
+| 批注、图片 / 图表                                           | 按格子位置锚定，挪了会挂错格子 |
+| 名称定义（workbook 里的 `definedName`）                     | 名称里写的是位置               |
+
+- **追加在最后一行 / 最后一列后面总可以**（加字段最常见），「最后」按文件里实际用到的最后一列算（带样式的空格子也算）。删列只要碰到原文件就有的列就算「中间」。
+- 页面在插列、删列前先问服务端（`GET /shift-check?path=`，返回每张表的原因和最后一列），不能时插列弹窗只给「加在最后」、删列确认框直接说明原因；真正把关的是保存时的同一套规则。
+- 插删行原来的规则（公式、合并单元格、条件格式、数据验证、超链接、表格对象、名称定义）并进了这一套，补上了跨表引用、自动筛选、批注、图片。
+- CSV 没有这些，随便插删。
+
+## 草稿（没保存的改动）
+
+- 改动停手 400ms、页面藏起来或关掉时，把「行列操作 + 改了的格子（带改之前的值）」存进浏览器 IndexedDB（库 `agent-panel-tables`，按「项目 id + 文件路径」一份，`table-drafts.ts`）；保存、撤销到底、丢掉改动、关页签时删掉。表格文件一个字节不动。超过 30 天的打开表格页时清掉。
+- 进表格页时有草稿就提醒一句，文件树上带点；打开文件时表格上方提示（`DraftBar`）：
+  - 文件没变（修改时间、大小都对得上）：原样恢复，一步能撤销；
+  - 文件在外面改过、草稿只改了格子：每格比「文件里现在的值」和「草稿记的改之前的值」，没动过的直接放回，两边都改了的算冲突，可以看明细、选冲突时用文件的还是我的；
+  - 文件改过、草稿插删过行列：位置对不上，只给「仍按原位置恢复」并提醒核对，或丢掉。
+- 还没决定恢复还是丢掉之前，这份草稿不会被覆盖。
+
+## 一行的表单
+
+- 工具栏「一行的表单」或格子右键「在表单里看这一行」打开右边的抽屉（`RowForm`，宽度可拖、记在本机）：竖着列出当前格所在那一行的每个字段——字段名、列字母、类型标签、表头注释行当说明、不合规的原因。
+- 枚举、引用列给下拉建议（能自由填），引用列旁边能跳过去；长文本自动用多行输入框（Ctrl+回车提交）。离开输入框或回车就写进表格，和在格子里改一样能撤销。
+- 跟着表格的当前格走；Alt+↑↓ 或按钮按表格现在的显示顺序（筛选、排序后）切行；能按字段名、说明筛，或只看有值的字段。
+- 设置 → 组件里有示例（`RowFormSpecimen`），跟着「输入框」「弹出菜单」的微调走。
+
+## 大表
+
+- 表格页按 `TABLE_XLSX`（`server/tables/files.ts`）读 xlsx：单张表 200 万格、整本 400 万格（面板 `readXlsx` 的 `limits` 参数）；文件弹窗还是面板默认的 20 万 / 60 万。超过上限的表只读前面一部分并整份只读。解析、保存前后读回比对都用同一个上限（`readTableXlsx`）。
+- 保存大表：原表的格子取解析缓存（不再解析一遍），写完把读回比对时的解析结果放进缓存（`primeTable`），重新打开不再解析。1 万行 × 80 列的 xlsx 改一格保存约 3 秒（性能基准 `xlsxSave`）。
+- 性能基准 `scripts/bench.ts` 含一本 1 万行 × 80 列的 xlsx（`bigBook`）：读、改一格保存、跨表搜索（冷 / 热 / 按字段）、一列 1 万格的跨表替换（预览 / 写）。
 
 ## 不支持的
 

@@ -2,73 +2,7 @@
  * 测试用的 xlsx：照 Excel / WPS 存出来的样子拼（共享字符串、样式号、spans、公式、日期样式、
  * 第二张表、一张图片、带数据描述符的条目），用来验证原地改写只动该动的地方。只给测试用。
  */
-import { deflateRawSync } from 'node:zlib'
-import { crc32 } from './zip.ts'
-
-interface Part {
-  name: string
-  data: Buffer
-  /** 不压缩直接存 */
-  stored?: boolean
-  /** 用数据描述符（大小和校验写在数据后面，WPS 存出来的有这种） */
-  descriptor?: boolean
-}
-
-export function buildZip(parts: Part[]) {
-  const out: Buffer[] = []
-  const dir: Buffer[] = []
-  let offset = 0
-  for (const p of parts) {
-    const data = p.stored ? p.data : deflateRawSync(p.data)
-    const crc = crc32(p.data)
-    const name = Buffer.from(p.name, 'utf8')
-    const flags = p.descriptor ? 8 : 0
-    const local = Buffer.alloc(30)
-    local.writeUInt32LE(0x04034b50, 0)
-    local.writeUInt16LE(20, 4)
-    local.writeUInt16LE(flags, 6)
-    local.writeUInt16LE(p.stored ? 0 : 8, 8)
-    local.writeUInt16LE(0x6000, 10)
-    local.writeUInt16LE(0x5a6b, 12)
-    if (!p.descriptor) {
-      local.writeUInt32LE(crc, 14)
-      local.writeUInt32LE(data.length, 18)
-      local.writeUInt32LE(p.data.length, 22)
-    }
-    local.writeUInt16LE(name.length, 26)
-    const desc = Buffer.alloc(p.descriptor ? 16 : 0)
-    if (p.descriptor) {
-      desc.writeUInt32LE(0x08074b50, 0)
-      desc.writeUInt32LE(crc, 4)
-      desc.writeUInt32LE(data.length, 8)
-      desc.writeUInt32LE(p.data.length, 12)
-    }
-    const central = Buffer.alloc(46)
-    central.writeUInt32LE(0x02014b50, 0)
-    central.writeUInt16LE(20, 4)
-    central.writeUInt16LE(20, 6)
-    central.writeUInt16LE(flags, 8)
-    central.writeUInt16LE(p.stored ? 0 : 8, 10)
-    central.writeUInt16LE(0x6000, 12)
-    central.writeUInt16LE(0x5a6b, 14)
-    central.writeUInt32LE(crc, 16)
-    central.writeUInt32LE(data.length, 20)
-    central.writeUInt32LE(p.data.length, 24)
-    central.writeUInt16LE(name.length, 28)
-    central.writeUInt32LE(offset, 42)
-    out.push(local, name, data, desc)
-    dir.push(central, name)
-    offset += 30 + name.length + data.length + desc.length
-  }
-  const cd = Buffer.concat(dir)
-  const end = Buffer.alloc(22)
-  end.writeUInt32LE(0x06054b50, 0)
-  end.writeUInt16LE(parts.length, 8)
-  end.writeUInt16LE(parts.length, 10)
-  end.writeUInt32LE(cd.length, 12)
-  end.writeUInt32LE(offset, 16)
-  return Buffer.concat([...out, cd, end])
-}
+import { buildZip } from './zip.ts'
 
 const x = (s: string) => Buffer.from(s, 'utf8')
 
@@ -98,5 +32,46 @@ export function gameBook(opts: { formulaSheet1?: boolean; merge?: boolean } = {}
     { name: 'xl/sharedStrings.xml', data: x(sstXml) },
     { name: 'xl/styles.xml', data: x(styles) },
     { name: 'xl/media/image1.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5]), stored: true },
+  ])
+}
+
+/**
+ * 一本大 xlsx（性能基准用）：两行表头（类型、字段名）+ rows 行数据，每三列一列整数、其余是共享字符串，
+ * 和策划常见的大物品表差不多（字符串多、几乎不重复）
+ */
+export function bigBook(rows: number, cols: number) {
+  const sst: string[] = []
+  // 列字母：A、B……AA（Excel 存的每个格子都带 r="B7" 这样的位置）
+  const letters = Array.from({ length: cols }, (_, c) => {
+    let s = ''
+    for (let n = c + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s
+    return s
+  })
+  const str = (r: number, c: number, v: string) => `<c r="${letters[c]}${r}" t="s"><v>${sst.push(v) - 1}</v></c>`
+  const lines: string[] = []
+  const head = (r: number, f: (c: number) => string) => letters.map((_, c) => str(r, c, f(c))).join('')
+  lines.push(`<row r="1">${head(1, (c) => (c % 3 ? 'string' : 'uint32'))}</row>`)
+  lines.push(`<row r="2">${head(2, (c) => (c ? `F${c}` : 'ID'))}</row>`)
+  for (let r = 0; r < rows; r++) {
+    const at = r + 3
+    let cells = ''
+    for (let c = 0; c < cols; c++)
+      cells += c % 3 ? str(at, c, `v${r}_${c}`) : `<c r="${letters[c]}${at}"><v>${r + c}</v></c>`
+    lines.push(`<row r="${at}">${cells}</row>`)
+  }
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${lines.join('')}</sheetData></worksheet>`
+  const sstXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map((v) => `<si><t>${v}</t></si>`).join('')}</sst>`
+  const book = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Big" sheetId="1" r:id="rId1"/></sheets></workbook>`
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`
+  return buildZip([
+    { name: '[Content_Types].xml', data: x('<Types/>') },
+    { name: 'xl/workbook.xml', data: x(book) },
+    { name: 'xl/_rels/workbook.xml.rels', data: x(rels) },
+    { name: 'xl/worksheets/sheet1.xml', data: x(sheet) },
+    { name: 'xl/sharedStrings.xml', data: x(sstXml) },
   ])
 }

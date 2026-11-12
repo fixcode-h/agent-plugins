@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { TableSchema } from './tables.ts'
 import type { SheetData } from './files.ts'
 import { findBackRefs, findRefTarget, refsTo } from './table-refs.ts'
+import { ruleOf } from './table-header.ts'
 
 const roles: SheetData = {
   name: 'Role',
@@ -26,7 +27,11 @@ const config: SheetData = {
   ],
 }
 const schema = TableSchema.parse({
-  style: { listSep: ';' },
+  style: {
+    listSep: ';',
+    header: ruleOf(['modifier', 'type', 'name']),
+    exceptions: [{ glob: 'r.xlsx', header: ruleOf(['type', 'name']) }],
+  },
   columns: { 'c.xlsx#*#RoleIDs': { ref: 'r.xlsx#ID' } },
 })
 

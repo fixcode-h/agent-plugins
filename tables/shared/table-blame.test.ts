@@ -2,8 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cellChanges, cellIn } from './table-blame.ts'
 import { emptySchema } from './tables.ts'
+import { ruleOf } from './table-header.ts'
 
-const schema = emptySchema()
+const schema = { ...emptySchema(), style: { ...emptySchema().style, header: ruleOf(['name', 'type', 'comment']) } }
 const sheet = (rows: string[][]) => [{ name: 'Sheet1', rows }]
 
 test('cellIn 按主键找同一行、按字段名找同一列', () => {

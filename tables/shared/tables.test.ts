@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { TableSchema, globHit, globList, schemaColumn, schemaHeader, tableKind, tablesOn } from './tables.ts'
+import { ruleOf } from './table-header.ts'
 
 test('通配：不带 / 的只比文件名，带 / 的比相对路径，** 跨目录', () => {
   const g = globList('*.xlsx, ~$*\n Design/**/*.csv')
@@ -25,19 +26,25 @@ test('种类和开关', () => {
   assert.equal(tablesOn({ dirs: ['Config'] }), true)
 })
 
-test('表头：单文件覆盖 > 例外规则 > 项目风格；列结构：本工作表 > 每张表', () => {
-  const own = { start: 2, roles: ['name' as const] }
-  const ex = { start: 1, roles: ['type' as const, 'name' as const] }
-  const style = { start: 0, roles: ['modifier' as const, 'type' as const, 'name' as const] }
+test('表头只按配置：只管这个工作表的 > 按通配的（排前面的优先，通配空着不生效）> 项目表头；列结构：本工作表 > 每张表', () => {
+  const own = ruleOf(['name'], 2)
+  const ex = ruleOf(['type', 'name'], 1)
+  const style = ruleOf(['modifier', 'type', 'name'])
   const s = TableSchema.parse({
-    style: { header: style, exceptions: [{ glob: 'Enum/*.xlsx', header: ex }] },
-    files: { 'Config/A.xlsx#Sheet1': own },
+    style: {
+      header: style,
+      exceptions: [
+        { glob: 'Config/A.xlsx', sheet: 'Sheet1', header: own },
+        { glob: '', header: ruleOf(['comment']) },
+        { glob: 'Enum/*.xlsx', header: ex },
+      ],
+    },
     columns: { 'Config/A.xlsx#*#Type': { enum: 'T' }, 'Config/A.xlsx#Sheet2#Type': { enum: 'U' } },
   })
-  assert.deepEqual(schemaHeader(s, 'Config/A.xlsx', 'Sheet1'), own)
-  assert.deepEqual(schemaHeader(s, 'Enum/E.xlsx', 'Sheet1'), ex)
-  assert.deepEqual(schemaHeader(s, 'Config/B.xlsx', 'Sheet1'), style)
-  assert.equal(schemaHeader(TableSchema.parse({}), 'x.xlsx', 's'), undefined)
+  assert.deepEqual(schemaHeader(s, 'Config/A.xlsx', 'Sheet1'), { rule: own, source: { kind: 'sheet', index: 0 } })
+  assert.deepEqual(schemaHeader(s, 'Config/A.xlsx', 'Sheet2'), { rule: style, source: { kind: 'project' } })
+  assert.deepEqual(schemaHeader(s, 'Enum/E.xlsx', 'Sheet1'), { rule: ex, source: { kind: 'file', index: 2 } })
+  assert.deepEqual(schemaHeader(TableSchema.parse({}), 'x.xlsx', 's').rule, { start: 0, rows: [] })
   assert.equal(schemaColumn(s, 'Config/A.xlsx', 'Sheet1', 'Type')?.enum, 'T')
   assert.equal(schemaColumn(s, 'Config/A.xlsx', 'Sheet2', 'Type')?.enum, 'U')
   assert.equal(schemaColumn(s, 'Config/A.xlsx', 'Sheet1', 'Other'), undefined)

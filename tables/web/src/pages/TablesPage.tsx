@@ -1,23 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GitCompareArrows, Loader2, RefreshCw, Settings2 } from 'lucide-react'
 import { t } from '@shared/i18n'
-import {
-  tablesOf,
-  type TableDoc,
-  type TableHit,
-  type TableSchema,
-  type TableSearch,
-  type TablesIndex,
-} from '@shared/tables'
+import { tablesOf, type TableDoc, type TableHit, type TableSchema, type TablesIndex } from '@shared/tables'
 import { useNav } from '@/lib/data'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, useTableSchema } from '@/lib/table-schema'
+import { NewTableDialog } from '@/components/tables/NewTableDialog'
 import { rememberTablesProject, TABLES_SECTION, tablesRoute, useTablesEntry, useTablesProjects } from '@/lib/tables-nav'
 import { toast, toastError } from '@/lib/toast'
 import { parseRef } from '@shared/table-struct'
 import { findRefTarget } from '@shared/table-refs'
 import { ListPane } from '@/components/layout/ListPane'
-import { EmptyPanel } from '@/components/ui/empty-panel'
 import { IconButton } from '@/components/ui/icon-button'
 import { Select } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
@@ -25,19 +18,28 @@ import { TableTree } from '@/components/tables/TableTree'
 import { TableQuick } from '@/components/tables/TableQuick'
 import { useTableMarks } from '@/components/tables/use-table-marks'
 import { TableHits } from '@/components/tables/TableHits'
+import { TableSearchOptions } from '@/components/tables/TableSearchOptions'
+import { ReplaceAllDialog } from '@/components/tables/ReplaceAllDialog'
+import { useContentSearch, useSearchFlags } from '@/components/tables/use-content-search'
 import { TableCheckList } from '@/components/tables/TableCheckList'
 import { TablesCompareDialog } from '@/components/tables/TablesCompareDialog'
 import { TableTabs } from '@/components/tables/TableTabs'
 import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
+import { useTableDrafts } from '@/components/tables/use-table-drafts'
+import { DraftBar } from '@/components/tables/DraftBar'
+import { firstShownSheet } from '@/components/files/SheetTable'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
+import { TablesHome } from '@/components/tables/TablesHome'
 import type { SheetEdit } from '@shared/table-edit'
 import type { TableExport } from '@shared/table-export'
 
 type Mode = 'name' | 'content' | 'check'
+/** 还没查过时文件树上不标数 */
+const NO_COUNTS = new Map<string, number>()
 
 /** 切回表格页时，文件列表超过这么久没读就在后台再读一次 */
 const STALE_MS = 60_000
@@ -54,6 +56,8 @@ export function TablesPage({ path, active = true }: { path: string; active?: boo
   const shown = active
   const id = path.split('/')[0]
   const projectId = projects.some((p) => p.id === id) ? id : fallback
+  // 地址里项目后面的部分是要打开的文件（面板文件弹窗的「在表格页打开」）：<项目>/<文件>#<工作表>
+  const want = projectId === id ? path.slice(id.length + 1) : ''
   useEffect(() => {
     if (projectId) rememberTablesProject(projectId)
   }, [projectId])
@@ -66,6 +70,9 @@ export function TablesPage({ path, active = true }: { path: string; active?: boo
       projectId={projectId}
       projects={projects.map((p) => ({ value: p.id, label: p.name }))}
       exports={tablesOf(projects.find((p) => p.id === projectId))?.exports ?? []}
+      readOnlyProject={!!tablesOf(projects.find((p) => p.id === projectId))?.readOnly}
+      want={want}
+      onOpened={() => go(tablesRoute(projectId))}
       onProject={(id) => go(tablesRoute(id))}
       onSettings={() => openProject(projectId, TABLES_SECTION)}
     />
@@ -80,13 +87,22 @@ function Workbench({
   onProject,
   onSettings,
   exports,
+  readOnlyProject,
+  want,
+  onOpened,
 }: {
+  /** 地址带来的要打开的文件（<文件>#<工作表>），空串没有 */
+  want: string
+  /** 打开了 want：地址换回只有项目的，下次从弹窗再点同一个文件也能再跳过来 */
+  onOpened: () => void
   /** 表格页正在显示；切到别的页面时藏起来但不卸载，回来时不重新加载 */
   shown: boolean
   projectId: string
   projects: { value: string; label: string }[]
   /** 项目设置里的导表脚本 */
   exports: TableExport[]
+  /** 项目设置里把表格设成了只读：不给「全部替换」 */
+  readOnlyProject: boolean
   onProject: (id: string) => void
   onSettings: () => void
 }) {
@@ -101,6 +117,7 @@ function Workbench({
   /** 存了表格或结构文件后加一：「检查」重新查 */
   const [checkSeq, setCheckSeq] = useState(0)
   const [comparing, setComparing] = useState(false)
+  const [creating, setCreating] = useState(false)
   const others = projects.filter((p) => p.value !== projectId)
   const [query, setQuery] = useState('')
   const [tabs, setTabs] = useState<string[]>([])
@@ -159,6 +176,16 @@ function Workbench({
       return d && 'sheets' in d && pendingOf(edits[p], d.sheets).length > 0
     }),
   )
+  // 没保存的改动存进浏览器（草稿）：刷新、重启、崩了以后打开文件能恢复
+  const drafts = useTableDrafts({ projectId, docs, edits, setEdits })
+  // 文件树、页签上的「有没保存的改动」：页面上的，加上浏览器里存着草稿、还没打开（或还没决定恢复）的
+  const markedDirty = useMemo(() => {
+    const out = new Set(dirtyPaths)
+    for (const p of drafts.stored) if (!docs[p] || drafts.asks[p]) out.add(p)
+    return out
+    // dirtyPaths 每次渲染都是新的 Set：按内容比
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [[...dirtyPaths].join('\n'), drafts.stored, drafts.asks, docs])
   // 有没保存的改动时关页面、刷新先提醒
   const anyDirty = dirtyPaths.size > 0
   useEffect(() => {
@@ -192,7 +219,8 @@ function Workbench({
     Object.entries(docs).flatMap(([p, d]) => (d && 'sheets' in d && (d.readOnly || d.kind === 'xls') ? [p] : [])),
   )
   // 上次全项目检查的结果：文件树上每个文件标不合规数
-  const [problemCounts, setProblemCounts] = useState<Map<string, number>>(() => new Map())
+  // null：这次打开页面还没查过（空白区据此给「检查全部表格」的入口，而不是说没有问题）
+  const [problemCounts, setProblemCounts] = useState<Map<string, number> | null>(null)
   const openHit = (h: TableHit) => {
     open(h.path)
     const doc = docs[h.path]
@@ -201,6 +229,23 @@ function Workbench({
     if (i >= 0) setSheetOf((m) => ({ ...m, [h.path]: i }))
     setJump((j) => ({ sheet: h.sheet, row: h.row, col: h.col, seq: (j?.seq ?? 0) + 1 }))
   }
+  // 从面板文件弹窗「在表格页打开」跳过来：打开这个文件，切到弹窗里正在看的那张表
+  useEffect(() => {
+    if (!want) return
+    const k = want.lastIndexOf('#')
+    const file = k >= 0 ? want.slice(0, k) : want
+    const sheet = k >= 0 ? want.slice(k + 1) : ''
+    open(file)
+    if (sheet) {
+      const doc = docs[file]
+      const i = doc && 'sheets' in doc ? doc.sheets.findIndex((s) => s.name === sheet) : -1
+      pendingSheet.current = { path: file, sheet }
+      if (i >= 0) setSheetOf((m) => ({ ...m, [file]: i }))
+    }
+    onOpened()
+    // 只在地址带来新的文件时跑；open、docs 每次渲染都是新的
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [want])
   // 读到文件后补上搜索跳转要切的表
   useEffect(() => {
     const p = pendingSheet.current
@@ -211,7 +256,11 @@ function Workbench({
     pendingSheet.current = null
   }, [docs])
 
-  const search = useContentSearch(projectId, mode === 'content' ? query : '')
+  // 内容搜索的开关（区分大小写 / 整格 / 正则）；全部替换之后 searchSeq 加一重新搜
+  const [flags, setFlags] = useSearchFlags()
+  const [searchSeq, setSearchSeq] = useState(0)
+  const [replacing, setReplacing] = useState(false)
+  const search = useContentSearch(projectId, mode === 'content' ? query : '', flags, searchSeq)
   // 别的表格文件（枚举表、被引用的表）：打开过的直接用，没打开的读一次记下
   const extDocs = useRef(new Map<string, Promise<TableDoc | undefined>>())
   const loadDoc = useCallback(
@@ -231,14 +280,17 @@ function Workbench({
   const busy = useRef(false)
   // 被外面改过、页面上又有没保存改动的文件：表格上方提示，用户决定怎么办
   const [stale, setStale] = useState<Record<string, true>>({})
-  const activeDoc = active ? docs[active] : undefined
-  // 藏起来（切到别的页面）时不看外部改动，切回来再接着看
-  useExternalChange(projectId, shown && activeDoc && 'sheets' in activeDoc ? activeDoc : undefined, busy, (path) => {
+  // 打开着的表都盯着（服务端 fs.watch 加推送）；藏起来（切到别的页面）时收到的先记着，切回来再处理
+  const watched = Object.values(docs).flatMap((d) =>
+    'sheets' in d && d.mtime ? [{ path: d.path, mtime: d.mtime }] : [],
+  )
+  useExternalChange(projectId, watched, shown, busy, (path) => {
     const d = docs[path]
     if (d && 'sheets' in d && pendingOf(edits[path], d.sheets).length) return setStale((m) => ({ ...m, [path]: true }))
-    // 没有没保存的改动：直接载入新内容
+    // 没有没保存的改动：直接载入新内容；正看着的这张才提示，后台页签悄悄换成新的
     reloadDoc(path, false)
-    toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
+    if (path === active)
+      toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
   })
   /** 重新载入：keep 时把页面上改过的格子按位置写回新内容上（只改格子、没插删行时才行） */
   const reloadDoc = (path: string, keep: boolean) => {
@@ -334,6 +386,18 @@ function Workbench({
     [projectId],
   )
 
+  /** 别处（枚举改名、跨表替换、切版本）改了这些文件：打开着的没改动就重新载入、有改动就提示；别的只清掉缓存 */
+  const filesChanged = (paths: string[]) => {
+    for (const p of paths) {
+      extDocs.current.delete(p)
+      const d = docs[p]
+      if (!d || !('sheets' in d)) continue
+      if (pendingOf(edits[p], d.sheets).length) setStale((m) => ({ ...m, [p]: true }))
+      else reloadDoc(p, false)
+    }
+    setCheckSeq((n) => n + 1)
+  }
+
   const doc = active ? docs[active] : undefined
   const files = index?.files ?? []
   const fileSet = useMemo(() => new Set((index?.files ?? []).map((f) => f.path)), [index])
@@ -343,8 +407,9 @@ function Workbench({
       <ListPane
         title={t('表格')}
         count={files.length}
-        onNew={() => {}}
-        hideNew
+        // 新建表格：按项目的表头配置填每一列（表格目录还没有时不给）
+        onNew={() => setCreating(true)}
+        hideNew={!index?.dirs.length || !schema}
         compact
         resizeKey="tables-list"
         query={query}
@@ -378,6 +443,14 @@ function Workbench({
                 { id: 'check', label: t('检查') },
               ]}
             />
+            {mode === 'content' && (
+              <TableSearchOptions
+                flags={flags}
+                onFlags={setFlags}
+                canReplace={!!query.trim()}
+                onReplace={readOnlyProject ? undefined : () => setReplacing(true)}
+              />
+            )}
             {projects.length > 1 && (
               <Select
                 size="sm"
@@ -411,8 +484,8 @@ function Workbench({
               files={files}
               query={query}
               active={active}
-              dirty={dirtyPaths}
-              problems={problemCounts}
+              dirty={markedDirty}
+              problems={problemCounts ?? NO_COUNTS}
               readOnly={readOnlyPaths}
               onOpen={open}
               exports={exports}
@@ -478,51 +551,59 @@ function Workbench({
           active ? (
             <TableSkeleton />
           ) : (
-            <div className="tb:flex tb:flex-1 tb:items-center tb:justify-center tb:p-6">
-              <EmptyPanel size="md" className="tb:max-w-sm">
-                {t('从左边选一张表打开；可以同时开几张，在上面的页签里切换。')}
-              </EmptyPanel>
-            </div>
+            <TablesHome
+              recent={quick.recent}
+              favs={quick.favs}
+              problems={problemCounts}
+              total={files.length}
+              onOpen={open}
+              onCheck={() => {
+                setMode('check')
+                setQuery('')
+              }}
+            />
           )
         ) : 'error' in doc ? (
           <p className="tb:p-6 tb:text-body tb:text-danger">{doc.error}</p>
         ) : !schema ? (
           <TableSkeleton />
         ) : (
-          <TableView
-            projectId={projectId}
-            key={doc.path}
-            doc={doc}
-            schema={schema}
-            onSchema={saveSchema}
-            jump={jump}
-            sheetIndex={sheetOf[doc.path] ?? 0}
-            onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
-            edits={edits[doc.path]}
-            onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
-            onSave={(pending, force) => saveDoc(doc, pending, force)}
-            onCheckout={(rev) => checkoutDoc(doc, rev)}
-            exports={exports}
-            onExport={(i) => runExport(i, [doc.path])}
-            onRefJump={jumpRef}
-            stale={!!stale[doc.path]}
-            onReload={(keep) => reloadDoc(doc.path, keep)}
-            onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
-            onFilesChanged={(paths) => {
-              // 打开着的：没改动的直接重新载入，有改动的提示；别的只清掉缓存
-              for (const p of paths) {
-                extDocs.current.delete(p)
-                const d = docs[p]
-                if (!d || !('sheets' in d)) continue
-                if (pendingOf(edits[p], d.sheets).length) setStale((m) => ({ ...m, [p]: true }))
-                else reloadDoc(p, false)
-              }
-              setCheckSeq((n) => n + 1)
-            }}
-            onOpenHit={openHit}
-            loadDoc={loadDoc}
-            files={files.map((f) => f.path)}
-          />
+          <>
+            {drafts.asks[doc.path] && (
+              <DraftBar
+                draft={drafts.asks[doc.path]}
+                doc={doc}
+                editing={dirtyPaths.has(doc.path)}
+                onRestore={(keep) => drafts.restore(doc.path, keep)}
+                onDiscard={() => drafts.discard(doc.path)}
+              />
+            )}
+            <TableView
+              projectId={projectId}
+              key={doc.path}
+              doc={doc}
+              schema={schema}
+              onSchema={saveSchema}
+              jump={jump}
+              // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
+              sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
+              onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
+              edits={edits[doc.path]}
+              onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
+              onSave={(pending, force) => saveDoc(doc, pending, force)}
+              onCheckout={(rev) => checkoutDoc(doc, rev)}
+              exports={exports}
+              onExport={(i) => runExport(i, [doc.path])}
+              onRefJump={jumpRef}
+              stale={!!stale[doc.path]}
+              onReload={(keep) => reloadDoc(doc.path, keep)}
+              onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
+              onFilesChanged={filesChanged}
+              onOpenHit={openHit}
+              loadDoc={loadDoc}
+              files={files.map((f) => f.path)}
+            />
+          </>
         )}
         {runs.length > 0 && (
           <TableOutputPanel
@@ -538,6 +619,34 @@ function Workbench({
           />
         )}
       </main>
+      {creating && schema && index && (
+        <NewTableDialog
+          projectId={projectId}
+          schema={schema}
+          dirs={index.dirs}
+          files={fileSet}
+          onCreated={(path) => {
+            reload(true)
+            open(path)
+          }}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {replacing && (
+        <ReplaceAllDialog
+          projectId={projectId}
+          query={query}
+          flags={flags}
+          dirty={dirtyPaths}
+          onClose={() => setReplacing(false)}
+          onApplied={(paths) => {
+            if (!paths.length) return
+            filesChanged(paths)
+            reload(true)
+            setSearchSeq((n) => n + 1)
+          }}
+        />
+      )}
       {comparing && (
         <TablesCompareDialog
           open
@@ -559,36 +668,4 @@ function Workbench({
       />
     </>
   )
-}
-
-/** 内容搜索：停手 300ms 再搜，旧的结果先留着（不闪） */
-function useContentSearch(projectId: string, query: string) {
-  const [result, setResult] = useState<TableSearch | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  useEffect(() => {
-    const q = query.trim()
-    if (!q) {
-      setResult(null)
-      setError('')
-      return
-    }
-    let live = true
-    setLoading(true)
-    // 又输了字：取消上一次请求，服务端也就不再接着搜
-    const abort = new AbortController()
-    const timer = setTimeout(() => {
-      tablesApi
-        .search(projectId, q, abort.signal)
-        .then((r) => live && (setResult(r), setError('')))
-        .catch((e) => live && setError((e as Error).message))
-        .finally(() => live && setLoading(false))
-    }, 300)
-    return () => {
-      live = false
-      clearTimeout(timer)
-      abort.abort()
-    }
-  }, [projectId, query])
-  return { result, loading, error }
 }
