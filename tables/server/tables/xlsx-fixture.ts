@@ -100,3 +100,44 @@ export function gameBook(opts: { formulaSheet1?: boolean; merge?: boolean } = {}
     { name: 'xl/media/image1.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5]), stored: true },
   ])
 }
+
+/**
+ * 一本大 xlsx（性能基准用）：两行表头（类型、字段名）+ rows 行数据，每三列一列整数、其余是共享字符串，
+ * 和策划常见的大物品表差不多（字符串多、几乎不重复）
+ */
+export function bigBook(rows: number, cols: number) {
+  const sst: string[] = []
+  // 列字母：A、B……AA（Excel 存的每个格子都带 r="B7" 这样的位置）
+  const letters = Array.from({ length: cols }, (_, c) => {
+    let s = ''
+    for (let n = c + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s
+    return s
+  })
+  const str = (r: number, c: number, v: string) => `<c r="${letters[c]}${r}" t="s"><v>${sst.push(v) - 1}</v></c>`
+  const lines: string[] = []
+  const head = (r: number, f: (c: number) => string) => letters.map((_, c) => str(r, c, f(c))).join('')
+  lines.push(`<row r="1">${head(1, (c) => (c % 3 ? 'string' : 'uint32'))}</row>`)
+  lines.push(`<row r="2">${head(2, (c) => (c ? `F${c}` : 'ID'))}</row>`)
+  for (let r = 0; r < rows; r++) {
+    const at = r + 3
+    let cells = ''
+    for (let c = 0; c < cols; c++)
+      cells += c % 3 ? str(at, c, `v${r}_${c}`) : `<c r="${letters[c]}${at}"><v>${r + c}</v></c>`
+    lines.push(`<row r="${at}">${cells}</row>`)
+  }
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${lines.join('')}</sheetData></worksheet>`
+  const sstXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map((v) => `<si><t>${v}</t></si>`).join('')}</sst>`
+  const book = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Big" sheetId="1" r:id="rId1"/></sheets></workbook>`
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`
+  return buildZip([
+    { name: '[Content_Types].xml', data: x('<Types/>') },
+    { name: 'xl/workbook.xml', data: x(book) },
+    { name: 'xl/_rels/workbook.xml.rels', data: x(rels) },
+    { name: 'xl/worksheets/sheet1.xml', data: x(sheet) },
+    { name: 'xl/sharedStrings.xml', data: x(sstXml) },
+  ])
+}
