@@ -930,5 +930,6 @@
   "至少要有一列": "Add at least one column",
   "每一列都要填字段名": "Every column needs a field name",
   "字段名「{name}」重复了": "Field name \"{name}\" is used twice",
-  "设好表格目录并点「确认」保存后，可以配置项目的表头：从第几行开始，下面一行一项，每行叫什么、是什么、能填什么。": "Once the table folders are set and saved with Confirm, you can set up the project header: the start row, then one item per row with its name, meaning and allowed values."
+  "设好表格目录并点「确认」保存后，可以配置项目的表头：从第几行开始，下面一行一项，每行叫什么、是什么、能填什么。": "Once the table folders are set and saved with Confirm, you can set up the project header: the start row, then one item per row with its name, meaning and allowed values.",
+  "在表格页打开": "Open in Tables"
 }

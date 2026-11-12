@@ -15,6 +15,10 @@ const subscribe = (f: () => void) => {
   return () => subs.delete(f)
 }
 
+/** 手上这个项目的结构文件（还没读过为 undefined）和变化通知：给不在 React 里的地方用（面板文件弹窗的表格认领） */
+export const tableSchemaOf = (projectId: string) => cache.get(projectId)
+export const onTableSchema = subscribe
+
 /** 直接换成这一份（已经保存过的，或者先显示、随后保存的） */
 export function putTableSchema(projectId: string, s: TableSchema) {
   cache.set(projectId, s)
