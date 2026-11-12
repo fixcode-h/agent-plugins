@@ -23,7 +23,10 @@ export const tablesApi = {
   probe: (projectId: string, path: string, tables: TablesConfig) =>
     request<TablesProbe>(`${BASE}/${projectId}/probe`, json('POST', { path, tables })),
   open: (projectId: string, path: string) => request<TableDoc>(`${BASE}/${projectId}/file?path=${q(path)}`),
-  /** 文件现在的修改时间（外部改动检测） */
+  /** 登记这个页面（推送连接 conn）在这个项目里打开着的文件：外面改了服务端推 file-changed 过来 */
+  watch: (projectId: string, conn: string, files: { path: string; mtime: string }[]) =>
+    request<{ watching: number }>(`${BASE}/${projectId}/watch`, json('POST', { conn, files })),
+  /** 文件现在的修改时间（外部改动检测：忙完后再对一次） */
   stat: (projectId: string, path: string) =>
     request<{ mtime?: string; size?: number; missing?: boolean }>(`${BASE}/${projectId}/stat?path=${q(path)}`),
   search: (projectId: string, query: string, signal?: AbortSignal) =>

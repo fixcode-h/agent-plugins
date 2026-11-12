@@ -64,6 +64,17 @@ export interface WebHost {
     get: <T>(path: string) => Promise<T>
     post: <T>(path: string, body?: unknown) => Promise<T>
   }
+  /**
+   * 服务端推来的事件（插件接口 7，服务端 ctx.pages.push）：要跟着服务端变的界面用它，不定时拉接口。
+   * on / useEvent 订阅，onConnect 在每次连上（含断线重连）时向服务端登记这个页面要什么，连接 id 填进 push 的 to。
+   * 接口 7 才有：清单 api 写 7 的插件可以直接用
+   */
+  events: {
+    on: (event: string, fn: (data: unknown) => void) => () => void
+    useEvent: (event: string, fn: (data: unknown) => void) => void
+    conn: () => string
+    onConnect: (fn: (conn: string) => void) => () => void
+  }
   /** 插件包里的文件地址 */
   fileUrl: (rel: string) => string
   panel: {

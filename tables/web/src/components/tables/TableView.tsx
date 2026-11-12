@@ -24,7 +24,8 @@ import type { SheetHeader } from '@shared/sheet-header'
 import type { TableExport } from '@shared/table-export'
 import { colCount, colName as colLetter, type CellHit } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
-import { SheetTable, SheetTabs } from '@/components/files/SheetTable'
+import { SheetTable, SheetTabs, parseLoc } from '@/components/files/SheetTable'
+import { shiftLook } from '@shared/table-look'
 import { headerSummary, SheetHeaderBar } from '@/components/files/SheetHeaderBar'
 import { useSheetView, type SheetHeaderStore } from '@/components/files/use-sheet-view'
 import { Button } from '@/components/ui/button'
@@ -172,6 +173,11 @@ export function TableView({
   const index = Math.min(sheetIndex, Math.max(0, doc.sheets.length - 1))
   const sheet = doc.sheets[index]
   const rows = useMemo(() => (sheet ? rowsOf(edits, sheet) : null), [edits, sheet])
+  // xlsx 里的合并单元格、批注、超链接、整行底色：跟着没保存的插删行挪位置
+  const sheetOps = sheet ? edits?.sheets[sheet.name]?.ops : undefined
+  const look = useMemo(() => shiftLook(sheet?.look, sheetOps), [sheet?.look, sheetOps])
+  // 表内链接（Sheet2!A1）：切到那张表、选中那一格（和内容搜索跳过来同一条路）
+  const [linkJump, setLinkJump] = useState<TableJump>()
   const fileKey = `${doc.path}#${sheet?.name ?? ''}`
   const store = useMemo<SheetHeaderStore>(
     () => ({
@@ -431,6 +437,19 @@ export function TableView({
     setHit([{ row: jump.row, col: jump.col }])
     go({ row: jump.row, col: jump.col })
   }, [jump, sheet?.name, go])
+  useEffect(() => {
+    if (!linkJump || linkJump.sheet !== sheet?.name) return
+    setHit([{ row: linkJump.row, col: linkJump.col }])
+    go({ row: linkJump.row, col: linkJump.col })
+  }, [linkJump, sheet?.name, go])
+  const onLocate = (loc: string) => {
+    const at = parseLoc(loc)
+    if (!at) return
+    const i = at.sheet ? doc.sheets.findIndex((x) => x.name === at.sheet) : index
+    if (i < 0) return
+    if (i !== index) onSheet(i)
+    setLinkJump((j) => ({ sheet: doc.sheets[i].name, row: at.r, col: at.c, seq: (j?.seq ?? 0) + 1 }))
+  }
 
   if (doc.kind === 'xls')
     return (
@@ -805,6 +824,8 @@ export function TableView({
               rowHeight={DENSITY_ROW_H[density]}
               onHeadCollapse={setHeadCollapsed}
               rows={rows}
+              look={look}
+              onLocate={onLocate}
               scrollEl={grid.box}
               hits={findHits.length ? findHits : hit}
               header={view.header}

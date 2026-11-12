@@ -771,5 +771,6 @@
   "（未设置）": "(not set)",
   "（没有字段名）": "(no field name)",
   "（清空）": "(cleared)",
-  "（空）": "(empty)"
+  "（空）": "(empty)",
+  "要盯的文件格式不对": "Invalid list of files to watch"
 }

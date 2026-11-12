@@ -31,6 +31,7 @@ import { TableTabs } from '@/components/tables/TableTabs'
 import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
+import { firstShownSheet } from '@/components/files/SheetTable'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
@@ -231,14 +232,17 @@ function Workbench({
   const busy = useRef(false)
   // 被外面改过、页面上又有没保存改动的文件：表格上方提示，用户决定怎么办
   const [stale, setStale] = useState<Record<string, true>>({})
-  const activeDoc = active ? docs[active] : undefined
-  // 藏起来（切到别的页面）时不看外部改动，切回来再接着看
-  useExternalChange(projectId, shown && activeDoc && 'sheets' in activeDoc ? activeDoc : undefined, busy, (path) => {
+  // 打开着的表都盯着（服务端 fs.watch 加推送）；藏起来（切到别的页面）时收到的先记着，切回来再处理
+  const watched = Object.values(docs).flatMap((d) =>
+    'sheets' in d && d.mtime ? [{ path: d.path, mtime: d.mtime }] : [],
+  )
+  useExternalChange(projectId, watched, shown, busy, (path) => {
     const d = docs[path]
     if (d && 'sheets' in d && pendingOf(edits[path], d.sheets).length) return setStale((m) => ({ ...m, [path]: true }))
-    // 没有没保存的改动：直接载入新内容
+    // 没有没保存的改动：直接载入新内容；正看着的这张才提示，后台页签悄悄换成新的
     reloadDoc(path, false)
-    toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
+    if (path === active)
+      toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
   })
   /** 重新载入：keep 时把页面上改过的格子按位置写回新内容上（只改格子、没插删行时才行） */
   const reloadDoc = (path: string, keep: boolean) => {
@@ -496,7 +500,8 @@ function Workbench({
             schema={schema}
             onSchema={saveSchema}
             jump={jump}
-            sheetIndex={sheetOf[doc.path] ?? 0}
+            // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
+            sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
             onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
             edits={edits[doc.path]}
             onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
