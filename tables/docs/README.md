@@ -122,7 +122,12 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 查找替换（Ctrl+H、工具栏「替换」）：范围是选中区域 / 当前列 / 整张表，只算筛选后看得见的数据行，跳过表头和隐藏的列；实时预览，「全部替换」一次撤销。
 - 列名右键冻结到某列、隐藏列（`use-col-layout.ts`，按「项目:文件#工作表」记在 localStorage，表格文件不动）。冻结列在列虚拟化之外一直画，`sticky` 钉在行号列右边，底色换成不透明色（`sheet-frozen`）。
 - 格子右键（整个表格只挂一个菜单，`CellMenu`）：引用列跳到被引用表的那一行（`findRefTarget`），被引用的表可以查「谁引用了这一行」（`findBackRefs`：结构文件里 ref 指向这张表的列，数组列按分隔符拆开整项比）。
-- 快捷键（`use-grid-edit.tsx`）：Ctrl+方向键跳到这一段数据的边缘、Ctrl+Home / End、Shift+空格 / Ctrl+空格选整行整列、Ctrl+Shift+= 在上方插行、Ctrl+- 删选中的行（`rowOpsIn` 一次撤销）。F1 / Ctrl+/ 打开共用的快捷键一览（`web/src/components/tables/shortcuts.ts` 的「表格」组，经 `ShortcutsHelp` 的 `first` 排最前；全局的 `?` 在格子里是打字，`useShortcuts` 跳过已经 `preventDefault` 的键）。
+- 快捷键（`grid-keys.ts`，由 `use-grid-edit.tsx` 调）：Ctrl+方向键跳到这一段数据的边缘、Ctrl+Home / End、Shift+空格 / Ctrl+空格选整行整列、PageUp / PageDown 按实际行高（`rowH`，跟着紧凑 / 宽松和设置）和数据区高度翻一屏、Ctrl+Shift+= 在上方插行（选中几行插几行，主键依次编号，`shared/table-rows.ts`）、Ctrl+- 删选中的行（`rowOpsIn` 一次撤销；选的是整列时拒绝）、Alt+↑ / ↓ 把选中的连续几行上移下移。F1 / Ctrl+/ 打开共用的快捷键一览（`web/src/components/tables/shortcuts.ts` 的「表格」组，经 `ShortcutsHelp` 的 `first` 排最前；全局的 `?` 在格子里是打字，`useShortcuts` 跳过已经 `preventDefault` 的键）。
+- 整行整列：点行号选整行、点列名选整列（`SheetEditing.onRowDown / onColDown`），Shift 点击扩大、按住拖动多选。选区多一个 `whole`：整行时列铺满，整列时只铺满数据行（表头不跟着被清空、批量改）；当前格停在看得见的格子上，不把表格滚走。右键行号时点在选区里就按选中的几行出菜单（`RowMenu.tsx`：插 N 行、上移下移、删 N 行）。
+- 拖动（`use-drag-select.ts`）：拖格子、行号、列名、填充柄都走这一份。每帧按鼠标坐标问浏览器是哪一格（`grid-dom.ts`，不用自己按行高列宽算，冻结列、隐藏列、筛选都不用管）；拖到数据区边上按离边的距离加速滚（按时间算，高刷新率屏幕不会更快）。只认整格露出来的格子，否则 SheetTable 会为了让当前格露全一下子滚半屏。
+- 移动行只改格子（几行内容轮换，`moveRowsCells`），不做行操作：xlsx 的行样式、公式表的结构都不动，外面改过文件时也能按「只改格子」保存。筛选或排序后看到的相邻两行在表里不一定挨着，这时拒绝并提示先清掉。
+- 填充柄（`grid-fill-drag.ts`，规律在 `shared/table-fill.ts`）：选区右下角的小方块（大小在设置 → 组件 → 数据表格的「填充柄大小」），往下 / 上 / 右 / 左拖，看离选区哪个方向更远。规律照 Excel：两格以上数字按步长递增、一格数字复制、结尾带数字的文字往后数（保留补的 0），按住 Ctrl 复制和递增对调；拖的时候选区跟着变大、鼠标旁提示最远那格的值，松手一次提交（一次撤销）。往下往上只填数据行，筛掉的行、隐藏的列不填。
+- 读屏：能聚焦的表格容器是 `role="grid"`（`boxProps`：行列总数、多选、只读），`aria-activedescendant` 指向当前格（SheetTable 只给当前格加 id）；SheetTable 在编辑模式下是 `rowgroup`，格子是 `gridcell` 带 `aria-colindex`，行号是 `rowheader`。
 - 查找条（Ctrl+F，`TableFindBar`）：只查筛选后显示的行和没隐藏的列，打字防抖 120ms，最多 5000 处；可以只查当前列。Ctrl+G 跳转：先按主键找，找不到再当行号。
 - 编辑栏（工具栏「查看」里开关，`TableEditBar`，localStorage `table-edit-bar`）：看全、修改长文本，右边是这一列的规则（`ruleText`）。
 - 快速筛选（`TableQuickFilter`）：只看不合规 / 改过的 / 引用缺失 / 空着的必填，几个一起是「或」，只过滤行号数组；当前的筛选、排序、快速筛选能存成视图（localStorage `table-views:<项目>:<文件#工作表>`）。
