@@ -43,11 +43,11 @@
     {
       "id": "tables",
       "name": "表格",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "游戏配置表这类 xlsx / CSV 表格的管理：按目录浏览、搜索、在线改单元格（文件仍是原来的 Excel / WPS 格式），结构信息存在表格之外；版本差异、提交和冲突合并、跨项目对比、导表脚本、AI 分析表格风格；Agent 能按主键查改，评审里的表格改动按格子比。原来是面板自带的表格页。",
       "icon": "table",
-      "tag": "tables-v1.0.0",
-      "asset": "tables-1.0.0.zip",
+      "tag": "tables-v1.1.0",
+      "asset": "tables-1.1.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/tables"
     }
   ]

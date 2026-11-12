@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { FileSpreadsheet, Loader2 } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { TableHit, TableSearch } from '@shared/tables'
+import { parseSearchQuery } from '@shared/table-search'
 import { colName } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
 import { GroupHeader, ListGroup } from '@/components/layout/ListPane'
@@ -52,6 +53,8 @@ export function TableHits({
     return (
       <p className="tb:px-3 tb:py-6 tb:text-center tb:text-footnote tb:text-subtle">
         {t('输入要找的字，在所有表格的格子里找')}
+        <br />
+        {t('写成「字段名:值」（如 ItemId:1001）只在这一列找')}
       </p>
     )
   if (loading && !result)
@@ -63,7 +66,13 @@ export function TableHits({
   if (!groups.length)
     return (
       <p className="tb:px-3 tb:py-6 tb:text-center tb:text-footnote tb:text-subtle">
-        {t('{n} 个表格里都没有「{q}」', { n: result?.files ?? 0, q: query })}
+        {result?.field
+          ? t('{n} 个表格的 {field} 列里都没有「{q}」', {
+              n: result.files,
+              field: result.field,
+              q: parseSearchQuery(query).text,
+            })
+          : t('{n} 个表格里都没有「{q}」', { n: result?.files ?? 0, q: query })}
       </p>
     )
   return (
@@ -81,6 +90,16 @@ export function TableHits({
         {t('{files} 个文件里找到 {n} 处', { files: groups.length, n: result!.hits.length })}
         {result?.truncated && t('（只列出前 {n} 处）', { n: result.hits.length })}
       </p>
+      {result?.field && (
+        <p className="tb:px-2 tb:text-caption tb:text-subtle">
+          {t('只在字段 {field} 这一列里找', { field: result.field })}
+        </p>
+      )}
+      {result?.fieldMissing && (
+        <p className="tb:px-2 tb:text-caption tb:text-warning">
+          {t('没有哪张表有字段 {field}，按整串找了', { field: result.fieldMissing })}
+        </p>
+      )}
       {groups.map(([path, hits]) => {
         const shut = folded.has(path)
         return (
@@ -132,7 +151,7 @@ export function TableHits({
                       {h.field}
                     </span>
                   )}
-                  <Mark text={h.text} q={query} />
+                  <Mark text={h.text} q={query} at={h.at} />
                 </button>
               )
             })}
@@ -157,11 +176,11 @@ function HitFile({ path }: { path: string }) {
   )
 }
 
-/** 命中的词加底色 */
-function Mark({ text, q }: { text: string; q: string }) {
-  const i = text.toLowerCase().indexOf(q.trim().toLowerCase())
+/** 命中的部分加底色：服务端给了位置（正则、字段名:值）按位置，没给时按查询的字找 */
+function Mark({ text, q, at }: { text: string; q: string; at?: [number, number] }) {
+  const i = at ? at[0] : text.toLowerCase().indexOf(q.trim().toLowerCase())
   if (i < 0) return <span className="tb:min-w-0 tb:flex-1 tb:truncate tb:text-muted">{text}</span>
-  const n = q.trim().length
+  const n = at ? at[1] - at[0] : q.trim().length
   // 命中在很后面时从前面截掉一段，让命中的词露出来
   const from = Math.max(0, i - 16)
   return (

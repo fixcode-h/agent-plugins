@@ -7,7 +7,7 @@ import type { Problem } from './table-struct.ts'
 const where = (path: string, sheet: string) => `表格 \`${path}\`（工作表「${sheet}」）`
 
 const PROPOSE =
-  '先用 table.query 看字段、主键和已有的行（必要时 table.sample 看表头、table.query 查被引用的表），照着已有数据的写法来。' +
+  '先用 table.schema 看每一列的类型、枚举能填的值、引用哪张表，再用 table.query 看主键和已有的行（必要时 table.query 查被引用的表），照着已有数据的写法来。' +
   '改动用 table.propose 提交（不要用 table.edit，也不要自己写脚本改文件），它会按表格结构检查，不通过就改对再提交；' +
   '通过后告诉用户去表格页看「AI 提的改动」，确认后才会放进表格。note 里写清楚改了什么、依据是什么。'
 
@@ -37,7 +37,7 @@ export function explainColumnPrompt(path: string, sheet: string, field: string) 
   return [
     `解释${where(path, sheet)}里的「${field}」这一列：`,
     '它是做什么用的、取值范围和规律（看实际数据统计）、是枚举还是引用别的表、和哪些列有关联、填的时候要注意什么。',
-    '用 table.query 读数据，需要时看被引用的表和枚举表。只读，不要改任何文件。回答简洁，用中文。',
+    '用 table.schema 看这一列的类型、枚举和引用，table.query 读数据，table.search 查这一列的值在别的表里被谁用到。只读，不要改任何文件。回答简洁，用中文。',
   ].join('\n')
 }
 
@@ -45,7 +45,7 @@ export function explainTablePrompt(path: string, sheet: string) {
   return [
     `解释${where(path, sheet)}：`,
     '这张表是配什么的、主键是什么、每一列大概的用途（分组说）、和哪些表互相引用、新加一行时要注意什么。',
-    '用 table.sample / table.query 读，按结构和数据推断，拿不准的地方标出来。只读，不要改任何文件。回答简洁，用中文。',
+    '用 table.schema 看列结构、table.query 读数据、table.search 找互相引用的地方，按结构和数据推断，拿不准的地方标出来。只读，不要改任何文件。回答简洁，用中文。',
   ].join('\n')
 }
 

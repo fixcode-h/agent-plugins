@@ -11,8 +11,17 @@ import { csvFormat, parseCsv, writeCsv } from '../../shared/csv.ts'
 import { applyOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
 import { tableKind, type TableDoc, type TablesConfig } from '../../shared/tables.ts'
 import { DATA_DIR } from '../store.ts'
-import { readXlsx } from '../xlsx.ts'
-import { forgetLists, forgetTable, lockedByOffice, openTable, safeRel } from './files.ts'
+import {
+  forgetLists,
+  forgetTable,
+  lockedByOffice,
+  openTable,
+  parseTable,
+  primeTable,
+  readTableXlsx,
+  safeRel,
+} from './files.ts'
+import type { SheetData } from '../../shared/files.ts'
 import { editXlsx } from './xlsx-write.ts'
 import { HttpError } from './http-error.ts'
 
@@ -58,6 +67,44 @@ export async function saveTable(
   body: TableSave,
   deps: SaveDeps = {},
 ): Promise<TableDoc> {
+  const { rel, full, next, sheets } = await prepareSave(dir, cfg, body)
+  // P4 管着的文件是只读的：先签出
+  const writable = await access(full, constants.W_OK).then(
+    () => true,
+    () => false,
+  )
+  if (!writable) {
+    const p4 = deps.p4Edit ? await deps.p4Edit(full) : false
+    if (p4 && !p4.ok) throw new HttpError(t('p4 edit 失败：{err}', { err: p4.err }), 409)
+    if (!p4) throw new HttpError(t('文件是只读的，没有权限写入'), 409)
+  }
+  await backup(projectId, rel, full)
+  // 同目录的临时文件再改名替换：写到一半断电也不会留下半个文件
+  const tmp = path.join(path.dirname(full), `.${path.basename(full)}.${process.pid}.agentpanel-tmp`)
+  try {
+    await writeFile(tmp, next)
+    await rename(tmp, full)
+  } catch (e) {
+    await rm(tmp, { force: true })
+    throw new HttpError(t('写入失败：{err}', { err: (e as Error).message }), 409)
+  }
+  // xlsx 读回来比对时已经解析过新内容：直接放进缓存，下面重新打开不用再解析一遍（大表一次要一秒多）
+  if (sheets) await primeTable(full, sheets)
+  else forgetTable(full)
+  // 列表里的大小、修改时间也变了
+  forgetLists()
+  return openTable(dir, rel, cfg)
+}
+
+/**
+ * 保存前的全部检查，不写文件：只读、锁、外面改过、原地改写做不做得了、读回来对不对得上。
+ * 跨表替换的预览用它先试一遍，把会被拒绝的文件和原因提前列出来
+ */
+export async function prepareSave(
+  dir: string,
+  cfg: TablesConfig,
+  body: TableSave,
+): Promise<{ rel: string; full: string; next: Buffer; sheets?: SheetData[] }> {
   if (cfg.readOnly) throw new HttpError(t('项目设置里把表格设成了只读'), 409)
   const { rel, full } = safeRel(dir, body.path, cfg)
   const kind = tableKind(rel)
@@ -83,7 +130,8 @@ export async function saveTable(
     want = expected(sheets, { ...body, sheets: body.sheets.map((s) => ({ ...s, name: sheets[0].name })) })
     next = Buffer.from(writeCsv(want.get(sheets[0].name)!, f), 'utf8')
   } else {
-    const sheets = readXlsx(buf)
+    // 打开时已经解析过（缓存按修改时间 + 大小认），不用再解析一遍
+    const { sheets } = await parseTable(full)
     if (sheets.some((s) => s.truncated)) throw new HttpError(t('表格太大，只读了前面一部分，不能在这里改'))
     want = expected(sheets, body)
     try {
@@ -102,7 +150,7 @@ export async function saveTable(
             rows: parseCsv(next.toString('utf8'), csvFormat(next.toString('utf8')).delimiter),
           },
         ]
-      : readXlsx(next)
+      : readTableXlsx(next)
   for (const [name, rows] of want) {
     const diff = gridDiff(got.find((s) => s.name === name)?.rows ?? [], rows)
     if (diff)
@@ -116,28 +164,5 @@ export async function saveTable(
       )
   }
 
-  // P4 管着的文件是只读的：先签出
-  const writable = await access(full, constants.W_OK).then(
-    () => true,
-    () => false,
-  )
-  if (!writable) {
-    const p4 = deps.p4Edit ? await deps.p4Edit(full) : false
-    if (p4 && !p4.ok) throw new HttpError(t('p4 edit 失败：{err}', { err: p4.err }), 409)
-    if (!p4) throw new HttpError(t('文件是只读的，没有权限写入'), 409)
-  }
-  await backup(projectId, rel, full)
-  // 同目录的临时文件再改名替换：写到一半断电也不会留下半个文件
-  const tmp = path.join(path.dirname(full), `.${path.basename(full)}.${process.pid}.agentpanel-tmp`)
-  try {
-    await writeFile(tmp, next)
-    await rename(tmp, full)
-  } catch (e) {
-    await rm(tmp, { force: true })
-    throw new HttpError(t('写入失败：{err}', { err: (e as Error).message }), 409)
-  }
-  forgetTable(full)
-  // 列表里的大小、修改时间也变了
-  forgetLists()
-  return openTable(dir, rel, cfg)
+  return { rel, full, next, ...(kind === 'xlsx' ? { sheets: got } : {}) }
 }

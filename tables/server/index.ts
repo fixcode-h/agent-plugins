@@ -5,9 +5,10 @@ import { dataPath, readJson } from './store.ts'
 import { tablesApi } from './tables/routes.ts'
 import { tableActions } from './actions.ts'
 import { reviewTextifier } from './review.ts'
+import { tableWatcher } from './tables/watch.ts'
 
 /**
- * 表格插件的服务端入口（面板插件接口 6，ADR 0059；原来是面板自带的表格页，重构文档第 15 条拆出来）：
+ * 表格插件的服务端入口（面板插件接口 7，ADR 0059；原来是面板自带的表格页，重构文档第 15 条拆出来）：
  * 表格页的接口挂在 /api/plugins/tables/api/tables/ 下，Agent 用的 table.* 面板动作登记进面板的动作表，
  * 评审里的 .xlsx 差异由 textify 按格子比。
  *
@@ -22,12 +23,15 @@ const projects = {
   get: async (id: string) => (await projects.list()).find((p) => p.id === id) ?? null,
 }
 
-const activate: ActivateServer = () => {
-  const app = new Hono().route('/tables', tablesApi({ projects }))
+const activate: ActivateServer = (ctx) => {
+  // 外部改动检测：盯着页面上打开着的文件，改了经面板的推送通道（插件接口 7）通知页面
+  const watcher = tableWatcher(ctx.pages)
+  const app = new Hono().route('/tables', tablesApi({ projects, watcher }))
   return {
     fetch: (req) => app.fetch(req),
     actions: tableActions,
     textify: reviewTextifier(projects),
+    stop: () => watcher.close(),
   }
 }
 

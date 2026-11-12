@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GitCompareArrows, Loader2, RefreshCw, Settings2 } from 'lucide-react'
 import { t } from '@shared/i18n'
-import {
-  tablesOf,
-  type TableDoc,
-  type TableHit,
-  type TableSchema,
-  type TableSearch,
-  type TablesIndex,
-} from '@shared/tables'
+import { tablesOf, type TableDoc, type TableHit, type TableSchema, type TablesIndex } from '@shared/tables'
 import { useNav } from '@/lib/data'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, useTableSchema } from '@/lib/table-schema'
@@ -25,6 +18,9 @@ import { TableTree } from '@/components/tables/TableTree'
 import { TableQuick } from '@/components/tables/TableQuick'
 import { useTableMarks } from '@/components/tables/use-table-marks'
 import { TableHits } from '@/components/tables/TableHits'
+import { TableSearchOptions } from '@/components/tables/TableSearchOptions'
+import { ReplaceAllDialog } from '@/components/tables/ReplaceAllDialog'
+import { useContentSearch, useSearchFlags } from '@/components/tables/use-content-search'
 import { TableCheckList } from '@/components/tables/TableCheckList'
 import { TablesCompareDialog } from '@/components/tables/TablesCompareDialog'
 import { TableTabs } from '@/components/tables/TableTabs'
@@ -33,6 +29,7 @@ import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/
 import { useExternalChange } from '@/components/tables/use-external-change'
 import { useTableDrafts } from '@/components/tables/use-table-drafts'
 import { DraftBar } from '@/components/tables/DraftBar'
+import { firstShownSheet } from '@/components/files/SheetTable'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
@@ -68,6 +65,7 @@ export function TablesPage({ path, active = true }: { path: string; active?: boo
       projectId={projectId}
       projects={projects.map((p) => ({ value: p.id, label: p.name }))}
       exports={tablesOf(projects.find((p) => p.id === projectId))?.exports ?? []}
+      readOnlyProject={!!tablesOf(projects.find((p) => p.id === projectId))?.readOnly}
       onProject={(id) => go(tablesRoute(id))}
       onSettings={() => openProject(projectId, TABLES_SECTION)}
     />
@@ -82,6 +80,7 @@ function Workbench({
   onProject,
   onSettings,
   exports,
+  readOnlyProject,
 }: {
   /** 表格页正在显示；切到别的页面时藏起来但不卸载，回来时不重新加载 */
   shown: boolean
@@ -89,6 +88,8 @@ function Workbench({
   projects: { value: string; label: string }[]
   /** 项目设置里的导表脚本 */
   exports: TableExport[]
+  /** 项目设置里把表格设成了只读：不给「全部替换」 */
+  readOnlyProject: boolean
   onProject: (id: string) => void
   onSettings: () => void
 }) {
@@ -223,7 +224,11 @@ function Workbench({
     pendingSheet.current = null
   }, [docs])
 
-  const search = useContentSearch(projectId, mode === 'content' ? query : '')
+  // 内容搜索的开关（区分大小写 / 整格 / 正则）；全部替换之后 searchSeq 加一重新搜
+  const [flags, setFlags] = useSearchFlags()
+  const [searchSeq, setSearchSeq] = useState(0)
+  const [replacing, setReplacing] = useState(false)
+  const search = useContentSearch(projectId, mode === 'content' ? query : '', flags, searchSeq)
   // 别的表格文件（枚举表、被引用的表）：打开过的直接用，没打开的读一次记下
   const extDocs = useRef(new Map<string, Promise<TableDoc | undefined>>())
   const loadDoc = useCallback(
@@ -243,14 +248,17 @@ function Workbench({
   const busy = useRef(false)
   // 被外面改过、页面上又有没保存改动的文件：表格上方提示，用户决定怎么办
   const [stale, setStale] = useState<Record<string, true>>({})
-  const activeDoc = active ? docs[active] : undefined
-  // 藏起来（切到别的页面）时不看外部改动，切回来再接着看
-  useExternalChange(projectId, shown && activeDoc && 'sheets' in activeDoc ? activeDoc : undefined, busy, (path) => {
+  // 打开着的表都盯着（服务端 fs.watch 加推送）；藏起来（切到别的页面）时收到的先记着，切回来再处理
+  const watched = Object.values(docs).flatMap((d) =>
+    'sheets' in d && d.mtime ? [{ path: d.path, mtime: d.mtime }] : [],
+  )
+  useExternalChange(projectId, watched, shown, busy, (path) => {
     const d = docs[path]
     if (d && 'sheets' in d && pendingOf(edits[path], d.sheets).length) return setStale((m) => ({ ...m, [path]: true }))
-    // 没有没保存的改动：直接载入新内容
+    // 没有没保存的改动：直接载入新内容；正看着的这张才提示，后台页签悄悄换成新的
     reloadDoc(path, false)
-    toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
+    if (path === active)
+      toast.info(t('{name} 在外面被改过，已载入最新内容', { name: path.slice(path.lastIndexOf('/') + 1) }))
   })
   /** 重新载入：keep 时把页面上改过的格子按位置写回新内容上（只改格子、没插删行时才行） */
   const reloadDoc = (path: string, keep: boolean) => {
@@ -346,6 +354,18 @@ function Workbench({
     [projectId],
   )
 
+  /** 别处（枚举改名、跨表替换、切版本）改了这些文件：打开着的没改动就重新载入、有改动就提示；别的只清掉缓存 */
+  const filesChanged = (paths: string[]) => {
+    for (const p of paths) {
+      extDocs.current.delete(p)
+      const d = docs[p]
+      if (!d || !('sheets' in d)) continue
+      if (pendingOf(edits[p], d.sheets).length) setStale((m) => ({ ...m, [p]: true }))
+      else reloadDoc(p, false)
+    }
+    setCheckSeq((n) => n + 1)
+  }
+
   const doc = active ? docs[active] : undefined
   const files = index?.files ?? []
   const fileSet = useMemo(() => new Set((index?.files ?? []).map((f) => f.path)), [index])
@@ -390,6 +410,14 @@ function Workbench({
                 { id: 'check', label: t('检查') },
               ]}
             />
+            {mode === 'content' && (
+              <TableSearchOptions
+                flags={flags}
+                onFlags={setFlags}
+                canReplace={!!query.trim()}
+                onReplace={readOnlyProject ? undefined : () => setReplacing(true)}
+              />
+            )}
             {projects.length > 1 && (
               <Select
                 size="sm"
@@ -518,7 +546,8 @@ function Workbench({
               schema={schema}
               onSchema={saveSchema}
               jump={jump}
-              sheetIndex={sheetOf[doc.path] ?? 0}
+              // 没切过表时停在第一张没隐藏的表（Excel 里隐藏的排在切换条最后）
+              sheetIndex={sheetOf[doc.path] ?? firstShownSheet(doc.sheets)}
               onSheet={(i) => setSheetOf((m) => ({ ...m, [doc.path]: i }))}
               edits={edits[doc.path]}
               onEdits={(f) => setEdits((m) => ({ ...m, [doc.path]: f(m[doc.path] ?? noEdits()) }))}
@@ -530,17 +559,7 @@ function Workbench({
               stale={!!stale[doc.path]}
               onReload={(keep) => reloadDoc(doc.path, keep)}
               onKeepMine={() => setStale(({ [doc.path]: _, ...m }) => m)}
-              onFilesChanged={(paths) => {
-                // 打开着的：没改动的直接重新载入，有改动的提示；别的只清掉缓存
-                for (const p of paths) {
-                  extDocs.current.delete(p)
-                  const d = docs[p]
-                  if (!d || !('sheets' in d)) continue
-                  if (pendingOf(edits[p], d.sheets).length) setStale((m) => ({ ...m, [p]: true }))
-                  else reloadDoc(p, false)
-                }
-                setCheckSeq((n) => n + 1)
-              }}
+              onFilesChanged={filesChanged}
               onOpenHit={openHit}
               loadDoc={loadDoc}
               files={files.map((f) => f.path)}
@@ -561,6 +580,21 @@ function Workbench({
           />
         )}
       </main>
+      {replacing && (
+        <ReplaceAllDialog
+          projectId={projectId}
+          query={query}
+          flags={flags}
+          dirty={dirtyPaths}
+          onClose={() => setReplacing(false)}
+          onApplied={(paths) => {
+            if (!paths.length) return
+            filesChanged(paths)
+            reload(true)
+            setSearchSeq((n) => n + 1)
+          }}
+        />
+      )}
       {comparing && (
         <TablesCompareDialog
           open
@@ -582,36 +616,4 @@ function Workbench({
       />
     </>
   )
-}
-
-/** 内容搜索：停手 300ms 再搜，旧的结果先留着（不闪） */
-function useContentSearch(projectId: string, query: string) {
-  const [result, setResult] = useState<TableSearch | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  useEffect(() => {
-    const q = query.trim()
-    if (!q) {
-      setResult(null)
-      setError('')
-      return
-    }
-    let live = true
-    setLoading(true)
-    // 又输了字：取消上一次请求，服务端也就不再接着搜
-    const abort = new AbortController()
-    const timer = setTimeout(() => {
-      tablesApi
-        .search(projectId, q, abort.signal)
-        .then((r) => live && (setResult(r), setError('')))
-        .catch((e) => live && setError((e as Error).message))
-        .finally(() => live && setLoading(false))
-    }, 300)
-    return () => {
-      live = false
-      clearTimeout(timer)
-      abort.abort()
-    }
-  }, [projectId, query])
-  return { result, loading, error }
 }
