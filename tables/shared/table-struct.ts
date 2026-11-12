@@ -556,6 +556,9 @@ export function checkTouched(
   const keyCol = infos.find((i) => i.field && i.field === key)?.col ?? -1
   const cells = new Set(touched.map((x) => `${x.r}:${x.c}`))
   const rows = new Set(touched.map((x) => x.r))
+  // 主键重复记在后出现的那一行上：改到的行排在前面时，问题落在没改的那行，按主键的值也要算上
+  const keyOf = (r: number) => (keyCol >= 0 ? (sheet.rows[r]?.[keyCol] ?? '').trim() : '')
+  const keys = new Set([...rows].map(keyOf).filter(Boolean))
   return checkSheet(
     sheet.rows,
     header.start + header.roles.length,
@@ -566,6 +569,6 @@ export function checkTouched(
     undefined,
     uniquesFor(schema, file),
   )
-    .filter((p) => cells.has(`${p.r}:${p.c}`) || (p.c === keyCol && rows.has(p.r)))
+    .filter((p) => cells.has(`${p.r}:${p.c}`) || (p.c === keyCol && (rows.has(p.r) || keys.has(keyOf(p.r)))))
     .map((p) => ({ ...p, field: infos[p.c]?.field ?? '' }))
 }

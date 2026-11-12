@@ -213,12 +213,20 @@ function editSheet(xml: string, edit: SheetEdit, book: string, ctx: Ctx): string
 
   // 改格子：按行分组
   const byRow = new Map<number, CellSet[]>()
-  for (const c of edit.cells) byRow.set(c.r, [...(byRow.get(c.r) ?? []), c])
+  for (const c of edit.cells) {
+    const sets = byRow.get(c.r)
+    if (sets) sets.push(c)
+    else byRow.set(c.r, [c])
+  }
+  // 按行号找行：一次改上万格（跨表替换）时逐个 find 是平方级
+  const at = new Map(list.map((x) => [x.r, x]))
   for (const [r, sets] of byRow) {
-    let row = list.find((x) => x.r === r)
+    let row = at.get(r)
     if (!row) {
       row = { r, attrs: ` r="${r + 1}"`, cells: [] }
       list.push(row)
+      at.set(r, row)
+      // 新行要排好：下面找「上面一格」的样式按顺序往上找
       list.sort((a, b) => a.r - b.r)
     }
     const cells = cellsOf(row)

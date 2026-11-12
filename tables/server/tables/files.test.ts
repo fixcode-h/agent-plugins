@@ -5,7 +5,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { TableSchema, TablesConfig } from '../../shared/tables.ts'
-import { listTables, lockedByOffice, openTable, safeRel, searchTables } from './files.ts'
+import { listTables, lockedByOffice, openTable, safeRel } from './files.ts'
+import { searchTables } from './search.ts'
 
 function project() {
   const dir = mkdtempSync(path.join(tmpdir(), 'agent-panel-tables-'))
@@ -82,21 +83,33 @@ test('Excel / WPS 的锁文件说明文件正被打开', async () => {
 test('内容搜索：不分大小写，跨文件给出工作表、行列和那格的字', async () => {
   const dir = project()
   const { files } = await listTables(dir, cfg())
-  const r = await searchTables(dir, files, '剑')
+  const r = await searchTables(dir, files, { q: '剑' })
   assert.deepEqual(
     r.hits.map((h) => `${h.path}#${h.sheet}!${h.row},${h.col}=${h.text}`),
     ['Config/Item.csv#Item!1,1=木剑', 'Config/Item.csv#Item!2,1=铁剑'],
   )
   assert.equal(r.files, 2)
-  assert.deepEqual((await searchTables(dir, files, '  ')).hits, [])
+  assert.deepEqual((await searchTables(dir, files, { q: '  ' })).hits, [])
   // 给了结构文件：数据行的命中带上字段名（按表头的字段名行），表头里的命中不带
   const schema = TableSchema.parse({ style: { header: { start: 0, rows: [{ kind: 'name' }] } } })
-  const named = await searchTables(dir, files, 'name', undefined, schema)
+  const named = await searchTables(dir, files, { q: 'name' }, undefined, schema)
   assert.equal(named.hits[0].field, undefined)
   assert.deepEqual(
-    (await searchTables(dir, files, '剑', undefined, schema)).hits.map((h) => h.field),
+    (await searchTables(dir, files, { q: '剑' }, undefined, schema)).hits.map((h) => h.field),
     ['Name', 'Name'],
   )
+  // 「字段名:值」只在那一列的数据行里找；整格；命中位置给出来高亮用
+  const byField = await searchTables(dir, files, { q: 'name:木' }, undefined, schema)
+  assert.equal(byField.field, 'name')
+  assert.deepEqual(
+    byField.hits.map((h) => [h.path, h.row, h.at]),
+    [['Config/Item.csv', 1, [0, 1]]],
+  )
+  assert.equal((await searchTables(dir, files, { q: 'ID:1', whole: true }, undefined, schema)).hits.length, 1)
+  // 没有哪张表有这个字段：按整串找（值本身带冒号）
+  const missing = await searchTables(dir, files, { q: 'Nope:木' }, undefined, schema)
+  assert.equal(missing.fieldMissing, 'Nope')
+  assert.equal(missing.hits.length, 0)
 })
 
 test('表格目录可以是绝对路径：项目目录里的换成相对路径，项目目录外的按绝对路径列，多层子目录都找', async () => {

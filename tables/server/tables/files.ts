@@ -1,6 +1,6 @@
 /**
- * 表格页的文件层：按项目设置的表格目录列出表格文件、解析（带缓存）、跨文件按内容搜索。
- * 只读：写回在 server/tables/write.ts。解析结果按「修改时间 + 大小」缓存，内容搜索第一次全量解析、之后只重读变过的文件。
+ * 表格页的文件层：按项目设置的表格目录列出表格文件、解析（带缓存）。跨文件按内容搜索在 search.ts。
+ * 只读：写回在 server/tables/write.ts。解析结果按「修改时间 + 大小」缓存，跨表搜索第一次全量解析、之后只重读变过的文件。
  */
 import path from 'node:path'
 import { readdir, readFile, stat } from 'node:fs/promises'
@@ -13,22 +13,25 @@ import {
   tableKind,
   type TableDoc,
   type TableFile,
-  type TableHit,
   type TableRoot,
-  type TableSchema,
-  type TableSearch,
   type TablesConfig,
   type TablesIndex,
 } from '../../shared/tables.ts'
 import type { SheetData } from '../../shared/files.ts'
-import { sheetFieldNames } from '../../shared/table-struct.ts'
-import { MAX_XLSX_BYTES, readXlsx } from '../xlsx.ts'
+import { MAX_XLSX_BYTES, readXlsx, type XlsxLimits } from '../xlsx.ts'
 import { resolvePath } from '../fs.ts'
+
+/**
+ * 表格页按这个上限读 xlsx：单张表 200 万格、整本 400 万格（1 万行 × 80 列的大表也能整份读进来改）。
+ * 文件弹窗还用面板默认的低上限：它只是看一眼，不值得往页面上发几十兆
+ */
+export const TABLE_XLSX: XlsxLimits = { sheetCells: 2_000_000, bookCells: 4_000_000 }
+
+/** 读一份 xlsx 给表格页（解析、保存前后的比对都用同一个上限，不然大表保存时读回来对不上） */
+export const readTableXlsx = (buf: Buffer) => readXlsx(buf, TABLE_XLSX)
 
 /** 一个项目最多列这么多个表格文件 */
 const MAX_FILES = 20000
-/** 内容搜索最多给这么多处命中 */
-const MAX_HITS = 500
 /** 解析缓存最多留这么多个单元格（所有文件合计）；超了丢掉最久没用的 */
 const CACHE_CELLS = 6_000_000
 /** 不往里走的目录 */
@@ -208,6 +211,13 @@ export const forgetTable = (full: string) => {
   cache.delete(full)
 }
 
+/** 刚写进去的文件：已经有解析结果了，按新的修改时间和大小放进缓存（只给 xlsx 用，CSV 还要记分隔符这些） */
+export async function primeTable(full: string, sheets: SheetData[]) {
+  const info = await stat(full).catch(() => null)
+  if (!info) return forgetTable(full)
+  remember(full, { key: `${info.mtimeMs}:${info.size}`, sheets, cells: countCells(sheets) })
+}
+
 /** 解析一个表格文件（xlsx / csv），带缓存 */
 export async function parseTable(full: string): Promise<{ sheets: SheetData[]; csv?: TableDoc['csv'] }> {
   const info = await stat(full)
@@ -235,7 +245,7 @@ export async function parseTableBuffer(
   const kind = tableKind(name)
   if (kind === 'xlsx') {
     if (buf.length > MAX_XLSX_BYTES) throw new Error(t('表格太大（超过 30 MB），请用表格软件打开'))
-    return { sheets: readXlsx(buf) }
+    return { sheets: readTableXlsx(buf) }
   }
   if (kind === 'csv') {
     const text = buf.toString('utf8')
@@ -276,57 +286,7 @@ export async function openTable(dir: string, rel: string, cfg: TablesConfig): Pr
   const readOnly = cfg.readOnly
     ? t('项目设置里把表格设成了只读')
     : truncated
-      ? t('表格太大，只读了前面一部分，不能在这里改')
+      ? t('表格太大（单张表超过 {n} 万格），只读了前面一部分，不能在这里改', { n: TABLE_XLSX.sheetCells / 10000 })
       : undefined
   return { ...base, sheets, csv, ...(readOnly ? { readOnly } : {}), locked: await lockedByOffice(full) }
-}
-
-/** 在全部表格文件里按内容找（不区分大小写），命中按文件顺序 */
-export async function searchTables(
-  dir: string,
-  files: TableFile[],
-  q: string,
-  signal?: AbortSignal,
-  schema?: TableSchema,
-): Promise<TableSearch> {
-  const needle = q.trim().toLowerCase()
-  const hits: TableHit[] = []
-  let searched = 0
-  if (!needle) return { hits, files: 0 }
-  for (const f of files) {
-    if (f.kind === 'xls') continue
-    // 页面上又输了新的字（这次请求被取消）就不搜了；每读几个文件让一下，别的请求不用等整轮搜完
-    if (signal?.aborted) break
-    if (searched % 20 === 19) await new Promise((r) => setImmediate(r))
-    let sheets: SheetData[]
-    try {
-      sheets = (await parseTable(tableFull(dir, f.path))).sheets
-    } catch {
-      continue
-    }
-    searched++
-    for (const s of sheets) {
-      // 字段名按表头算，只在这张表有命中时才算一次
-      let names: { from: number; names: string[] } | undefined
-      for (let r = 0; r < s.rows.length; r++) {
-        const row = s.rows[r]
-        for (let c = 0; c < row.length; c++) {
-          const v = row[c]
-          if (!v || !v.toLowerCase().includes(needle)) continue
-          names ??= sheetFieldNames(schema, f.path, s)
-          const field = r >= names.from ? names.names[c] : undefined
-          hits.push({
-            path: f.path,
-            sheet: s.name,
-            row: r,
-            col: c,
-            text: v.length > 200 ? `${v.slice(0, 200)}…` : v,
-            ...(field ? { field } : {}),
-          })
-          if (hits.length >= MAX_HITS) return { hits, files: searched, truncated: true }
-        }
-      }
-    }
-  }
-  return { hits, files: searched }
 }

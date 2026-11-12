@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import type { TableDoc, TableSchema, TablesIndex } from '../shared/tables.ts'
+import type { TableDoc, TableSchema, TableSearch, TablesIndex } from '../shared/tables.ts'
 import { checkTouched, headerOf, workbookNeeds } from '../shared/table-struct.ts'
+import { describeSheet } from '../shared/table-describe.ts'
+import { colLetters } from '../shared/table-agent.ts'
 import { TableEditInput, TableQueryInput, planEdit, queryRows } from '../shared/table-agent.ts'
 import type { PluginAction, PluginActionCtx as ActionCtx } from '../../sdk/server.ts'
 import type { TablesCheck } from './tables/check.ts'
@@ -42,6 +44,16 @@ async function openSheet(pid: string, path: string, sheet: string | undefined, c
   return { doc, sheet: s, schema, header: headerOf(schema, path, s) }
 }
 
+/** 检查、列结构要用到的别的文件（枚举表、被引用的表）：读不到的当没有 */
+async function extSheets(pid: string, files: string[], ctx: ActionCtx) {
+  const ext: Record<string, TableDoc['sheets'] | undefined> = {}
+  for (const f of files)
+    ext[f] = (
+      (await ctx.api('GET', `${API}/tables/${enc(pid)}/file?path=${enc(f)}`).catch(() => null)) as TableDoc | null
+    )?.sheets
+  return ext
+}
+
 /** 写之前按表格结构查改到的格子，不合规就拦下、原因交给模型 */
 async function mustPass(
   pid: string,
@@ -53,12 +65,7 @@ async function mustPass(
   ctx: ActionCtx,
 ) {
   const after = { name, rows: plan.after }
-  const need = workbookNeeds(schema, path, [after])
-  const ext: Record<string, TableDoc['sheets'] | undefined> = {}
-  for (const f of need)
-    ext[f] = (
-      (await ctx.api('GET', `${API}/tables/${enc(pid)}/file?path=${enc(f)}`).catch(() => null)) as TableDoc | null
-    )?.sheets
+  const ext = await extSheets(pid, workbookNeeds(schema, path, [after]), ctx)
   const bad = checkTouched(schema, path, after, plan.touched, (f) =>
     f === path ? doc.sheets.map((s) => (s.name === name ? after : s)) : ext[f],
   )
@@ -107,6 +114,67 @@ export const tableActions: PluginAction[] = [
       const pid = pidOf(a.projectId, ctx)
       const { sheet, schema, header } = await openSheet(pid, a.path, a.sheet, ctx)
       return { sheet: sheet.name, ...queryRows(sheet.rows, header, schema.style.key, a) }
+    },
+  }),
+  defineAction({
+    name: 'table.search',
+    title: '跨表找',
+    description:
+      '在项目所有配置表的格子里找一个值，返回每处在哪个文件、哪张表、哪一格（Excel 位置）、哪个字段、那一行的主键。' +
+      '想知道某个 ID 在哪些表里被用到、某个字段名在哪张表时用它，不要一张张 table.query。' +
+      'q 写成「字段名:值」（例如 ItemId:1001）只在叫这个名字的列里找；whole 整格相同才算（数组列 1001;1002 里某一项相同也算）。',
+    level: 'read',
+    input: z.object({
+      projectId: PID,
+      q: z.string().trim().min(1).max(500).describe('要找的值；「字段名:值」只在那一列找'),
+      field: z.string().max(200).optional().describe('只在这个字段里找（和在 q 里写「字段名:」一样）'),
+      whole: z.boolean().default(false).describe('整格相同才算（找 ID 时一般要开）'),
+      caseSensitive: z.boolean().default(false),
+      regex: z.boolean().default(false).describe('q 按正则（JavaScript 语法）'),
+      limit: z.number().int().min(1).max(500).default(100),
+    }),
+    run: async (a, ctx) => {
+      const pid = pidOf(a.projectId, ctx)
+      const q = a.field ? `${a.field}:${a.q}` : a.q
+      const flags = `${a.whole ? '&whole=1' : ''}${a.caseSensitive ? '&case=1' : ''}${a.regex ? '&regex=1' : ''}`
+      const r = (await ctx.api(
+        'GET',
+        `${API}/tables/${enc(pid)}/search?q=${enc(q)}${flags}&limit=${a.limit}`,
+      )) as TableSearch
+      return {
+        searched: r.files,
+        ...(r.field ? { field: r.field } : {}),
+        ...(r.fieldMissing ? { note: `没有哪张表有字段「${r.fieldMissing}」，按整串找了` } : {}),
+        hits: r.hits.map((h) => ({
+          path: h.path,
+          sheet: h.sheet,
+          cell: `${colLetters(h.col)}${h.row + 1}`,
+          ...(h.field ? { field: h.field } : { header: true }),
+          ...(h.key ? { key: h.key } : {}),
+          text: h.text,
+        })),
+        ...(r.truncated ? { truncated: `只列出前 ${r.hits.length} 处，缩小范围（写字段名、开 whole）再找` } : {}),
+      }
+    },
+  }),
+  defineAction({
+    name: 'table.schema',
+    title: '看一张表的列结构',
+    description:
+      '列出一张配置表每一列的字段名、类型、是不是数组（分隔符）、枚举能填哪些值、引用哪张表的哪个字段、取值范围、正则、必填，' +
+      '以及表头有几行、数据从第几行开始、主键字段。按项目的表格结构识别（和表格页、保存前检查同一份）。加行、改值之前先用它看该填什么。',
+    level: 'read',
+    input: z.object({
+      projectId: PID,
+      path: z.string().trim().min(1).max(600).describe('表格的路径（table.list 列出来的）'),
+      sheet: z.string().max(200).optional().describe('工作表名，不写是第一张'),
+    }),
+    run: async (a, ctx) => {
+      const pid = pidOf(a.projectId, ctx)
+      const { doc, sheet, schema } = await openSheet(pid, a.path, a.sheet, ctx)
+      const ext = await extSheets(pid, workbookNeeds(schema, a.path, [sheet]), ctx)
+      const desc = describeSheet(schema, a.path, sheet, (f) => (f === a.path ? doc.sheets : ext[f]))
+      return { path: a.path, sheets: doc.sheets.map((s) => s.name), ...desc }
     },
   }),
   defineAction({

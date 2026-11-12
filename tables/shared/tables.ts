@@ -136,12 +136,20 @@ export interface TableHit {
   text: string
   /** 数据行的格子：这一列的字段名 */
   field?: string
+  /** 数据行的格子：这一行主键的值（Agent 接着按主键查、改） */
+  key?: string
+  /** 命中的部分在 text 里的位置（高亮用）；没有时按查询的字自己找 */
+  at?: [number, number]
 }
 export interface TableSearch {
   hits: TableHit[]
   /** 搜了几个文件 */
   files: number
   truncated?: boolean
+  /** 按「字段名:值」只在这一列里找了 */
+  field?: string
+  /** 写了「字段名:值」但没有哪张表有这个字段：改成按整串找了 */
+  fieldMissing?: string
 }
 
 // ---------- 结构文件 ----------

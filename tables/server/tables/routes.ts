@@ -11,7 +11,10 @@ import { TableSchema, TablesConfig, tablesOf, tablesOn } from '../../shared/tabl
 import type { Project } from '../../shared/schema.ts'
 import { resolvePath } from '../fs.ts'
 import { revealItem } from '../open.ts'
-import { absPath, listTables, openTable, safeRel, searchTables } from './files.ts'
+import { absPath, listTables, openTable, safeRel } from './files.ts'
+import { MAX_HITS, searchTables } from './search.ts'
+import { replaceTables } from './bulk-replace.ts'
+import { TableReplaceBody } from '../../shared/table-search.ts'
 import { readSchema, schemaDir, writeSchema } from './schema-store.ts'
 import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
@@ -129,7 +132,15 @@ export function tablesApi(deps: TablesDeps) {
           if (!tablesOn(cfg)) return c.json({ hits: [], files: 0 })
           const { files } = await listTables(dir, cfg)
           const schema = await readSchema(schemaAt).catch(() => undefined)
-          return c.json(await searchTables(dir, files, c.req.query('q') ?? '', c.req.raw.signal, schema))
+          const flag = (k: string) => c.req.query(k) === '1'
+          const opts = {
+            q: c.req.query('q') ?? '',
+            caseSensitive: flag('case'),
+            whole: flag('whole'),
+            regex: flag('regex'),
+          }
+          const limit = Math.min(5000, Math.max(1, Number(c.req.query('limit')) || MAX_HITS))
+          return c.json(await searchTables(dir, files, opts, c.req.raw.signal, schema, limit))
         } catch (e) {
           return fail(c, e)
         }
@@ -341,6 +352,26 @@ export function tablesApi(deps: TablesDeps) {
               { dir, projectId: project.id, cfg, files, schema },
               renames.slice(0, 200),
               body.apply === true,
+              { p4Edit: p4Edit(dir) },
+              c.req.raw.signal,
+            ),
+          )
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 跨表批量替换：apply=false 只预览（每个文件改几格、会不会被拒绝），apply=true 只写勾选的文件
+      .post('/:id/replace', async (c) => {
+        try {
+          const { project, dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
+          const body = TableReplaceBody.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('替换的参数格式不对'))
+          const { files } = await listTables(dir, cfg)
+          const schema = await readSchema(schemaAt)
+          return c.json(
+            await replaceTables(
+              { dir, projectId: project.id, cfg, files, schema },
+              body.data,
               { p4Edit: p4Edit(dir) },
               c.req.raw.signal,
             ),
