@@ -24,7 +24,7 @@ import type { SheetHeader } from '@shared/sheet-header'
 import type { TableExport } from '@shared/table-export'
 import { colCount, colName as colLetter, type CellHit } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
-import { SheetTable, SheetTabs } from '@/components/files/SheetTable'
+import { SheetTable, SheetTabs, useRowH } from '@/components/files/SheetTable'
 import { headerSummary, SheetHeaderBar } from '@/components/files/SheetHeaderBar'
 import { useSheetView, type SheetHeaderStore } from '@/components/files/use-sheet-view'
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,8 @@ import {
   undoIn,
   type Edits,
 } from './table-edits'
-import { nextKey } from '@shared/table-tools'
+import { insertRowsCells, moveRowsCells } from '@shared/table-rows'
+import { FillTip, RowMenu } from './RowMenu'
 import { useGridEdit } from './use-grid-edit'
 import { ExportMenu } from './ExportMenu'
 import { useColLayout } from './use-col-layout'
@@ -228,6 +229,9 @@ export function TableView({
   const [headCollapsed, setHeadCollapsed] = useHeadCollapsed()
   const [editBar, setEditBar] = useLocalFlag('table-edit-bar')
   const [density, setDensity] = useDensity()
+  // 实际行高：紧凑 / 宽松是写死的，普通跟着设置 → 组件 → 数据表格；翻页、虚拟滚动都按它算
+  const settingRowH = useRowH()
+  const rowH = DENSITY_ROW_H[density] ?? settingRowH
   const [refNames, setRefNames] = useLocalFlag('table-ref-names')
   const [findMode, setFindMode] = useState<FindMode | null>(null)
   const [findHits, setFindHits] = useState<CellHit[]>([])
@@ -296,17 +300,24 @@ export function TableView({
   const rowOp = (op: RowOp) => sheet && onEdits((e) => rowOpIn(e, sheet, op))
   // 主键列：新增行自动编号（最大的整数 + 1），复制行时主键 +1
   const keyCol = struct.infos.findIndex((i) => !!schema.style.key && i.field === schema.style.key)
-  /** 在 at 插一行：主键列填下一个编号；copy 是要复制的那一行 */
-  const insertRow = (at: number, copy?: number) => {
-    if (!sheet || !rows) return
-    const from = view?.from ?? 0
-    const id = keyCol >= 0 ? nextKey(rows, from, keyCol) : ''
-    const src = copy === undefined ? [] : (rows[copy] ?? [])
-    const cells: CellSet[] = src.map((v, c) => ({ r: at, c, v })).filter((x) => x.v)
-    if (id && at >= from) cells.push({ r: at, c: keyCol, v: id })
-    onEdits((e) => rowOpWithCells(e, sheet, { at, n: 1 }, cells))
+  /** 在 at 插 n 行：主键列依次填下一个编号；copy 是要复制的那一行。插完选中新插的几行 */
+  const insertRows = (at: number, n: number, copy?: number) => {
+    if (!sheet || !rows || n < 1) return
+    const cells = insertRowsCells(rows, { at, n, from: view?.from ?? 0, keyCol, copy })
+    onEdits((e) => rowOpWithCells(e, sheet, { at, n }, cells))
     grid.go({ row: at, col: Math.max(0, keyCol) })
+    if (n > 1) grid.go({ row: at + n - 1, col: Math.max(0, keyCol) }, true)
   }
+  const deleteRows = (rs: number[]) =>
+    sheet &&
+    rs.length &&
+    onEdits((e) =>
+      rowOpsIn(
+        e,
+        sheet,
+        rs.map((r) => ({ at: r, n: -1 })),
+      ),
+    )
   const grid = useGridEdit({
     rows: rows ?? [],
     cols: Math.max(1, rows ? colCount(rows) : 1),
@@ -317,6 +328,7 @@ export function TableView({
     onUndo: () => onEdits(undoIn),
     onRedo: () => onEdits(redoIn),
     onSave: () => pending.length && setSaving(true),
+    rowH,
     editor: (p, init, done) => {
       const info = p.row >= (view?.from ?? 0) ? struct.infos[p.col] : undefined
       // 表头格子：这一行在设置里选了取值（通用枚举 / 类型名）就下拉选
@@ -379,17 +391,15 @@ export function TableView({
     onFindBar: () => setFindMode('find'),
     onGoto: () => setFindMode('goto'),
     onHelp: () => setHelpOpen(true),
-    onInsertAbove: (r) => insertRow(Math.max(r, view?.from ?? 0)),
-    onDeleteRows: (rs) =>
-      sheet &&
-      rs.length &&
-      onEdits((e) =>
-        rowOpsIn(
-          e,
-          sheet,
-          rs.map((r) => ({ at: r, n: -1 })),
-        ),
-      ),
+    onInsertAbove: (r, n) => insertRows(Math.max(r, view?.from ?? 0), n),
+    onDeleteRows: deleteRows,
+    // 移动行只改格子（几行内容轮换），不做行操作：xlsx 的行样式不动，撤销一次就回去
+    onMoveRows: (at, n, dir) => {
+      const cells = rows ? moveRowsCells(rows, at, n, dir, view?.from ?? 0) : null
+      if (!cells) return false
+      if (cells.length) setCells(cells)
+      return true
+    },
     display: refNameOf
       ? (r, c, text) => {
           const info = r >= (view?.from ?? 0) ? struct.infos[c] : undefined
@@ -405,20 +415,18 @@ export function TableView({
     rowMenu: readOnly
       ? undefined
       : (r, trigger) => (
-          <ContextMenu>
-            <ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onSelect={() => insertRow(r)}>{t('在上方插入一行')}</ContextMenuItem>
-              <ContextMenuItem onSelect={() => insertRow(r + 1)}>{t('在下方插入一行')}</ContextMenuItem>
-              <ContextMenuItem onSelect={() => insertRow(r + 1, r)}>
-                {keyCol >= 0 ? t('复制这一行插到下方（主键自动编号）') : t('复制这一行插到下方')}
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem danger onSelect={() => rowOp({ at: r, n: -1 })}>
-                {t('删除第 {n} 行', { n: r + 1 })}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
+          <RowMenu
+            r={r}
+            trigger={trigger}
+            selected={grid.selection()?.rows ?? null}
+            keyCol={keyCol >= 0}
+            act={{
+              insert: (at, n, copy) => insertRows(Math.max(at, view?.from ?? 0), n, copy),
+              // 选中的行里混着表头行时只删数据行
+              remove: (rs) => deleteRows(rs.filter((x) => x >= (view?.from ?? 0))),
+              move: (d) => grid.moveRows(d),
+            }}
+          />
         ),
   })
 
@@ -654,7 +662,7 @@ export function TableView({
           <ToolGroup label={t('编辑')}>
             <IconButton icon={Undo2} label={t('撤销（Ctrl+Z）')} disabled={!canUndo} onClick={() => onEdits(undoIn)} />
             <IconButton icon={Redo2} label={t('重做（Ctrl+Y）')} disabled={!canRedo} onClick={() => onEdits(redoIn)} />
-            <IconButton icon={Plus} label={t('在末尾加一行')} onClick={() => insertRow(rows.length)} />
+            <IconButton icon={Plus} label={t('在末尾加一行')} onClick={() => insertRows(rows.length, 1)} />
             <Button
               size="sm"
               className="tb:relative tb:ml-1 tb:h-7"
@@ -780,6 +788,7 @@ export function TableView({
         <div className="tb:relative tb:min-h-0 tb:flex-1">
           <div
             ref={grid.box}
+            {...grid.boxProps}
             tabIndex={0}
             aria-label={t('表格内容')}
             onKeyDown={grid.onKeyDown}
@@ -802,7 +811,7 @@ export function TableView({
             <SheetTable
               colHead={(c) => colHeads[c]}
               headCollapsed={headCollapsed}
-              rowHeight={DENSITY_ROW_H[density]}
+              rowHeight={rowH}
               onHeadCollapse={setHeadCollapsed}
               rows={rows}
               scrollEl={grid.box}
@@ -820,6 +829,7 @@ export function TableView({
               onLayout={setLayout}
             />
           </div>
+          <FillTip tip={grid.fillTip} />
           <ScrollMarks
             order={order}
             layers={scrollLayers}
