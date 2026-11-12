@@ -86,6 +86,8 @@ import { selectionStats, TableStatusBar } from './TableStatusBar'
 import {
   DENSITY_ROW_H,
   colHeadOf,
+  colKindOf,
+  problemTip,
   ruleText,
   useDensity,
   useHeadCollapsed,
@@ -225,6 +227,11 @@ export function TableView({
   })
   // 两行列头：字段名 + 类型标签，按列结构算（只在列结构变时重算）
   const colHeads = useMemo(() => struct.infos.map(colHeadOf), [struct.infos])
+  // 没有一列有字段名（没认出表头）时不给，交给表格自己按数据猜数字列
+  const colKinds = useMemo(
+    () => (struct.infos.some((i) => i.field) ? struct.infos.map(colKindOf) : null),
+    [struct.infos],
+  )
   const [headCollapsed, setHeadCollapsed] = useHeadCollapsed()
   const [editBar, setEditBar] = useLocalFlag('table-edit-bar')
   const [density, setDensity] = useDensity()
@@ -373,7 +380,17 @@ export function TableView({
         .join(' ')
       return cls || undefined
     },
-    tip: (r, c) => struct.problemAt.get(`${r}:${c}`),
+    tip: (r, c) => {
+      const msg = struct.problemAt.get(`${r}:${c}`)
+      if (!msg) return undefined
+      const info = r >= (view?.from ?? 0) ? struct.infos[c] : undefined
+      const opts = info?.enumName
+        ? struct.enumOpts.get(info.enumName)
+        : info?.ref
+          ? struct.refOpts.get(info.ref)
+          : undefined
+      return problemTip(msg, info, opts)
+    },
     hiddenCol: (c) => hiddenSet.has(c),
     onFind: () => setFinding({ sel: grid.selection() }),
     onFindBar: () => setFindMode('find'),
@@ -801,6 +818,7 @@ export function TableView({
           >
             <SheetTable
               colHead={(c) => colHeads[c]}
+              colKind={colKinds ? (c) => colKinds[c] : undefined}
               headCollapsed={headCollapsed}
               rowHeight={DENSITY_ROW_H[density]}
               onHeadCollapse={setHeadCollapsed}

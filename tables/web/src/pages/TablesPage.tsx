@@ -17,7 +17,6 @@ import { toast, toastError } from '@/lib/toast'
 import { parseRef } from '@shared/table-struct'
 import { findRefTarget } from '@shared/table-refs'
 import { ListPane } from '@/components/layout/ListPane'
-import { EmptyPanel } from '@/components/ui/empty-panel'
 import { IconButton } from '@/components/ui/icon-button'
 import { Select } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
@@ -34,10 +33,13 @@ import { useExternalChange } from '@/components/tables/use-external-change'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
+import { TablesHome } from '@/components/tables/TablesHome'
 import type { SheetEdit } from '@shared/table-edit'
 import type { TableExport } from '@shared/table-export'
 
 type Mode = 'name' | 'content' | 'check'
+/** 还没查过时文件树上不标数 */
+const NO_COUNTS = new Map<string, number>()
 
 /** 切回表格页时，文件列表超过这么久没读就在后台再读一次 */
 const STALE_MS = 60_000
@@ -192,7 +194,8 @@ function Workbench({
     Object.entries(docs).flatMap(([p, d]) => (d && 'sheets' in d && (d.readOnly || d.kind === 'xls') ? [p] : [])),
   )
   // 上次全项目检查的结果：文件树上每个文件标不合规数
-  const [problemCounts, setProblemCounts] = useState<Map<string, number>>(() => new Map())
+  // null：这次打开页面还没查过（空白区据此给「检查全部表格」的入口，而不是说没有问题）
+  const [problemCounts, setProblemCounts] = useState<Map<string, number> | null>(null)
   const openHit = (h: TableHit) => {
     open(h.path)
     const doc = docs[h.path]
@@ -412,7 +415,7 @@ function Workbench({
               query={query}
               active={active}
               dirty={dirtyPaths}
-              problems={problemCounts}
+              problems={problemCounts ?? NO_COUNTS}
               readOnly={readOnlyPaths}
               onOpen={open}
               exports={exports}
@@ -478,11 +481,17 @@ function Workbench({
           active ? (
             <TableSkeleton />
           ) : (
-            <div className="tb:flex tb:flex-1 tb:items-center tb:justify-center tb:p-6">
-              <EmptyPanel size="md" className="tb:max-w-sm">
-                {t('从左边选一张表打开；可以同时开几张，在上面的页签里切换。')}
-              </EmptyPanel>
-            </div>
+            <TablesHome
+              recent={quick.recent}
+              favs={quick.favs}
+              problems={problemCounts}
+              total={files.length}
+              onOpen={open}
+              onCheck={() => {
+                setMode('check')
+                setQuery('')
+              }}
+            />
           )
         ) : 'error' in doc ? (
           <p className="tb:p-6 tb:text-body tb:text-danger">{doc.error}</p>
