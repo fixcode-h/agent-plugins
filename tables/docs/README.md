@@ -28,7 +28,9 @@
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `shared/tables.ts`                                         | 项目设置里的 `TablesConfig`、表格页的数据结构、结构文件 `TableSchema`、通配和表头优先级       |
 | `shared/csv.ts`                                            | CSV 的读、写回（保持分隔符 / 换行 / BOM / 结尾换行）                                          |
-| `server/tables/files.ts`                                   | 列表格文件、解析（按 mtime + 大小缓存）、锁文件检查、跨文件内容搜索、路径越界检查             |
+| `server/tables/files.ts`                                   | 列表格文件、解析（按 mtime + 大小缓存）、锁文件检查、路径越界检查                             |
+| `server/tables/search.ts`、`shared/table-search.ts`        | 跨表搜索（`/search`）：「字段名:值」、区分大小写 / 整格 / 正则，匹配规则和替换共用            |
+| `server/tables/bulk-replace.ts`                            | 跨表批量替换（`/replace`）：预览时试一遍保存、列出拒绝原因，勾选后逐个文件原地保存            |
 | `server/tables/schema-store.ts`                            | 结构文件读写：`.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，拆成 4 个 json            |
 | `server/tables/routes.ts`                                  | `/api/plugins/tables/api/tables/:id`（列表）、`/probe`、`/file`、`/search`、`/schema`         |
 | `web/src/lib/tables-api.ts`                                | 页面调接口                                                                                    |
@@ -44,7 +46,8 @@
 | `shared/sheet-diff.ts`                                     | 格子级差异（版本差异、跨项目对比共用）、只看变化的折叠、跨项目「拷到另一边」                  |
 | `server/tables/history.ts`                                 | 版本记录（`/history`：git log / p4 filelog / svn log）、取某一版（`/at`：show / print / cat） |
 | `server/tables/compare.ts`                                 | 跨项目对比（`/compare?other=`）：按相对路径配对，比解析出来的格子                             |
-| `shared/table-agent.ts`、`server/app-actions/tables.ts`    | 给 Agent 的动作 `table.list / query / edit / check`（经 app_actions / app_do）                |
+| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / search / schema / edit / propose / check`      |
+| `shared/table-describe.ts`                                 | `table.schema` 的列结构：类型、数组分隔符、枚举值、引用、范围和校验规则                       |
 
 ## 表格目录
 
@@ -126,6 +129,8 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - 引用列「ID · 名称」（localStorage `table-ref-names`）：只改显示（`SheetEditing.display`），名称取被引用表同一行里像名字的列（`refOptions` 的 desc）。
 - 检查结果（`ProblemsBar`）按「列 + 种类」分组（`shared/table-problems.ts`；种类是 `Problem.rule`，同一列「引用的表里没有 X / Y」算一组）。每组批量修：超出范围改成边界值、改成「也允许」的值、清空（必填 / 主键不给），先预览再一次放进表格；或让 AI 修这一组。滚动条右边一条 canvas 标出不合规、改过、查找命中的位置（`ScrollMarks`，按像素合并，点一下跳到最近的一处）。
 - 内容搜索结果（`TableHits`）每条带字段名（服务端 `searchTables` 按结构文件的表头算，`sheetFieldNames`，只在这张表有命中时算一次），按文件分组、组头吸顶能折叠，上下键在结果里走、表格跟着跳。
+- 跨表搜索的选项（`TableSearchOptions`，开关记在 localStorage `agent-panel.tables.search-flags`）：区分大小写、整格（数组列 `1001;1002` 里某一项整项相同也算，分隔符用项目的 `listSep`）、正则，和表格里的查找替换同一套（`findRe`）。查询写成「字段名:值」（冒号前像字段名才算：字母 / 汉字 / 下划线开头、没有空格；全角冒号也认）只在叫这个名字的列（不分大小写）的数据行里找；没有哪张表有这个字段时按整串再找一遍并提示（`fieldMissing`），所以 `12:30`、`http://…` 这类值照样能找。命中位置由服务端给（`TableHit.at`），正则、长格子都能准确高亮。
+- 跨表批量替换（`ReplaceAllDialog` → `POST /replace`，`server/tables/bulk-replace.ts`）：`apply:false` 预览每个文件改几格、前 5 处改前改后、替换后有几处不合规；预览时对每个文件跑一遍 `prepareSave`（保存前的全部检查，不写），会被拒绝的标出原因、不能勾，页面上有没保存改动的文件也不能勾。`apply:true` 只写勾选的文件，带预览时的修改时间，对不上（预览之后被改过）就不写这个文件；改了查找、替换或开关后要重新预览才能替换。只改数据行，表头不动。拒绝的情况：项目只读（整个请求）；老 .xls、表格太大只读了一部分、正被 Excel / WPS 打开、预览后被改过、公式格或少见写法（原地改写做不了）、读回比对不上、「保存前检查」是「不让保存」且替换后不合规（单个文件）。每个文件写之前备份。
 - 行高三档（工具栏「查看」→ 行高，localStorage `table-density`）：紧凑 22、标准跟着设置、宽松 32，通过 `SheetTable` 的 `rowHeight` 传。双击列边线按看得见的 200 行 + 表头量宽（`fitWidth`），不扫整列。
 - 导表输出在表格页底部的「输出」面板（`TableOutput.tsx`），不再是弹窗：每次执行一个 `ExportRun` 一直挂着（切去看别的一次只是藏起来，不会停），留最近 20 次；关面板才停掉在跑的。
 - 版本差异、跨项目对比：改过的格子只显示新值，悬停看旧 / 新；摘要里「改 / 加 / 删」能点，只看那一种行（`DiffOnly`）。
@@ -145,7 +150,7 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 
 ## Agent 改表格
 
-动作在 `server/app-actions/tables.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
+动作在 `server/actions.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.search` 走 `/search`（同样认「字段名:值」和三个开关），每处带 Excel 位置、字段名和这一行的主键；`table.schema` 用 `describeSheet` 列出每一列的类型、数组分隔符、枚举能填的值（最多 80 个）、引用、范围和校验规则，枚举表、被引用的表经 `/file` 读。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
 
 ## AI（表格页工具栏「AI」）
 
@@ -153,6 +158,12 @@ AI 分析的结果（`TablesDraft`）也是几套表头，外加数组标记、�
 - `table.propose`（`server/app-actions/tables.ts`）：参数同 `table.edit`，同样 `planEdit` + `checkTouched`，不合规拦下交给模型；通过后不写文件，`POST /proposal` 存进内存（`server/tables/proposals.ts`，每个文件只留最新一份，重启就没）。
 - 表格页打开文件、AI 对话结束时取 `GET /proposal`：上方提示条「看差异」按表头和主键出差异，「放进表格」用 `replaceIn` 成为一次改动（还要用户保存），然后 `DELETE /proposal`。提出之后文件 mtime 变了或页面上有没保存的改动时不让放（行号对不上）。状态只看工具调用存下的提议，不读模型回复的文字。
 - 解释一列 / 这张表：只读提示词，结果就在 AI 窗口的对话里。
+
+## 大表
+
+- 表格页按 `TABLE_XLSX`（`server/tables/files.ts`）读 xlsx：单张表 200 万格、整本 400 万格（面板 `readXlsx` 的 `limits` 参数）；文件弹窗还是面板默认的 20 万 / 60 万。超过上限的表只读前面一部分并整份只读。解析、保存前后读回比对都用同一个上限（`readTableXlsx`）。
+- 保存大表：原表的格子取解析缓存（不再解析一遍），写完把读回比对时的解析结果放进缓存（`primeTable`），重新打开不再解析。1 万行 × 80 列的 xlsx 改一格保存约 3 秒（性能基准 `xlsxSave`）。
+- 性能基准 `scripts/bench.ts` 含一本 1 万行 × 80 列的 xlsx（`bigBook`）：读、改一格保存、跨表搜索（冷 / 热 / 按字段）、一列 1 万格的跨表替换（预览 / 写）。
 
 ## 不支持的
 
