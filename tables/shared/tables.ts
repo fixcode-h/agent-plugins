@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { HeaderException, HeaderRule, emptyRule } from './table-header.ts'
 import type { SheetData } from './files.ts'
 import { TableExport } from './table-export.ts'
+import { TableTypes, TypeFormats } from './table-types.ts'
 
 /** 默认认作表格的文件 */
 export const TABLE_INCLUDE = '*.xlsx, *.xlsm, *.xls, *.csv, *.tsv'
@@ -233,17 +234,21 @@ export const TableStyle = z.object({
   saveCheck: z.enum(['off', 'warn', 'block']).default('warn'),
   /** 按文件指定的表头：这些文件（通配，可以细到工作表）用另一份表头，排在前面的优先 */
   exceptions: z.array(HeaderException).max(100).default([]),
+  /** 数组、映射、结构体在格子里怎么存、怎么显示（见 table-types.ts） */
+  formats: TypeFormats.default(() => TypeFormats.parse({})),
 })
 export type TableStyle = z.infer<typeof TableStyle>
 
 /**
- * 结构文件合起来的样子。存成 4 个文件（style / enums / columns / files .json），多人各改各的不容易冲突。
+ * 结构文件合起来的样子。存成 4 个文件（style / enums / columns / types .json），多人各改各的不容易冲突。
  * columns 的键是「相对路径#工作表#字段名」，工作表写 * 表示每张表；按字段名记，表格里插了列也不会错位
  */
 export const TableSchema = z.object({
   style: TableStyle.default(() => TableStyle.parse({})),
   enums: z.record(z.string().max(200), TableEnum).default({}),
   columns: z.record(z.string().max(700), TableColumn).default({}),
+  /** 类型表：自定义的结构体、别名、带范围的基础类型（types.json） */
+  types: TableTypes.default({}),
   analyzedAt: z.string().max(40).optional(),
 })
 export type TableSchema = z.infer<typeof TableSchema>

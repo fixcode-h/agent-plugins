@@ -629,6 +629,7 @@ function Workbench({
             reload(true)
             open(path)
           }}
+          onSchema={saveSchema}
           onClose={() => setCreating(false)}
         />
       )}

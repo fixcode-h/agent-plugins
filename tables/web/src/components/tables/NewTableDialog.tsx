@@ -1,21 +1,36 @@
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns3, Plus, X } from 'lucide-react'
 import { t } from '@shared/i18n'
-import { TYPE_NAMES, type TableSchema } from '@shared/tables'
+import { TYPE_NAMES, colKey, type TableSchema } from '@shared/tables'
 import { enumOptions } from '@shared/table-struct'
 import { ruleOf, type HeaderRule } from '@shared/table-header'
 import { newTableIssues, newTableRows, type NewColumn } from '@shared/table-create'
+import { typeNode, type TypeNode } from '@shared/table-codec'
 import { tablesApi } from '@/lib/tables-api'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
-import { Field, Input, Select } from '@/components/ui/input'
+import { ComboInput, Field, Input, Select } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu'
 import { roleShort } from '@/components/files/sheet-roles'
+import { ColumnFields } from './ColumnFields'
+import { columnOf, putColumn, type ColDraft } from './column-draft'
 
 /** 新表格最多加这么多列（弹窗里一列一行，再多就该从别的表复制了） */
 const MAX_COLS = 200
+
+/** 弹窗里的一列：表头各行填的字 + 这一列的结构（枚举、引用、范围……，新建时一起记进结构文件） */
+type Col = NewColumn & { rules?: ColDraft }
+
+/** 类型式每个叶子都认得（基础类型、类型表、枚举）：类型行的格子标红用 */
+function typeKnown(n: TypeNode): boolean {
+  if (n.k === 'scalar') return n.kind !== 'other'
+  if (n.k === 'struct') return true
+  if (n.k === 'list') return typeKnown(n.of)
+  return typeKnown(n.key) && typeKnown(n.val)
+}
 
 /**
  * 新建表格：选表格目录、起文件名，按项目的表头配置给每一列填表头各行（字段名、类型、注释……），
@@ -27,6 +42,7 @@ export function NewTableDialog({
   dirs,
   files,
   onCreated,
+  onSchema,
   onClose,
 }: {
   projectId: string
@@ -36,26 +52,28 @@ export function NewTableDialog({
   /** 已有的文件：重名提示 */
   files: Set<string>
   onCreated: (path: string) => void
+  /** 有列设了结构时，新建后写进结构文件 */
+  onSchema: (s: TableSchema) => void
   onClose: () => void
 }) {
   // 项目还没配置表头：先只给一行字段名，提示去配置
   const unset = !schema.style.header.rows.length
   const rule: HeaderRule = unset ? ruleOf(['name']) : schema.style.header
   const nameAt = rule.rows.findIndex((r) => r.kind === 'name')
-  const blank = (): NewColumn => ({ cells: rule.rows.map(() => '') })
+  const typeAt = rule.rows.findIndex((r) => r.kind === 'type')
+  const blank = (): Col => ({ cells: rule.rows.map(() => '') })
   /** 加一列：修饰、导出端这种大多数列都一样的行照前一列填，字段名、类型、注释空着自己填 */
-  const nextCol = (prev?: NewColumn): NewColumn => ({
+  const nextCol = (prev?: Col): Col => ({
     cells: rule.rows.map((r, i) => (prev && (r.kind === 'modifier' || r.kind === 'side') ? prev.cells[i] : '')),
   })
   const [dir, setDir] = useState(dirs[0] ?? '')
   const [name, setName] = useState('NewTable.xlsx')
   const [sheet, setSheet] = useState('Sheet1')
-  const [cols, setCols] = useState<NewColumn[]>(() => {
+  const [cols, setCols] = useState<Col[]>(() => {
     // 第一列默认是主键
     const first = blank()
     if (nameAt >= 0) first.cells[nameAt] = schema.style.key || 'ID'
     // 主键一般是整数：类型行填基础类型里第一个整数类型
-    const typeAt = rule.rows.findIndex((r) => r.kind === 'type')
     const int = schema.style.primitives.find((p) => /int/i.test(p))
     if (typeAt >= 0 && int) first.cells[typeAt] = int
     return [first]
@@ -64,21 +82,49 @@ export function NewTableDialog({
   const full = (n: string) => (dir ? `${dir}/${n.trim()}` : n.trim())
   const xlsx = /\.xlsx$/i.test(name.trim())
   const issues = newTableIssues(name, xlsx ? sheet : 'Sheet1', rule, cols, (n) => files.has(full(n)))
-  /** 能填什么设了的行：下拉的选项（类型行是基础类型 + 通用枚举名） */
+  /** 能填什么设了的行：只能从这些里选（类型行是基础类型 + 类型表 + 通用枚举名，另外认 TArray<…> 这类类型式） */
   const options = useMemo(
     () =>
       rule.rows.map((r) => {
         if (!r.values) return null
         const names =
           r.values === TYPE_NAMES
-            ? [...schema.style.primitives, ...Object.keys(schema.enums)]
+            ? [...schema.style.primitives, ...Object.keys(schema.types), ...Object.keys(schema.enums)]
             : enumOptions(schema.enums[r.values]).map((o) => o.name)
         return names.length ? names : null
       }),
     [rule, schema],
   )
+  /** 每行的建议：限定了取值的按限定的；没限定的按这种行常见的写法，再加上别的列已经填过的 */
+  const suggest = (ri: number) => {
+    const r = rule.rows[ri]
+    const base =
+      options[ri] ??
+      (r.kind === 'type'
+        ? [
+            ...schema.style.primitives,
+            ...Object.keys(schema.types),
+            ...Object.keys(schema.enums),
+            'TArray<int32>',
+            'TMap<FName, int32>',
+          ]
+        : r.kind === 'modifier'
+          ? ['optional', 'required', ...schema.style.arrayMarks]
+          : r.kind === 'side'
+            ? ['Client', 'Server', 'All']
+            : [])
+    const used = cols.map((c) => c.cells[ri]?.trim()).filter((v): v is string => !!v)
+    return [...new Set([...base, ...used])].map((value) => ({ value }))
+  }
+  /** 填了限定取值以外的字：类型行认类型式，其余必须是选项之一 */
+  const badCell = (ri: number, v: string) => {
+    const opts = options[ri]
+    if (!opts || !v.trim()) return false
+    if (rule.rows[ri].values === TYPE_NAMES) return !typeKnown(typeNode(schema, v.trim()))
+    return !opts.includes(v.trim())
+  }
   const setCell = (ci: number, ri: number, v: string) =>
-    setCols((cs) => cs.map((c, j) => (j === ci ? { cells: c.cells.map((x, k) => (k === ri ? v : x)) } : c)))
+    setCols((cs) => cs.map((c, j) => (j === ci ? { ...c, cells: c.cells.map((x, k) => (k === ri ? v : x)) } : c)))
   const move = (i: number, d: -1 | 1) =>
     setCols((cs) => {
       const next = [...cs]
@@ -95,6 +141,13 @@ export function NewTableDialog({
         rows,
         freeze: rows.length,
       })
+      // 设了结构的列：按字段名记进结构文件（键和表格页「列结构」一样是「文件#*#字段名」）
+      let next = schema
+      for (const c of cols) {
+        const field = nameAt >= 0 ? c.cells[nameAt]?.trim() : ''
+        if (field && c.rules && columnOf(c.rules).col) next = putColumn(next, colKey(r.path, '*', field), c.rules)
+      }
+      if (next !== schema) onSchema(next)
       toast.success(t('已新建 {path}', { path: r.path }))
       onCreated(r.path)
       onClose()
@@ -170,7 +223,7 @@ export function NewTableDialog({
                     </span>
                   </th>
                 ))}
-                <th className="tb:w-[72px]" />
+                <th className="tb:w-[100px]" />
               </tr>
             </thead>
             <tbody>
@@ -181,31 +234,38 @@ export function NewTableDialog({
                   </td>
                   {rule.rows.map((r, ri) => {
                     const label = t('第 {c} 列的{row}', { c: ci + 1, row: r.label || roleShort(r.kind) })
-                    const opts = options[ri]
                     return (
                       <td key={ri} className="tb:px-1.5 tb:py-1">
-                        {opts ? (
-                          <Select
-                            size="sm"
-                            aria-label={label}
-                            value={c.cells[ri] ?? ''}
-                            onChange={(e) => setCell(ci, ri, e.target.value)}
-                            options={[{ value: '', label: t('（空）') }, ...opts.map((o) => ({ value: o, label: o }))]}
-                          />
-                        ) : (
-                          <Input
-                            size="sm"
-                            aria-label={label}
-                            value={c.cells[ri] ?? ''}
-                            onChange={(e) => setCell(ci, ri, e.target.value)}
-                            className={cn(r.kind !== 'comment' && 'tb:font-mono')}
-                          />
-                        )}
+                        <ComboInput
+                          size="sm"
+                          aria-label={label}
+                          aria-invalid={badCell(ri, c.cells[ri] ?? '') || undefined}
+                          title={badCell(ri, c.cells[ri] ?? '') ? t('不是这一行能填的值') : undefined}
+                          value={c.cells[ri] ?? ''}
+                          onChange={(v) => setCell(ci, ri, v)}
+                          suggestions={suggest(ri)}
+                          className={cn(
+                            r.kind !== 'comment' && 'tb:font-mono',
+                            badCell(ri, c.cells[ri] ?? '') && 'tb:border-danger',
+                          )}
+                        />
                       </td>
                     )
                   })}
                   <td className="tb:px-1 tb:py-1">
                     <span className="tb:flex tb:items-center">
+                      <ColRules
+                        n={ci + 1}
+                        value={c.rules}
+                        onChange={(rules) => setCols((cs) => cs.map((x, j) => (j === ci ? { ...x, rules } : x)))}
+                        schema={schema}
+                        files={[...files]}
+                        fields={
+                          nameAt >= 0 ? cols.map((x) => x.cells[nameAt]?.trim()).filter((f, j) => f && j !== ci) : []
+                        }
+                        typeHint={typeAt >= 0 ? c.cells[typeAt] : undefined}
+                        disabled={nameAt < 0 || !c.cells[nameAt]?.trim()}
+                      />
                       <IconButton
                         icon={ArrowUp}
                         size="xs"
@@ -247,5 +307,68 @@ export function NewTableDialog({
         </div>
       </div>
     </Modal>
+  )
+}
+
+/** 一列的结构（枚举、引用、范围、必填……）：按钮上有个点表示设过；字段名还没填时不能设（结构按字段名记） */
+function ColRules({
+  n,
+  value,
+  onChange,
+  schema,
+  files,
+  fields,
+  typeHint,
+  disabled,
+}: {
+  n: number
+  value: ColDraft | undefined
+  onChange: (v: ColDraft) => void
+  schema: TableSchema
+  files: string[]
+  fields: string[]
+  typeHint?: string
+  disabled: boolean
+}) {
+  const set = !!value && !!columnOf(value).col
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <span className="tb:relative tb:inline-flex">
+          <IconButton
+            icon={Columns3}
+            size="xs"
+            disabled={disabled}
+            label={disabled ? t('先填字段名再设第 {n} 列的结构', { n }) : t('第 {n} 列的结构', { n })}
+          />
+          {set && (
+            <span
+              aria-hidden
+              className="tb:pointer-events-none tb:absolute tb:top-0.5 tb:right-0.5 tb:h-1.5 tb:w-1.5 tb:rounded-full tb:bg-accent"
+            />
+          )}
+        </span>
+      </PopoverTrigger>
+      <PopoverContent
+        className="thin-scroll tb:max-h-[min(640px,calc(100dvh-120px))] tb:w-[340px] tb:overflow-y-auto tb:p-3"
+        align="end"
+      >
+        <div className="tb:flex tb:flex-col tb:gap-3">
+          <span className="tb:text-body tb:font-medium">{t('第 {n} 列的结构', { n })}</span>
+          <ColumnFields
+            x={value ?? { d: {}, newEnum: '', allow: '', when: '' }}
+            onChange={onChange}
+            schema={schema}
+            files={files}
+            fields={fields}
+            typeHint={typeHint}
+            noType
+          />
+          <p className="tb:rounded-lg tb:bg-sel tb:px-2.5 tb:py-2 tb:text-caption tb:leading-relaxed tb:text-subtle">
+            {t('新建时按字段名记进项目的表格结构文件，之后在表格页「列结构」里还能改。')}
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

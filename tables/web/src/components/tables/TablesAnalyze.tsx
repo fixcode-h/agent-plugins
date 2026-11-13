@@ -5,6 +5,7 @@ import { extractJson } from '@shared/assist'
 import { applyTablesDraft, draftItemIds, resolveTablesProposal, type TablesDraft } from '@shared/tables-assist'
 import { TYPE_NAMES } from '@shared/tables'
 import type { HeaderRule } from '@shared/table-header'
+import { typeKindLabel } from './TypeEditor'
 import { runPromptInProject } from '@/lib/assist-conv'
 import { tablesApi } from '@/lib/tables-api'
 import { saveTableSchema, useTableSchema } from '@/lib/table-schema'
@@ -188,6 +189,35 @@ function DraftReview({
         id,
         label: t('枚举：{name}', { name: id.slice(5) }),
         detail: e.values.map((v) => v.name).join(', '),
+      }
+    }
+    if (id.startsWith('type:')) {
+      const ty = draft.types[id.slice(5)]
+      return {
+        id,
+        label: t('类型：{name}', { name: id.slice(5) }),
+        detail: [
+          typeKindLabel(ty.kind),
+          ty.fields?.map((f) => `${f.name}: ${f.type}`).join(', '),
+          ty.of,
+          ty.store && t('存储 {tpl}', { tpl: ty.store }),
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      }
+    }
+    if (id === 'formats') {
+      const f = draft.formats!
+      return {
+        id,
+        label: t('数组、映射的写法'),
+        detail: [
+          f.listStore && t('数组 {v}', { v: JSON.stringify(f.listStore) }),
+          f.mapStore && t('映射 {v}', { v: JSON.stringify(f.mapStore) }),
+          f.field && t('结构体字段用 {sep} 隔开', { sep: f.field }),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       }
     }
     const c = draft.columns[id.slice(4)]

@@ -1,6 +1,7 @@
 /**
  * AI 分析表格风格：给 CLI 一份挑出来的几张表的清单，它一张一张用 table.sample 读表头和前几行，
- * 让它自己从读到的表头总结出项目的表头配置（一个「行」的数组）、主键、列表分隔符、基础类型、例外文件、枚举和列的引用 / 范围，输出一个 JSON。
+ * 让它自己从读到的表头总结出项目的表头配置（一个「行」的数组）、主键、列表分隔符、基础类型、例外文件、枚举、列的引用 / 范围，
+ * 以及结构体这类类型的字段和存储样式（照格子实际的写法，用户 2026-11-13 要求 AI 分析时自己调整存储样式），输出一个 JSON。
  * 页面上逐项勾选后才写进项目的表格结构文件；表格文件本身不动。
  */
 import { z } from 'zod'
@@ -10,6 +11,7 @@ import { SHEET_ROLES } from './sheet-header.ts'
 import { HeaderRule } from './table-header.ts'
 import { upgradeRule } from './table-schema-upgrade.ts'
 import { TableColumn, TableEnum, type TableSchema } from './tables.ts'
+import { MapFormat, TableType, TypeFormats } from './table-types.ts'
 
 /** CLI 输出的 JSON；每一部分都可以没有 */
 export const TablesDraft = z.object({
@@ -37,6 +39,16 @@ export const TablesDraft = z.object({
     .default({}),
   enums: z.record(z.string().max(200), TableEnum).default({}),
   columns: z.record(z.string().max(700), TableColumn).default({}),
+  /** 类型表：结构体、映射这类格子的字段和存储样式（照表里实际的写法） */
+  types: z.record(z.string().max(100), TableType).default({}),
+  /** 数组、映射在格子里的写法；只写看得出的几项 */
+  formats: z
+    .object({
+      field: z.string().min(1).max(8).optional(),
+      listStore: TypeFormats.shape.listStore.unwrap().partial().optional(),
+      mapStore: MapFormat.partial().optional(),
+    })
+    .optional(),
 })
 export type TablesDraft = z.infer<typeof TablesDraft>
 
@@ -64,13 +76,20 @@ export function buildTablesPrompt(sample: string, convo: string, langWord: strin
 - style.primitives：类型行里出现的基础类型名（数字、字符串、布尔），其余大驼峰的类型名当枚举或结构。
 - enums：样本里看得出取值范围的枚举类型：键是类型名，values 是 [{ "name": 填进表格的字, "value": 数值（看不出就不写）, "desc": 说明（看不出就不写） }]。
   只列样本里确实出现过的值，不要编；值太多（超过 200）或看起来是自由文本的不要当枚举。
+- types：**类型表**。类型行里出现的结构体、坐标、颜色、奖励这类「一格里有好几个字段」的类型（例如 FVector、Reward、TArray<FReward> 里的 FReward），
+  按表里格子**实际的写法**总结：键是类型名，值是 { "kind": "struct", "fields": [{ "name": 字段名, "type": 字段类型 }], "store": 存储样式模板 }。
+  store 用 {字段名} 占位，其余照抄格子里的字，例如格子写 1#2#3 就是 "{X}#{Y}#{Z}"，写 (X=1,Y=2,Z=3) 就是 "(X={X},Y={Y},Z={Z})"；
+  字段名看不出时用 UE 的叫法（FVector 是 X Y Z、FRotator 是 Pitch Yaw Roll、FColor 是 R G B A）。也可以写别名
+  { "kind": "alias", "of": "TArray<int32>" } 和带范围的基础类型 { "kind": "int", "min": 0, "max": 100 }。只写样本里确实看到的类型。
+- formats：数组、映射在格子里的写法，只写看得出的：listStore（{ "open": 左括号, "close": 右括号, "inner": 数组套数组时里层的分隔符 }）、
+  mapStore（{ "open", "close", "sep": 两对之间的分隔符, "entry": 一对的模板，{K} 是键、{V} 是值，例如 "{K}:{V}" }）、field（结构体字段默认的分隔符）。
 - columns：看得出的引用和范围，键是「相对路径#*#字段名」，值是 { "ref": "被引用表的相对路径#字段名", "min": 数, "max": 数, "allow": ["-1"], "note": 说明 }。
   只写有把握的；没有就给空对象。`,
     convo ? `## 对话\n${convo}` : '',
     `## 输出格式
 先用两三句${langWord}说明看到的风格。然后输出且只输出一个 \`\`\`json 代码块：
 \`\`\`json
-{ "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": {}, "columns": {} }
+{ "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": {}, "columns": {}, "types": { "FVector": { "kind": "struct", "fields": [{ "name": "X", "type": "float" }, { "name": "Y", "type": "float" }, { "name": "Z", "type": "float" }], "store": "{X}#{Y}#{Z}" } }, "formats": { "mapStore": { "sep": ";", "entry": "{K}:{V}" } } }
 \`\`\``,
   ]
     .filter(Boolean)
@@ -107,8 +126,17 @@ function fixRule(h: unknown, roleEnums: Record<string, unknown>): unknown {
   return { ...up, rows }
 }
 
-function normalizeDraft(json: unknown): unknown {
-  if (!json || typeof json !== 'object') return json
+function normalizeDraft(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  // 类型一个个查：写坏的一个丢掉，不让整份分析作废
+  const types = (raw as { types?: unknown }).types
+  const json =
+    types && typeof types === 'object'
+      ? {
+          ...raw,
+          types: Object.fromEntries(Object.entries(types).filter(([, v]) => TableType.safeParse(v).success)),
+        }
+      : raw
   const style = (json as { style?: Record<string, unknown> }).style
   if (!style || typeof style !== 'object') return json
   const s: Record<string, unknown> = { ...style }
@@ -145,6 +173,8 @@ export function draftItemIds(d: TablesDraft): string[] {
     ...(s.exceptions ?? []).map((_, i) => `ex:${i}`),
     ...Object.keys(d.enums).map((k) => `enum:${k}`),
     ...Object.keys(d.columns).map((k) => `col:${k}`),
+    ...Object.keys(d.types).map((k) => `type:${k}`),
+    ...(d.formats && Object.values(d.formats).some(Boolean) ? ['formats'] : []),
   ]
 }
 
@@ -171,5 +201,16 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
     if (picked.has(`enum:${k}`)) enums[k] = { ...e, ...(enums[k]?.source ? { source: enums[k].source } : {}) }
   const columns = { ...schema.columns }
   for (const [k, c] of Object.entries(d.columns)) if (picked.has(`col:${k}`)) columns[k] = c
-  return { ...schema, style, enums, columns, analyzedAt: at }
+  const types = { ...schema.types }
+  for (const [k, ty] of Object.entries(d.types)) if (picked.has(`type:${k}`)) types[k] = ty
+  if (picked.has('formats') && d.formats) {
+    const f = style.formats
+    style.formats = TypeFormats.parse({
+      ...f,
+      ...(d.formats.field ? { field: d.formats.field } : {}),
+      listStore: { ...f.listStore, ...d.formats.listStore },
+      mapStore: { ...f.mapStore, ...d.formats.mapStore },
+    })
+  }
+  return { ...schema, style, enums, columns, types, analyzedAt: at }
 }

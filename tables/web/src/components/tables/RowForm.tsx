@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
+import { ArrowUpRight, Braces, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { CellSet } from '@shared/table-edit'
 import type { ColInfo, EnumOption } from '@shared/table-struct'
+import { storeToShow } from '@shared/table-codec'
 import { cn } from '@/lib/utils'
 import { colName } from '@/lib/sheet'
 import type { SheetColHead } from '@/components/files/SheetTable'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ComboInput, Input, Textarea } from '@/components/ui/input'
 import { ResizeHandle, usePaneWidth } from '@/components/ui/resize'
+import { TypedValueDialog } from './TypedValueDialog'
 
 /** 格子里的字超过这么长、或者有换行，就用多行输入框 */
 const LONG = 48
@@ -201,6 +203,7 @@ const FormRow = memo(function FormRow({
 }) {
   const { col, info, head, note, options } = field
   const [draft, setDraft] = useState<string | null>(null)
+  const [typedOpen, setTypedOpen] = useState(false)
   const v = draft ?? value
   const commit = () => {
     if (draft !== null && draft !== value) onCommit(draft)
@@ -288,6 +291,20 @@ const FormRow = memo(function FormRow({
             />
           )}
         </div>
+        {info?.typed && !readOnly && (
+          <IconButton icon={Braces} label={t('逐项编辑')} className="tb:mt-1" onClick={() => setTypedOpen(true)} />
+        )}
+        {typedOpen && info?.typed && (
+          <TypedValueDialog
+            init={value}
+            {...info.typed}
+            field={info.field}
+            onDone={(x) => {
+              setTypedOpen(false)
+              if (x !== null && x !== value) onCommit(x)
+            }}
+          />
+        )}
         {refValue && (
           <IconButton
             icon={ArrowUpRight}
@@ -297,6 +314,14 @@ const FormRow = memo(function FormRow({
           />
         )}
       </div>
+      {info?.typed && v && !problem && (
+        <p
+          className="tb:truncate tb:font-mono tb:text-caption tb:text-subtle"
+          title={storeToShow(info.typed.node, v, info.typed.codec)}
+        >
+          {storeToShow(info.typed.node, v, info.typed.codec)}
+        </p>
+      )}
       {problem && <p className="tb:text-caption tb:leading-snug tb:text-danger">{problem}</p>}
     </div>
   )
