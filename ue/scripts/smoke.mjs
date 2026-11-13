@@ -61,15 +61,29 @@ try {
   assert.equal(added.project.uname, 'Fake', JSON.stringify(added))
   await api('POST', '/projects', { id: 'p2', name: 'Offline', path: offline, mode: 'none' })
 
-  // 挂工具：没接入的项目、聊天对话不挂
-  assert.equal(
+  // 挂工具：没接入的项目、聊天对话不挂，并说明原因（插件接口 8 的 skip，设置 →「MCP」的自检照原文显示）
+  assert.deepEqual(
     await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'nope', mode: 'agent' }),
-    undefined,
+    { skip: '这个项目还没在 UE 页接入' },
   )
-  assert.equal(
-    await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'p1', mode: 'chat' }),
-    undefined,
+  assert.match(
+    (await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'p1', mode: 'chat' }))
+      .skip,
+    /Chat 页/,
   )
+  // 能力目录：不开对话也能列出工具，每个都写了作用和什么时候用
+  const cat = await plugin.catalog()
+  assert.deepEqual(
+    cat.servers.map((s) => s.name),
+    ['ue'],
+  )
+  const catTools = await cat.servers[0].tools()
+  assert.equal(catTools.length, 19)
+  assert.deepEqual(
+    catTools.filter((x) => !x.guide?.useWhen).map((x) => x.name),
+    [],
+  )
+  assert.ok(catTools.every((x) => !('call' in x)))
   const runTools = await plugin.tools({
     taskId: 't1',
     agentName: 'UE 调试',
@@ -83,6 +97,7 @@ try {
     ['ue'],
   )
   assert.match(runTools.hint, /ue_status/)
+  assert.ok(runTools.servers[0].summary)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
   assert.equal(Object.keys(tools).length, 19)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
