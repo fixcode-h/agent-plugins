@@ -17,6 +17,9 @@ const TableEditorsSpecimen = lazy(() =>
 const HeaderRowsSpecimen = lazy(() =>
   import('./src/components/settings/HeaderRowsSpecimen').then((m) => ({ default: m.HeaderRowsSpecimen })),
 )
+const TypesSpecimen = lazy(() =>
+  import('./src/components/settings/TypesSpecimen').then((m) => ({ default: m.TypesSpecimen })),
+)
 const RowFormSpecimen = lazy(() =>
   import('./src/components/settings/RowFormSpecimen').then((m) => ({ default: m.RowFormSpecimen })),
 )
@@ -86,6 +89,16 @@ const plugin = (): WebPlugin => ({
       Specimen: () => (
         <Suspense fallback={null}>
           <HeaderRowsSpecimen />
+        </Suspense>
+      ),
+    },
+    {
+      id: 'types',
+      label: 'TypeEditor · TypedValueForm',
+      tune: ['input', 'button'],
+      Specimen: () => (
+        <Suspense fallback={null}>
+          <TypesSpecimen />
         </Suspense>
       ),
     },

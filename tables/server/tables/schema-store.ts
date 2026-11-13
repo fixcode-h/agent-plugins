@@ -1,7 +1,7 @@
 /**
  * 表格的结构文件：表头、枚举、列的结构。全部存在表格之外——
  * 项目目录 .agentpanel/tables/（能提交给团队）或数据目录 tables/<项目 id>/（只在本机），由项目设置决定。
- * 拆成 3 个文件，多人各改各的部分不容易冲突；JSON 两格缩进，版本控制里看得出改了什么。
+ * 拆成 4 个文件（types.json 是类型表），多人各改各的部分不容易冲突；JSON 两格缩进，版本控制里看得出改了什么。
  * 旧版还有 files.json（单张表的表头覆盖）：读的时候并进 style 的「按文件指定」，下次保存时删掉。
  */
 import path from 'node:path'
@@ -10,7 +10,7 @@ import { TableSchema, type TablesConfig } from '../../shared/tables.ts'
 import { upgradeSchemaRaw } from '../../shared/table-schema-upgrade.ts'
 import { DATA_DIR } from '../store.ts'
 
-const PARTS = ['style', 'enums', 'columns'] as const
+const PARTS = ['style', 'enums', 'columns', 'types'] as const
 /** 旧版的单表表头覆盖，只读不写 */
 const LEGACY = 'files'
 
@@ -55,6 +55,7 @@ export async function writeSchema(dir: string, s: TableSchema) {
     style: next.analyzedAt ? { ...next.style, analyzedAt: next.analyzedAt } : next.style,
     enums: next.enums,
     columns: next.columns,
+    types: next.types,
   }
   for (const p of PARTS) {
     const file = path.join(dir, `${p}.json`)

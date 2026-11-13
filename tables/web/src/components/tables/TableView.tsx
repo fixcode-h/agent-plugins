@@ -45,6 +45,8 @@ import {
   MenuTrigger,
 } from '@/components/ui/menu'
 import { CellEditor } from './CellEditor'
+import { cellDisplay } from './cell-display'
+import { TypedValueDialog } from './TypedValueDialog'
 import { ColumnSetup } from './ColumnSetup'
 import { EnumPicker } from './EnumPicker'
 import { EnumsDialog } from './EnumsDialog'
@@ -360,6 +362,17 @@ export function TableView({
         : info?.ref
           ? struct.refOpts.get(info.ref)
           : undefined
+      if (info?.typed)
+        return (
+          <TypedValueDialog
+            // 打字进来时 init 只是那一个字：弹窗总从格子原来的值开始
+            init={rows?.[p.row]?.[p.col] ?? ''}
+            {...info.typed}
+            field={info.field}
+            opts={{ enums: struct.enumOpts, refs: struct.refOpts }}
+            onDone={done}
+          />
+        )
       const title = info?.enumName ?? info?.ref ?? info?.field ?? ''
       if (info?.list) return <ListEditor init={init} sep={info.sep} options={opts} title={title} onDone={done} />
       if (info && opts)
@@ -418,18 +431,11 @@ export function TableView({
       if (cells.length) setCells(cells)
       return true
     },
-    display: refNameOf
-      ? (r, c, text) => {
-          const info = r >= (view?.from ?? 0) ? struct.infos[c] : undefined
-          const names = info?.ref ? refNameOf.get(info.ref) : undefined
-          if (!names?.size) return text
-          const one = (v: string) => {
-            const n = names.get(v.trim())
-            return n ? `${v.trim()} · ${n}` : v
-          }
-          return info!.list ? text.split(info!.sep).map(one).join(`${info!.sep} `) : one(text)
-        }
-      : undefined,
+    display: cellDisplay(
+      (r, c) => (r >= (view?.from ?? 0) ? struct.infos[c] : undefined),
+      struct.infos.some((i) => i.typed),
+      refNameOf,
+    ),
     rowMenu: readOnly
       ? undefined
       : (r, trigger) => (

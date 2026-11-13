@@ -102,3 +102,21 @@ test('AI 还按旧格式（几套 headers、roles、roleEnums）回答：取第�
   assert.deepEqual(next.style.header, d.style.header)
   assert.deepEqual(next.style.arrayMarks, ['repeated', 'list'])
 })
+
+test('分析结果里的类型和容器写法：写坏的类型丢掉，勾上的写进类型表', () => {
+  const r = resolveTablesProposal({
+    types: {
+      FVector: { kind: 'struct', fields: [{ name: 'X', type: 'float' }], store: '{X}' },
+      Bad: { kind: 'nope' },
+    },
+    formats: { mapStore: { entry: '{K}={V}' } },
+  })
+  const d = r.proposal!.draft
+  assert.deepEqual(Object.keys(d.types), ['FVector'])
+  assert.ok(draftItemIds(d).includes('type:FVector'))
+  assert.ok(draftItemIds(d).includes('formats'))
+  const s = applyTablesDraft(TableSchema.parse({}), d, new Set(['type:FVector', 'formats']), 'now')
+  assert.equal(s.types.FVector.store, '{X}')
+  assert.equal(s.style.formats.mapStore.entry, '{K}={V}')
+  assert.equal(s.style.formats.mapStore.sep, ';')
+})

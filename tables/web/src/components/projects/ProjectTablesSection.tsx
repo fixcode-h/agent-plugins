@@ -16,9 +16,10 @@ import { DirList } from '@/components/projects/DirList'
 import { ProjectTablesEnums, ProjectTablesHeader } from './ProjectTablesHeader'
 import { ProjectTablesExports } from './ProjectTablesExports'
 import { ProjectTablesRules } from './ProjectTablesRules'
+import { ProjectTablesTypes } from './ProjectTablesTypes'
 
 /** 「表格」设置的子页：一页太长，按要做的事分开 */
-type Sub = 'dirs' | 'header' | 'enums' | 'rules' | 'exports' | 'ai'
+type Sub = 'dirs' | 'header' | 'types' | 'enums' | 'rules' | 'exports' | 'ai'
 
 /** 常见的表格目录写法：点一下加一行 */
 const COMMON_DIRS = ['Config', 'Designer/Excel', 'Design/Tables', 'Content/DataTables']
@@ -80,12 +81,13 @@ export function ProjectTablesSection({
   const subs: { id: Sub; label: string }[] = [
     { id: 'dirs', label: t('目录') },
     { id: 'header', label: t('表头') },
+    { id: 'types', label: t('类型') },
     { id: 'enums', label: t('枚举') },
     { id: 'rules', label: t('校验') },
     { id: 'exports', label: t('导表') },
     { id: 'ai', label: t('AI 分析') },
   ]
-  /** 目录、导表在项目设置里，跟着「确认」；表头、枚举、校验、AI 分析写结构文件，改了就存 */
+  /** 目录、导表在项目设置里，跟着「确认」；表头、类型、枚举、校验、AI 分析写结构文件，改了就存 */
   const viaConfirm = sub === 'dirs' || sub === 'exports'
   return (
     <>
@@ -172,6 +174,13 @@ export function ProjectTablesSection({
               )}
             </p>
           )}
+        </FormSection>
+      )}
+
+      {sub === 'types' && !(saved && project) && <NeedSave />}
+      {sub === 'types' && saved && project && (
+        <FormSection title={t('类型')}>
+          <ProjectTablesTypes projectId={project.id} />
         </FormSection>
       )}
 

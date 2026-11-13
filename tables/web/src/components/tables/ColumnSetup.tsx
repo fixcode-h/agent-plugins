@@ -1,16 +1,15 @@
 import { Fragment, useState } from 'react'
 import { Columns3 } from 'lucide-react'
 import { t } from '@shared/i18n'
-import { colKey, TableColumn, type TableSchema } from '@shared/tables'
+import { colKey, type TableSchema } from '@shared/tables'
 import type { ColInfo, ColKind } from '@shared/table-struct'
 import { colName } from '@/lib/sheet'
 import { cn } from '@/lib/utils'
 import { roleShort } from '@/components/files/sheet-roles'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, Input, Select } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu'
-import { ColumnRules } from './ColumnRules'
+import { ColumnFields } from './ColumnFields'
+import { NEW_ENUM, colDraftOf, putColumn, type ColDraft } from './column-draft'
 
 export const kindLabel = (k: ColKind) =>
   ({
@@ -20,12 +19,9 @@ export const kindLabel = (k: ColKind) =>
     bool: t('布尔'),
     string: t('文字'),
     enum: t('枚举'),
+    struct: t('结构'),
     other: t('未识别'),
   })[k]
-
-const NEW = '__new__'
-/** 参数类型的常用写法（下拉里的选项；也能手填别的） */
-const TYPES = ['int32', 'uint32', 'int64', 'float', 'double', 'bool', 'string']
 
 /**
  * 「列结构」：当前列在表头里的每一行（修饰、导出端、类型、字段名、注释），手动改参数类型、指定枚举、引用、repeated、取值范围。
@@ -51,50 +47,11 @@ export function ColumnSetup({
   const [open, setOpen] = useState(false)
   const key = info?.field ? colKey(file, '*', info.field) : ''
   const own = key ? schema.columns[key] : undefined
-  const [d, setD] = useState<TableColumn>({})
-  const [newEnum, setNewEnum] = useState('')
-  const [allow, setAllow] = useState('')
-  const [when, setWhen] = useState('')
-  const reset = () => {
-    setD(own ?? {})
-    setNewEnum('')
-    setAllow((own?.allow ?? []).join(', '))
-    setWhen((own?.requiredWhen?.values ?? []).join(', '))
-  }
-  const num = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? undefined : Number(v))
+  const [x, setX] = useState<ColDraft>(() => colDraftOf())
+  const reset = () => setX(colDraftOf(own))
   const save = () => {
     if (!key) return
-    const enumName = d.enum === NEW ? newEnum.trim() : d.enum
-    const col = TableColumn.parse({
-      ...d,
-      type: d.type?.trim() || undefined,
-      enum: enumName || undefined,
-      ref: d.ref?.trim() || undefined,
-      allow: allow
-        .split(/[,，]/)
-        .map((x) => x.trim())
-        .filter(Boolean),
-      note: d.note?.trim() || undefined,
-      pattern: d.pattern?.trim() || undefined,
-      requiredWhen:
-        !d.required && d.requiredWhen?.field
-          ? {
-              field: d.requiredWhen.field,
-              values: when
-                .split(/[,，]/)
-                .map((x) => x.trim())
-                .filter(Boolean),
-            }
-          : undefined,
-    })
-    if (!col.allow?.length) delete col.allow
-    if (col.requiredWhen && !col.requiredWhen.values.length) delete col.requiredWhen
-    const columns = { ...schema.columns }
-    const empty = Object.values(col).every((v) => v === undefined || v === false)
-    if (empty) delete columns[key]
-    else columns[key] = col
-    const enums = enumName && !schema.enums[enumName] ? { ...schema.enums, [enumName]: { values: [] } } : schema.enums
-    onSchema({ ...schema, columns, enums })
+    onSchema(putColumn(schema, key, x))
     setOpen(false)
   }
   return (
@@ -149,126 +106,16 @@ export function ColumnSetup({
                 {t('这张表没有认出字段名行：先在「调整表头」里把字段名那一行标出来，列结构按字段名记。')}
               </p>
             ) : (
-              <>
-                <Field
-                  label={t('参数类型')}
-                  tip={t('表头类型行写错或没写时，按这里的类型检查和编辑；只记在结构文件里，表格不改')}
-                >
-                  <Input
-                    size="sm"
-                    list="table-col-types"
-                    placeholder={info.head.find((h) => h.role === 'type')?.text || 'uint32'}
-                    value={d.type ?? ''}
-                    onChange={(e) => setD({ ...d, type: e.target.value })}
-                    className="tb:font-mono"
-                  />
-                  <datalist id="table-col-types">
-                    {[...TYPES, ...Object.keys(schema.enums)].map((x) => (
-                      <option key={x} value={x} />
-                    ))}
-                  </datalist>
-                </Field>
-                <Field label={t('枚举')} tip={t('选了枚举后，这一列改格子时是下拉选择，填了不在枚举里的值会标红')}>
-                  <Select
-                    size="sm"
-                    value={d.enum ?? ''}
-                    onChange={(e) => setD({ ...d, enum: e.target.value || undefined })}
-                    options={[
-                      {
-                        value: '',
-                        label: info.enumName && !d.enum ? t('按类型名：{e}', { e: info.enumName }) : t('不是枚举'),
-                      },
-                      ...Object.keys(schema.enums).map((e) => ({ value: e, label: e })),
-                      { value: NEW, label: t('新建枚举…') },
-                    ]}
-                  />
-                </Field>
-                {d.enum === NEW && (
-                  <Input
-                    size="sm"
-                    autoFocus
-                    placeholder={info.type || 'MyEnum'}
-                    value={newEnum}
-                    onChange={(e) => setNewEnum(e.target.value)}
-                  />
-                )}
-                <Field
-                  label={t('引用')}
-                  tip={t('这一列填的是别的表的主键，写成「文件#字段」，例如 Config/Item.xlsx#ID；改格子时从那张表里选')}
-                >
-                  <Input
-                    size="sm"
-                    list="table-ref-files"
-                    placeholder="Config/Item.xlsx#ID"
-                    value={d.ref ?? ''}
-                    onChange={(e) => setD({ ...d, ref: e.target.value })}
-                    className="tb:font-mono"
-                  />
-                  <datalist id="table-ref-files">
-                    {files.map((f) => (
-                      <option key={f} value={`${f}#ID`} />
-                    ))}
-                  </datalist>
-                </Field>
-                <div className="tb:grid tb:grid-cols-2 tb:gap-2">
-                  <Field label={t('最小值')}>
-                    <Input
-                      size="sm"
-                      type="number"
-                      value={d.min ?? ''}
-                      onChange={(e) => setD({ ...d, min: num(e.target.value) })}
-                    />
-                  </Field>
-                  <Field label={t('最大值')}>
-                    <Input
-                      size="sm"
-                      type="number"
-                      value={d.max ?? ''}
-                      onChange={(e) => setD({ ...d, max: num(e.target.value) })}
-                    />
-                  </Field>
-                </div>
-                <Field label={t('也允许的值')} tip={t('不在范围、枚举里也算对的特殊值，逗号分隔，例如 -1 表示未配置')}>
-                  <Input
-                    size="sm"
-                    placeholder="-1"
-                    value={allow}
-                    onChange={(e) => setAllow(e.target.value)}
-                    className="tb:font-mono"
-                  />
-                </Field>
-                <div className="tb:flex tb:flex-wrap tb:items-center tb:gap-3">
-                  <Checkbox
-                    checked={d.list ?? info.list}
-                    onChange={(v) => setD({ ...d, list: v })}
-                    label={t('数组（一格多个值）')}
-                  />
-                  {(d.list ?? info.list) && (
-                    <label className="tb:flex tb:items-center tb:gap-1.5 tb:text-footnote tb:text-muted">
-                      {t('分隔符')}
-                      <Input
-                        size="sm"
-                        aria-label={t('数组分隔符')}
-                        placeholder={schema.style.listSep || ';'}
-                        value={d.sep ?? ''}
-                        maxLength={4}
-                        onChange={(e) => setD({ ...d, sep: e.target.value || undefined })}
-                        className="tb:w-14 tb:text-center tb:font-mono"
-                      />
-                    </label>
-                  )}
-                </div>
-                <ColumnRules
-                  d={d}
-                  onChange={setD}
-                  fields={fields.filter((f) => f && f !== info.field)}
-                  when={when}
-                  onWhen={setWhen}
-                />
-                <Field label={t('说明')}>
-                  <Input size="sm" value={d.note ?? ''} onChange={(e) => setD({ ...d, note: e.target.value })} />
-                </Field>
-              </>
+              <ColumnFields
+                x={x}
+                onChange={setX}
+                schema={schema}
+                files={files}
+                fields={fields.filter((f) => f && f !== info.field)}
+                typeHint={info.head.find((h) => h.role === 'type')?.text}
+                enumHint={info.enumName}
+                listHint={info.list}
+              />
             )}
             <p className="tb:rounded-lg tb:bg-sel tb:px-2.5 tb:py-2 tb:text-caption tb:leading-relaxed tb:text-subtle">
               {t('按字段名记在项目的表格结构文件里（这个文件的每张表通用），表格文件不改。')}
@@ -277,7 +124,7 @@ export function ColumnSetup({
               <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
                 {t('取消')}
               </Button>
-              <Button size="sm" onClick={save} disabled={!info.field || (d.enum === NEW && !newEnum.trim())}>
+              <Button size="sm" onClick={save} disabled={!info.field || (x.d.enum === NEW_ENUM && !x.newEnum.trim())}>
                 {t('确定')}
               </Button>
             </div>

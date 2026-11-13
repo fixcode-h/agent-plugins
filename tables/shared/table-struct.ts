@@ -8,8 +8,11 @@ import { validHeader, type SheetHeader, type SheetRole } from './sheet-header.ts
 import { toSheetHeader, type TableHeader } from './table-header.ts'
 import { TYPE_NAMES, globHit, schemaColumn, schemaHeader, type TableEnum, type TableSchema } from './tables.ts'
 import type { SheetData } from './files.ts'
+import { eachLeaf, isComplex, parseStore, typeNode, type Codec, type ScalarNode, type TypeNode } from './table-codec.ts'
+import { defaultFormats } from './table-types.ts'
 
-export type ColKind = 'int' | 'uint' | 'float' | 'bool' | 'string' | 'enum' | 'other'
+/** struct：结构体、映射、套着它们的数组，按类型树拆开检查（ColInfo.node） */
+export type ColKind = 'int' | 'uint' | 'float' | 'bool' | 'string' | 'enum' | 'struct' | 'other'
 
 export interface ColInfo {
   col: number
@@ -37,13 +40,9 @@ export interface ColInfo {
   note?: string
   /** 这一列在结构文件里单独设过 */
   custom: boolean
+  /** 要按类型拆的列（结构体、映射……）：类型树 + 写法；格子按存储样式拆、按显示样式显示 */
+  typed?: { node: TypeNode; codec: Codec }
 }
-
-const INT = /^(s?int(8|16|32|64)?|sfixed(32|64)|long|short|byte)$/i
-const UINT = /^(uint(8|16|32|64)?|fixed(32|64)|ulong|ushort)$/i
-const FLOAT = /^(float|double|number|real|decimal)$/i
-const BOOL = /^(bool|boolean)$/i
-const STRING = /^(string|bytes|text|str|fstring|fname|ftext)$/i
 
 /** 表头里某种角色那一行（没有就是空数组） */
 function roleRow(rows: string[][], header: SheetHeader, role: string) {
@@ -68,40 +67,34 @@ export function columnInfos(
     const field = (names[c] ?? '').trim()
     const own = field ? schemaColumn(schema, file, sheet, field) : undefined
     const rawType = own?.type || (types[c] ?? '').trim()
-    // 类型里写了数组：int[]、list<int>、array<ItemId>、TArray<…>、vector<…>；按元素类型检查
-    const arr = /^(.+?)\s*\[\]$/.exec(rawType) ?? /^(?:list|array|vector|tarray|set)\s*<\s*(.+?)\s*>$/i.exec(rawType)
-    const type = arr ? arr[1].trim() : rawType
+    // 类型式按类型表展开：结构体、映射这类按类型拆（node）；数组（int[]、TArray<…>、别名）按元素类型检查
+    const full = rawType ? typeNode(schema, rawType) : undefined
+    const node = full && isComplex(full) ? full : undefined
+    const leaf = full?.k === 'list' && full.of.k === 'scalar' ? full.of : full?.k === 'scalar' ? full : undefined
+    const type = leaf?.name ?? rawType
     const mod = (mods[c] ?? '').trim().toLowerCase()
     const marks = (schema.style.arrayMarks ?? ['repeated']).map((m) => m.toLowerCase())
-    const enumName = own?.enum ?? (schema.enums[type] ? type : undefined)
-    const kind: ColKind = enumName
-      ? 'enum'
-      : INT.test(type)
-        ? 'int'
-        : UINT.test(type)
-          ? 'uint'
-          : FLOAT.test(type)
-            ? 'float'
-            : BOOL.test(type)
-              ? 'bool'
-              : STRING.test(type) || schema.style.primitives.includes(type)
-                ? 'string'
-                : 'other'
+    const enumName = own?.enum ?? leaf?.enumName
+    const kind: ColKind = node ? 'struct' : enumName ? 'enum' : (leaf?.kind ?? 'other')
     out.push({
       col: c,
       field,
       type,
       head: header.roles.map((role, i) => ({ role, text: (rows[header.start + i]?.[c] ?? '').trim() })),
       kind,
-      list: own?.list ?? (!!arr || (!!mod && marks.includes(mod))),
+      list: !node && (own?.list ?? (full?.k === 'list' || (!!mod && marks.includes(mod)))),
+      typed: node && {
+        node,
+        codec: { formats: schema.style.formats ?? defaultFormats(), listSep: own?.sep || schema.style.listSep || ';' },
+      },
       sep: own?.sep || schema.style.listSep || ';',
       remark: !field && names.length > 0,
       enumName,
       ref: own?.ref,
-      min: own?.min,
-      max: own?.max,
+      min: own?.min ?? leaf?.min,
+      max: own?.max ?? leaf?.max,
       allow: own?.allow,
-      pattern: own?.pattern || undefined,
+      pattern: own?.pattern || leaf?.pattern || undefined,
       required: own?.required,
       requiredWhen: own?.requiredWhen?.field ? own.requiredWhen : undefined,
       note: own?.note,
@@ -171,6 +164,46 @@ export interface CellBad {
   msg: string
 }
 
+/** 按类型拆的格子：拆不开算类型不对；拆开后每个叶子按字段的类型、范围、枚举、引用查，原因带上位置（「第 2 项 · Y」） */
+function typedBad(
+  info: ColInfo,
+  typed: NonNullable<ColInfo['typed']>,
+  value: string,
+  ctx: CheckCtx,
+): CellBad | undefined {
+  const p = parseStore(typed.node, value, typed.codec)
+  if (!p.ok) return { rule: 'type', msg: p.err }
+  let bad: CellBad | undefined
+  eachLeaf(typed.node, p.v, (leaf, text, at) => {
+    const one = checkOne(leafInfo(info, leaf), text.trim(), ctx)
+    if (one) bad = { rule: one.rule, msg: at ? `${at}：${one.msg}` : one.msg }
+    return one?.msg
+  })
+  return bad
+}
+
+/** 叶子当一列来查：只用到种类、范围、正则、枚举、引用；列上额外允许的值也算。按列缓存，一万行不重复造对象 */
+const LEAVES = new WeakMap<object, Map<ScalarNode, ColInfo>>() // 模块状态：缓存，丢了重算
+function leafInfo(col: ColInfo, n: ScalarNode): ColInfo {
+  let m = LEAVES.get(col)
+  if (!m) LEAVES.set(col, (m = new Map()))
+  let x = m.get(n)
+  if (!x) {
+    x = {
+      ...col,
+      kind: n.kind,
+      min: n.min,
+      max: n.max,
+      pattern: n.pattern,
+      enumName: n.enumName,
+      ref: n.ref,
+      typed: undefined,
+    }
+    m.set(n, x)
+  }
+  return x
+}
+
 /** 一个值对不对：对就返回 undefined，不对返回原因和种类 */
 function checkOne(info: ColInfo, v: string, ctx: CheckCtx): CellBad | undefined {
   if (info.allow?.includes(v)) return undefined
@@ -204,6 +237,7 @@ function checkOne(info: ColInfo, v: string, ctx: CheckCtx): CellBad | undefined 
 /** 一格对不对（带种类）；空格子不查（可以不填） */
 export function cellBad(info: ColInfo | undefined, value: string, ctx: CheckCtx): CellBad | undefined {
   if (!info || !value || info.remark) return undefined
+  if (info.typed) return typedBad(info, info.typed, value, ctx)
   if (info.list) {
     for (const item of value.split(info.sep || ctx.listSep).map((x) => x.trim())) {
       if (!item) continue
@@ -329,13 +363,15 @@ export function checkHeader(rows: string[][], header: TableHeader, infos: ColInf
     for (const info of infos) {
       if (!info.field) continue
       const v = (rows[r]?.[info.col] ?? '').trim()
-      if (v && !set.has(v))
+      // 类型行：TArray<FVector> 这类类型式按类型表认得出来（这一列不是「未识别」）也算对
+      const known = name === TYPE_NAMES && info.kind !== 'other'
+      if (v && !set.has(v) && !known)
         out.push({
           r,
           c: info.col,
           msg:
             name === TYPE_NAMES
-              ? t('「{v}」不是基础类型，也不是通用枚举', { v })
+              ? t('「{v}」不是基础类型、类型表里的类型，也不是通用枚举', { v })
               : t('「{v}」不是 {e} 里的值', { v, e: name }),
           rule: 'header',
         })
@@ -449,6 +485,7 @@ export function columnOptions(
       name === TYPE_NAMES
         ? [
             ...schema.style.primitives.map((p) => ({ name: p })),
+            ...Object.keys(schema.types).map((e) => ({ name: e, desc: t('类型表') })),
             ...Object.keys(schema.enums).map((e) => ({ name: e, desc: t('枚举') })),
           ]
         : enumOptions(schema.enums[name])
