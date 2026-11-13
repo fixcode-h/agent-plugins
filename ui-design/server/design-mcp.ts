@@ -25,6 +25,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { inspect } from './design-inspect.ts'
 import { compareTool, proposeLayout } from './design-compare.ts'
+import { describeTool } from '../shared/mcp-catalog/describe.ts'
+import { DESIGN_GUIDES, DESIGN_SUMMARY } from './design-tool-guides.ts'
 
 /**
  * 给 CLI 用的设计工具（MCP，Streamable HTTP）：AI 像在控件树和属性面板里操作一样调用工具改设计。
@@ -182,7 +184,7 @@ const batch = (item: Record<string, unknown>, required: string[], extra: Record<
   obj({ items: { type: 'array', items: obj(item, required) }, ...extra }, ['items'])
 const NAMES = obj({ names: { type: 'array', items: { type: 'string' } }, in: IN }, ['names'])
 
-const TOOLS = [
+export const TOOLS = [
   {
     name: 'get_tree',
     description:
@@ -1102,6 +1104,14 @@ async function callTool(s: Session, raw: string, args: any) {
   }
 }
 
+/**
+ * 交给 Agent 的工具列表：说明后面补上「什么时候用 / 不要用」（面板插件接口 8，和设置 →「MCP」显示的同一份）；
+ * 旧面板没有 describeTool 时插件装不上（构建时登记了 hostModules），不用兼容
+ */
+export function designTools() {
+  return TOOLS.map((x) => ({ ...x, description: describeTool(x.description, DESIGN_GUIDES[x.name]) }))
+}
+
 /** 一条 JSON-RPC 请求；通知（没有 id）返回 undefined */
 async function handle(s: Session, msg: any) {
   const reply = (result: unknown) => ({ jsonrpc: '2.0', id: msg.id, result })
@@ -1112,11 +1122,12 @@ async function handle(s: Session, msg: any) {
         protocolVersion: msg.params?.protocolVersion ?? '2025-03-26',
         capabilities: { tools: {} },
         serverInfo: { name: 'agent-panel-design', version: '1.0.0' },
+        instructions: DESIGN_SUMMARY,
       })
     case 'ping':
       return reply({})
     case 'tools/list':
-      return reply({ tools: TOOLS })
+      return reply({ tools: designTools() })
     case 'tools/call':
       return reply(await callTool(s, String(msg.params?.name ?? ''), msg.params?.arguments ?? {}))
     default:

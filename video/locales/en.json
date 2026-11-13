@@ -173,5 +173,7 @@
   "这是第一张，没有前一张可比": "This is the first frame; nothing to compare with",
   "重试": "Retry",
   "面板用 FFmpeg 从视频里取帧图片，只读原视频、不改它。这台电脑上没找到可用的 ffmpeg。": "The panel uses FFmpeg to take frame images from the video. It only reads the original and never changes it. No working ffmpeg was found on this computer.",
-  "颜色 {c}": "Color {c}"
+  "颜色 {c}": "Color {c}",
+  "派出的一次性子任务和工作流节点不给，只给用户在聊的对话": "Not given to dispatched one-off subtasks or workflow nodes, only to conversations you are chatting in",
+  "用户在聊的对话（父对话、子对话、Chat 页）；派出的子任务和工作流节点不挂": "Conversations you are chatting in (parent, child, Chat page); not attached to dispatched subtasks or workflow nodes"
 }

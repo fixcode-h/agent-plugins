@@ -3,51 +3,51 @@
     {
       "id": "blender",
       "name": "Blender",
-      "version": "3.1.0-alpha.3",
+      "version": "3.1.0-alpha.4",
       "description": "让 Agent 直接驱动你的 Blender：GUI 会话里执行 Python、看视口、跑 228 个建模算子，无头作业和渲染排队执行；附带模型设计页。",
       "icon": "box",
-      "tag": "blender-v3.1.0-alpha.3",
-      "asset": "blender-3.1.0-alpha.3.zip",
+      "tag": "blender-v3.1.0-alpha.4",
+      "asset": "blender-3.1.0-alpha.4.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/blender"
     },
     {
       "id": "ue",
       "name": "UE",
-      "version": "0.9.1",
+      "version": "0.10.0",
       "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
       "icon": "gamepad",
-      "tag": "ue-v0.9.1",
-      "asset": "ue-0.9.1.zip",
+      "tag": "ue-v0.10.0",
+      "asset": "ue-0.10.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue"
     },
     {
       "id": "ui-design",
       "name": "UI 设计",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "description": "用对话设计游戏界面和网页：AI 改控件树、加图片和动画，出整屏原画、抠切图和还原，标注、版本和导出（UE 控件树、React 网页、ZIP）。原来是面板自带的「设计」模式。",
       "icon": "palette",
-      "tag": "ui-design-v1.1.1",
-      "asset": "ui-design-1.1.1.zip",
+      "tag": "ui-design-v1.2.0",
+      "asset": "ui-design-1.2.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ui-design"
     },
     {
       "id": "video",
       "name": "视频截帧",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "把视频拖进对话输入框就能截帧：播放器里手动截、按画面变化 / 录屏 / 均匀自动截，选段、标注、去重、看前后变化，用 FFmpeg 或 ComfyUI 做画面增强，发送时换成选好的帧图片；Agent 也能自己调工具从视频里截帧来看。原来是面板自带的视频截帧。",
       "icon": "film",
-      "tag": "video-v1.0.0",
-      "asset": "video-1.0.0.zip",
+      "tag": "video-v1.1.0",
+      "asset": "video-1.1.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/video"
     },
     {
       "id": "tables",
       "name": "表格",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "description": "游戏配置表这类 xlsx / CSV 表格的管理：按目录浏览、搜索、在线改单元格（文件仍是原来的 Excel / WPS 格式），结构信息存在表格之外；版本差异、提交和冲突合并、跨项目对比、导表脚本、AI 分析表格风格；Agent 能按主键查改，评审里的表格改动按格子比。原来是面板自带的表格页。",
       "icon": "table",
-      "tag": "tables-v1.2.0",
-      "asset": "tables-1.2.0.zip",
+      "tag": "tables-v1.2.1",
+      "asset": "tables-1.2.1.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/tables"
     }
   ]

@@ -97,5 +97,9 @@
   "未命名模型": "Untitled model",
   "还没有模型设计对话。写下要建的模型，就会开一个对话用 Blender 建模。": "No model designs yet. Describe a model and a conversation starts modeling it in Blender.",
   "要建什么模型？": "What should we model?",
-  "写下要建的模型，Agent 会在后台开一个 Blender 建模，右边实时预览。": "Describe the model. The agent models it in a background Blender, with a live preview on the right."
+  "写下要建的模型，Agent 会在后台开一个 Blender 建模，右边实时预览。": "Describe the model. The agent models it in a background Blender, with a live preview on the right.",
+  "这个角色没有 Blender 技能（{skills}），插件设置为只给 Blender 角色和模型设计对话挂": "This role has no Blender skills ({skills}); the plugin is set to attach only to Blender roles and model design conversations",
+  "所有对话（插件设置为全部挂）": "All conversations (plugin set to attach everywhere)",
+  "带 Blender 技能的角色的对话，以及模型设计对话": "Conversations of roles with Blender skills, and model design conversations",
+  "只在 Blender 页的模型设计对话里": "Only in model design conversations on the Blender page"
 }

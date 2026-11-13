@@ -928,5 +928,6 @@
   "高度由内容决定": "Height set by content",
   "鼠标悬停": "On hover",
   "（空）": "(empty)",
-  "，修改意见写在右边的对话框里发送": ", and write your notes in the chat on the right"
+  "，修改意见写在右边的对话框里发送": ", and write your notes in the chat on the right",
+  "只在 UI 设计页的 AI 对话里（每轮一个会话，只能改这份设计）": "Only in AI conversations on the UI Design page (one session per turn, limited to this design)"
 }
