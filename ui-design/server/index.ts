@@ -5,6 +5,8 @@ import type { ActivateServer } from '../../sdk/server.ts'
 import type { Project } from '../shared/schema.ts'
 import { DATA_DIR, dataPath, readJson } from './store.ts'
 import { designsApi, setDesignsDir } from './designs.ts'
+import { TOOLS } from './design-mcp.ts'
+import { DESIGN_GUIDES, DESIGN_SUMMARY } from './design-tool-guides.ts'
 
 /**
  * UI 设计插件的服务端入口（面板插件接口 4，ADR 0059）：设计的全部接口挂在 /api/plugins/ui-design/api/designs/ 下，
@@ -54,6 +56,17 @@ const activate: ActivateServer = async (ctx) => {
   const app = new Hono().route('/designs', designs.routes)
   return {
     fetch: (req) => app.fetch(req),
+    // 设置 →「MCP」的能力目录（插件接口 8）：design 工具不经 tools(run)，只在设计页的 AI 对话里自己开会话
+    catalog: () => ({
+      servers: [
+        {
+          name: 'design',
+          summary: DESIGN_SUMMARY,
+          attach: ctx.t('只在 UI 设计页的 AI 对话里（每轮一个会话，只能改这份设计）'),
+          tools: () => TOOLS.map((x) => ({ ...x, ...(DESIGN_GUIDES[x.name] && { guide: DESIGN_GUIDES[x.name] }) })),
+        },
+      ],
+    }),
     status: async () => ({ [ctx.t('正在进行的设计任务')]: designs.running() }),
     stop: () => designs.stop(),
   }

@@ -6,7 +6,8 @@ import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
 import { listProjects, projectForRun } from './registry.ts'
 import { ueTextifier } from './textify.ts'
-import { ueTools } from './tools.ts'
+import { ueToolDefs, ueTools } from './tools.ts'
+import { UE_SUMMARY } from './tool-guides.ts'
 import { setCtx, t } from './util.ts'
 
 /**
@@ -54,16 +55,34 @@ const activate: ActivateServer = async (ctx) => {
 
     async tools(run) {
       // 设计文档 3.6：只认 Agent 模式（项目里执行）的对话，聊天和设计模式不挂
-      if (run.mode === 'chat' || run.pluginTask) return undefined
+      if (run.mode === 'chat') return { skip: t('Chat 页的对话不挂，只在项目里的 Agent 对话挂') }
+      if (run.pluginTask) return { skip: t('其他插件的设计模式对话不挂') }
       const project = await projectForRun(run.projectId, run.cwd)
-      if (!project) return undefined
-      if (ctx.config().attach === 'role' && !run.skills.some((s) => UE_SKILLS.includes(s))) return undefined
+      if (!project) return { skip: t('这个项目还没在 UE 页接入') }
+      if (ctx.config().attach === 'role' && !run.skills.some((s) => UE_SKILLS.includes(s)))
+        return { skip: t('插件设置为只给 UE 角色挂，这个角色没有 {skills} 技能', { skills: UE_SKILLS.join(' / ') }) }
       return {
-        servers: [{ name: 'ue', tools: () => ueTools(project.id, project.root, run.agentName) }],
+        servers: [{ name: 'ue', summary: UE_SUMMARY, tools: () => ueTools(project.id, project.root, run.agentName) }],
         hint: run.resume ? undefined : HINT,
         notices: run.resume ? undefined : await bridgeNotice(project.root),
       }
     },
+
+    // 设置 →「MCP」的能力目录（面板插件接口 8）：不开对话也能列出工具和说明
+    catalog: () => ({
+      servers: [
+        {
+          name: 'ue',
+          summary: UE_SUMMARY,
+          attach:
+            ctx.config().attach === 'role'
+              ? t('在 UE 页接入的项目里、带 UE 技能的角色的 Agent 对话（插件设置为只给 UE 角色）')
+              : t('在 UE 页接入的项目里的 Agent 对话（Chat 页不挂）'),
+          hint: HINT,
+          tools: () => ueToolDefs().map(({ fn: _fn, targets: _t, ...d }) => d),
+        },
+      ],
+    }),
 
     // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
     textify: ueTextifier,

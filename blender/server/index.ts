@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import type { ActivateServer, McpTool, PluginConfig, PluginRun } from '../../sdk/server.ts'
 import { addonTargets, installAddon } from './addon-install.ts'
-import { addonZipPath, dshGateway, dshTools, initDsh, startDsh, stopDsh } from './dsh-host.ts'
+import { addonZipPath, dshGateway, dshToolDefs, dshTools, initDsh, startDsh, stopDsh } from './dsh-host.ts'
+import { DSH_SUMMARY, MODEL_SUMMARY, withGuide } from './tool-guides.ts'
 import { MODEL_HINT } from './model-meta.ts'
 import { MODEL_TOOLS } from './model-tools.ts'
 import { blenderStatus, initModel, readGlb, readModelMeta, stopModel } from './model.ts'
@@ -52,11 +53,16 @@ const activate: ActivateServer = async (ctx) => {
       ctx.log.warn('启动 Gateway 失败', { error: e.message })
     })
 
+  // 自检（run.dryRun，插件接口 8）只列定义：不起 Gateway
   const dshServer = (run: PluginRun) => ({
     name: 'blender',
-    tools: (): Promise<McpTool[]> =>
-      dshTools({ taskId: run.taskId, parentTaskId: run.parentTaskId, name: run.agentName }, ctx.config()),
+    summary: DSH_SUMMARY,
+    tools: async (): Promise<McpTool[]> =>
+      run.dryRun
+        ? dshToolDefs().map((d) => ({ ...d, call: async () => ({ content: [] }) }))
+        : dshTools({ taskId: run.taskId, parentTaskId: run.parentTaskId, name: run.agentName }, ctx.config()),
   })
+  const modelTools = () => MODEL_TOOLS.map(withGuide)
 
   return {
     async fetch(req) {
@@ -106,15 +112,43 @@ const activate: ActivateServer = async (ctx) => {
       const model = run.pluginTask === MODEL_MODE
       const blenderAgent = run.skills.some((s) => BLENDER_SKILLS.includes(s))
       const all = cfg.attach === 'all'
-      if (!model && !blenderAgent && !all) return undefined
+      if (!model && !blenderAgent && !all)
+        return {
+          skip: ctx.t('这个角色没有 Blender 技能（{skills}），插件设置为只给 Blender 角色和模型设计对话挂', {
+            skills: BLENDER_SKILLS.join(' / '),
+          }),
+        }
       const servers = [dshServer(run)]
       const hints = [DSH_HINT]
       if (model) {
-        servers.push({ name: 'blender-model', tools: async () => MODEL_TOOLS })
+        servers.push({ name: 'blender-model', summary: MODEL_SUMMARY, tools: async () => modelTools() })
         hints.unshift(MODEL_HINT)
       }
       return { servers, hint: run.resume ? undefined : hints.join('\n\n') }
     },
+
+    // 设置 →「MCP」的能力目录（插件接口 8）
+    catalog: () => ({
+      servers: [
+        {
+          name: 'blender',
+          summary: DSH_SUMMARY,
+          attach:
+            ctx.config().attach === 'all'
+              ? ctx.t('所有对话（插件设置为全部挂）')
+              : ctx.t('带 Blender 技能的角色的对话，以及模型设计对话'),
+          hint: DSH_HINT,
+          tools: dshToolDefs,
+        },
+        {
+          name: 'blender-model',
+          summary: MODEL_SUMMARY,
+          attach: ctx.t('只在 Blender 页的模型设计对话里'),
+          hint: MODEL_HINT,
+          tools: modelTools,
+        },
+      ],
+    }),
 
     onConfig(next: PluginConfig, prev: PluginConfig) {
       return RESTART_KEYS.some((k) => next[k] !== prev[k])

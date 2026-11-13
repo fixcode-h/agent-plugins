@@ -24,7 +24,8 @@ const ctx = {
 const { default: activate } = await import(pathToFileURL(path.join(dir, 'server', 'index.js')).href)
 const plugin = await activate(ctx)
 try {
-  assert.equal(await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false }), undefined)
+  // 不是 Blender 角色、也不是模型设计对话：不挂，并说明原因（插件接口 8 的 skip）
+  assert.match((await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false })).skip, /Blender 技能/)
   const run = await plugin.tools({
     taskId: 'm',
     agentName: 'x',
@@ -51,6 +52,27 @@ try {
   const text = doctor.content.map((c) => c.text ?? '').join('\n')
   assert.match(text, /SESSION doctor/)
   console.log(text.split('\n')[0])
+  // 工具带了作用和什么时候用（插件接口 8）
+  assert.deepEqual(
+    dsh.filter((t) => !t.guide?.useWhen).map((t) => t.name),
+    [],
+  )
+  // 能力目录：Gateway 已经起过，照列已注册的工具；预演（dryRun）只列定义，不调工具
+  const cat = await plugin.catalog()
+  assert.deepEqual(
+    cat.servers.map((s) => s.name),
+    ['blender', 'blender-model'],
+  )
+  assert.equal((await cat.servers[0].tools()).length, 6)
+  const dry = await plugin.tools({
+    taskId: '',
+    agentName: 'x',
+    skills: [],
+    resume: false,
+    pluginTask: 'blender.model',
+    dryRun: true,
+  })
+  assert.equal((await dry.servers[0].tools()).length, 6)
   const model = await run.servers[1].tools()
   assert.deepEqual(
     model.map((t) => t.name),

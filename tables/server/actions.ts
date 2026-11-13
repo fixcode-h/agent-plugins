@@ -84,6 +84,7 @@ export const tableActions: PluginAction[] = [
     title: '列出表格',
     description: '列出项目表格目录（项目设置 → 表格）里的配置表：相对路径、格式。改表格前先用它找文件。',
     level: 'read',
+    useWhen: '改表格或查数据前先找到文件路径时',
     input: z.object({ projectId: PID }),
     run: async (a, ctx) => {
       const r = (await ctx.api('GET', `${API}/tables/${enc(pidOf(a.projectId, ctx))}`)) as TablesIndex
@@ -97,6 +98,7 @@ export const tableActions: PluginAction[] = [
     description:
       '读一张配置表的表头和前几行数据（制表符分隔，行号从 1 数），以及这张表里各个类型名出现过的值。AI 分析表格风格时一张一张用它看，不要自己写脚本解析 xlsx。',
     level: 'read',
+    useWhen: '要了解一张表的表头、写法和已有取值风格时（AI 分析表格、新增行之前）',
     input: z.object({ projectId: PID, path: z.string().min(1).describe('表格的路径（table.list 列出来的）') }),
     run: async (a, ctx) =>
       (await ctx.api('GET', `${API}/tables/${enc(pidOf(a.projectId, ctx))}/sample?path=${enc(a.path)}`)) as {
@@ -109,6 +111,8 @@ export const tableActions: PluginAction[] = [
     description:
       '按字段名查一张配置表：返回字段列表、主键字段、匹配的行（Excel 行号 + 字段值）。表头按项目的表格结构识别，不用自己数第几行。读 xlsx 用它，不要自己写脚本解析。',
     level: 'read',
+    useWhen: '按字段或主键查具体的行和值时',
+    avoidWhen: '不知道值在哪张表时先用 table.search',
     input: TableQueryInput.extend({ projectId: PID }),
     run: async (a, ctx) => {
       const pid = pidOf(a.projectId, ctx)
@@ -124,6 +128,7 @@ export const tableActions: PluginAction[] = [
       '想知道某个 ID 在哪些表里被用到、某个字段名在哪张表时用它，不要一张张 table.query。' +
       'q 写成「字段名:值」（例如 ItemId:1001）只在叫这个名字的列里找；whole 整格相同才算（数组列 1001;1002 里某一项相同也算）。',
     level: 'read',
+    useWhen: '知道一个值（id、名字）但不知道在哪张表、哪一格时',
     input: z.object({
       projectId: PID,
       q: z.string().trim().min(1).max(500).describe('要找的值；「字段名:值」只在那一列找'),
@@ -164,6 +169,7 @@ export const tableActions: PluginAction[] = [
       '列出一张配置表每一列的字段名、类型、是不是数组（分隔符）、枚举能填哪些值、引用哪张表的哪个字段、取值范围、正则、必填，' +
       '以及表头有几行、数据从第几行开始、主键字段。按项目的表格结构识别（和表格页、保存前检查同一份）。加行、改值之前先用它看该填什么。',
     level: 'read',
+    useWhen: '改格子前确认这一列的类型、枚举、引用和取值范围，免得写进非法值',
     input: z.object({
       projectId: PID,
       path: z.string().trim().min(1).max(600).describe('表格的路径（table.list 列出来的）'),
@@ -184,6 +190,8 @@ export const tableActions: PluginAction[] = [
       '按主键（或 Excel 行号）改一张配置表的格子、在末尾加行、删行。只写这些格子，样式、公式、其它工作表原样保留，文件格式不变，写之前自动备份。' +
       '按项目的表格结构检查（类型、枚举、引用、范围、主键重复），有问题时不写并列出原因。改 xlsx 一律用它，不要用 openpyxl 之类整本重写。',
     level: 'write',
+    useWhen: '用户明确要你直接改表格时',
+    avoidWhen: '用户想先看差异再决定时用 table.propose',
     input: TableEditInput.extend({ projectId: PID }),
     run: async (a, ctx) => {
       const pid = pidOf(a.projectId, ctx)
@@ -215,6 +223,7 @@ export const tableActions: PluginAction[] = [
       '和 table.edit 参数一样，但不写文件：按表格结构检查通过后，把改动交给用户在表格页里看差异、确认后再放进表格保存。' +
       '用户从表格页让你「照着描述加几行」「修检查出的问题」时用它，不要用 table.edit。note 用一两句话说明改了什么、依据是什么。同一张表再提会替换上一份。',
     level: 'read',
+    useWhen: '改动要用户确认后再写、或用户没明确说直接改时',
     input: TableEditInput.extend({
       projectId: PID,
       note: z.string().max(2000).default('').describe('给用户看的说明：改了什么、为什么'),
@@ -255,6 +264,7 @@ export const tableActions: PluginAction[] = [
     description:
       '按项目的表格结构把所有配置表查一遍（类型、枚举、引用、范围、主键重复），按文件和工作表列出前几处问题。',
     level: 'read',
+    useWhen: '改完表格后核对有没有破坏类型、枚举、引用和主键',
     input: z.object({ projectId: PID }),
     run: async (a, ctx) => {
       const r = (await ctx.api('GET', `${API}/tables/${enc(pidOf(a.projectId, ctx))}/check`)) as TablesCheck

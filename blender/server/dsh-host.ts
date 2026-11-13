@@ -1,3 +1,4 @@
+import { withGuide } from './tool-guides.ts'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -232,14 +233,28 @@ export async function dshTools(caller: DshCaller, cfg: PluginConfig): Promise<Mc
       session: { id: caller.parentTaskId ?? caller.taskId },
     },
   })
-  return [...tools.values()].map((def) => ({
-    name: def.name,
-    description: def.description,
-    inputSchema: inputSchema(def.parameters),
-    call: async (args, c) => {
-      // Gateway 可能还没起（「打开插件时就启动」关着）：上游各工具自己会 ensureBackend
-      const value = await def.execute(args, exec(c.callId))
-      return toMcp(def, args, value)
-    },
-  }))
+  return [...tools.values()].map((def) =>
+    withGuide({
+      name: def.name,
+      description: def.description,
+      inputSchema: inputSchema(def.parameters),
+      call: async (args, c) => {
+        // Gateway 可能还没起（「打开插件时就启动」关着）：上游各工具自己会 ensureBackend
+        const value = await def.execute(args, exec(c.callId))
+        return toMcp(def, args, value)
+      },
+    }),
+  )
+}
+
+/**
+ * 不起 Gateway、不注册的工具定义（设置 →「MCP」的能力目录和自检）：插件打开时已经注册过就照列；
+ * 「打开插件时就启动」关着、还没有对话用过时列不出，照实说
+ */
+export function dshToolDefs(): Omit<McpTool, 'call'>[] {
+  if (!tools.size)
+    throw new Error('Blender 工具还没加载：插件设置里「打开插件时就启动 Gateway」关着，第一次对话用到时才加载')
+  return [...tools.values()].map((def) =>
+    withGuide({ name: def.name, description: def.description, inputSchema: inputSchema(def.parameters) }),
+  )
 }

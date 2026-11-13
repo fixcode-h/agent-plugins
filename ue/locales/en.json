@@ -1026,5 +1026,11 @@
   "没有能赋给这个参数的对象": "No objects can be assigned to this parameter",
   "没加载的资源": "Not loaded",
   "UE 进程 {pid} 里的桥接是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新桥接，重新编译并重启 UE。用不到新操作的功能照常能用": "The bridge in UE process {pid} is {old} and has no \"{op}\" operation (the plugin ships {new}). Update the bridge under \"Bridge & permissions\" on the UE page, rebuild and restart UE. Features that do not need new operations keep working",
-  "项目里的 UE 桥接是 {old}，插件带的是 {new}：新功能要更新桥接后才能用。到 UE 页「桥接与权限」更新，再重新编译。": "The UE bridge in this project is {old}; the plugin ships {new}. New features need the updated bridge: update it under \"Bridge & permissions\" on the UE page, then rebuild."
+  "项目里的 UE 桥接是 {old}，插件带的是 {new}：新功能要更新桥接后才能用。到 UE 页「桥接与权限」更新，再重新编译。": "The UE bridge in this project is {old}; the plugin ships {new}. New features need the updated bridge: update it under \"Bridge & permissions\" on the UE page, then rebuild.",
+  "Chat 页的对话不挂，只在项目里的 Agent 对话挂": "Not attached to Chat page conversations, only to Agent conversations in a project",
+  "其他插件的设计模式对话不挂": "Not attached to other plugins' design-mode conversations",
+  "这个项目还没在 UE 页接入": "This project has not been connected on the UE page yet",
+  "插件设置为只给 UE 角色挂，这个角色没有 {skills} 技能": "The plugin is set to attach only to UE roles, and this role has none of the {skills} skills",
+  "在 UE 页接入的项目里、带 UE 技能的角色的 Agent 对话（插件设置为只给 UE 角色）": "Agent conversations of roles with UE skills, in projects connected on the UE page (plugin set to UE roles only)",
+  "在 UE 页接入的项目里的 Agent 对话（Chat 页不挂）": "Agent conversations in projects connected on the UE page (not the Chat page)"
 }

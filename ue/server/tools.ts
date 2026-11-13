@@ -12,6 +12,7 @@ import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+import { UE_GUIDES } from './tool-guides.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -434,12 +435,9 @@ export const TOOL_NAMES = DEFS.map((d) => d.name)
 
 /** 这一轮对话的工具：项目按对话所在的项目找（每次调用时重新读，登记改了不用重启对话） */
 export function ueTools(projectId: string, root: string, agent: string): McpTool[] {
-  return DEFS.map((d) => ({
-    name: d.name,
-    description: d.description,
-    inputSchema: { type: 'object', properties: d.properties, required: d.required },
-    ...(d.effect && { effect: d.effect }),
-    ...(d.targets && { targets: (args: Record<string, unknown>) => d.targets!(args, root) }),
+  return ueToolDefs().map(({ fn, targets, ...def }) => ({
+    ...def,
+    ...(targets && { targets: (args: Record<string, unknown>) => targets(args, root) }),
     call: async (args: Record<string, unknown>, mctx: McpCallContext) => {
       const project = await getProject(projectId)
       if (!project) return mcpText('这个项目已经从 UE 页移除了', true)
@@ -451,10 +449,28 @@ export function ueTools(projectId: string, root: string, agent: string): McpTool
         target: target && (target.instance !== undefined || target.world) ? target : undefined,
       }
       try {
-        return await d.fn(args, ctx)
+        return await fn(args, ctx)
       } catch (e) {
         return mcpText((e as Error).message, true)
       }
     },
   }))
+}
+
+/** 不带 call 的工具定义（设置 →「MCP」的能力目录也用它，不用找项目） */
+export function ueToolDefs() {
+  return DEFS.map((d) => {
+    const { confirms, irreversible, ...guide } = UE_GUIDES[d.name] ?? {}
+    return {
+      name: d.name,
+      description: d.description,
+      inputSchema: { type: 'object', properties: d.properties, required: d.required },
+      ...(d.effect && { effect: d.effect }),
+      ...(guide.title && { guide: guide as (typeof UE_GUIDES)[string] }),
+      ...(confirms && { confirms }),
+      ...(irreversible && { irreversible }),
+      fn: d.fn,
+      targets: d.targets,
+    }
+  })
 }
