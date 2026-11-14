@@ -111,9 +111,12 @@ export interface EnumOption {
   desc?: string
 }
 export function enumOptions(e: TableEnum | undefined, fromSource: EnumOption[] = []): EnumOption[] {
-  const own = e?.values ?? []
-  const seen = new Set(own.map((v) => v.name))
-  return [...own, ...fromSource.filter((v) => !seen.has(v.name))]
+  // 扫描出来的以源头为准排前面；手写的、枚举表里的同名的不再重复列
+  const scanned = e?.scanned?.values ?? []
+  const seen = new Set(scanned.map((v) => v.name))
+  const own = (e?.values ?? []).filter((v) => !seen.has(v.name))
+  for (const v of own) seen.add(v.name)
+  return [...scanned, ...own, ...fromSource.filter((v) => !seen.has(v.name))]
 }
 
 /** 「相对路径#字段名」或「相对路径#工作表#字段名」 */
@@ -156,7 +159,17 @@ export function patternRe(p: string): RegExp | null {
  * 也决定能给哪些批量修法（超出范围改成边界值……）
  */
 export type ProblemRule =
-  'type' | 'min' | 'max' | 'pattern' | 'enum' | 'ref' | 'required' | 'requiredWhen' | 'key' | 'unique' | 'header'
+  | 'type'
+  | 'min'
+  | 'max'
+  | 'pattern'
+  | 'enum'
+  | 'ref'
+  | 'required'
+  | 'requiredWhen'
+  | 'key'
+  | 'unique'
+  | 'header'
 
 /** 一格不合规：原因 + 种类 */
 export interface CellBad {

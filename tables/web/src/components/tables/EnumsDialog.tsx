@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/icon-button'
 import { Field, Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { cn } from '@/lib/utils'
+import { ScanMark, ScannedValues } from './EnumScanParts'
 
 /**
  * 项目的枚举：左边每个枚举一行，右边它的值（名字、值、说明），以及「从枚举表里取」的设置。
@@ -96,8 +97,9 @@ export function EnumsDialog({
                 )}
               >
                 <span className="tb:min-w-0 tb:flex-1 tb:truncate">{n}</span>
+                {enums[n].scanned && <ScanMark />}
                 <span className="tb:shrink-0 tb:text-caption tb:text-subtle tb:tabular-nums">
-                  {enums[n].values.length}
+                  {enums[n].values.length + (enums[n].scanned?.values.length ?? 0)}
                 </span>
               </button>
             ))}
@@ -112,20 +114,29 @@ export function EnumsDialog({
           <section className="tb:flex tb:min-w-0 tb:flex-1 tb:flex-col tb:gap-3">
             <div className="tb:flex tb:items-center tb:gap-2">
               <h3 className="tb:font-mono tb:text-body tb:font-semibold">{sel}</h3>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="tb:ml-auto tb:text-danger"
-                onClick={() => {
-                  setEnums(({ [sel]: _, ...m }) => m)
-                  setSel(names.find((n) => n !== sel) ?? '')
-                }}
-              >
-                <Trash2 className="tb:h-3.5 tb:w-3.5" />
-                {t('删除这个枚举')}
-              </Button>
+              {/* 只靠扫描才有的枚举删不掉（下次读又会出现）：去设置里改扫描规则 */}
+              {!(cur.scanned && !cur.values.length && !cur.source) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="tb:ml-auto tb:text-danger"
+                  onClick={() => {
+                    setEnums(({ [sel]: _, ...m }) => m)
+                    setSel(names.find((n) => n !== sel) ?? '')
+                  }}
+                >
+                  <Trash2 className="tb:h-3.5 tb:w-3.5" />
+                  {t('删除这个枚举')}
+                </Button>
+              )}
             </div>
+            {cur.scanned && <ScannedValues scanned={cur.scanned} scans={schema.scans} />}
             <div className="tb:grid tb:grid-cols-[1fr_90px_1fr_28px] tb:items-center tb:gap-x-2 tb:gap-y-1 tb:text-footnote">
+              {cur.scanned && (
+                <span className="tb:col-span-4 tb:text-caption tb:text-subtle">
+                  {t('手写的成员（和扫描出来的同名时以扫描的为准）')}
+                </span>
+              )}
               <span className="tb:text-caption tb:text-subtle">{t('名字（填进表格的字）')}</span>
               <span className="tb:text-caption tb:text-subtle">{t('值')}</span>
               <span className="tb:text-caption tb:text-subtle">{t('说明')}</span>

@@ -4,10 +4,12 @@ import { toast } from '@/lib/toast'
 import { t } from '@shared/i18n'
 import { type TableSchema } from '@shared/tables'
 import type { HeaderException, HeaderRule } from '@shared/table-header'
+import { ScanMark } from '@/components/tables/EnumScanParts'
+import { ProjectTablesScans } from './ProjectTablesScans'
 import { saveTableSchema, useSchemaDraft, useTableSchema } from '@/lib/table-schema'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
-import { Input } from '@/components/ui/input'
+import { FormSection, Input } from '@/components/ui/input'
 import { HeaderRowsEditor } from '@/components/tables/HeaderRowsEditor'
 import { EnumsDialog } from '@/components/tables/EnumsDialog'
 import { EnumRenameDialog } from '@/components/tables/EnumRenameDialog'
@@ -206,6 +208,26 @@ function ExceptionList({
  */
 export function ProjectTablesEnums({ projectId }: { projectId: string }) {
   const { schema, error } = useTableSchema(projectId)
+  if (error) return <p className="tb:text-footnote tb:text-danger">{error}</p>
+  if (!schema) return null
+  return (
+    <>
+      <FormSection title={t('枚举扫描')}>
+        <ProjectTablesScans projectId={projectId} schema={schema} />
+      </FormSection>
+      <FormSection title={t('通用枚举')}>
+        <p className="tb:text-footnote tb:leading-relaxed tb:text-subtle">
+          {t('整个项目所有表格共用：列的类型写了同名类型，或在「列结构」里选了它，改格子时就是下拉，填错会标红。')}
+        </p>
+        <EnumLibrary projectId={projectId} />
+      </FormSection>
+    </>
+  )
+}
+
+/** 通用枚举库：枚举名一排胶囊（扫描出来的带标记）+「管理通用枚举」 */
+function EnumLibrary({ projectId }: { projectId: string }) {
+  const { schema, error } = useTableSchema(projectId)
   const [open, setOpen] = useState(false)
   const [renames, setRenames] = useState<EnumRename[] | null>(null)
   if (error) return <p className="tb:text-footnote tb:text-danger">{error}</p>
@@ -220,8 +242,11 @@ export function ProjectTablesEnums({ projectId }: { projectId: string }) {
               key={n}
               className="tb:inline-flex tb:h-6 tb:items-center tb:gap-1 tb:rounded-(--c-badge-radius) tb:bg-sel tb:px-2 tb:font-mono tb:text-caption tb:text-muted"
             >
+              {schema.enums[n].scanned && <ScanMark />}
               {n}
-              <span className="tb:text-subtle">{schema.enums[n].values.length}</span>
+              <span className="tb:text-subtle">
+                {schema.enums[n].values.length + (schema.enums[n].scanned?.values.length ?? 0)}
+              </span>
             </span>
           ))
         ) : (

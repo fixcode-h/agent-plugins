@@ -20,6 +20,9 @@ const HeaderRowsSpecimen = lazy(() =>
 const TypesSpecimen = lazy(() =>
   import('./src/components/settings/TypesSpecimen').then((m) => ({ default: m.TypesSpecimen })),
 )
+const EnumScanSpecimen = lazy(() =>
+  import('./src/components/settings/EnumScanSpecimen').then((m) => ({ default: m.EnumScanSpecimen })),
+)
 const RowFormSpecimen = lazy(() =>
   import('./src/components/settings/RowFormSpecimen').then((m) => ({ default: m.RowFormSpecimen })),
 )
@@ -99,6 +102,16 @@ const plugin = (): WebPlugin => ({
       Specimen: () => (
         <Suspense fallback={null}>
           <TypesSpecimen />
+        </Suspense>
+      ),
+    },
+    {
+      id: 'enum-scan',
+      label: 'EnumScanRow · ScanPreview',
+      tune: ['button', 'input'],
+      Specimen: () => (
+        <Suspense fallback={null}>
+          <EnumScanSpecimen />
         </Suspense>
       ),
     },

@@ -185,14 +185,7 @@ export function ProjectTablesSection({
       )}
 
       {sub === 'enums' && !(saved && project) && <NeedSave />}
-      {sub === 'enums' && saved && project && (
-        <FormSection title={t('通用枚举')}>
-          <p className="tb:text-footnote tb:leading-relaxed tb:text-subtle">
-            {t('整个项目所有表格共用：列的类型写了同名类型，或在「列结构」里选了它，改格子时就是下拉，填错会标红。')}
-          </p>
-          <ProjectTablesEnums projectId={project.id} />
-        </FormSection>
-      )}
+      {sub === 'enums' && saved && project && <ProjectTablesEnums projectId={project.id} />}
 
       {sub === 'rules' && !(saved && project) && <NeedSave />}
       {sub === 'rules' && saved && project && (
