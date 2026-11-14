@@ -2,7 +2,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { TableSchema } from './tables.ts'
-import { applyTablesDraft, buildTablesBody, draftItemIds, resolveTablesProposal } from './tables-assist.ts'
+import {
+  applyTablesDraft,
+  buildTablesBody,
+  draftItemIds,
+  resolveTablesProposal,
+  tablesJsonOf,
+} from './tables-assist.ts'
 
 const draft = {
   summary: '5 行表头',
@@ -31,7 +37,7 @@ test('提示词带上样本和对话', () => {
   const p = buildTablesBody({ sample: '### a.xlsx\n1\tID' }, [{ role: 'user', text: '主键是 Id' }])
   assert.match(p, /### a\.xlsx/)
   assert.match(p, /主键是 Id/)
-  assert.match(p, /```json/)
+  assert.match(p, /```tables-style/)
 })
 
 test('JSON 校验：不认识的 kind 改成「其它」并留作行名，格式错才报错，缺的部分给默认', () => {
@@ -119,4 +125,12 @@ test('分析结果里的类型和容器写法：写坏的类型丢掉，勾上�
   assert.equal(s.types.FVector.store, '{X}')
   assert.equal(s.style.formats.mapStore.entry, '{K}={V}')
   assert.equal(s.style.formats.mapStore.sep, ';')
+})
+
+test('结果取 tables-style 代码块的最后一个，没有时交给旧的 json 解析', () => {
+  const fb = () => ({ json: 'old' })
+  const text = '说明\n```tables-style\n{"a":1}\n```\n改一下\n```tables-style\n{"a":2}\n```'
+  assert.deepEqual(tablesJsonOf(text, fb), { json: { a: 2 } })
+  assert.deepEqual(tablesJsonOf('```json\n{}\n```', fb), { json: 'old' })
+  assert.match(tablesJsonOf('```tables-style\n{坏\n```', fb).error ?? '', /JSON 解析失败/)
 })

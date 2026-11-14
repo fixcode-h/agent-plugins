@@ -48,7 +48,6 @@
   "{vcs} · 选一个版本看它改了什么": "{vcs} · pick a version to see what it changed",
   "… 第 {from}–{to} 行没变（{n} 行），点开看 …": "… rows {from}–{to} unchanged ({n} rows), click to show …",
   "…前面还有 {n} 行": "…{n} earlier lines",
-  "「{title}」的结果已经交回项目设置，可以去应用": "The result of \"{title}\" is back in the project settings, ready to apply",
   "「{v}」不是 {e} 里的值": "\"{v}\" is not a value of {e}",
   "一共 {n} 个表格文件": "{n} table files in total",
   "上一个": "Previous match",
@@ -303,7 +302,6 @@
   "已在 {n} 个文件里替换 {m} 格": "Replaced {m} cells in {n} files",
   "已复制路径": "Path copied",
   "已复制输出": "Output copied",
-  "已应用到表格设置：上面的表头、通用枚举已经更新，表格页按新的结构显示": "Applied to the table settings. The header and shared enums above are updated, and the Tables page uses the new structure",
   "已把 {name} 切换到所选版本": "Switched {name} to the selected version",
   "已拷 {n} 行到 {name}": "Copied {n} rows to {name}",
   "已提交到 {vcs}": "Submitted to {vcs}",
@@ -1054,5 +1052,12 @@
   "第 {n} 对": "Pair {n}",
   "键「{k}」重复了": "Key “{k}” appears twice",
   "「{v}」不是基础类型、类型表里的类型，也不是通用枚举": "“{v}” is not a basic type, a type from the type table or a shared enum",
-  "默认 {v}": "Default {v}"
+  "默认 {v}": "Default {v}",
+  "分析出的表头、类型、枚举逐项勾选，应用后直接写进项目的表格结构文件": "Pick the analyzed header, types and enums; applying writes them straight into the project's table schema files",
+  "分析结果读不出来：{error}": "Couldn't read the analysis result: {error}",
+  "可以在对话里让它按要求重新输出结果。": "You can ask it in the chat to output the result again in the required format.",
+  "这次分析的结果已经应用到表格设置，项目设置的「表格」页和表格页都按新的结构显示。": "This analysis has been applied to the table settings. The project's Tables settings and the Tables page now use the new structure.",
+  "重新勾选": "Pick again",
+  "「{title}」的结果可以在分析窗口右侧或项目设置的「表格」页应用": "Results of \"{title}\" can be applied on the right of the analysis window or in the project's Tables settings",
+  "已应用到表格设置：表头、通用枚举已经更新，表格页按新的结构显示": "Applied to table settings: header and shared enums updated, the Tables page now uses the new structure"
 }
