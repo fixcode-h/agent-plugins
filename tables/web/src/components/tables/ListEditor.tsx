@@ -9,7 +9,8 @@ import type { CellMove } from './CellEditor'
 
 /**
  * repeated 列（一格里存一串值，用分隔符隔开）的编辑：下面列出已有的值，能删，
- * 输入框里打字回车加一项（退格删最后一项）；是枚举或引用时列出能选的值点一下加进去。确认后按项目的分隔符拼回一格
+ * 输入框里打字回车加一项（退格删最后一项）；是枚举或引用时只能从列出的值里选，输入框只用来筛选，
+ * 打的字不会直接变成一项（以前会，错字就混进了表格）。确认后按项目的分隔符拼回一格
  */
 export function ListEditor({
   init,
@@ -38,7 +39,9 @@ export function ListEditor({
     ended.current = true
     onDone(v, move)
   }
-  const commit = (move?: CellMove) => end([...items, ...(q.trim() ? [q.trim()] : [])].join(sep), move)
+  // 有能选的值（枚举 / 引用）时输入框只是筛选，打的字不算一项
+  const pickOnly = !!options?.length
+  const commit = (move?: CellMove) => end([...items, ...(!pickOnly && q.trim() ? [q.trim()] : [])].join(sep), move)
   const needle = q.trim().toLowerCase()
   const shown = useMemo(
     () =>
@@ -56,9 +59,9 @@ export function ListEditor({
       <P.Anchor asChild>
         <input
           autoFocus
-          aria-label={t('添加一项')}
+          aria-label={pickOnly ? t('筛选值') : t('添加一项')}
           value={q}
-          placeholder={items.join(sep)}
+          placeholder={pickOnly ? t('搜索后点选或回车选第一项') : items.join(sep)}
           spellCheck={false}
           onChange={(e) => setQ(e.target.value)}
           onBlur={() => commit()}
@@ -69,7 +72,8 @@ export function ListEditor({
             if (e.key === 'Backspace' && !q && items.length) return void setItems((xs) => xs.slice(0, -1))
             if (e.key === 'Enter' && q.trim()) {
               e.preventDefault()
-              return add(options?.length && shown.length ? shown[0].name : q.trim())
+              if (pickOnly) return shown.length ? add(shown[0].name) : undefined
+              return add(q.trim())
             }
             if (e.key === 'Enter' || e.key === 'Tab') {
               e.preventDefault()
@@ -112,7 +116,9 @@ export function ListEditor({
               </span>
             ))}
             {!items.length && (
-              <span className="tb:text-footnote tb:text-subtle">{t('还没有值，在上面输入后回车')}</span>
+              <span className="tb:text-footnote tb:text-subtle">
+                {pickOnly ? t('还没有值，从下面选') : t('还没有值，在上面输入后回车')}
+              </span>
             )}
           </div>
           {!!options?.length && (
@@ -131,6 +137,7 @@ export function ListEditor({
                   )}
                 </button>
               ))}
+              {!shown.length && <p className="tb:px-2 tb:py-1 tb:text-footnote tb:text-subtle">{t('没有匹配的值')}</p>}
             </div>
           )}
         </P.Content>

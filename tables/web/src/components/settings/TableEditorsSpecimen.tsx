@@ -54,7 +54,6 @@ export function TableEditorsSpecimen() {
                 init={mount}
                 options={MOUNT}
                 title="HomeDecorationMountType"
-                onAdd={() => {}}
                 onDone={(v) => {
                   if (v !== null) setMount(v)
                   setOpen(null)

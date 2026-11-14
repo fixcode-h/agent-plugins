@@ -295,11 +295,6 @@ export function TableView({
       m.set(ref, new Map(opts.flatMap((o) => (o.desc ? [[o.name, o.desc]] : []))))
     return m
   }, [refNames, struct.refOpts])
-  /** 新增枚举值：记进结构文件 */
-  const addEnumValue = (name: string, value: string) => {
-    const e = schema.enums[name] ?? { values: [] }
-    onSchema({ ...schema, enums: { ...schema.enums, [name]: { ...e, values: [...e.values, { name: value }] } } })
-  }
 
   // 保存前检查：改到的行里不合规的格子（改了一格可能让同一行的必填、组合唯一出问题，所以按行算）
   const touchedProblems = useMemo(() => {
@@ -352,6 +347,7 @@ export function TableView({
         return (
           <EnumPicker
             init={init}
+            cur={rows?.[p.row]?.[p.col] ?? ''}
             options={headOpts}
             title={headEnum === TYPE_NAMES ? t('类型') : headEnum}
             onDone={done}
@@ -376,15 +372,7 @@ export function TableView({
       const title = info?.enumName ?? info?.ref ?? info?.field ?? ''
       if (info?.list) return <ListEditor init={init} sep={info.sep} options={opts} title={title} onDone={done} />
       if (info && opts)
-        return (
-          <EnumPicker
-            init={init}
-            options={opts}
-            title={title}
-            onDone={done}
-            onAdd={info.enumName ? (v) => addEnumValue(info.enumName!, v) : undefined}
-          />
-        )
+        return <EnumPicker init={init} cur={rows?.[p.row]?.[p.col] ?? ''} options={opts} title={title} onDone={done} />
       return <CellEditor init={init} onDone={done} />
     },
     mark: (r, c) => {
