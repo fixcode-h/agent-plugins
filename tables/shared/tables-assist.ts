@@ -13,6 +13,29 @@ import { upgradeRule } from './table-schema-upgrade.ts'
 import { TableColumn, TableEnum, type TableSchema } from './tables.ts'
 import { MapFormat, TableType, TypeFormats } from './table-types.ts'
 
+/**
+ * 结果代码块的语言名：面板的 AI 分析窗口按它认出这条回复，在右侧功能面板画应用面板（WebPlugin.reports），
+ * 对话区不再铺这段 JSON。不用 json：面板的「AI 初始化项目」也认 json 块，别和它混
+ */
+export const TABLES_STYLE_LANG = 'tables-style'
+
+/**
+ * 从回复里取结果 JSON：先找 tables-style 代码块（最后一个），旧提示词的 json 块和裸 JSON 交给 fallback（面板的 extractJson）
+ */
+export function tablesJsonOf(
+  text: string,
+  fallback: (text: string) => { json?: unknown; error?: string },
+): { json?: unknown; error?: string } {
+  const blocks = [...text.matchAll(new RegExp('```' + TABLES_STYLE_LANG + '[^\\n]*\\n([\\s\\S]*?)```', 'g'))]
+  const raw = blocks.at(-1)?.[1]
+  if (raw === undefined) return fallback(text)
+  try {
+    return { json: JSON.parse(raw) }
+  } catch (e) {
+    return { error: `JSON 解析失败：${(e as Error).message}` }
+  }
+}
+
 /** CLI 输出的 JSON；每一部分都可以没有 */
 export const TablesDraft = z.object({
   summary: z.string().max(4000).default(''),
@@ -87,8 +110,8 @@ export function buildTablesPrompt(sample: string, convo: string, langWord: strin
   只写有把握的；没有就给空对象。`,
     convo ? `## 对话\n${convo}` : '',
     `## 输出格式
-先用两三句${langWord}说明看到的风格。然后输出且只输出一个 \`\`\`json 代码块：
-\`\`\`json
+先用两三句${langWord}说明看到的风格。然后输出且只输出一个代码块，语言名写 ${TABLES_STYLE_LANG}，内容是 JSON（面板会把它画在对话右侧，让用户逐项勾选应用）：
+\`\`\`${TABLES_STYLE_LANG}
 { "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": {}, "columns": {}, "types": { "FVector": { "kind": "struct", "fields": [{ "name": "X", "type": "float" }, { "name": "Y", "type": "float" }, { "name": "Z", "type": "float" }], "store": "{X}#{Y}#{Z}" } }, "formats": { "mapStore": { "sep": ";", "entry": "{K}:{V}" } } }
 \`\`\``,
   ]

@@ -61,3 +61,30 @@ test('手改坏的文件当没有，表格页照样能打开', async () => {
   assert.equal(s.style.key, 'Id')
   assert.deepEqual(s.enums, {})
 })
+
+test('枚举扫描：规则存 enum-scans.json；结果并进枚举的 scanned，写回时不进 enums.json', async () => {
+  const { writeScanResults } = await import('./enum-scan-store.ts')
+  const dir = path.join(mkdtempSync(path.join(tmpdir(), 'agent-panel-schema-')), 'tables')
+  const s = TableSchema.parse({
+    enums: { Manual: { values: [{ name: 'A' }] }, Mixed: { values: [{ name: 'Extra' }] } },
+    scans: [{ id: 'scan-1', from: { kind: 'block', file: 'Enum.xlsx', enumCol: 'A', nameCol: 'B' } }],
+  })
+  await writeSchema(dir, s)
+  assert.match(readFileSync(path.join(dir, 'enum-scans.json'), 'utf8'), /scan-1/)
+  await writeScanResults(dir, {
+    'scan-1': { at: 'x', files: {}, enums: { Mixed: [{ name: 'S1' }], OnlyScan: [{ name: 'S2' }] }, warnings: [] },
+    gone: { at: 'x', files: {}, enums: { Ghost: [{ name: 'g' }] }, warnings: [] },
+  })
+  const got = await readSchema(dir)
+  assert.deepEqual(got.enums.Mixed.scanned, { by: 'scan-1', values: [{ name: 'S1' }] })
+  assert.deepEqual(got.enums.OnlyScan, { values: [], scanned: { by: 'scan-1', values: [{ name: 'S2' }] } })
+  assert.equal(got.enums.Ghost, undefined)
+  // 页面把带 scanned 的整份交回来：enums.json 里不出现扫描结果，只靠扫描的枚举不写
+  const back = await writeSchema(dir, got)
+  const file = readFileSync(path.join(dir, 'enums.json'), 'utf8')
+  assert.doesNotMatch(file, /S1|OnlyScan/)
+  assert.deepEqual(back.enums.OnlyScan.scanned?.values, [{ name: 'S2' }])
+  // 规则写坏了一条只丢那一条
+  writeFileSync(path.join(dir, 'enum-scans.json'), JSON.stringify([{ id: '' }, s.scans[0]]))
+  assert.equal((await readSchema(dir)).scans.length, 1)
+})

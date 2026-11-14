@@ -27,6 +27,7 @@ import { TableTabs } from '@/components/tables/TableTabs'
 import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
+import { useEnumAutoScan } from '@/components/tables/use-enum-auto-scan'
 import { useTableDrafts } from '@/components/tables/use-table-drafts'
 import { DraftBar } from '@/components/tables/DraftBar'
 import { firstShownSheet } from '@/components/files/SheetTable'
@@ -284,6 +285,8 @@ function Workbench({
   const watched = Object.values(docs).flatMap((d) =>
     'sheets' in d && d.mtime ? [{ path: d.path, mtime: d.mtime }] : [],
   )
+  // 枚举扫描的「打开时」：进页面、打开 / 保存了规则用到的文件时看源头变没变
+  useEnumAutoScan(projectId, schema, docs)
   useExternalChange(projectId, watched, shown, busy, (path) => {
     const d = docs[path]
     if (d && 'sheets' in d && pendingOf(edits[path], d.sheets).length) return setStale((m) => ({ ...m, [path]: true }))

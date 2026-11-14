@@ -11,7 +11,7 @@ import { draftCount, planRestore, type Draft } from './table-drafts'
 const SHOW = 200
 
 /** 「3 分钟前」「昨天 14:20」这类：草稿是什么时候留下的 */
-function when(at: number) {
+export function when(at: number) {
   const min = Math.round((Date.now() - at) / 60_000)
   if (min < 1) return t('刚才')
   if (min < 60) return t('{n} 分钟前', { n: min })

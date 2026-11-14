@@ -6,7 +6,7 @@
 - 职责：按项目设置的表格目录浏览、搜索、查看、在线修改 xlsx / CSV 表格；表头、枚举等结构信息存在表格之外
 - 源码：`web/index.tsx`、`server/index.ts`、`server/tables/`、`server/actions.ts`、`server/review.ts`、`shared/tables.ts`、`shared/table-*.ts`、`web/src/pages/TablesPage.tsx`、`web/src/components/tables/`
 - 入口：`web/index.tsx`、`server/index.ts`
-- 关键词：表格、表头配置、新建表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
+- 关键词：表格、枚举扫描、表头配置、新建表格、配置表、表格目录、绝对路径、目录选择器、xlsx、CSV、表头、枚举、引用、结构文件、内容搜索、原地保存、检查、AI 分析表格风格、版本差异、一格的历史、提交、冲突合并、跨项目对比、table.edit
 - 更新：2026-11-12（表头改成按配置的行数组、新建表格）
 
 设计稿在项目共享目录 `designs/表格管理与在线编辑-设计稿.md`。硬约束：**表格文件只在用户保存改动时原地改单元格，结构信息一律不写进表格**。
@@ -81,14 +81,23 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 
 ## 结构化（枚举、引用、检查）
 
-- 列是什么由 `columnInfos` 算：类型行的字（`uint32`、枚举类型名……）+ 修饰行（`repeated`）+ 结构文件 `columns.json` 里按「路径#*#字段名」记的覆盖（枚举、引用、最小 / 最大、也允许的值）。
+- 列是什么由 `columnInfos` 算：类型行的字（`uint32`、枚举类型名……）+ 修饰行（`repeated`）+ 结构文件 `columns.json` 里按「路径#\*#字段名」记的覆盖（枚举、引用、最小 / 最大、也允许的值）。
 - 枚举值 = 结构文件里手写 / 页面新增的 + 枚举表里按名字列取的（`source`，多个枚举放一张表时按 `match` 筛）；页面「新增枚举值」只写结构文件。
 - 检查（`checkSheet`）：类型、枚举（名字和值都算）、引用（被引用的表读到了才查）、范围、主键重复；空格子不查。表格页标红和左栏「检查」、服务端 `/check` 都用它。
 - 列结构面板列出这一列在表头里的每一行（`ColInfo.head`）；结构文件 `columns` 里的 `type` 覆盖类型行（表头写错、没写时用），表格不改。
 - 通用枚举：结构文件 `enums.json` 就是整个项目共用的枚举库，项目设置 → 表格「通用枚举」和表格页「枚举」管的是同一份。
 - 项目级表头：见上面「表头从哪来」。
 - 新建表格：表格页左栏「新建」（`NewTableDialog`）选表格目录、文件名（.xlsx / .csv / .tsv），每一列按项目表头的每一行填（每格都能手填，也能从建议里选：限定了取值的行按限定的、类型行认类型式，填了不认得的标红；修饰、导出端照前一列）。每一列还能设列结构（枚举、引用、范围、必填……，和表格页「列结构」同一个 `ColumnFields`），新建后按字段名写进 `columns`；`newTableIssues` 查文件名、工作表名、字段名空 / 重复。服务端 `POST /create`（`server/tables/create.ts`）只写在设置的表格目录里、不覆盖已有文件（`wx`），xlsx 是从头拼的最小工作簿（共享字符串、表头冻结），之后照常原地改格子。
-- AI 分析：页面先取 `/sample`——**只是挑出来的几张表的清单**（按目录轮着挑，最多 8 张），放进 `subject.sample` 交给配置助手（`kind: 'tables'`）；CLI 再用面板动作 `table.sample`（`/sample?path=`：一张表的表头 + 前 3 行数据 + 这张表里类型名出现过的值，最多 6000 字）一张一张看。提示词只放清单，不会超过任务提示词 20000 字的上限；多轮对话太长时只留最近的。在项目里开分析对话（记成 `run`，右侧不出项目设置面板）；结果暂存在页面模块里，回到项目设置 → 表格逐项勾选后 `applyTablesDraft` 写进结构文件。
+- AI 分析：页面先取 `/sample`——**只是挑出来的几张表的清单**（按目录轮着挑，最多 8 张），放进 `subject.sample` 交给配置助手（`kind: 'tables'`）；CLI 再用面板动作 `table.sample`（`/sample?path=`：一张表的表头 + 前 3 行数据 + 这张表里类型名出现过的值，最多 6000 字）一张一张看。提示词只放清单，不会超过任务提示词 20000 字的上限；多轮对话太长时只留最近的。在项目里开分析对话（记成 `run`）；结果写在回复末尾的 `tables-style` 代码块（`TABLES_STYLE_LANG`），面板（2026-11-14 起，`WebPlugin.reports`）在分析窗口右侧功能面板画「表格设置」（`TablesAnalysisReport`），逐项勾选后 `applyAnalysis` → `applyTablesDraft` 写进结构文件；应用过的回复按消息 id 记在本机，再打开显示「已应用」。同一份结果也暂存在页面模块里，项目设置 → 表格「AI 分析」照样能勾选应用（旧面板只有这条路）。勾选列表是共用的 `DraftReview`（`TablesDraftReview.tsx`，设置 → 组件里有示例）。
+
+## 枚举扫描（2026-11-14）
+
+用户定：枚举定义在表格的某个页签（用户项目的 `EnumType`：A 列只在每组第一行写枚举名、B 成员名、C 值，没有表头）、C++ 或 Lua 里时，按规则一键扫描，打开时自动刷新。设计稿在项目共享目录 `designs/表格枚举扫描-设计稿.md`，一期只做表格里的写法；C++ / Lua / 正则、AI 总结规则、盯着改动、自定义命令是后面几期。
+
+- 规则：结构文件 `enum-scans.json`（`TableSchema.scans`，`shared/table-enum-scan.ts` 的 `EnumScan`）。写法 `block` 分组块 / `rows` 每行写枚举名 / `sheets` 一页一个枚举；列写 Excel 列号或字段名，全写列号时不按项目表头跳行、从第 1 行扫；`rename` 去前缀、加前缀、手动对照；`auto` 是 `open`（打开时）或 `off`。一条写坏了只丢那一条。
+- 结果：`enum-scan-results.json`（按规则 id：时间、源文件的修改时间和大小、扫出的枚举、提醒、错误），只在扫描时写（`server/tables/enum-scan-store.ts`）。`readSchema` 并进对应枚举的 `scanned`（只读，规则顺序靠前的赢）；`writeSchema` 去掉 `scanned`，只靠扫描才有的枚举不进 `enums.json`。`enumOptions` 扫描的排前面，手写同名的不重复。
+- 执行（`server/tables/enum-scan.ts`）：`POST /enum-scan`（`ids` 手动；`auto` 只扫 `open` 的规则且源文件修改时间 / 大小变了的，`file` 时只看用到它的规则）、`POST /enum-scan/try`（试跑不写）、`GET /enum-scan`（每条上次的情况）。同一个结构文件目录排队跑；失败时旧结果留着、记下错误，照实报给页面。
+- 页面：项目设置 → 表格 → 枚举的「枚举扫描」（`ProjectTablesScans`、`EnumScanRow`、`EnumScanDialog`、`ScanPreview`；设置 → 组件里有示例）；表格页 `useEnumAutoScan` 进页面时请求一次、规则用到的文件打开 / 保存 / 重新载入（修改时间变了）时再请求，有变化重读结构文件并提示变了什么；枚举对话框里扫描的成员只读显示。
 
 ## 类型和存储样式（2026-11-13）
 
