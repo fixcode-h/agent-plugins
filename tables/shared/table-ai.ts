@@ -37,7 +37,7 @@ export function explainColumnPrompt(path: string, sheet: string, field: string) 
   return [
     `解释${where(path, sheet)}里的「${field}」这一列：`,
     '它是做什么用的、取值范围和规律（看实际数据统计）、是枚举还是引用别的表、和哪些列有关联、填的时候要注意什么。',
-    '用 table.schema 看这一列的类型、枚举和引用，table.query 读数据，table.search 查这一列的值在别的表里被谁用到。只读，不要改任何文件。回答简洁，用中文。',
+    '用 table.schema 看这一列的类型、枚举和引用，table.query 读数据，引用了别的表就用 table.list 按表名找到那张表再看。只读，不要改任何文件。回答简洁，用中文。',
   ].join('\n')
 }
 
@@ -45,7 +45,7 @@ export function explainTablePrompt(path: string, sheet: string) {
   return [
     `解释${where(path, sheet)}：`,
     '这张表是配什么的、主键是什么、每一列大概的用途（分组说）、和哪些表互相引用、新加一行时要注意什么。',
-    '用 table.schema 看列结构、table.query 读数据、table.search 找互相引用的地方，按结构和数据推断，拿不准的地方标出来。只读，不要改任何文件。回答简洁，用中文。',
+    '用 table.schema 看列结构、table.query 读数据、table.list 按表名找引用到的表，按结构和数据推断，拿不准的地方标出来。只读，不要改任何文件。回答简洁，用中文。',
   ].join('\n')
 }
 

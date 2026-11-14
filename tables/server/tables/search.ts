@@ -1,6 +1,6 @@
 /**
  * 跨表搜索：在全部表格文件里按内容找，支持「字段名:值」只在叫这个名字的列里找，区分大小写 / 整格 / 正则三个开关。
- * 匹配规则在 shared/table-search.ts（跨表替换、Agent 的 table.search 用同一份）。解析走 files.ts 的缓存，第一次全量解析、之后只重读变过的文件。
+ * 匹配规则在 shared/table-search.ts（跨表替换用同一份）。解析走 files.ts 的缓存，第一次全量解析、之后只重读变过的文件。
  */
 import type { SheetData } from '../../shared/files.ts'
 import type { TableFile, TableHit, TableSchema, TableSearch } from '../../shared/tables.ts'

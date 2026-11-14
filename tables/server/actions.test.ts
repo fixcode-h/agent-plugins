@@ -122,20 +122,21 @@ test('提议：不写文件，存成表格页能取的提议；结构不对同�
   assert.equal(gone.proposal, null)
 })
 
-test('跨表找：「字段名:值」整格匹配，每处带位置、字段名和这一行的主键', async () => {
-  const r = await runAppAction('table.search', { q: 'Q:Rare', whole: true }, caller)
-  assert.ok(r.ok, JSON.stringify(r))
-  const v = r.result as { field?: string; hits: { path: string; cell: string; field?: string; key?: string }[] }
-  assert.equal(v.field, 'Q')
-  // 前面的测试把 1 号也改成了 Rare：两处都在
-  assert.deepEqual(
-    v.hits.find((h) => h.key === '2'),
-    { path: 'Config/Item.csv', sheet: 'Item', cell: 'C4', field: 'Q', key: '2', text: 'Rare' },
+test('列出表格：name 按表名找，只看路径不读内容；找不到时说明', async () => {
+  const all = await runAppAction('table.list', {}, caller)
+  assert.ok(all.ok, JSON.stringify(all))
+  assert.ok((all.result as { files: string[] }).files.includes('Config/Item.csv'))
+  const hit = await runAppAction('table.list', { name: 'config ITEM' }, caller)
+  assert.deepEqual((hit.result as { files: string[] }).files, ['Config/Item.csv'])
+  const miss = await runAppAction('table.list', { name: 'Rare' }, caller)
+  const v = miss.result as { files: string[]; note?: string }
+  assert.deepEqual(v.files, [])
+  assert.match(v.note ?? '', /Rare/)
+  // 按内容跨表找的动作已经去掉：表格不做预处理，读全部内容太慢
+  assert.equal(
+    tableActions.some((x) => x.name === 'table.search'),
+    false,
   )
-  // 写错的正则说明原因
-  const bad = await runAppAction('table.search', { q: '(', regex: true }, caller)
-  assert.equal(bad.ok, false)
-  assert.match((bad as { error: string }).error, /正则/)
 })
 
 test('列结构：类型、枚举能填的值、表头几行、数据从第几行开始', async () => {
