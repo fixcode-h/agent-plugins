@@ -9,7 +9,7 @@
 struct lua_State;
 class UObject;
 
-class AGENTPANELBRIDGE_API FAgentPanelLua
+class UELINKCORE_API FAgentPanelLua
 {
 public:
 	/**

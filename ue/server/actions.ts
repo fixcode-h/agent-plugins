@@ -1,7 +1,7 @@
 import { backgroundState } from './editor.ts'
 import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
-import { bundledVersion } from './install.ts'
+import { availableVersion } from './uelink.ts'
 import { projectJobs } from './jobs.ts'
 import { clearOfflineLog, logFile, logSize, searchFile, tailFile } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
@@ -16,7 +16,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
   const [instances, bridge, bundled] = await Promise.all([
     Promise.all(cards.map(info)),
     bridgeVersionIn(p.root),
-    bundledVersion(),
+    availableVersion(),
   ])
   return { project: p, instances, bridge, bundled, background: backgroundState(p.id, cards), jobs: projectJobs(p.id) }
 }

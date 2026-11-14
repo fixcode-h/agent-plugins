@@ -14,7 +14,7 @@
 #include "AgentPanelGMLibrary.generated.h"
 
 UCLASS(Abstract)
-class AGENTPANELBRIDGE_API UAgentPanelGMLibrary : public UObject
+class UELINKCORE_API UAgentPanelGMLibrary : public UObject
 {
 	GENERATED_BODY()
 

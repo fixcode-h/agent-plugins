@@ -19,6 +19,7 @@ import {
   worldLabel,
 } from '../ui.tsx'
 import { RunBar } from './RunBar.tsx'
+import { canUpgrade } from '../../server/semver.ts'
 
 /**
  * 概览（图 1）：四个状态块（点了去对应的页）、实例列表（点一行设为目标）、最近操作（还在生效的能一键撤回）、常用。
@@ -57,12 +58,12 @@ export function Overview() {
       to: () => go('bridge'),
       value: state?.bridge ? t('已安装') : t('未安装'),
       badge: state?.bridge ? (
-        <Badge tone={state.bundled && state.bundled !== state.bridge ? 'warn' : 'ok'}>{state.bridge}</Badge>
+        <Badge tone={canUpgrade(state.bridge, state.bundled) ? 'warn' : 'ok'}>{state.bridge}</Badge>
       ) : null,
       desc: state?.bridge
-        ? state.bundled && state.bundled !== state.bridge
+        ? canUpgrade(state.bridge, state.bundled)
           ? t('有新版本 {v}，到「桥接与权限」升级', { v: state.bundled })
-          : `Plugins/AgentPanelBridge · ${project.install?.mode === 'vcs' ? t('已加入版本管理') : t('只在本机')}`
+          : `Plugins/UELink · ${project.install?.mode === 'vcs' ? t('已加入版本管理') : t('只在本机')}`
         : t('到「桥接与权限」安装，装好后编辑器重启生效'),
     },
     {

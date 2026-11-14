@@ -179,7 +179,7 @@ export function AddProject({
               label={t('桥接插件')}
               hint={
                 mode === 'local'
-                  ? t('复制到 Plugins/AgentPanelBridge，写进本机忽略文件，不影响团队')
+                  ? t('复制 UELink 到 Plugins/UELink，写进本机忽略文件，不影响团队')
                   : mode === 'vcs'
                     ? t('复制后加入版本管理（P4 进默认变更列表，不提交），团队都能用')
                     : t('先不装，之后在「桥接与权限」里装；没装时只能读日志文件')

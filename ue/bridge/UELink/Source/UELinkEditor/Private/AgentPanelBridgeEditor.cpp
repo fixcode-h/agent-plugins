@@ -1,9 +1,11 @@
 // 编辑器模块的操作：DataTable 行编辑、资源保存 / 放弃改动 / 列出改过的、PIE、Live Coding、在编辑器里打开资源、编辑器视口截图。
+// 推送通道（UEToVS 用的日志 / 测试 / Live Coding 推送）在 UELinkStream*.cpp，它的 HTTP 操作在 UELinkStreamOps.cpp。
 // 资源通用层和蓝图读写在同目录的 AgentPanelAssetOps.cpp、AgentPanelBlueprint*.cpp（共用的东西在 AgentPanelEditorShared.h）。
 // 后台编辑器（-run=AgentPanel，见 AgentPanelCommandlet）也加载这个模块，所以资源写入在编辑器没开时同样可用。
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
 #include "AgentPanelEditorShared.h"
+#include "UELinkStream.h"
 
 #include "DataTableEditorUtils.h"
 #include "Editor.h"
@@ -12,6 +14,8 @@
 #include "HAL/FileManager.h"
 #include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
+#include "Misc/CoreDelegates.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "PackageTools.h"
 #include "Settings/LevelEditorPlaySettings.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -20,6 +24,13 @@
 #include "UnrealClient.h"
 #if AGENT_PANEL_LIVE_CODING
 #include "ILiveCodingModule.h"
+#endif
+
+// 5.8 起 FCoreDelegates::OnPostEngineInit 弃用（同 UELinkCore 的 AgentPanelBridge.cpp）
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
+#define UELINK_EDITOR_POST_ENGINE_INIT FCoreDelegates::GetOnPostEngineInit()
+#else
+#define UELINK_EDITOR_POST_ENGINE_INIT FCoreDelegates::OnPostEngineInit
 #endif
 
 using namespace AgentPanel;
@@ -305,29 +316,23 @@ static void RegisterEditorOps()
 	// ---------- Live Coding ----------
 	B.AddOp(TEXT("livecoding"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 	{
-#if AGENT_PANEL_LIVE_CODING
-		ILiveCodingModule* LC = FModuleManager::GetModulePtr<ILiveCodingModule>(LIVE_CODING_MODULE_NAME);
-		if (!LC || IsRunningCommandlet())
+		// 和 UEToVS 共用一份触发逻辑；编译结果用 livecoding.status 查，或订阅推送通道的 liveCoding 事件
+		if (IsRunningCommandlet())
 		{
-			Error = TEXT("Live Coding 不可用（只有 Windows 上的编辑器有）");
+			Error = TEXT("Live Coding 不可用（后台编辑器里没有）");
 			return false;
 		}
-		if (!LC->IsEnabledForSession())
+		FString Message;
+		if (!FUELinkStream::Get().TriggerLiveCoding(Message, Error))
 		{
-			LC->EnableForSession(true);
-		}
-		if (!LC->CanEnableForSession() && !LC->IsEnabledForSession())
-		{
-			Error = LC->GetEnableErrorText().ToString();
 			return false;
 		}
-		LC->Compile();
-		Out->SetBoolField(TEXT("started"), true);
+		Out->SetBoolField(TEXT("started"), Message.IsEmpty());
+		if (!Message.IsEmpty())
+		{
+			Out->SetStringField(TEXT("message"), Message);
+		}
 		return true;
-#else
-		Error = TEXT("Live Coding 只在 Windows 上可用");
-		return false;
-#endif
 	});
 
 	// ---------- 编辑器视口截图：编辑器世界用关卡编辑器当前的视口，其他世界交给运行时的做法 ----------
@@ -364,7 +369,19 @@ public:
 		RegisterBlueprintEditOps();
 		RegisterTraceOps();
 		RegisterTextifyOps();
+		RegisterStreamOps();
+		// 推送通道等引擎初始化完再起（和运行时模块的 HTTP 服务同一时机）；commandlet、游戏进程里 Start 自己会跳过
+		PostInit = UELINK_EDITOR_POST_ENGINE_INIT.AddLambda([]() { FUELinkStream::Get().Start(); });
 	}
+
+	virtual void ShutdownModule() override
+	{
+		UELINK_EDITOR_POST_ENGINE_INIT.Remove(PostInit);
+		FUELinkStream::Get().Stop();
+	}
+
+private:
+	FDelegateHandle PostInit;
 };
 
-IMPLEMENT_MODULE(FAgentPanelBridgeEditorModule, AgentPanelBridgeEditor)
+IMPLEMENT_MODULE(FAgentPanelBridgeEditorModule, UELinkEditor)

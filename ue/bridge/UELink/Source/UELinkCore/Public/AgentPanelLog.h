@@ -6,7 +6,8 @@
 #include "Misc/OutputDevice.h"
 #include "Dom/JsonObject.h"
 
-class FAgentPanelLog : public FOutputDevice
+/** 进程里唯一的日志缓冲：HTTP 的 log.tail 和推送通道（UEToVS 的日志窗口、测试、Live Coding）都从这里取，GLog 只挂这一个 */
+class UELINKCORE_API FAgentPanelLog : public FOutputDevice
 {
 public:
 	static FAgentPanelLog& Get();
@@ -32,6 +33,22 @@ public:
 
 	/** 正在写的日志文件 */
 	FString FilePath() const;
+
+	/** 一行日志的原样数据（推送通道按序号增量取，自己拼 JSON，不经过 FJsonObject） */
+	struct FEntry
+	{
+		uint64 Seq = 0;
+		double Time = 0;
+		FString Text;
+		FName Category;
+		ELogVerbosity::Type Verbosity = ELogVerbosity::Log;
+	};
+
+	/**
+	 * 取 Since 之后的行，按时间顺序追加到 Out，最多 Limit 行（超出的取最新的）；
+	 * OutDropped 是游标落后太多、已经被环形缓冲挤掉的行数加上因 Limit 没给的行数。返回当前最大序号，下次拿它当 Since
+	 */
+	uint64 EntriesSince(uint64 Since, int32 Limit, TArray<FEntry>& Out, int64& OutDropped) const;
 
 private:
 	struct FLine

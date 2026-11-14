@@ -38,7 +38,16 @@ void FAgentPanelLog::Detach()
 
 void FAgentPanelLog::Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& Category)
 {
+	// SetColor 是控制台改颜色的控制行，不是日志内容（UEToVSLink 原来也跳过）
+	if (V == nullptr || Verbosity == ELogVerbosity::SetColor)
+	{
+		return;
+	}
 	const ELogVerbosity::Type Level = (ELogVerbosity::Type)(Verbosity & ELogVerbosity::VerbosityMask);
+	if (Level == ELogVerbosity::NoLogging)
+	{
+		return;
+	}
 	// 性能：日志刷屏时每秒上万行，这里在任意线程上被调用。锁外先拷好（单行最多 MaxLineChars，超长的大段转储只留开头），
 	// 锁里只做序号和环形缓冲的替换，不分配大块内存
 	const int32 Len = FCString::Strlen(V);
@@ -142,6 +151,38 @@ TSharedPtr<FJsonObject> FAgentPanelLog::Tail(uint64 Since, int32 Limit, const FS
 	R->SetNumberField(TEXT("warnings"), Warnings);
 	R->SetStringField(TEXT("file"), FilePath());
 	return R;
+}
+
+uint64 FAgentPanelLog::EntriesSince(uint64 Since, int32 Limit, TArray<FEntry>& Out, int64& OutDropped) const
+{
+	FScopeLock Guard(&Lock);
+	OutDropped = 0;
+	const int32 N = Lines.Num();
+	if (N == 0 || Seq <= Since)
+	{
+		return Seq;
+	}
+	const uint64 Oldest = Lines[Head % N].Seq;
+	if (Since + 1 < Oldest)
+	{
+		OutDropped += (int64)(Oldest - Since - 1);
+	}
+	// 缓冲里比 Since 新的有几行（缓冲按序号递增，从最旧的往后数）
+	const int32 Newer = (int32)FMath::Min<uint64>(Seq - FMath::Max(Since, Oldest - 1), (uint64)N);
+	const int32 Take = FMath::Min(Newer, FMath::Max(Limit, 0));
+	OutDropped += Newer - Take;
+	Out.Reserve(Out.Num() + Take);
+	for (int32 k = N - Take; k < N; ++k)
+	{
+		const FLine& L = Lines[(Head + k) % N];
+		FEntry& E = Out.AddDefaulted_GetRef();
+		E.Seq = L.Seq;
+		E.Time = L.Time;
+		E.Text = L.Text;
+		E.Category = L.Category;
+		E.Verbosity = L.Verbosity;
+	}
+	return Seq;
 }
 
 TArray<FString> FAgentPanelLog::TextSince(uint64 Since, int32 Limit) const
