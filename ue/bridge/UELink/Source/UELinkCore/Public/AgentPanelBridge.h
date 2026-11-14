@@ -1,17 +1,18 @@
 // 桥接服务的对外接口：编辑器模块、后台编辑器（commandlet）通过它登记自己的操作、启动服务。
 // 协议：POST /rpc，请求头 X-AgentPanel-Token，正文 {"op": "...", "args": {...}}，回 {"ok": true, ...} 或 {"ok": false, "error": "..."}；
-// GET /info 回进程和世界列表。只监听 127.0.0.1，令牌每次启动随机生成、写在 Saved/AgentPanel/instances/<PID>.json 的名片里。
+// GET /info 回进程和世界列表。只监听 127.0.0.1，令牌每次启动随机生成、写在 Saved/UELink/instances/<PID>.json 的名片里（兼容旧面板，Saved/AgentPanel/instances 下也写一份）。
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 
 class UWorld;
 
 /** 一个操作：args 是请求里的 args，往 Out 里写结果字段；出错时返回 false 并写 Error（原样显示给用户和 Agent） */
 using FAgentPanelOp = TFunction<bool(const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error)>;
 
-class AGENTPANELBRIDGE_API FAgentPanelBridge
+class UELINKCORE_API FAgentPanelBridge
 {
 public:
 	static FAgentPanelBridge& Get();
@@ -31,12 +32,20 @@ public:
 	static UWorld* ResolveWorld(const FString& WorldId, FString& Error);
 	static FString WorldId(const UWorld* World);
 
+	/** 往名片里加一个字段（编辑器模块用它登记推送通道的端口 stream、features）；服务已经起来时立刻重写名片 */
+	void SetCardField(const FString& Name, const TSharedPtr<FJsonValue>& Value);
+
+	/** 本次启动的令牌（推送通道用同一个令牌认新客户端） */
+	const FString& GetToken() const { return Token; }
+
 private:
 	TMap<FString, FAgentPanelOp> Ops;
 	int32 Port = 0;
 	FString Token;
 	FString Kind;
-	FString CardFile;
+	FString StartedAt;
+	TArray<FString> CardFiles;
+	TMap<FString, TSharedPtr<FJsonValue>> CardExtra;
 	double LastRequest = 0;
 
 	void WriteCard();

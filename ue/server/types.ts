@@ -63,7 +63,7 @@ export interface Detection {
   supported: boolean
   cpp: boolean
   vcs: Vcs
-  /** 已装的桥接版本（Plugins/AgentPanelBridge/*.uplugin 的 VersionName），没装为空 */
+  /** 已装的桥接版本（Plugins/UELink/UELink.uplugin 的 VersionName，没有时看旧桥接 Plugins/AgentPanelBridge），没装为空 */
   bridge: string
   running: { pid: number; kind: string }[]
 }

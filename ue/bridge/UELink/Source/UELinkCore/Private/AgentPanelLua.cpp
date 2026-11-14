@@ -57,7 +57,7 @@ void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>&) {}
 #endif
 
 #if LUA_VERSION_NUM < 503
-#error "AgentPanelBridge 的 Lua 支持要 Lua 5.3 及以上（UnLua 自带的就是）"
+#error "UELink 的 Lua 支持要 Lua 5.3 及以上（UnLua 自带的就是）"
 #endif
 
 using namespace AgentPanel;

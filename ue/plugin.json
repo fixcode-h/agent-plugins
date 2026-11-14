@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
   "author": "fixcode-h",
@@ -42,6 +42,14 @@
       "min": 1,
       "max": 240,
       "unit": "分钟"
+    },
+    {
+      "key": "uelinkSource",
+      "type": "text",
+      "group": "UELink",
+      "label": "UELink 更新源",
+      "desc": "装和升级 UE 端插件 UELink 时去哪查新版本。留空用 GitHub（fixcode-h/UELink 的最新正式版）；公司内网可以填镜像地址（放着 manifest.json 和源码包的网址）或本机目录。读不到时用插件自带的那份",
+      "default": ""
     },
     {
       "key": "dangerous",

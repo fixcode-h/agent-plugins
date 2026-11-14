@@ -7,9 +7,10 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Badge, Card, Confirm, PageHead, Term } from '../ui.tsx'
 import { BuildHint } from './BuildHint.tsx'
+import { canUpgrade } from '../../server/semver.ts'
 
 /**
- * 桥接与权限：桥接插件的安装、升级、编译、卸载和输出；Agent 权限；GM 预设存哪；引擎目录和编译命令；从 UE 页移除项目
+ * 桥接与权限：UE 端插件 UELink（和 UEToVS 共用）的安装、升级、编译、卸载和输出；Agent 权限；GM 预设存哪；引擎目录和编译命令；从 UE 页移除项目
  */
 export function Bridge() {
   const { project, state, reload } = useUe()
@@ -25,7 +26,9 @@ export function Bridge() {
   const latest = jobId || state?.jobs.at(-1)?.id || ''
   const job = useLoad(() => (latest ? get<Job>(`/jobs/${latest}`) : Promise.resolve(undefined)), [latest], 1500)
   const installed = state?.bridge
-  const upgrade = installed && state?.bundled && installed !== state.bundled
+  const upgrade = canUpgrade(installed, state?.bundled)
+  // 旧版桥接（AgentPanelBridge 1.x）：升级时会换成 UELink 并删掉旧插件
+  const legacy = !!installed && canUpgrade(installed, '2.0.0')
   const live = (state?.instances ?? []).some((i) => i.kind === 'editor')
 
   const saveSettings = (patch: Partial<UeProject>) =>
@@ -46,18 +49,19 @@ export function Bridge() {
       <PageHead title={t('桥接与权限')} desc={project.root} />
       <div className={STACK}>
         <Card
-          title={t('桥接插件 AgentPanelBridge')}
+          title={t('UE 端插件 UELink')}
           aside={installed ? <Badge tone={upgrade ? 'warn' : 'ok'}>{installed}</Badge> : <Badge>{t('未安装')}</Badge>}
         >
           <div className="ue:flex ue:flex-col ue:gap-3 ue:p-4">
             <p className="ue:text-footnote ue:text-subtle">
               {t(
-                '装在 Plugins/AgentPanelBridge（{mode}），只在 127.0.0.1 监听，令牌每次启动随机生成；Shipping 包不含桥接。',
+                '装在 Plugins/UELink（{mode}），Agent 面板和 UEToVS 共用这一个插件；只在 127.0.0.1 监听，令牌每次启动随机生成；Shipping 包不含它。',
                 {
                   mode: project.install?.mode === 'vcs' ? t('已加入版本管理') : t('只在本机'),
                 },
               )}
-              {upgrade && ` ${t('面板带的版本是 {v}，可以升级。', { v: state?.bundled ?? '' })}`}
+              {upgrade && ` ${t('公共库有 {v}，可以升级。', { v: state?.bundled ?? '' })}`}
+              {legacy && ` ${t('现在装的是旧版桥接 AgentPanelBridge，升级会换成 UELink 并删掉旧插件；项目代码依赖了 AgentPanelBridge 模块的，Build.cs 里改成 UELinkCore。')}`}
               {live && ` ${t('编辑器开着：装好、编译完要重启编辑器才加载新版本。')}`}
             </p>
             <div className="ue:flex ue:flex-wrap ue:gap-2">

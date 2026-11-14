@@ -1,11 +1,13 @@
-import { readdir, readFile, rm } from 'node:fs/promises'
+import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { Instance, Target } from './types.ts'
+import { bundledVersion, cmpVersion, pluginVersion } from './uelink.ts'
 import { alive, readJson, t } from './util.ts'
 
 /**
- * 实例发现（设计文档 2.1）：桥接插件起服务后在 <项目>/Saved/AgentPanel/instances/<PID>.json 写名片
+ * 实例发现（设计文档 2.1）：UELink 起服务后在 <项目>/Saved/UELink/instances/<PID>.json 写名片
  * （端口、令牌、进程类型），退出时删掉；进程崩了名片会留下，这里按 PID 是否还活着清掉。
+ * 还没升级的旧桥接（AgentPanelBridge 1.x）写在 Saved/AgentPanel/instances/，两处都读，同一个进程只算一次。
  */
 export interface Card {
   pid: number
@@ -18,20 +20,27 @@ export interface Card {
   startedAt: string
 }
 
-const cardDir = (root: string) => path.join(root, 'Saved', 'AgentPanel', 'instances')
+const cardDirs = (root: string) => [
+  path.join(root, 'Saved', 'UELink', 'instances'),
+  path.join(root, 'Saved', 'AgentPanel', 'instances'),
+]
 
 export async function liveCards(root: string): Promise<Card[]> {
-  const dir = cardDir(root)
   const out: Card[] = []
-  for (const n of await readdir(dir).catch(() => [] as string[])) {
-    if (!n.endsWith('.json')) continue
-    const card = await readJson<Card | null>(path.join(dir, n), null)
-    if (!card?.pid || !card.port) continue
-    if (!alive(card.pid)) {
-      await rm(path.join(dir, n), { force: true })
-      continue
+  const seen = new Set<number>()
+  for (const dir of cardDirs(root)) {
+    for (const n of await readdir(dir).catch(() => [] as string[])) {
+      if (!n.endsWith('.json')) continue
+      const card = await readJson<Card | null>(path.join(dir, n), null)
+      if (!card?.pid || !card.port) continue
+      if (!alive(card.pid)) {
+        await rm(path.join(dir, n), { force: true })
+        continue
+      }
+      if (seen.has(card.pid)) continue
+      seen.add(card.pid)
+      out.push(card)
     }
-    out.push(card)
   }
   return out.sort((a, b) => kindRank(a.kind) - kindRank(b.kind) || a.pid - b.pid)
 }
@@ -39,16 +48,15 @@ export async function liveCards(root: string): Promise<Card[]> {
 /** 默认目标的优先级：编辑器 > 游戏 > 专用服务器 > 后台编辑器 */
 const kindRank = (k: string) => ['editor', 'game', 'server', 'background'].indexOf(k) + 1 || 9
 
-/** 项目里装的桥接版本：Plugins/AgentPanelBridge/AgentPanelBridge.uplugin 的 VersionName */
+/**
+ * 项目里装的桥接版本：Plugins/UELink/UELink.uplugin 的 VersionName；没有时看旧桥接 Plugins/AgentPanelBridge（1.x），
+ * 这样旧项目照样显示「已安装 1.9.0、可升级到 2.x」，升级时安装会把旧的清掉
+ */
 export async function bridgeVersionIn(root: string) {
-  const f = path.join(root, 'Plugins', 'AgentPanelBridge', 'AgentPanelBridge.uplugin')
-  const txt = await readFile(f, 'utf8').catch(() => '')
-  if (!txt) return ''
-  try {
-    return String(JSON.parse(txt.replace(/^﻿/, '')).VersionName ?? '?')
-  } catch {
-    return '?'
-  }
+  return (
+    (await pluginVersion(path.join(root, 'Plugins', 'UELink', 'UELink.uplugin'))) ||
+    (await pluginVersion(path.join(root, 'Plugins', 'AgentPanelBridge', 'AgentPanelBridge.uplugin')))
+  )
 }
 
 export class BridgeError extends Error {}
@@ -84,13 +92,9 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
   return body
 }
 
-/** 版本号逐段比较（1.10.0 比 1.9.0 新）：a 比 b 旧返回 true */
+/** a 比 b 旧（按语义化版本比，2.0.0-beta.1 比 2.0.0 旧） */
 export function olderVersion(a: string, b: string) {
-  const pa = a.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
-  const pb = b.split(/[.-]/).map((x) => parseInt(x, 10) || 0)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++)
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0)
-  return false
+  return cmpVersion(a, b) < 0
 }
 
 /**
@@ -100,10 +104,10 @@ export function olderVersion(a: string, b: string) {
  */
 async function oldBridgeError(card: Card, op: string, error?: string) {
   if (!error?.startsWith(`这个进程不支持 ${op}`) || !card.bridge) return ''
-  const bundled = await (await import('./install.ts')).bundledVersion()
+  const bundled = await bundledVersion()
   if (!bundled || !olderVersion(card.bridge, bundled)) return ''
   return t(
-    'UE 进程 {pid} 里的桥接是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新桥接，重新编译并重启 UE。用不到新操作的功能照常能用',
+    'UE 进程 {pid} 里的 UELink（桥接）是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新，重新编译并重启 UE。用不到新操作的功能照常能用',
     { pid: card.pid, old: card.bridge, op, new: bundled },
   )
 }

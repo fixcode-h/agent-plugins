@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react'
 import type { PluginConfig } from '../../sdk/server.ts'
 import { h, t } from './host.ts'
+import { canUpgrade } from '../server/semver.ts'
 
 interface S {
   projects?: number
@@ -36,7 +37,7 @@ export function Status({
               <div className="ue:text-body ue:text-fg">{p.name}</div>
               <div className="ue:text-footnote ue:text-subtle">
                 UE {p.engine} · {p.bridge ? t('桥接 {v}', { v: p.bridge }) : t('没装桥接')}
-                {p.bridge && p.bundled && p.bridge !== p.bundled ? ` · ${t('可升级到 {v}', { v: p.bundled })}` : ''}
+                {canUpgrade(p.bridge, p.bundled) ? ` · ${t('可升级到 {v}', { v: p.bundled })}` : ''}
               </div>
             </div>
             <span className="ue:text-body ue:text-muted">

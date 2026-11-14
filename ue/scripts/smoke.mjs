@@ -8,7 +8,7 @@
 // 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 /** 目录里还剩下的东西 */
 const hasEntries = (d) => readdirSync(d).length > 0
@@ -134,7 +134,7 @@ try {
 
   // 桥接比插件带的旧、又没有这个操作：统一提示更新桥接（插件框架改进 C1），不是只说「不支持」
   const old = await api('POST', '/p/p1/op', { op: 'stat.nosuch', args: {} })
-  assert.match(JSON.stringify(old), /桥接是 1\.0\.0.*桥接与权限/, JSON.stringify(old))
+  assert.match(JSON.stringify(old), /UELink（桥接）是 1\.0\.0.*桥接与权限/, JSON.stringify(old))
 
   // 函数执行：网页列出非蓝图函数，网页（你自己点）能执行；Agent 带 any 也调不了
   const fnAll = await api('POST', '/p/p1/op', { op: 'functions', args: { path: bridge.hero, all: true } })
@@ -455,6 +455,39 @@ try {
 
   const hist = await api('GET', '/p/p1/history')
   assert.ok(hist.items.length >= 4)
+
+  // 装 UELink：公共库读不到（更新源指向不存在的目录）时用自带的；清掉合进来的旧插件和 .uproject 里的条目；只升不降
+  cfg.uelinkSource = path.join(tmp, 'no-mirror')
+  const plugins = path.join(proj, 'Plugins')
+  mkdirSync(path.join(plugins, 'AgentPanelBridge', 'Binaries'), { recursive: true })
+  writeFileSync(path.join(plugins, 'AgentPanelBridge', 'AgentPanelBridge.uplugin'), JSON.stringify({ VersionName: '1.9.0' }))
+  mkdirSync(path.join(plugins, 'Tools', 'UEToVSLink'), { recursive: true })
+  writeFileSync(path.join(plugins, 'Tools', 'UEToVSLink', 'UEToVSLink.uplugin'), JSON.stringify({ VersionName: '0.2.0' }))
+  const uproject = path.join(proj, 'Fake.uproject')
+  writeFileSync(
+    uproject,
+    JSON.stringify({ EngineAssociation: '5.4', Plugins: [{ Name: 'UEToVSLink', Enabled: true }, { Name: 'X', Enabled: true }] }),
+  )
+  assert.equal((await api('GET', '/p/p1/state')).bridge, '1.9.0', '旧桥接也认作已安装，好提示升级')
+  const ueInst = await api('POST', '/p/p1/install', { mode: 'local' })
+  const instJob = await api('GET', `/jobs/${ueInst.job}`)
+  assert.equal(instJob.status, 'done', instJob.log.join('\n'))
+  assert.ok(instJob.log.some((l) => /公共库读不到/.test(l)), instJob.log.join('\n'))
+  const ueVersion = JSON.parse(readFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), 'utf8')).VersionName
+  assert.match(ueVersion, /^2\./)
+  assert.ok(existsSync(path.join(plugins, 'UELink', 'Source', 'UELinkCore', 'UELinkCore.Build.cs')))
+  assert.ok(!existsSync(path.join(plugins, 'AgentPanelBridge')) && !existsSync(path.join(plugins, 'Tools', 'UEToVSLink')))
+  assert.deepEqual(JSON.parse(readFileSync(uproject, 'utf8')).Plugins, [{ Name: 'X', Enabled: true }])
+  const record = JSON.parse(readFileSync(path.join(plugins, 'UELink', '.install.json'), 'utf8'))
+  assert.equal(record.by, 'agent-panel')
+  assert.equal(record.source, 'bundled')
+  assert.equal((await api('GET', '/p/p1/state')).bridge, ueVersion)
+  // 项目里已经是更新的（UEToVS 装的）：不动
+  writeFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), JSON.stringify({ VersionName: '9.0.0' }))
+  const ueAgain = await api('GET', `/jobs/${(await api('POST', '/p/p1/install', { mode: 'local' })).job}`)
+  assert.ok(ueAgain.log.some((l) => /已经是 UELink 9\.0\.0/.test(l)), ueAgain.log.join('\n'))
+  assert.equal(JSON.parse(readFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), 'utf8')).VersionName, '9.0.0')
+
   console.log(`ue 冒烟测试通过：19 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()

@@ -9,6 +9,7 @@
 #endif
 
 #include "AgentPanelLog.h"
+#include "UELinkVersion.h"
 #include "AgentPanelLuaOps.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -36,7 +37,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogAgentPanelBridge, Log, All);
 
-static const TCHAR* BridgeVersion = TEXT("1.9.0");
+// 面板按名片里的 bridge 字段比版本：合进 UELink 后报 UELink 的版本（2.0.0 起，比旧桥接的 1.x 都大）
+static const TCHAR* BridgeVersion = UELINK_VERSION;
 
 FAgentPanelBridge& FAgentPanelBridge::Get()
 {
@@ -238,11 +240,17 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	return Out;
 }
 
+void FAgentPanelBridge::SetCardField(const FString& Name, const TSharedPtr<FJsonValue>& Value)
+{
+	CardExtra.Add(Name, Value);
+	if (Port != 0)
+	{
+		WriteCard();
+	}
+}
+
 void FAgentPanelBridge::WriteCard()
 {
-	const FString Dir = FPaths::Combine(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir()), TEXT("AgentPanel"), TEXT("instances"));
-	IFileManager::Get().MakeDirectory(*Dir, true);
-	CardFile = FPaths::Combine(Dir, FString::Printf(TEXT("%u.json"), FPlatformProcess::GetCurrentProcessId()));
 	TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 	O->SetNumberField(TEXT("pid"), FPlatformProcess::GetCurrentProcessId());
 	O->SetNumberField(TEXT("port"), Port);
@@ -251,8 +259,28 @@ void FAgentPanelBridge::WriteCard()
 	O->SetStringField(TEXT("engine"), FEngineVersion::Current().ToString(EVersionComponent::Patch));
 	O->SetStringField(TEXT("bridge"), BridgeVersion);
 	O->SetStringField(TEXT("project"), FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath()));
-	O->SetStringField(TEXT("startedAt"), FDateTime::UtcNow().ToIso8601());
-	FFileHelper::SaveStringToFile(ToJsonString(O), *CardFile, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	// 名片会因为编辑器模块补字段重写，启动时间用 Start 时记下的，不随重写变
+	O->SetStringField(TEXT("startedAt"), StartedAt);
+	// UELink 新加的字段：旧面板不认识的字段直接忽略
+	O->SetStringField(TEXT("plugin"), TEXT("UELink"));
+	O->SetStringField(TEXT("version"), BridgeVersion);
+	O->SetNumberField(TEXT("http"), Port);
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Extra : CardExtra)
+	{
+		O->SetField(Extra.Key, Extra.Value);
+	}
+	const FString Json = ToJsonString(O);
+	// 同一张名片写两处：Saved/UELink/instances 是新位置；Saved/AgentPanel/instances 给还没改读新位置的面板 UE 插件（兼容层，三期去掉）
+	CardFiles.Reset();
+	static const TCHAR* const Folders[] = {TEXT("UELink"), TEXT("AgentPanel")};
+	for (const TCHAR* Folder : Folders)
+	{
+		const FString Dir = FPaths::Combine(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir()), Folder, TEXT("instances"));
+		IFileManager::Get().MakeDirectory(*Dir, true);
+		const FString File = FPaths::Combine(Dir, FString::Printf(TEXT("%u.json"), FPlatformProcess::GetCurrentProcessId()));
+		FFileHelper::SaveStringToFile(Json, *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		CardFiles.Add(File);
+	}
 }
 
 bool FAgentPanelBridge::Start(const FString& InKind)
@@ -262,6 +290,7 @@ bool FAgentPanelBridge::Start(const FString& InKind)
 		return true;
 	}
 	Kind = InKind;
+	StartedAt = FDateTime::UtcNow().ToIso8601();
 	Token = FGuid::NewGuid().ToString(EGuidFormats::Digits).ToLower();
 	FAgentPanelLog::Get().Attach();
 	if (Ops.Num() == 0 || !Ops.Contains(TEXT("console")))
@@ -285,7 +314,7 @@ bool FAgentPanelBridge::Start(const FString& InKind)
 	}
 	if (!Router.IsValid())
 	{
-		UE_LOG(LogAgentPanelBridge, Warning, TEXT("Agent 面板桥接没起来：30110-30199 没有空闲端口"));
+		UE_LOG(LogAgentPanelBridge, Warning, TEXT("UELink 的 HTTP 服务没起来：30110-30199 没有空闲端口"));
 		return false;
 	}
 	Router->BindRoute(FHttpPath(TEXT("/info")), EHttpServerRequestVerbs::VERB_GET,
@@ -324,17 +353,17 @@ bool FAgentPanelBridge::Start(const FString& InKind)
 	Http.StartAllListeners();
 	LastRequest = FPlatformTime::Seconds();
 	WriteCard();
-	UE_LOG(LogAgentPanelBridge, Display, TEXT("Agent 面板桥接已启动：127.0.0.1:%d（%s）"), Port, *Kind);
+	UE_LOG(LogAgentPanelBridge, Display, TEXT("UELink %s 已启动：127.0.0.1:%d（%s）"), BridgeVersion, Port, *Kind);
 	return true;
 }
 
 void FAgentPanelBridge::Stop()
 {
-	if (!CardFile.IsEmpty())
+	for (const FString& File : CardFiles)
 	{
-		IFileManager::Get().Delete(*CardFile, false, true, true);
-		CardFile.Reset();
+		IFileManager::Get().Delete(*File, false, true, true);
 	}
+	CardFiles.Reset();
 	FAgentPanelLog::Get().Detach();
 	Port = 0;
 }
@@ -368,4 +397,4 @@ private:
 	FDelegateHandle PostInit;
 };
 
-IMPLEMENT_MODULE(FAgentPanelBridgeModule, AgentPanelBridge)
+IMPLEMENT_MODULE(FAgentPanelBridgeModule, UELinkCore)

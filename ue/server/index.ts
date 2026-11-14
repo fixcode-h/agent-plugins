@@ -1,6 +1,6 @@
 import type { ActivateServer } from '../../sdk/server.ts'
 import { projectState } from './actions.ts'
-import { bundledVersion } from './install.ts'
+import { availableVersion } from './uelink.ts'
 import { bridgeVersionIn, olderVersion } from './instances.ts'
 import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
@@ -13,7 +13,7 @@ import { setCtx, t } from './util.ts'
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
  * 网页的 UE 管理页、添加项目和桥接安装走 fetch；Agent 的 ue_* 工具只挂给接入了 UE 的项目里的对话；
- * UE 端是项目里的 AgentPanelBridge 插件（包里 bridge/ 目录，安装时复制进项目）。
+ * UE 端是项目里的 UELink 插件（公共库 fixcode-h/UELink，和 UEToVS 共用；包里 bridge/UELink 带一份，安装时和公共库最新版取高的复制进项目）。
  */
 
 /** 用到这个技能的角色视为 UE 角色（attach=role 时只给它们挂工具） */
@@ -35,11 +35,11 @@ const HINT = `## UE 工具
  * 旧桥接上用不到新操作的功能照常能用，用到时 rpc 会说清楚要更新（instances.ts 的 oldBridgeError）
  */
 async function bridgeNotice(root: string) {
-  const [installed, bundled] = await Promise.all([bridgeVersionIn(root), bundledVersion()])
+  const [installed, bundled] = await Promise.all([bridgeVersionIn(root), availableVersion()])
   if (!installed || installed === '?' || !bundled || !olderVersion(installed, bundled)) return undefined
   return [
     t(
-      '项目里的 UE 桥接是 {old}，插件带的是 {new}：新功能要更新桥接后才能用。到 UE 页「桥接与权限」更新，再重新编译。',
+      '项目里的 UE 桥接是 {old}，UELink 已经有 {new}：新功能要更新后才能用。到 UE 页「桥接与权限」更新，再重新编译。',
       {
         old: installed,
         new: bundled,
