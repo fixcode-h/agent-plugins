@@ -2,8 +2,18 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { SheetData } from './files.ts'
-import { ScanFrom, applyRename, colIndex, diffScan, diffLine, scanSheets, ScanRename } from './table-enum-scan.ts'
+import {
+  ScanFrom,
+  type SheetFrom,
+  applyRename,
+  colIndex,
+  diffScan,
+  diffLine,
+  scanSheets,
+  ScanRename,
+} from './table-enum-scan.ts'
 
+const sheetFrom = (x: unknown) => ScanFrom.parse(x) as SheetFrom
 const noHeader = () => ({ names: [], dataFrom: 0 })
 
 // 和截图里一样：A 列只在第一行写枚举名，B 成员名，C 值；没有表头
@@ -29,7 +39,7 @@ test('列号转下标', () => {
 })
 
 test('分组块：枚举名只写在第一行，下面的成员归它；重复成员只留第一个并提醒', () => {
-  const from = ScanFrom.parse({
+  const from = sheetFrom({
     kind: 'block',
     file: 'Enum.xlsx',
     sheet: 'EnumType',
@@ -45,7 +55,7 @@ test('分组块：枚举名只写在第一行，下面的成员归它；重复�
 })
 
 test('列全写列号时不按项目表头跳行，从第 1 行开始', () => {
-  const from = ScanFrom.parse({ kind: 'block', file: 'Enum.xlsx', sheet: 'EnumType', enumCol: 'A', nameCol: 'B' })
+  const from = sheetFrom({ kind: 'block', file: 'Enum.xlsx', sheet: 'EnumType', enumCol: 'A', nameCol: 'B' })
   const r = scanSheets(from, [enumType], () => ({ names: ['x'], dataFrom: 3 }), 'Enum.xlsx')
   assert.equal(r.enums.OutsideAttributeDisplayEntry.length, 3)
 })
@@ -61,7 +71,7 @@ test('每行写枚举名：按字段名找列，从表头下面开始', () => {
       ['EShape', 'Box', '0', ''],
     ],
   }
-  const from = ScanFrom.parse({
+  const from = sheetFrom({
     kind: 'rows',
     file: 'a.xlsx',
     enumCol: 'Enum',
@@ -79,7 +89,7 @@ test('每行写枚举名：按字段名找列，从表头下面开始', () => {
 })
 
 test('一页一个枚举：页签名就是枚举名；找不到列时提醒', () => {
-  const from = ScanFrom.parse({ kind: 'sheets', file: 'e.xlsx', sheet: 'E*', nameCol: 'A', valueCol: 'B' })
+  const from = sheetFrom({ kind: 'sheets', file: 'e.xlsx', sheet: 'E*', nameCol: 'A', valueCol: 'B' })
   const r = scanSheets(
     from,
     [
@@ -91,7 +101,7 @@ test('一页一个枚举：页签名就是枚举名；找不到列时提醒', ()
     'e.xlsx',
   )
   assert.deepEqual(Object.keys(r.enums), ['EA', 'EB'])
-  const miss = scanSheets(ScanFrom.parse({ ...from, nameCol: 'Name' }), [{ name: 'EA', rows: [] }], noHeader, 'e.xlsx')
+  const miss = scanSheets(sheetFrom({ ...from, nameCol: 'Name' }), [{ name: 'EA', rows: [] }], noHeader, 'e.xlsx')
   assert.equal(Object.keys(miss.enums).length, 0)
   assert.equal(miss.warnings.length, 1)
 })

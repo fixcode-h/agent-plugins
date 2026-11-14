@@ -2,7 +2,9 @@ import { Hono } from 'hono'
 import type { ActivateServer } from '../../sdk/server.ts'
 import type { Project } from '../shared/schema.ts'
 import { dataPath, readJson } from './store.ts'
-import { tablesApi } from './tables/routes.ts'
+import { projectOf, tablesApi } from './tables/routes.ts'
+import { readSchema } from './tables/schema-store.ts'
+import { enumScanWatcher } from './tables/enum-scan-watch.ts'
 import { tableActions } from './actions.ts'
 import { reviewTextifier } from './review.ts'
 import { tableWatcher } from './tables/watch.ts'
@@ -26,12 +28,25 @@ const projects = {
 const activate: ActivateServer = (ctx) => {
   // 外部改动检测：盯着页面上打开着的文件，改了经面板的推送通道（插件接口 7）通知页面
   const watcher = tableWatcher(ctx.pages)
-  const app = new Hono().route('/tables', tablesApi({ projects, watcher }))
+  // 枚举扫描「盯着改动」的规则：后台盯源文件，改了就扫、推给页面；规则改了（保存结构文件）重新同步
+  const scanWatch = enumScanWatcher({
+    pages: ctx.pages,
+    ctxOf: async (id) => {
+      const { dir, cfg, schemaAt } = await projectOf({ projects }, id)
+      return { dir, cfg, schemaAt, schema: await readSchema(schemaAt) }
+    },
+    projectIds: async () => (await projects.list()).map((p) => p.id),
+  })
+  void scanWatch.syncAll()
+  const app = new Hono().route('/tables', tablesApi({ projects, watcher, scanWatch }))
   return {
     fetch: (req) => app.fetch(req),
     actions: tableActions,
     textify: reviewTextifier(projects),
-    stop: () => watcher.close(),
+    stop: () => {
+      watcher.close()
+      scanWatch.close()
+    },
   }
 }
 

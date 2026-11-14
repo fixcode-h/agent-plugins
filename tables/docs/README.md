@@ -92,12 +92,16 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 
 ## 枚举扫描（2026-11-14）
 
-用户定：枚举定义在表格的某个页签（用户项目的 `EnumType`：A 列只在每组第一行写枚举名、B 成员名、C 值，没有表头）、C++ 或 Lua 里时，按规则一键扫描，打开时自动刷新。设计稿在项目共享目录 `designs/表格枚举扫描-设计稿.md`，一期只做表格里的写法；C++ / Lua / 正则、AI 总结规则、盯着改动、自定义命令是后面几期。
+用户定：枚举定义在表格的某个页签（用户项目的 `EnumType`：A 列只在每组第一行写枚举名、B 成员名、C 值，没有表头）、C++ 或 Lua 里时，按规则一键扫描，打开时自动刷新。设计稿在项目共享目录 `designs/表格枚举扫描-设计稿.md`，一期（1.3.0）做了表格里的写法；二到四期（1.4.0）加了 C++ / Lua / 正则 / 自定义命令、AI 总结规则、盯着改动、改名提示。
 
-- 规则：结构文件 `enum-scans.json`（`TableSchema.scans`，`shared/table-enum-scan.ts` 的 `EnumScan`）。写法 `block` 分组块 / `rows` 每行写枚举名 / `sheets` 一页一个枚举；列写 Excel 列号或字段名，全写列号时不按项目表头跳行、从第 1 行扫；`rename` 去前缀、加前缀、手动对照；`auto` 是 `open`（打开时）或 `off`。一条写坏了只丢那一条。
+- 规则：结构文件 `enum-scans.json`（`TableSchema.scans`，`shared/table-enum-scan.ts` 的 `EnumScan`）。写法 `block` 分组块 / `rows` 每行写枚举名 / `sheets` 一页一个枚举；列写 Excel 列号或字段名，全写列号时不按项目表头跳行、从第 1 行扫；`rename` 去前缀、加前缀、手动对照；`auto` 是 `open`（打开时）、`watch`（盯着改动）或 `off`。一条写坏了只丢那一条。
 - 结果：`enum-scan-results.json`（按规则 id：时间、源文件的修改时间和大小、扫出的枚举、提醒、错误），只在扫描时写（`server/tables/enum-scan-store.ts`）。`readSchema` 并进对应枚举的 `scanned`（只读，规则顺序靠前的赢）；`writeSchema` 去掉 `scanned`，只靠扫描才有的枚举不进 `enums.json`。`enumOptions` 扫描的排前面，手写同名的不重复。
 - 执行（`server/tables/enum-scan.ts`）：`POST /enum-scan`（`ids` 手动；`auto` 只扫 `open` 的规则且源文件修改时间 / 大小变了的，`file` 时只看用到它的规则）、`POST /enum-scan/try`（试跑不写）、`GET /enum-scan`（每条上次的情况）。同一个结构文件目录排队跑；失败时旧结果留着、记下错误，照实报给页面。
 - 页面：项目设置 → 表格 → 枚举的「枚举扫描」（`ProjectTablesScans`、`EnumScanRow`、`EnumScanDialog`、`ScanPreview`；设置 → 组件里有示例）；表格页 `useEnumAutoScan` 进页面时请求一次、规则用到的文件打开 / 保存 / 重新载入（修改时间变了）时再请求，有变化重读结构文件并提示变了什么；枚举对话框里扫描的成员只读显示。
+- 代码类写法（`shared/table-enum-scan-code.ts`，轻量词法扫描，不是完整语法分析）：`cpp` 认 UENUM / enum class / enum / `namespace EFoo { enum Type }`，自增、`1 << 3` 这类表达式、UMETA 的 DisplayName / ToolTip（没有退到注释）、跳过 Hidden 和 `_MAX` / `Count` 哨兵，`#if` 里的成员记提醒；`lua` 认 `EFoo = { A = 1 }`（local、`M.EFoo`），可按变量名正则、总表（`container`）、成员是表时取字段；`regex` 两个正则（块带 `name` / `body` 组，成员带 `name`、可选 `value` / `desc`）；`command` 跑项目里的脚本，标准输出 `{"enums":{…}}`，没写 `files` 时不自动跑。文件通配在 `server/tables/enum-scan-files.ts`（只往写死的目录里找，跳过 .git / Intermediate / Binaries 等，超过 5000 个文件或 50MB 直接报错让用户写窄），按文件的修改时间和大小缓存每个文件的结果。
+- AI 总结规则（`shared/table-enum-scan-ai.ts`、`web/src/components/tables/EnumScanAi.tsx`）：用户指一个示例文件（可带页签、枚举名、说明），在项目里开分析对话；CLI 用面板动作 `table.enum_scan_peek`（看页签原始行，带列号）和 `table.enum_scan_try`（试跑规则，不收 command）调到对上，最后回复里给 ```enum-scan 代码块。AI 只写声明式规则、不写脚本，扫描本身不调模型。结果记在页面模块里，项目设置 → 表格 → 枚举顶上「查看并保存」打开规则弹窗并自动试跑；已有规则旁边有「让 AI 调整」，把现在的规则和上次的提醒 / 错误一起带上。
+- 盯着改动（`server/tables/enum-scan-watch.ts`）：插件启动时、保存结构文件后按 `watch` 规则的通配起始目录开 `fs.watch` recursive，事件停 1.5 秒后按修改时间比、变了才扫，结果经推送 `enum-scan` 事件给所有页面（`listenEnumScanPush`），页面重读结构文件并提示。
+- 改名：`diffScan` 按值（再按位置）把去掉的和新加的成员配成 `renames`，项目设置 → 表格 → 枚举顶上提示，用户确认后用 `EnumRenameDialog` 替换表格里的旧值（会改表格文件，不悄悄做）。
 
 ## 类型和存储样式（2026-11-13）
 

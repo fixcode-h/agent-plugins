@@ -62,7 +62,7 @@ test('扫描失败时旧结果留着，记下错误', async () => {
   await runScans(ctx, { ids: ['s1'] })
   const rule = ctx.schema.scans[0]
   const prev = (await readScanResults(ctx.schemaAt)).s1
-  const r = await scanOnce({ ...ctx }, { ...rule, from: { ...rule.from, file: 'Gone.csv' } }, prev)
+  const r = await scanOnce({ ...ctx }, { ...rule, from: { ...rule.from, file: 'Gone.csv' } as typeof rule.from }, prev)
   assert.ok(r.error)
   assert.equal(r.result.enums.Color.length, 2)
   void dir
