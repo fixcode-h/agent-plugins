@@ -10,6 +10,7 @@ import type { ExportEvent } from '@shared/table-export'
 import type { EnumRename } from '@shared/table-enum-rename'
 import type { ReplaceResult, TableReplaceBody, TableSearchOpts } from '@shared/table-search'
 import type { CellAt, CellChange } from '@shared/table-blame'
+import type { EnumScan, ScanRun, ScanState } from '@shared/table-enum-scan'
 import { failure, json, request } from './api'
 import { trackedFetch } from './connection'
 
@@ -47,6 +48,14 @@ export const tablesApi = {
   replace: (projectId: string, body: TableReplaceBody, signal?: AbortSignal) =>
     request<ReplaceResult>(`${BASE}/${projectId}/replace`, { ...json('POST', body), signal }),
   schema: (projectId: string) => request<TableSchema>(`${BASE}/${projectId}/schema`),
+  /** 枚举扫描：ids 手动扫这几条；auto 自动刷新（只扫源文件变了的，file 时只看用到它的规则）。返回扫了的几条 */
+  enumScan: (projectId: string, pick: { ids?: string[]; auto?: boolean; file?: string }) =>
+    request<{ runs: ScanRun[] }>(`${BASE}/${projectId}/enum-scan`, json('POST', pick)),
+  /** 每条规则上次扫的情况 */
+  enumScanState: (projectId: string) => request<Record<string, ScanState>>(`${BASE}/${projectId}/enum-scan`),
+  /** 试跑一条规则（可能还没保存）：只读，不写结果 */
+  enumScanTry: (projectId: string, scan: EnumScan) =>
+    request<ScanRun>(`${BASE}/${projectId}/enum-scan/try`, json('POST', scan)),
   saveSchema: (projectId: string, s: TableSchema) =>
     request<TableSchema>(`${BASE}/${projectId}/schema`, json('PUT', s)),
   /** 保存改动：返回保存后的文件 */

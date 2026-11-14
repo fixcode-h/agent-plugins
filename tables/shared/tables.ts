@@ -7,6 +7,7 @@ import { HeaderException, HeaderRule, emptyRule } from './table-header.ts'
 import type { SheetData } from './files.ts'
 import { TableExport } from './table-export.ts'
 import { TableTypes, TypeFormats } from './table-types.ts'
+import { EnumScan } from './table-enum-scan.ts'
 
 /** 默认认作表格的文件 */
 export const TABLE_INCLUDE = '*.xlsx, *.xlsm, *.xls, *.csv, *.tsv'
@@ -180,6 +181,11 @@ export const TableEnum = z.object({
       descCol: z.string().max(200).optional(),
     })
     .optional(),
+  /**
+   * 枚举扫描（table-enum-scan.ts）扫出来的成员：读结构文件时从 enum-scan-results.json 并进来，只读；
+   * 写 enums.json 时去掉（结果只在扫描时写）。by 是扫出它的规则 id
+   */
+  scanned: z.object({ by: z.string().max(60), values: z.array(EnumValue).max(5000) }).optional(),
 })
 export type TableEnum = z.infer<typeof TableEnum>
 
@@ -249,6 +255,8 @@ export const TableSchema = z.object({
   columns: z.record(z.string().max(700), TableColumn).default({}),
   /** 类型表：自定义的结构体、别名、带范围的基础类型（types.json） */
   types: TableTypes.default({}),
+  /** 枚举扫描规则（enum-scans.json）：从表格页签 / 代码里扫出枚举 */
+  scans: z.array(EnumScan).max(50).default([]),
   analyzedAt: z.string().max(40).optional(),
 })
 export type TableSchema = z.infer<typeof TableSchema>

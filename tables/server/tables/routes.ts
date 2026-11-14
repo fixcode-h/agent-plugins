@@ -42,6 +42,9 @@ import { withPromptLangRules } from '../../shared/prompt-lang.ts'
 import { buildTablesBody } from '../../shared/tables-assist.ts'
 import { TableCreate } from '../../shared/table-create.ts'
 import { createTable } from './create.ts'
+import { runScans, scanOnce } from './enum-scan.ts'
+import { readScanResults } from './enum-scan-store.ts'
+import { EnumScan } from '../../shared/table-enum-scan.ts'
 import type { ExportEvent } from '../../shared/table-export.ts'
 
 export interface TablesDeps {
@@ -559,5 +562,54 @@ export function tablesApi(deps: TablesDeps) {
           return fail(c, e)
         }
       })
+      // 枚举扫描：手动按规则 id 扫，或「打开时」自动刷新（只扫源文件变了的）；返回扫了的几条和变化
+      .post('/:id/enum-scan', async (c) => {
+        try {
+          const { dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
+          const body = ScanBody.safeParse(await c.req.json().catch(() => ({})))
+          if (!body.success) throw new HttpError(t('扫描请求格式不对'))
+          const schema = await readSchema(schemaAt)
+          return c.json({ runs: await runScans({ dir, cfg, schemaAt, schema }, body.data) })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 每条规则上次扫的情况（时间、出错、提醒、扫出几个枚举），设置里规则那行显示
+      .get('/:id/enum-scan', async (c) => {
+        try {
+          const { schemaAt } = await projectOf(deps, c.req.param('id'))
+          const all = await readScanResults(schemaAt)
+          return c.json(
+            Object.fromEntries(
+              Object.entries(all).map(([k, r]) => [
+                k,
+                { at: r.at, error: r.error, warnings: r.warnings, enums: Object.keys(r.enums).length },
+              ]),
+            ),
+          )
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 试跑一条（可能还没保存的）规则：只读，不写结果
+      .post('/:id/enum-scan/try', async (c) => {
+        try {
+          const { dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
+          const body = EnumScan.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('扫描规则格式不对'))
+          const schema = await readSchema(schemaAt)
+          const prev = (await readScanResults(schemaAt))[body.data.id]
+          const { result: _, ...run } = await scanOnce({ dir, cfg, schemaAt, schema }, body.data, prev)
+          return c.json(run)
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
   )
 }
+
+const ScanBody = z.object({
+  ids: z.array(z.string().max(60)).max(50).optional(),
+  auto: z.boolean().optional(),
+  file: z.string().max(600).optional(),
+})
