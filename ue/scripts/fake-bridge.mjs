@@ -1,5 +1,5 @@
-// 假的桥接（冒烟测试用）：在本进程里起一个 HTTP 服务，协议和 UE 里的 AgentPanelBridge 一样（GET /info、POST /rpc、令牌头），
-// 在 <项目>/Saved/AgentPanel/instances/<PID>.json 写名片。只实现冒烟测试用到的几个操作，状态放在内存里。
+// 假的桥接（冒烟测试用）：在本进程里起一个 HTTP 服务，协议和 UE 里的 UELink（原 AgentPanelBridge）一样（GET /info、POST /rpc、令牌头），
+// 在 <项目>/Saved/UELink/instances/<PID>.json 写名片。只实现冒烟测试用到的几个操作，状态放在内存里。
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
@@ -698,7 +698,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   })
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   const port = server.address().port
-  const dir = path.join(root, 'Saved', 'AgentPanel', 'instances')
+  const dir = path.join(root, 'Saved', 'UELink', 'instances')
   mkdirSync(dir, { recursive: true })
   const card = path.join(dir, `${process.pid}.json`)
   writeFileSync(

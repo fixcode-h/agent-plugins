@@ -10,5 +10,6 @@
 - 网页部分的 Tailwind 类名一律带插件自己的前缀（`index.css` 里 `prefix(…)`，例如 `bl:flex`）：不带前缀时插件样式里的 `.flex-col` 会盖掉面板的 `md:flex-row`，面板整页布局乱掉。
 - 界面文案用 `t('中文原文')`，英文写进插件的 `locales/en.json`（`npm run check` 查漏翻）；发给 Agent 的提示词、注释不翻译。注释用中文，写「为什么」。
 - 上游代码的副本（如 `blender/dsh/`）只改接入的地方，改动记在旁边的 `VENDORED.md`。
+- **UE 端的 C++（`ue/bridge/UELink/`）是公共库 [fixcode-h/UELink](https://github.com/fixcode-h/UELink) 发布版的副本**，和 UEToVS 共用：C++ 改动去 UELink 仓库做、发版，再 `node ue/scripts/sync-uelink.mjs [版本]` 换过来，不在这里改。
 - 凭据不进仓库。临时文件放 `.tmp/` 或系统临时目录。
 - 提交前：`npm run check && npm run build`（有照面板源码布局的插件时再加 `npm test`），用面板「链接本机目录」装 `dist/<id>` 试一遍；改了版本号就同时改 `plugin.json` 和 `plugins.json`。

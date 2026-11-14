@@ -10,7 +10,7 @@
   - 对话右栏的「UE」页签。
   - `.uasset` 的查看窗口（面板 SDK 的 `fileViewers`，`web/AssetFile.tsx`）：对话里的文件标记、文件浏览页点 `.uasset` 时弹出，DataTable 显示成表格，DataAsset 等显示属性，蓝图多一页大纲和图表伪代码，都有「摘要与引用」；只看不改，底栏可以跳到资源分区去改。旧面板没有这个扩展点，照旧交给系统打开。
   - Agent 工具。
-- **UE 端桥接插件**（`bridge/AgentPanelBridge/`，C++）：添加项目时复制到 `<项目>/Plugins/AgentPanelBridge/`。
+- **UE 端插件 UELink**（`bridge/UELink/`，C++，公共库 [fixcode-h/UELink](https://github.com/fixcode-h/UELink) 发布版的副本，见 `bridge/VENDORED.md`）：和 UEToVS 共用。安装时和公共库最新正式版取高的，复制到 `<项目>/Plugins/UELink/`，并清掉旧的 `AgentPanelBridge`、`UEToVSLink`；更新源可在插件参数「UELink 更新源」里换成内网镜像或本机目录。
   - 进程里起一个只听 127.0.0.1 的 HTTP 服务，名片写在 `Saved/AgentPanel/instances/<PID>.json`。
   - 运行时模块负责控制台、GM、反射读写、日志和截图。
   - 编辑器模块负责资源读写和保存、蓝图图表读写和编译、PIE 和 Live Coding。
@@ -25,7 +25,7 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - 「Lua」页：执行 Lua 代码（`self` 可以是某个对象的实例表），按路径看全局表里纯 Lua 的单例和管理器。
 - Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认）。
 - 读写只用 Lua 的 C 接口：UnLua 注册表里「UObject 指针 → 实例表」的对象表名字对不上时，扫注册表认出来；会触发元方法的读写都在 `lua_pcall` 里。
-- 只有「拿到 lua_State」和 UnLua 版本有关：`AgentPanelBridge.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
+- 只有「拿到 lua_State」和 UnLua 版本有关：UELink 的 `UELinkCore.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
 
 设计见面板仓库的 UE 插件设计文档，面板侧的扩展点是插件接口 2（ADR 0059）。
 

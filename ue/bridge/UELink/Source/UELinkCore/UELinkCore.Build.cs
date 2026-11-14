@@ -1,12 +1,12 @@
-// Agent 面板桥接插件的运行时模块：编辑器、PIE、-game / 专用服务器进程里都加载（Shipping 不加载，见 .uplugin）
+// UELink 的运行时模块（原 Agent 面板桥接 AgentPanelBridge）：编辑器、PIE、-game / 专用服务器进程里都加载（Shipping 不加载，见 .uplugin）
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnrealBuildTool;
 
-public class AgentPanelBridge : ModuleRules
+public class UELinkCore : ModuleRules
 {
-	public AgentPanelBridge(ReadOnlyTargetRules Target) : base(Target)
+	public UELinkCore(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
@@ -26,6 +26,29 @@ public class AgentPanelBridge : ModuleRules
 			PublicDefinitions.Add("AGENT_PANEL_BRIDGE_ENABLED=1");
 		}
 		SetupLua(Target);
+		RejectOldPlugins(Target);
+	}
+
+	/**
+	 * UELink 是 AgentPanelBridge（Agent 面板）和 UEToVSLink（UEToVS）合并来的：旧插件还在项目里时两边都挂日志、抢 Live Coding，
+	 * 旧桥接的类名还会和这里重复（单体编译直接链接冲突）。编译时就拦下，报清楚要删哪个目录，不留到运行时才出怪问题
+	 */
+	private void RejectOldPlugins(ReadOnlyTargetRules Target)
+	{
+		if (Target.ProjectFile == null)
+		{
+			return;
+		}
+		string Plugins = Path.Combine(Target.ProjectFile.Directory.FullName, "Plugins");
+		foreach (string Old in new string[] { "AgentPanelBridge", "UEToVSLink" })
+		{
+			string Found = FindFile(Plugins, Old + ".uplugin");
+			if (Found != null)
+			{
+				throw new Exception("UELink 已经包含 " + Old + " 的全部功能，项目里还留着旧插件：" + Path.GetDirectoryName(Found) +
+					"。关掉编辑器，删掉这个目录（.uproject 的 Plugins 列表里有 " + Old + " 的话也一起删掉），再重新编译。");
+			}
+		}
 	}
 
 	/**
@@ -56,7 +79,7 @@ public class AgentPanelBridge : ModuleRules
 		{
 			PrivateDependencyModuleNames.Add("Lua");
 		}
-		Console.WriteLine("AgentPanelBridge: 找到 UnLua（" + UnLuaDir + "），编进 Lua 支持；GetEnv(UObject)=" + bEnvByObject + " GetEnv()=" + bEnv + " GetState()=" + bGetState);
+		Console.WriteLine("UELink: 找到 UnLua（" + UnLuaDir + "），编进 Lua 支持；GetEnv(UObject)=" + bEnvByObject + " GetEnv()=" + bEnv + " GetState()=" + bGetState);
 	}
 
 	private string FindUnLua(ReadOnlyTargetRules Target)

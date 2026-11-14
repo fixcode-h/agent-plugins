@@ -91,4 +91,6 @@ namespace AgentPanelEd
 	void RegisterTextifyOps();
 	/** trace 分析（AgentPanelTrace.cpp）：trace.query */
 	void RegisterTraceOps();
+	/** 推送通道那边的 HTTP 操作：tests.run、tests.status、livecoding.status（UELinkStreamOps.cpp） */
+	void RegisterStreamOps();
 }
