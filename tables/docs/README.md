@@ -46,7 +46,7 @@
 | `shared/sheet-diff.ts`                                     | 格子级差异（版本差异、跨项目对比共用）、只看变化的折叠、跨项目「拷到另一边」                  |
 | `server/tables/history.ts`                                 | 版本记录（`/history`：git log / p4 filelog / svn log）、取某一版（`/at`：show / print / cat） |
 | `server/tables/compare.ts`                                 | 跨项目对比（`/compare?other=`）：按相对路径配对，比解析出来的格子                             |
-| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / search / schema / edit / propose / check`      |
+| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / schema / edit / propose / check`      |
 | `shared/table-describe.ts`                                 | `table.schema` 的列结构：类型、数组分隔符、枚举值、引用、范围和校验规则                       |
 
 ## 表格目录
@@ -188,7 +188,7 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 
 ## Agent 改表格
 
-动作在 `server/actions.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.search` 走 `/search`（同样认「字段名:值」和三个开关），每处带 Excel 位置、字段名和这一行的主键；`table.schema` 用 `describeSheet` 列出每一列的类型、数组分隔符、枚举能填的值（最多 80 个）、引用、范围和校验规则，枚举表、被引用的表经 `/file` 读。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
+动作在 `server/actions.ts`（ADR 0011：能力只加进动作表，不加新的 MCP 工具）。`table.list` 的 `name` 只按路径过滤（不分大小写、空格隔开的词都要含），不读表格内容；**不给 Agent 按内容跨表找的动作**（2026-11-14 去掉 `table.search`）：表格不做预处理，跨表读全部内容太慢，`/search` 只留给表格页左栏的「内容」搜索和全部替换。`table.schema` 用 `describeSheet` 列出每一列的类型、数组分隔符、枚举能填的值（最多 80 个）、引用、范围和校验规则，枚举表、被引用的表经 `/file` 读。`table.edit` 按主键或 Excel 行号改格子、末尾加行、删行，换成和表格页一样的「行操作 + 格子」走 `/save`；写之前 `checkTouched`，不合规就不写并把原因交给模型（`force: true` 只在用户明确要求时用）。
 
 ## AI（表格页工具栏「AI」）
 

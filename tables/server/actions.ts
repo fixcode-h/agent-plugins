@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TableDoc, TableSchema, TableSearch, TablesIndex } from '../shared/tables.ts'
+import type { TableDoc, TableSchema, TablesIndex } from '../shared/tables.ts'
 import { checkTouched, headerOf, workbookNeeds } from '../shared/table-struct.ts'
 import { describeSheet } from '../shared/table-describe.ts'
 import { colLetters } from '../shared/table-agent.ts'
@@ -83,14 +83,32 @@ export const tableActions: PluginAction[] = [
   defineAction({
     name: 'table.list',
     title: '列出表格',
-    description: '列出项目表格目录（项目设置 → 表格）里的配置表：相对路径、格式。改表格前先用它找文件。',
+    description:
+      '列出项目表格目录（项目设置 → 表格）里的配置表：相对路径、格式。改表格前先用它找文件。' +
+      'name 按表名找（路径里含这几个字就算，不分大小写，空格隔开的几个词都要含），只看文件名、不读表格内容，很快。',
     level: 'read',
-    useWhen: '改表格或查数据前先找到文件路径时',
-    input: z.object({ projectId: PID }),
+    useWhen: '改表格或查数据前先找到文件路径时；知道表名（或其中几个字）就写 name',
+    input: z.object({
+      projectId: PID,
+      name: z
+        .string()
+        .trim()
+        .max(200)
+        .optional()
+        .describe('按表名找：路径里含这几个字（不分大小写，空格隔开的词都要含）'),
+    }),
     run: async (a, ctx) => {
       const r = (await ctx.api('GET', `${API}/tables/${enc(pidOf(a.projectId, ctx))}`)) as TablesIndex
       if (!r.dirs.length && !r.files.length) throw new ActionError('这个项目还没设表格目录（项目设置 → 表格）')
-      return { dirs: r.dirs, files: r.files.map((f) => `${f.path}${f.kind === 'xls' ? '（只读）' : ''}`) }
+      // 只按路径过滤：表格内容不做预处理，跨表读内容太慢，所以 Agent 不提供按内容找
+      const words = (a.name ?? '').toLowerCase().split(/\s+/).filter(Boolean)
+      const files = words.length ? r.files.filter((f) => words.every((w) => f.path.toLowerCase().includes(w))) : r.files
+      return {
+        dirs: r.dirs,
+        files: files.map((f) => `${f.path}${f.kind === 'xls' ? '（只读）' : ''}`),
+        ...(words.length && !files.length ? { note: `没有路径里含「${a.name}」的表格，去掉 name 看全部` } : {}),
+        ...(r.truncated ? { truncated: '表格太多，只列了前面一部分；写 name 缩小范围' } : {}),
+      }
     },
   }),
   defineAction({
@@ -113,54 +131,12 @@ export const tableActions: PluginAction[] = [
       '按字段名查一张配置表：返回字段列表、主键字段、匹配的行（Excel 行号 + 字段值）。表头按项目的表格结构识别，不用自己数第几行。读 xlsx 用它，不要自己写脚本解析。',
     level: 'read',
     useWhen: '按字段或主键查具体的行和值时',
-    avoidWhen: '不知道值在哪张表时先用 table.search',
+    avoidWhen: '不知道是哪张表时先用 table.list 按表名找',
     input: TableQueryInput.extend({ projectId: PID }),
     run: async (a, ctx) => {
       const pid = pidOf(a.projectId, ctx)
       const { sheet, schema, header } = await openSheet(pid, a.path, a.sheet, ctx)
       return { sheet: sheet.name, ...queryRows(sheet.rows, header, schema.style.key, a) }
-    },
-  }),
-  defineAction({
-    name: 'table.search',
-    title: '跨表找',
-    description:
-      '在项目所有配置表的格子里找一个值，返回每处在哪个文件、哪张表、哪一格（Excel 位置）、哪个字段、那一行的主键。' +
-      '想知道某个 ID 在哪些表里被用到、某个字段名在哪张表时用它，不要一张张 table.query。' +
-      'q 写成「字段名:值」（例如 ItemId:1001）只在叫这个名字的列里找；whole 整格相同才算（数组列 1001;1002 里某一项相同也算）。',
-    level: 'read',
-    useWhen: '知道一个值（id、名字）但不知道在哪张表、哪一格时',
-    input: z.object({
-      projectId: PID,
-      q: z.string().trim().min(1).max(500).describe('要找的值；「字段名:值」只在那一列找'),
-      field: z.string().max(200).optional().describe('只在这个字段里找（和在 q 里写「字段名:」一样）'),
-      whole: z.boolean().default(false).describe('整格相同才算（找 ID 时一般要开）'),
-      caseSensitive: z.boolean().default(false),
-      regex: z.boolean().default(false).describe('q 按正则（JavaScript 语法）'),
-      limit: z.number().int().min(1).max(500).default(100),
-    }),
-    run: async (a, ctx) => {
-      const pid = pidOf(a.projectId, ctx)
-      const q = a.field ? `${a.field}:${a.q}` : a.q
-      const flags = `${a.whole ? '&whole=1' : ''}${a.caseSensitive ? '&case=1' : ''}${a.regex ? '&regex=1' : ''}`
-      const r = (await ctx.api(
-        'GET',
-        `${API}/tables/${enc(pid)}/search?q=${enc(q)}${flags}&limit=${a.limit}`,
-      )) as TableSearch
-      return {
-        searched: r.files,
-        ...(r.field ? { field: r.field } : {}),
-        ...(r.fieldMissing ? { note: `没有哪张表有字段「${r.fieldMissing}」，按整串找了` } : {}),
-        hits: r.hits.map((h) => ({
-          path: h.path,
-          sheet: h.sheet,
-          cell: `${colLetters(h.col)}${h.row + 1}`,
-          ...(h.field ? { field: h.field } : { header: true }),
-          ...(h.key ? { key: h.key } : {}),
-          text: h.text,
-        })),
-        ...(r.truncated ? { truncated: `只列出前 ${r.hits.length} 处，缩小范围（写字段名、开 whole）再找` } : {}),
-      }
     },
   }),
   defineAction({
