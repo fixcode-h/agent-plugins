@@ -442,7 +442,6 @@
   "文件正在 Excel / WPS 里打开：可以先改，保存前要在那边关掉": "The file is open in Excel / WPS: you can edit here, but close it there before saving",
   "文字": "Text",
   "新列": "new",
-  "新增枚举值「{v}」": "Add enum value \"{v}\"",
   "新建枚举": "New enum",
   "新建枚举…": "New enum…",
   "新枚举名": "New enum name",
@@ -735,7 +734,6 @@
   "选了 {n} 个文件": "{n} files selected",
   "选了枚举后，这一列改格子时是下拉选择，填了不在枚举里的值会标红": "With an enum set, editing this column shows a dropdown, and values not in the enum are flagged red",
   "选左边一个有差异的文件": "Pick a file with differences on the left",
-  "选择值": "Choose value",
   "选择表格目录": "Choose table folder",
   "逗号分隔的通配，比如 *.xlsx, *.csv；带 / 的按相对路径比": "Comma-separated wildcards such as *.xlsx, *.csv; patterns with / match the relative path",
   "通用枚举": "Shared enums",
@@ -1201,5 +1199,9 @@
   "{file} 里 {name} 定义了不止一次，只留第一个": "{name} is defined more than once in {file}; keeping the first",
   "正则写得不对或没填：枚举块和成员两个都要填": "Invalid or empty regex: both enum block and member are required",
   "枚举块的正则要有命名组 name 和 body：(?<name>…)、(?<body>…)": "The enum block regex needs named groups name and body: (?<name>…), (?<body>…)",
-  "成员的正则要有命名组 name：(?<name>…)": "The member regex needs a named group name: (?<name>…)"
+  "成员的正则要有命名组 name：(?<name>…)": "The member regex needs a named group name: (?<name>…)",
+  "筛选值": "Filter values",
+  "搜索名字、值或说明": "Search name, value or description",
+  "搜索后点选或回车选第一项": "Search, then click or press Enter for the first match",
+  "还没有值，从下面选": "No values yet; pick from the list below"
 }
