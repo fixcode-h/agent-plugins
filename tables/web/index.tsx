@@ -4,6 +4,8 @@ import type { ActivateWeb, WebPlugin } from '../../sdk/web.ts'
 import { t } from '@shared/i18n'
 import type { Project } from '@shared/schema'
 import { tablesOf } from '@shared/tables'
+import { TABLES_STYLE_LANG } from '@shared/tables-assist'
+import { TablesAnalysisReport } from '@/components/tables/TablesAnalysisReport'
 import { TableIcon } from '@/components/layout/rail-icons'
 import { ProjectTablesSection } from '@/components/projects/ProjectTablesSection'
 import { setTablesHost } from '@/lib/tables-host'
@@ -22,6 +24,9 @@ const TypesSpecimen = lazy(() =>
 )
 const EnumScanSpecimen = lazy(() =>
   import('./src/components/settings/EnumScanSpecimen').then((m) => ({ default: m.EnumScanSpecimen })),
+)
+const DraftReviewSpecimen = lazy(() =>
+  import('./src/components/settings/DraftReviewSpecimen').then((m) => ({ default: m.DraftReviewSpecimen })),
 )
 const RowFormSpecimen = lazy(() =>
   import('./src/components/settings/RowFormSpecimen').then((m) => ({ default: m.RowFormSpecimen })),
@@ -72,6 +77,17 @@ const plugin = (): WebPlugin => ({
       ),
     },
   ],
+  // AI 分析窗口右侧的功能面板：「AI 分析表格风格」的结果在对话旁边直接勾选应用（旧面板没有这个扩展点，忽略它）
+  reports: [
+    {
+      id: 'style',
+      lang: TABLES_STYLE_LANG,
+      title: t('表格设置'),
+      desc: t('分析出的表头、类型、枚举逐项勾选，应用后直接写进项目的表格结构文件'),
+      icon: Sheet,
+      Report: ({ task, messageId, text }) => <TablesAnalysisReport task={task} messageId={messageId} text={text} />,
+    },
+  ],
   // 面板文件弹窗里的表格文件：表格目录里的多「在表格页打开」，表头按项目的表格设置
   sheets: sheetClaimer,
   specimens: [
@@ -112,6 +128,16 @@ const plugin = (): WebPlugin => ({
       Specimen: () => (
         <Suspense fallback={null}>
           <EnumScanSpecimen />
+        </Suspense>
+      ),
+    },
+    {
+      id: 'draft-review',
+      label: 'DraftReview',
+      tune: ['button'],
+      Specimen: () => (
+        <Suspense fallback={null}>
+          <DraftReviewSpecimen />
         </Suspense>
       ),
     },
