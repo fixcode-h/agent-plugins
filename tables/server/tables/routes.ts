@@ -44,13 +44,17 @@ import { TableCreate } from '../../shared/table-create.ts'
 import { createTable } from './create.ts'
 import { runScans, scanOnce } from './enum-scan.ts'
 import { readScanResults } from './enum-scan-store.ts'
+import type { EnumScanWatcher } from './enum-scan-watch.ts'
 import { EnumScan } from '../../shared/table-enum-scan.ts'
+import { buildEnumScanPrompt } from '../../shared/table-enum-scan-ai.ts'
 import type { ExportEvent } from '../../shared/table-export.ts'
 
 export interface TablesDeps {
   projects: { get(id: string): Promise<Project | null> }
   /** 外部改动检测（fs.watch + 推送，watch.ts）；单测里不给 */
   watcher?: TableWatcher
+  /** 枚举扫描「盯着改动」（enum-scan-watch.ts）；单测里不给 */
+  scanWatch?: EnumScanWatcher
 }
 
 /** 项目、项目目录、表格配置；没开表格功能也给（列表为空） */
@@ -554,10 +558,14 @@ export function tablesApi(deps: TablesDeps) {
       })
       .put('/:id/schema', async (c) => {
         try {
-          const { schemaAt } = await projectOf(deps, c.req.param('id'))
+          const id = c.req.param('id')
+          const { schemaAt } = await projectOf(deps, id)
           const body = TableSchema.safeParse(await c.req.json().catch(() => null))
           if (!body.success) throw new HttpError(t('表格结构格式不对'))
-          return c.json(await writeSchema(schemaAt, body.data))
+          const saved = await writeSchema(schemaAt, body.data)
+          // 扫描规则可能改了「盯着改动」：重新算要盯的目录（不等它，失败只影响后台刷新）
+          void deps.scanWatch?.sync(id).catch(() => undefined)
+          return c.json(saved)
         } catch (e) {
           return fail(c, e)
         }
@@ -591,6 +599,17 @@ export function tablesApi(deps: TablesDeps) {
           return fail(c, e)
         }
       })
+      // AI 总结扫描规则的第一句话（按面板的回复语言拼好）
+      .post('/:id/enum-scan/prompt', async (c) => {
+        try {
+          await projectOf(deps, c.req.param('id'))
+          const body = ScanExampleBody.safeParse(await c.req.json().catch(() => null))
+          if (!body.success || !body.data.file.trim()) throw new HttpError(t('先填示例文件'))
+          return c.json({ prompt: withPromptLangRules(buildEnumScanPrompt(body.data)) })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
       // 试跑一条（可能还没保存的）规则：只读，不写结果
       .post('/:id/enum-scan/try', async (c) => {
         try {
@@ -607,6 +626,15 @@ export function tablesApi(deps: TablesDeps) {
       })
   )
 }
+
+const ScanExampleBody = z.object({
+  file: z.string().max(600),
+  sheet: z.string().max(200).optional(),
+  enumName: z.string().max(200).optional(),
+  note: z.string().max(2000).optional(),
+  current: EnumScan.optional(),
+  problems: z.array(z.string().max(500)).max(20).optional(),
+})
 
 const ScanBody = z.object({
   ids: z.array(z.string().max(60)).max(50).optional(),

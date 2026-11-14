@@ -3,10 +3,11 @@
  * C++ 或 Lua 里时，按规则一键扫描，或者打开时自动刷新）。规则存在结构文件 enum-scans.json，扫出来的结果存在
  * enum-scan-results.json，读结构文件时并进对应枚举的 scanned（只读）；表格文件、源文件都不改。
  *
- * 一期只做表格里的三种写法（这里是纯函数，服务端扫、单测都用它）：
- * - block 分组块：枚举名只写在每组第一行，下面几行枚举名那列空着，属于上面那个枚举（用户项目的 EnumType 页签就是这样，没有表头）
- * - rows 每行写枚举名：每一行都有枚举名、成员名
- * - sheets 一页一个枚举：页签名（或文件名）就是枚举名，整页是它的成员
+ * 写法（这里是纯函数和规则格式，服务端扫、单测都用它）：
+ * - 表格里：block 分组块（枚举名只写在每组第一行，下面几行枚举名那列空着，属于上面那个枚举；用户项目的 EnumType 页签就是这样，没有表头）、
+ *   rows 每行写枚举名、sheets 一页一个枚举（页签名或文件名就是枚举名）
+ * - 代码里（table-enum-scan-code.ts）：cpp（UENUM / enum class / namespace 包着的 enum）、lua（枚举表）、regex（两个正则）
+ * - command 自定义命令：内置写法表达不了时，跑项目里的脚本，它输出约定格式的 JSON
  */
 import { z } from 'zod'
 import { t } from './i18n.ts'
@@ -19,6 +20,15 @@ export const ScanValue = z.object({
   desc: z.string().trim().max(500).optional(),
 })
 type EnumValue = z.infer<typeof ScanValue>
+
+/** 默认跳过的哨兵成员：EFoo_MAX、MAX、Count、Num */
+export const SKIP_SENTINEL = '(^|_)(MAX|Max|COUNT|Count|NUM|Num)$'
+
+/** 代码类写法共用：哪些文件（相对项目目录的通配，逗号分隔，** 跨目录）、排除哪些 */
+const CodeFiles = {
+  files: z.string().max(1000).default(''),
+  exclude: z.string().max(1000).default(''),
+}
 
 /** 列：Excel 列号（A、B、AA）或表头里的字段名 */
 const Col = z.string().trim().max(200)
@@ -48,8 +58,69 @@ export const ScanFrom = z.discriminatedUnion('kind', [
     valueCol: Col.optional(),
     descCol: Col.optional(),
   }),
+  z.object({
+    kind: z.literal('cpp'),
+    ...CodeFiles,
+    /** 只要带 UENUM() 的（UE 项目里只给蓝图 / 反射用的枚举） */
+    onlyUenum: z.boolean().default(false),
+    /** 跳过 UMETA(Hidden) 的成员 */
+    skipHidden: z.boolean().default(true),
+    /** 跳过这些成员（正则）：_MAX、Count 这类哨兵 */
+    skip: z.string().max(300).default(SKIP_SENTINEL),
+    /** 说明取 UMETA(DisplayName / ToolTip) 还是行尾注释 */
+    desc: z.enum(['meta', 'comment', 'none']).default('meta'),
+  }),
+  z.object({
+    kind: z.literal('lua'),
+    ...CodeFiles,
+    /** 哪些变量名算枚举（正则，按最后一段比）；空的是「键都是名字、值都是数字或字符串」的表 */
+    names: z.string().max(300).default(''),
+    /** 枚举都放在一个总表下面时写它的名字（例如 Enums = { EColor = {...}, ... }），总表下每个子表是一个枚举 */
+    container: z.string().max(200).default(''),
+    /** 成员的值是表时（A = { id = 1, name = "…" }）：哪个字段当值、哪个当说明 */
+    valueField: z.string().max(100).default(''),
+    descField: z.string().max(100).default(''),
+    skip: z.string().max(300).default(''),
+  }),
+  z.object({
+    kind: z.literal('regex'),
+    ...CodeFiles,
+    /** 找一个枚举块：要有命名组 name（枚举名）和 body（成员那一段） */
+    block: z.string().max(1000).default(''),
+    /** 在 body 里找每个成员：要有命名组 name，可选 value、desc */
+    member: z.string().max(1000).default(''),
+    skip: z.string().max(300).default(''),
+  }),
+  z.object({
+    kind: z.literal('command'),
+    /** 在项目目录（或 cwd）里执行，标准输出是 {"enums":{"EFoo":[{"name":"A","value":"1","desc":"…"}]}} */
+    command: z.string().max(2000).default(''),
+    cwd: z.string().trim().max(300).default(''),
+    timeoutSec: z.number().int().min(1).max(600).default(60),
+    /** 自动扫时看哪些文件变没变（通配，逗号分隔）；空的只能手动扫 */
+    files: z.string().max(1000).default(''),
+    exclude: z.string().max(1000).default(''),
+  }),
 ])
 export type ScanFrom = z.infer<typeof ScanFrom>
+
+/** 表格里的写法（读一个表格文件） */
+export type SheetFrom = Extract<ScanFrom, { kind: 'block' | 'rows' | 'sheets' }>
+export type CodeFrom = Extract<ScanFrom, { kind: 'cpp' | 'lua' | 'regex' }>
+export const isSheetFrom = (f: ScanFrom): f is SheetFrom =>
+  f.kind === 'block' || f.kind === 'rows' || f.kind === 'sheets'
+
+/** 显示用：这条规则扫哪里 */
+export const fromWhere = (f: ScanFrom) =>
+  isSheetFrom(f) ? (f.sheet ? `${f.file} › ${f.sheet}` : f.file) : f.kind === 'command' ? f.command : f.files
+
+/** 一条规则自动扫时要看的文件通配：表格类是那一个文件，代码类、命令是 files */
+export const watchGlobs = (f: ScanFrom) => splitGlobs(isSheetFrom(f) ? f.file : f.files)
+export const splitGlobs = (s: string) =>
+  s
+    .split(/[,\n]/)
+    .map((x) => x.trim().replace(/\\/g, '/'))
+    .filter(Boolean)
 
 /** 扫出来的名字怎么换成表格里用的枚举名（C++ 叫 EFoo、表格里写 Foo） */
 export const ScanRename = z.object({
@@ -60,8 +131,11 @@ export const ScanRename = z.object({
 })
 export type ScanRename = z.infer<typeof ScanRename>
 
-/** 什么时候自动扫：off 只手动；open 进表格页、打开这个文件时看源文件变没变，变了才扫 */
-export const SCAN_AUTO = ['off', 'open'] as const
+/**
+ * 什么时候自动扫：off 只手动；open 进表格页、打开这个文件时看源文件变没变，变了才扫；
+ * watch 服务端盯着源文件所在的目录，一改就在后台扫并推给页面
+ */
+export const SCAN_AUTO = ['off', 'open', 'watch'] as const
 
 export const EnumScan = z.object({
   id: z.string().trim().min(1).max(60),
@@ -87,7 +161,13 @@ export type ScanResult = z.infer<typeof ScanResult>
 export const ScanResults = z.record(z.string().max(60), ScanResult)
 export type ScanResults = z.infer<typeof ScanResults>
 
-export const scanName = (s: EnumScan) => s.name.trim() || s.from.file.replace(/.*[\\/]/, '') || s.id
+export const scanName = (s: EnumScan) =>
+  s.name.trim() ||
+  fromWhere(s.from)
+    .split(',')[0]
+    .replace(/.*[\\/]/, '')
+    .slice(0, 40) ||
+  s.id
 
 /** 新规则的 id：名字里看得懂的部分 + 随机后缀，不和已有的重 */
 export function newScanId(have: { id: string }[]) {
@@ -152,7 +232,7 @@ const cell = (row: string[] | undefined, c: number) => (c >= 0 ? (row?.[c] ?? ''
  * 这时 names 为空、dataFrom 为 0，列只能写列号）
  */
 export function scanSheets(
-  from: ScanFrom,
+  from: SheetFrom,
   sheets: SheetData[],
   headerOf: (sheet: SheetData) => SheetCols,
   fileName: string,
@@ -242,6 +322,8 @@ export interface ScanDiff {
   added: string[]
   removed: string[]
   changed: { name: string; added: string[]; removed: string[]; modified: string[] }[]
+  /** 看起来是改了名的成员（去掉的和新加的值一样，或者在同一个位置）：问用户要不要替换表格里的旧值 */
+  renames?: { enum: string; from: string; to: string }[]
 }
 
 export function diffScan(
@@ -252,6 +334,7 @@ export function diffScan(
   const added = Object.keys(after).filter((k) => !old[k])
   const removed = Object.keys(old).filter((k) => !after[k])
   const changed: ScanDiff['changed'] = []
+  const renames: NonNullable<ScanDiff['renames']> = []
   for (const k of Object.keys(after)) {
     if (!old[k]) continue
     const a = new Map(old[k].map((v) => [v.name, v]))
@@ -262,8 +345,39 @@ export function diffScan(
       (n) => a.has(n) && (a.get(n)!.value !== b.get(n)!.value || a.get(n)!.desc !== b.get(n)!.desc),
     )
     if (add.length || rm.length || mod.length) changed.push({ name: k, added: add, removed: rm, modified: mod })
+    if (add.length && rm.length) renames.push(...guessRenames(k, old[k], after[k], new Set(add), new Set(rm)))
   }
-  return { added, removed, changed }
+  return { added, removed, changed, ...(renames.length ? { renames } : {}) }
+}
+
+/**
+ * 去掉的成员和新加的成员配对成「改名」：先按值配（值一样只换了名字，最可靠），配不上的再按原来的位置配。
+ * 只是猜测，替换表格前给用户逐条看
+ */
+function guessRenames(name: string, before: EnumValue[], after: EnumValue[], add: Set<string>, rm: Set<string>) {
+  const out: { enum: string; from: string; to: string }[] = []
+  const used = new Set<string>()
+  const byValue = new Map<string, string>()
+  for (const v of after)
+    if (add.has(v.name) && v.value !== undefined && !byValue.has(v.value)) byValue.set(v.value, v.name)
+  const left: EnumValue[] = []
+  for (const v of before) {
+    if (!rm.has(v.name)) continue
+    const to = v.value !== undefined ? byValue.get(v.value) : undefined
+    if (to && !used.has(to)) {
+      used.add(to)
+      out.push({ enum: name, from: v.name, to })
+    } else left.push(v)
+  }
+  for (const v of left) {
+    const i = before.indexOf(v)
+    const to = after[i]?.name
+    if (to && add.has(to) && !used.has(to) && after[i].value === undefined && v.value === undefined) {
+      used.add(to)
+      out.push({ enum: name, from: v.name, to })
+    }
+  }
+  return out
 }
 
 export const diffEmpty = (d: ScanDiff) => !d.added.length && !d.removed.length && !d.changed.length

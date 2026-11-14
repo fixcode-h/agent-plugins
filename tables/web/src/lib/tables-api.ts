@@ -11,6 +11,7 @@ import type { EnumRename } from '@shared/table-enum-rename'
 import type { ReplaceResult, TableReplaceBody, TableSearchOpts } from '@shared/table-search'
 import type { CellAt, CellChange } from '@shared/table-blame'
 import type { EnumScan, ScanRun, ScanState } from '@shared/table-enum-scan'
+import type { ScanExample } from '@shared/table-enum-scan-ai'
 import { failure, json, request } from './api'
 import { trackedFetch } from './connection'
 
@@ -51,6 +52,9 @@ export const tablesApi = {
   /** 枚举扫描：ids 手动扫这几条；auto 自动刷新（只扫源文件变了的，file 时只看用到它的规则）。返回扫了的几条 */
   enumScan: (projectId: string, pick: { ids?: string[]; auto?: boolean; file?: string }) =>
     request<{ runs: ScanRun[] }>(`${BASE}/${projectId}/enum-scan`, json('POST', pick)),
+  /** AI 总结扫描规则的第一句话 */
+  enumScanPrompt: (projectId: string, ex: ScanExample) =>
+    request<{ prompt: string }>(`${BASE}/${projectId}/enum-scan/prompt`, json('POST', ex)),
   /** 每条规则上次扫的情况 */
   enumScanState: (projectId: string) => request<Record<string, ScanState>>(`${BASE}/${projectId}/enum-scan`),
   /** 试跑一条规则（可能还没保存）：只读，不写结果 */

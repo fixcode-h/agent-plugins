@@ -20,7 +20,15 @@ export function ScanMark({ className }: { className?: string }) {
 
 /** 写法的显示名 */
 export const scanKindLabel = (k: EnumScan['from']['kind']) =>
-  k === 'block' ? t('分组块') : k === 'rows' ? t('每行写枚举名') : t('一页一个枚举')
+  ({
+    block: t('分组块'),
+    rows: t('每行写枚举名'),
+    sheets: t('一页一个枚举'),
+    cpp: 'C++',
+    lua: 'Lua',
+    regex: t('正则'),
+    command: t('自定义命令'),
+  })[k]
 
 /** 枚举对话框里：扫描出来的成员，只读 */
 export function ScannedValues({ scanned, scans }: { scanned: NonNullable<TableEnum['scanned']>; scans: EnumScan[] }) {

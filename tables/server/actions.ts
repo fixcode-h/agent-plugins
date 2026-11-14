@@ -6,6 +6,7 @@ import { colLetters } from '../shared/table-agent.ts'
 import { TableEditInput, TableQueryInput, planEdit, queryRows } from '../shared/table-agent.ts'
 import type { PluginAction, PluginActionCtx as ActionCtx } from '../../sdk/server.ts'
 import type { TablesCheck } from './tables/check.ts'
+import { EnumScan, type ScanRun } from '../shared/table-enum-scan.ts'
 
 /** 动作里说明给模型看的错误：面板把 message 原样交回 */
 class ActionError extends Error {}
@@ -277,6 +278,78 @@ export const tableActions: PluginAction[] = [
           count: s.count,
           first: s.first.slice(0, 10).map((p) => `第 ${p.r + 1} 行 ${p.field}：${p.msg}`),
         })),
+      }
+    },
+  }),
+  defineAction({
+    name: 'table.enum_scan_peek',
+    title: '看枚举页签的原样内容',
+    description:
+      '读一个表格文件某个页签的前几十行原样内容，每格带 Excel 列号（A1、B2……），不按项目表头处理。用来看枚举定义页签怎么写的。',
+    level: 'read',
+    useWhen: '总结枚举扫描规则时，看表格里的枚举页签（常常没有表头、枚举名只写在每组第一行）',
+    avoidWhen: '看普通配置表的表头和写法用 table.sample；代码文件（.h / .lua）直接读文件',
+    input: z.object({
+      projectId: PID,
+      path: z.string().describe('表格文件路径（table.list 里的写法）'),
+      sheet: z.string().optional().describe('页签名；不写是第一个'),
+      from: z.number().int().min(1).optional().describe('从第几行开始（Excel 行号），默认 1'),
+      rows: z.number().int().min(1).max(200).optional().describe('看几行，默认 60'),
+    }),
+    run: async (a, ctx) => {
+      const pid = pidOf(a.projectId, ctx)
+      const doc = (await ctx.api('GET', `${API}/tables/${enc(pid)}/file?path=${enc(a.path)}`)) as TableDoc
+      const s = a.sheet ? doc.sheets.find((x) => x.name === a.sheet) : doc.sheets[0]
+      if (!s) throw new ActionError(`没有页签「${a.sheet}」。有：${doc.sheets.map((x) => x.name).join('、')}`)
+      const start = (a.from ?? 1) - 1
+      const rows = s.rows.slice(start, start + (a.rows ?? 60))
+      return {
+        sheets: doc.sheets.map((x) => x.name),
+        sheet: s.name,
+        totalRows: s.rows.length,
+        rows: rows.map((r, i) => ({
+          row: start + i + 1,
+          cells: Object.fromEntries(r.flatMap((v, c) => (v ? [[colLetters(c), v]] : []))),
+        })),
+      }
+    },
+  }),
+  defineAction({
+    name: 'table.enum_scan_try',
+    title: '试跑枚举扫描规则',
+    description:
+      '按一条枚举扫描规则（格式见对话开头的说明）在本机试扫一次，不保存：返回扫出的枚举名、示例枚举的成员和值、提醒和错误。',
+    level: 'read',
+    useWhen: '总结或调整枚举扫描规则时，每改一次参数就试跑一次，直到示例枚举的成员和值都对上',
+    avoidWhen: '规则还没定时不要让用户保存；自定义命令（kind=command）这里不试跑，要用户在设置里自己跑',
+    input: z.object({
+      projectId: PID,
+      rule: z.record(z.string(), z.unknown()).describe('规则：{ name, from: { kind, … }, rename, auto }'),
+      example: z.string().optional().describe('示例里的一个枚举名：返回它的全部成员（最多 200 个）'),
+    }),
+    run: async (a, ctx) => {
+      const pid = pidOf(a.projectId, ctx)
+      const got = EnumScan.safeParse({ id: 'try', ...a.rule })
+      if (!got.success)
+        throw new ActionError(
+          `规则格式不对：${got.error.issues
+            .slice(0, 5)
+            .map((i) => `${i.path.join('.')}：${i.message}`)
+            .join('；')}`,
+        )
+      // 模型写的命令不在这里执行：要跑的话由用户在设置里自己试跑
+      if (got.data.from.kind === 'command')
+        throw new ActionError('kind=command 不在这里试跑；能用内置写法就用内置写法，确实不行就在说明里讲清楚，交给用户')
+      const run = (await ctx.api('POST', `${API}/tables/${enc(pid)}/enum-scan/try`, got.data)) as ScanRun
+      const names = Object.keys(run.enums)
+      const ex = a.example ? run.enums[a.example] : undefined
+      return {
+        error: run.error,
+        enums: names.length,
+        names: names.slice(0, 80),
+        sizes: Object.fromEntries(names.slice(0, 80).map((n) => [n, run.enums[n].length])),
+        ...(a.example ? { example: ex ? ex.slice(0, 200) : `没扫出 ${a.example}` } : {}),
+        warnings: run.warnings.slice(0, 20),
       }
     },
   }),

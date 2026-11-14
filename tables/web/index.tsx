@@ -10,6 +10,7 @@ import { TableIcon } from '@/components/layout/rail-icons'
 import { ProjectTablesSection } from '@/components/projects/ProjectTablesSection'
 import { setTablesHost } from '@/lib/tables-host'
 import { sheetClaimer } from './src/lib/sheet-claim'
+import { listenEnumScanPush } from './src/components/tables/use-enum-auto-scan'
 
 // 表格页和组件示例带着整套表格编辑器：第一次打开时才执行（esbuild 把 import() 打进同一个文件，但模块到用时才初始化）
 const TablesPage = lazy(() => import('./src/pages/TablesPage').then((m) => ({ default: m.TablesPage })))
@@ -39,6 +40,8 @@ const RowFormSpecimen = lazy(() =>
  */
 const activate: ActivateWeb = (host) => {
   setTablesHost(host)
+  // 「盯着改动」的枚举扫描：服务端扫完推过来，开着哪个页面都更新
+  listenEnumScanPush(host)
   return plugin()
 }
 
