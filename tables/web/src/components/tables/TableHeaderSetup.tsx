@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { SheetHeader } from '@shared/sheet-header'
-import { schemaHeader, type HeaderSource, type TableSchema } from '@shared/tables'
+import type { TableSchema } from '@shared/tables'
+import { pickHeader, type PickedSource } from '@shared/table-header-fit'
 import { fromSheetHeader, sameRule, toSheetHeader, type HeaderRule, type TableHeader } from '@shared/table-header'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu'
 import type { SheetHeaderStore } from '@/components/files/use-sheet-view'
+import { roleShort } from '@/components/files/sheet-roles'
 import { HeaderRowsEditor, ruleText } from './HeaderRowsEditor'
 
 /** 只管这一个工作表的「按文件指定」写进去（已有就换掉，没有就放最前面）；h 为空就删掉，改回按配置 */
@@ -17,21 +19,29 @@ function putSheetRule(schema: TableSchema, file: string, sheet: string, h: Heade
 }
 
 /**
- * 表格页一张表的表头：只按项目的表头配置（按文件指定 > 项目表头），不看内容。
+ * 表格页一张表的表头：按项目的表头配置（按文件指定 > 项目表头），按通配来的先和这张表的结构比一下，
+ * 对不上（辅助表、说明表）就不套（shared/table-header-fit.ts）。rows 给文件里的原样：改格子时表头不跟着跳。
  * store 交给面板的 useSheetView：own 是只管这个工作表的那条，style 是其余配置算出来的
  */
 export function useTableHeader(
   schema: TableSchema,
   file: string,
   sheet: string,
+  rows: string[][] | undefined,
   onSchema: (s: TableSchema) => void,
-): { rule: HeaderRule; header: TableHeader; source: HeaderSource; store: SheetHeaderStore } {
-  return useMemo(() => tableHeaderOf(schema, file, sheet, onSchema), [schema, file, sheet, onSchema])
+): { rule: HeaderRule; header: TableHeader; source: PickedSource; store: SheetHeaderStore } {
+  return useMemo(() => tableHeaderOf(schema, file, sheet, rows, onSchema), [schema, file, sheet, rows, onSchema])
 }
 
 /** useTableHeader 的纯函数版：面板文件弹窗里认领的表格（lib/sheet-claim.ts）不在 React 里也要同一套表头 */
-export function tableHeaderOf(schema: TableSchema, file: string, sheet: string, onSchema: (s: TableSchema) => void) {
-  const { rule, source } = schemaHeader(schema, file, sheet)
+export function tableHeaderOf(
+  schema: TableSchema,
+  file: string,
+  sheet: string,
+  rows: string[][] | undefined,
+  onSchema: (s: TableSchema) => void,
+) {
+  const { rule, source } = pickHeader(schema, file, sheet, rows)
   const header = toSheetHeader(rule)
   const has = rule.rows.length > 0
   const store: SheetHeaderStore = {
@@ -62,7 +72,7 @@ export function TableHeaderSetup({
   sheet: string
   rows: string[][]
   rule: HeaderRule
-  source: HeaderSource
+  source: PickedSource
   onSchema: (s: TableSchema) => void
   disabled?: boolean
 }) {
@@ -81,21 +91,25 @@ export function TableHeaderSetup({
   }
   /** 改它现在用的那份：项目表头或那条按文件指定 */
   const saveShared = () => {
+    if (source.kind === 'unfit') return
     if (source.kind === 'project') return done({ ...schema, style: { ...schema.style, header: draft } })
     const exceptions = schema.style.exceptions.map((e, i) => (i === source.index ? { ...e, header: draft } : e))
     done({ ...schema, style: { ...schema.style, exceptions } })
   }
   const from =
-    source.kind === 'project'
-      ? t('用的是项目的表头')
-      : source.kind === 'sheet'
-        ? t('这张表单独设了表头')
-        : t('用的是按文件指定的表头（{glob}）', { glob: schema.style.exceptions[source.index]?.glob ?? '' })
+    source.kind === 'unfit'
+      ? unfitText(schema, source)
+      : source.kind === 'project'
+        ? t('用的是项目的表头')
+        : source.kind === 'sheet'
+          ? t('这张表单独设了表头')
+          : t('用的是按文件指定的表头（{glob}）', { glob: schema.style.exceptions[source.index]?.glob ?? '' })
   return (
     <Popover
       open={open}
       onOpenChange={(o) => {
-        if (o) setDraft(rule)
+        // 没套上的表从本来要用的那份改起：不改直接「只改这张表」就是硬套给这张表
+        if (o) setDraft(source.kind === 'unfit' ? source.tried : rule)
         setOpen(o)
       }}
     >
@@ -108,7 +122,7 @@ export function TableHeaderSetup({
       <PopoverContent className="tb:w-[640px] tb:max-w-[calc(100vw-32px)] tb:p-3" align="end">
         <div className="tb:mb-1 tb:text-body tb:font-medium tb:text-fg">{t('表头设置')}</div>
         <p className="tb:mb-3 tb:text-caption tb:text-subtle">
-          {from} · {ruleText(rule)}
+          {source.kind === 'unfit' ? from : `${from} · ${ruleText(rule)}`}
         </p>
         <HeaderRowsEditor
           value={draft}
@@ -127,7 +141,7 @@ export function TableHeaderSetup({
             </Button>
           )}
           <span className="tb:flex-1" />
-          {source.kind !== 'sheet' && (
+          {source.kind !== 'sheet' && source.kind !== 'unfit' && (
             <Button size="sm" variant="secondary" disabled={!changed} onClick={saveShared}>
               {source.kind === 'project' ? t('改项目的表头') : t('改这条按文件指定')}
             </Button>
@@ -139,4 +153,22 @@ export function TableHeaderSetup({
       </PopoverContent>
     </Popover>
   )
+}
+
+/** 没套表头时说明：本来要用哪份、哪一行和这张表对不上 */
+export function unfitText(schema: TableSchema, source: Extract<PickedSource, { kind: 'unfit' }>) {
+  const which =
+    source.from.kind === 'project'
+      ? t('项目的表头')
+      : t('按文件指定的表头（{glob}）', {
+          glob: source.from.kind === 'file' ? (schema.style.exceptions[source.from.index]?.glob ?? '') : '',
+        })
+  const row = source.row === undefined ? undefined : source.tried.rows[source.row]
+  return row
+    ? t('这张表和{which}对不上（第 {n} 行不像「{label}」），没有套用，全部按数据显示', {
+        which,
+        n: source.tried.start + source.row! + 1,
+        label: row.label || roleShort(row.kind),
+      })
+    : t('这张表和{which}对不上，没有套用，全部按数据显示', { which })
 }

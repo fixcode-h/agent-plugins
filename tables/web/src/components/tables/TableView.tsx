@@ -55,7 +55,7 @@ import { findEnumRenames, type EnumRename } from '@shared/table-enum-rename'
 import { ListEditor } from './ListEditor'
 import { ProblemsBar } from './ProblemsBar'
 import { useTableStruct } from './use-table-struct'
-import { TableHeaderSetup, useTableHeader } from './TableHeaderSetup'
+import { TableHeaderSetup, unfitText, useTableHeader } from './TableHeaderSetup'
 import { TableSaveDialog } from './TableSaveDialog'
 import { TableHistoryDialog } from './TableHistoryDialog'
 import {
@@ -190,8 +190,8 @@ export function TableView({
   // 表内链接（Sheet2!A1）：切到那张表、选中那一格（和内容搜索跳过来同一条路）
   const [linkJump, setLinkJump] = useState<TableJump>()
   const fileKey = `${doc.path}#${sheet?.name ?? ''}`
-  // 表头只按项目的表头配置（项目设置 → 表格 → 表头），不按内容猜
-  const head = useTableHeader(schema, doc.path, sheet?.name ?? '', onSchema)
+  // 表头按项目的表头配置（项目设置 → 表格 → 表头），结构对不上的辅助表不套；按文件里的原样比，改格子时表头不跳
+  const head = useTableHeader(schema, doc.path, sheet?.name ?? '', sheet?.rows, onSchema)
   const view = useSheetView(fileKey, rows, head.store)
   const [layout, setLayout] = useColLayout(`${projectId}:${fileKey}`)
   const hiddenSet = useMemo(() => new Set(layout.hidden), [layout.hidden])
@@ -1039,7 +1039,11 @@ export function TableView({
             ? `${colLetter(grid.focus.col)}${grid.focus.row + 1}${focusInfo?.field ? ` · ${focusInfo.field}` : ''}`
             : ''
         }
-        header={headerSummary(view)}
+        header={
+          head.source.kind === 'unfit'
+            ? { badge: t('没套表头'), tone: 'warning', text: unfitText(schema, head.source) }
+            : headerSummary(view)
+        }
         stats={selectionStats(rows, sel)}
         shown={order.length}
         total={Math.max(0, rows.length - view.from)}

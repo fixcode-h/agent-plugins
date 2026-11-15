@@ -41,9 +41,9 @@ function claimOf(projectId: string, rel: string, same: boolean): SheetClaim {
           path: (sheet) => `${projectId}/${rel}${sheet && !csvName ? `#${sheet}` : ''}`,
         }
       : undefined,
-    // 表头只按项目的表头配置（和表格页一样，不按内容猜）；弹窗里「调整表头」存成只管这个工作表的那条
-    header: (sheet) =>
-      tableHeaderOf(schema(), rel, sheetOf(sheet), (next) => {
+    // 表头按项目的表头配置（和表格页一样，结构对不上的辅助表不套）；弹窗里「调整表头」存成只管这个工作表的那条
+    header: (sheet, rows) =>
+      tableHeaderOf(schema(), rel, sheetOf(sheet), rows, (next) => {
         putTableSchema(projectId, next)
         // 在最新的结构文件上改，不盖掉别处刚存的
         void saveTableSchema(projectId, (cur) => ({
