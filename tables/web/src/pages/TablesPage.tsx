@@ -49,27 +49,36 @@ const STALE_MS = 60_000
  * 表格页（项目设置 → 表格设了目录才有入口）：左边文件树和搜索（名字 / 内容），右边打开的表格。
  * 一次看一个项目的表格，项目在左栏顶上切；表头、枚举这些结构信息读写项目的表格结构文件，不碰表格本身
  */
-export function TablesPage({ path, active = true }: { path: string; active?: boolean }) {
+export function TablesPage({ path, active = true, project }: { path: string; active?: boolean; project?: string }) {
   const { go, openProject } = useNav()
   const projects = useTablesProjects()
   const fallback = useTablesEntry()
   // 表格页是一直挂着的插件整页（PluginPage.keep）：切到别的页面时不卸载，path 停在上次的项目，回来时不重新加载
   const shown = active
   const id = path.split('/')[0]
-  const projectId = projects.some((p) => p.id === id) ? id : fallback
+  // 从项目工具打开（插件接口 9 的 scope = project）时面板给出当前项目，页面里不再切项目；
+  // 旧面板不给 project，照旧按地址里的项目或上次看的那个
+  const projectId = project
+    ? projects.some((p) => p.id === project)
+      ? project
+      : ''
+    : projects.some((p) => p.id === id)
+      ? id
+      : fallback
   // 地址里项目后面的部分是要打开的文件（面板文件弹窗的「在表格页打开」）：<项目>/<文件>#<工作表>
-  const want = projectId === id ? path.slice(id.length + 1) : ''
+  const want = projectId && projectId === id ? path.slice(id.length + 1) : ''
   useEffect(() => {
     if (projectId) rememberTablesProject(projectId)
   }, [projectId])
 
-  if (!projectId) return <TablesSetupCard />
+  if (!projectId) return <TablesSetupCard project={project} />
   return (
     <Workbench
       key={projectId}
       shown={shown}
       projectId={projectId}
       projects={projects.map((p) => ({ value: p.id, label: p.name }))}
+      pinned={!!project}
       exports={tablesOf(projects.find((p) => p.id === projectId))?.exports ?? []}
       readOnlyProject={!!tablesOf(projects.find((p) => p.id === projectId))?.readOnly}
       want={want}
@@ -85,6 +94,7 @@ function Workbench({
   shown,
   projectId,
   projects,
+  pinned,
   onProject,
   onSettings,
   exports,
@@ -100,6 +110,8 @@ function Workbench({
   shown: boolean
   projectId: string
   projects: { value: string; label: string }[]
+  /** 项目由面板定（项目工具里打开）：不显示切项目的下拉，跨项目对比照常能选别的项目 */
+  pinned: boolean
   /** 项目设置里的导表脚本 */
   exports: TableExport[]
   /** 项目设置里把表格设成了只读：不给「全部替换」 */
@@ -454,7 +466,7 @@ function Workbench({
                 onReplace={readOnlyProject ? undefined : () => setReplacing(true)}
               />
             )}
-            {projects.length > 1 && (
+            {!pinned && projects.length > 1 && (
               <Select
                 size="sm"
                 aria-label={t('项目')}

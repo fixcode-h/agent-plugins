@@ -379,7 +379,7 @@ function ProbeSummary({
         </Button>
       ) : (
         <span className="tb:ml-auto tb:text-caption tb:text-subtle">
-          {t('点「确认」保存后，在图标栏的「表格」里打开。')}
+          {t('点「确认」保存后，在侧栏「项目工具」的「表格」里打开。')}
         </span>
       )}
     </div>

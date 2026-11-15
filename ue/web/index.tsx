@@ -25,7 +25,8 @@ const activate: ActivateWeb = (host) => {
   void refresh()
   setInterval(() => void refresh(), 60000)
   return {
-    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, Page: UePage }],
+    // 按项目生效（插件接口 9）：页面进侧栏的「项目工具」，面板给出当前项目
+    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, scope: 'project', Page: UePage }],
     taskTabs: [
       {
         id: 'ue',

@@ -45,7 +45,13 @@ const ctx = {
   config: () => cfg,
   log: { info: () => {}, warn: (m, d) => console.warn('[warn]', m, d ?? '') },
   t: (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v?.[k] ?? '')),
+  // 项目能力（插件接口 9）：记下插件替哪些项目打开了自己
+  projects: {
+    enabled: async (id) => enabledFor.has(id),
+    enable: async (id, on = true) => void (on ? enabledFor.add(id) : enabledFor.delete(id)),
+  },
 }
+const enabledFor = new Set()
 const bridge = await startFakeBridge(proj)
 const { default: activate } = await import(pathToFileURL(path.join(dir, 'server', 'index.js')).href)
 const plugin = await activate(ctx)
@@ -60,6 +66,12 @@ try {
   const added = await api('POST', '/projects', { id: 'p1', name: 'Fake', path: proj, mode: 'none' })
   assert.equal(added.project.uname, 'Fake', JSON.stringify(added))
   await api('POST', '/projects', { id: 'p2', name: 'Offline', path: offline, mode: 'none' })
+  // 在 UE 页接入就顺手在项目「能力」里打开；按目录推荐、还缺什么（插件接口 9）
+  assert.deepEqual([...enabledFor].sort(), ['p1', 'p2'])
+  assert.match((await plugin.detect({ path: proj })) ?? '', /Fake\.uproject/)
+  assert.equal(await plugin.detect({ path: data }), undefined)
+  assert.match((await plugin.ready({ id: 'nope', path: tmp })) ?? '', /接入/)
+  assert.match((await plugin.ready({ id: 'p1', path: proj })) ?? '', /UELink/)
 
   // 挂工具：没接入的项目、聊天对话不挂，并说明原因（插件接口 8 的 skip，设置 →「MCP」的自检照原文显示）
   assert.deepEqual(
@@ -460,23 +472,40 @@ try {
   cfg.uelinkSource = path.join(tmp, 'no-mirror')
   const plugins = path.join(proj, 'Plugins')
   mkdirSync(path.join(plugins, 'AgentPanelBridge', 'Binaries'), { recursive: true })
-  writeFileSync(path.join(plugins, 'AgentPanelBridge', 'AgentPanelBridge.uplugin'), JSON.stringify({ VersionName: '1.9.0' }))
+  writeFileSync(
+    path.join(plugins, 'AgentPanelBridge', 'AgentPanelBridge.uplugin'),
+    JSON.stringify({ VersionName: '1.9.0' }),
+  )
   mkdirSync(path.join(plugins, 'Tools', 'UEToVSLink'), { recursive: true })
-  writeFileSync(path.join(plugins, 'Tools', 'UEToVSLink', 'UEToVSLink.uplugin'), JSON.stringify({ VersionName: '0.2.0' }))
+  writeFileSync(
+    path.join(plugins, 'Tools', 'UEToVSLink', 'UEToVSLink.uplugin'),
+    JSON.stringify({ VersionName: '0.2.0' }),
+  )
   const uproject = path.join(proj, 'Fake.uproject')
   writeFileSync(
     uproject,
-    JSON.stringify({ EngineAssociation: '5.4', Plugins: [{ Name: 'UEToVSLink', Enabled: true }, { Name: 'X', Enabled: true }] }),
+    JSON.stringify({
+      EngineAssociation: '5.4',
+      Plugins: [
+        { Name: 'UEToVSLink', Enabled: true },
+        { Name: 'X', Enabled: true },
+      ],
+    }),
   )
   assert.equal((await api('GET', '/p/p1/state')).bridge, '1.9.0', '旧桥接也认作已安装，好提示升级')
   const ueInst = await api('POST', '/p/p1/install', { mode: 'local' })
   const instJob = await api('GET', `/jobs/${ueInst.job}`)
   assert.equal(instJob.status, 'done', instJob.log.join('\n'))
-  assert.ok(instJob.log.some((l) => /公共库读不到/.test(l)), instJob.log.join('\n'))
+  assert.ok(
+    instJob.log.some((l) => /公共库读不到/.test(l)),
+    instJob.log.join('\n'),
+  )
   const ueVersion = JSON.parse(readFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), 'utf8')).VersionName
   assert.match(ueVersion, /^2\./)
   assert.ok(existsSync(path.join(plugins, 'UELink', 'Source', 'UELinkCore', 'UELinkCore.Build.cs')))
-  assert.ok(!existsSync(path.join(plugins, 'AgentPanelBridge')) && !existsSync(path.join(plugins, 'Tools', 'UEToVSLink')))
+  assert.ok(
+    !existsSync(path.join(plugins, 'AgentPanelBridge')) && !existsSync(path.join(plugins, 'Tools', 'UEToVSLink')),
+  )
   assert.deepEqual(JSON.parse(readFileSync(uproject, 'utf8')).Plugins, [{ Name: 'X', Enabled: true }])
   const record = JSON.parse(readFileSync(path.join(plugins, 'UELink', '.install.json'), 'utf8'))
   assert.equal(record.by, 'agent-panel')
@@ -485,7 +514,10 @@ try {
   // 项目里已经是更新的（UEToVS 装的）：不动
   writeFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), JSON.stringify({ VersionName: '9.0.0' }))
   const ueAgain = await api('GET', `/jobs/${(await api('POST', '/p/p1/install', { mode: 'local' })).job}`)
-  assert.ok(ueAgain.log.some((l) => /已经是 UELink 9\.0\.0/.test(l)), ueAgain.log.join('\n'))
+  assert.ok(
+    ueAgain.log.some((l) => /已经是 UELink 9\.0\.0/.test(l)),
+    ueAgain.log.join('\n'),
+  )
   assert.equal(JSON.parse(readFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), 'utf8')).VersionName, '9.0.0')
 
   console.log(`ue 冒烟测试通过：19 个工具，操作记录 ${hist.items.length} 条`)

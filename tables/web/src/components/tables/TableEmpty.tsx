@@ -63,10 +63,12 @@ export function TableSkeleton() {
  * 还没有哪个项目设了表格目录：一张引导卡。挑一个项目、一键打开它的「项目设置 → 表格」去选目录；
  * 设好后图标栏和这里就会列出那个项目的表格
  */
-export function TablesSetupCard() {
-  const { projects } = useData()
+/** project：从项目工具打开时就是这个项目（插件接口 9），不再让用户挑 */
+export function TablesSetupCard({ project }: { project?: string } = {}) {
+  const { projects: all } = useData()
   const { go, openProject } = useNav()
-  const [pick, setPick] = useState(projects[0]?.id ?? '')
+  const projects = project ? all.filter((p) => p.id === project) : all
+  const [pick, setPick] = useState(project || (projects[0]?.id ?? ''))
   return (
     <main className="tb:flex tb:min-w-0 tb:flex-1 tb:items-center tb:justify-center tb:p-6">
       <section

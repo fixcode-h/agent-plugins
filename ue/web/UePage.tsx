@@ -73,7 +73,11 @@ const SECTIONS: Section[] = [
   { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
 ]
 
-export function UePage({ path }: { path: string }) {
+/**
+ * project：从侧栏「项目工具」打开时面板给的当前项目（插件接口 9 的 scope = project），页面里不再切项目；
+ * 旧面板不给，照旧按地址里的项目或第一个接入的
+ */
+export function UePage({ path, project: fixed }: { path: string; project?: string }) {
   const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
   const [pid, rawSection = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
@@ -86,7 +90,7 @@ export function UePage({ path }: { path: string }) {
   const nav = usePane('nav', '232px', 180)
   const navRef = useRef<HTMLElement>(null)
   const list = projects.data ?? []
-  const project = list.find((p) => p.id === pid) ?? list[0]
+  const project = fixed ? list.find((p) => p.id === fixed) : (list.find((p) => p.id === pid) ?? list[0])
 
   const go = (section: string, s?: string) =>
     route.go('main', [project?.id ?? '', section, s ?? ''].map(encodeURIComponent).join('/').replace(/\/+$/, ''))
@@ -157,7 +161,9 @@ export function UePage({ path }: { path: string }) {
           <span className="ue:flex ue:h-12 ue:w-12 ue:items-center ue:justify-center ue:rounded-xl ue:bg-hover ue:text-fg">
             <GamepadIcon className="ue:h-6 ue:w-6" />
           </span>
-          <h1 className="ue:text-subtitle ue:font-medium ue:text-fg">{t('还没有接入 UE 项目')}</h1>
+          <h1 className="ue:text-subtitle ue:font-medium ue:text-fg">
+            {fixed ? t('这个项目还没接入 UE') : t('还没有接入 UE 项目')}
+          </h1>
           <p className="ue:text-body ue:leading-relaxed ue:text-muted">
             {t(
               '从 Agent 模式里已经添加的项目中选一个 UE 项目（5.4 及以上），装上桥接插件后，就能在这里执行控制台命令、跑 GM、读改运行时属性和资源；对话里的 Agent 也能用这些操作。',
@@ -171,6 +177,7 @@ export function UePage({ path }: { path: string }) {
         <AddProject
           open={adding}
           onOpenChange={setAdding}
+          preset={fixed}
           onAdded={(p) => void projects.reload().then(() => route.go('main', p.id))}
         />
       </div>
@@ -202,6 +209,7 @@ export function UePage({ path }: { path: string }) {
           className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
         >
           <ProjectCard
+            pinned={!!fixed}
             list={list}
             onAdd={() => setAdding(true)}
             onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}

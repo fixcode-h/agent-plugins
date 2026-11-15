@@ -538,9 +538,9 @@
   "添加导表脚本": "Add export script",
   "添加表格目录": "Add table folder",
   "游戏配置表这类 xlsx / CSV 表格的管理：按项目设置的目录浏览、搜索、筛选，在线改单元格（只改格子的值，文件仍是原来的 Excel / WPS 格式），表头、枚举、引用这些结构信息存在表格之外；版本差异、一格的历史、提交和冲突合并、跨项目对比、导表脚本、AI 分析表格风格；Agent 能用 table.* 动作按主键查改，评审里的表格改动按格子比。原来是面板自带的表格页。": "Manage xlsx / CSV tables such as game config sheets: browse, search and filter the folders set per project, edit cells online (only cell values change; files stay in their original Excel / WPS format), and keep headers, enums and references outside the tables. Version diffs, per-cell history, commit and conflict merge, cross-project compare, export scripts and AI analysis of table style; agents can query and edit rows by key with table.* actions, and reviews compare table changes cell by cell. Formerly the panel's built-in Tables page.",
-  "游戏配置表这类表格的目录。设好后图标栏的「表格」里按目录浏览、搜索、筛选、在线改单元格、看版本差异、跨项目对比。保存改动只改单元格的值，文件仍是原来的 Excel / WPS 格式。": "Folders with tables such as game config sheets. Once set, the \"Tables\" page in the icon bar lets you browse by folder, search, filter, edit cells online, view version diffs and compare across projects. Saving only changes cell values; the file stays in its original Excel / WPS format.",
+  "游戏配置表这类表格的目录。设好后侧栏「项目工具」的「表格」里按目录浏览、搜索、筛选、在线改单元格、看版本差异、跨项目对比。保存改动只改单元格的值，文件仍是原来的 Excel / WPS 格式。": "Folders with tables such as game config sheets. Once set, \"Tables\" under Project tools in the sidebar lets you browse by folder, search, filter, edit cells online, view version diffs and compare across projects. Saving only changes cell values; the file stays in its original Excel / WPS format.",
   "滚动条标记": "Scrollbar markers",
-  "点「确认」保存后，在图标栏的「表格」里打开。": "After you click Confirm, open them from \"Tables\" in the icon bar.",
+  "点「确认」保存后，在侧栏「项目工具」的「表格」里打开。": "After you click Confirm, open them from \"Tables\" under Project tools in the sidebar.",
   "点一下跳到附近的标记": "Click to jump to the nearest marker",
   "点击": "Click",
   "照样拷": "Copy anyway",
@@ -1210,5 +1210,8 @@
   "没套表头": "Header not applied",
   "两版的表格内容完全一样（所有工作表都比过了）：这一版可能只改了格式（字体、颜色、列宽等），或者提交时文件内容没有改动。": "Both versions have identical table contents (all sheets compared): this revision may only change formatting (fonts, colors, column widths), or the file was submitted without content changes.",
   "这张工作表没变，这一版改的是其他工作表：{s}": "This sheet is unchanged; this revision changed other sheets: {s}",
-  "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}"
+  "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}",
+  "找到 {n} 个表格文件": "Found {n} table files",
+  "在 {dir} 等目录找到 {n} 个表格文件": "Found {n} table files in {dir} and other folders",
+  "还要选表格目录": "Choose the table folders first"
 }
