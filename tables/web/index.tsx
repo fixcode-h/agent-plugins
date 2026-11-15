@@ -35,7 +35,7 @@ const RowFormSpecimen = lazy(() =>
 
 /**
  * 表格插件的网页入口（面板插件接口 7，ADR 0059；原来是面板自带的表格页，重构文档第 15 条拆出来）：
- * 图标栏的「表格」整页（打开过就一直挂着，切走只藏起来）、项目设置里的「表格」页、设置 →「组件」里的表格编辑器示例。
+ * 「表格」整页（按项目生效，进侧栏的项目工具；打开过就一直挂着，切走只藏起来）、项目设置里的「表格」页、设置 →「组件」里的表格编辑器示例。
  * 文案在 activate 之后才取：面板先读好包里的英文再调这里。
  */
 const activate: ActivateWeb = (host) => {
@@ -51,10 +51,12 @@ const plugin = (): WebPlugin => ({
       id: 'tables',
       label: t('表格'),
       icon: TableIcon,
+      // 按项目生效（插件接口 9）：页面进侧栏的「项目工具」，面板给出当前项目
+      scope: 'project',
       keep: true,
-      Page: ({ path, active }) => (
+      Page: ({ path, active, project }) => (
         <Suspense fallback={null}>
-          <TablesPage path={path} active={active} />
+          <TablesPage path={path} active={active} project={project} />
         </Suspense>
       ),
     },
@@ -64,7 +66,7 @@ const plugin = (): WebPlugin => ({
       id: 'tables',
       label: t('表格'),
       desc: t(
-        '游戏配置表这类表格的目录。设好后图标栏的「表格」里按目录浏览、搜索、筛选、在线改单元格、看版本差异、跨项目对比。保存改动只改单元格的值，文件仍是原来的 Excel / WPS 格式。',
+        '游戏配置表这类表格的目录。设好后侧栏「项目工具」的「表格」里按目录浏览、搜索、筛选、在线改单元格、看版本差异、跨项目对比。保存改动只改单元格的值，文件仍是原来的 Excel / WPS 格式。',
       ),
       icon: Sheet,
       hint: (v) => tablesOf({ plugins: { tables: v } })?.dirs[0],

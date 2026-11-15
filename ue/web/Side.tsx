@@ -18,10 +18,13 @@ export function ProjectCard({
   list,
   onPick,
   onAdd,
+  pinned = false,
 }: {
   list: UeProject[]
   onPick: (id: string) => void
   onAdd: () => void
+  /** 项目由面板定（从项目工具打开，插件接口 9）：只显示当前项目，不给切换 */
+  pinned?: boolean
 }) {
   const { project } = useUe()
   const { cn } = h()
@@ -42,6 +45,18 @@ export function ProjectCard({
   }, [open])
   const meta = (p: UeProject) =>
     [`UE ${p.engine.version || '?'}`, p.cpp ? 'C++' : t('纯蓝图'), VCS_NAME[p.vcs]].filter(Boolean).join(' · ')
+  if (pinned)
+    return (
+      <div className="ue:flex ue:w-full ue:items-center ue:gap-2.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:px-2.5 ue:py-2 ue:shadow-card">
+        <span className="ue:flex ue:h-8 ue:w-8 ue:shrink-0 ue:items-center ue:justify-center ue:rounded-lg ue:bg-fg ue:text-bg">
+          <GamepadIcon className="ue:h-4 ue:w-4" />
+        </span>
+        <span className="ue:min-w-0 ue:flex-1">
+          <span className="ue:block ue:truncate ue:text-body ue:font-medium ue:text-fg">{project.name}</span>
+          <span className="ue:block ue:truncate ue:text-caption ue:text-subtle">{meta(project)}</span>
+        </span>
+      </div>
+    )
   return (
     <div ref={box} className="ue:relative">
       <button

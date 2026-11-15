@@ -13,6 +13,7 @@ import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalS
 import type { GmStore, InstallMode, Target, UeProject } from './types.ts'
 import { historyWithLive, undoAll } from './undo.ts'
 import { json, now, t } from './util.ts'
+import { enableFor } from './capability.ts'
 
 /**
  * 网页用的接口（挂在 /api/plugins/ue/ 下）。你在网页上的操作记成 actor=user，不受 Agent 权限限制，
@@ -63,6 +64,8 @@ async function register(b: Body) {
     jobs.push(await build(p))
   }
   await saveProject(p)
+  // 按项目生效（插件接口 9）：在 UE 页接入了，就顺手在这个项目的「能力」里打开 UE
+  await enableFor(p.id)
   return { project: p, jobs: jobs.map((j) => j.id) }
 }
 

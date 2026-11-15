@@ -15,10 +15,13 @@ export function AddProject({
   open,
   onOpenChange,
   onAdded,
+  preset = '',
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   onAdded: (p: UeProject) => void
+  /** 打开时先选好这个面板项目（从项目工具进 UE 页、这个项目还没接入时） */
+  preset?: string
 }) {
   const { ui, hooks, cn, toast } = h()
   const { Modal, Button, Field, Select, Segmented, Input } = ui
@@ -36,7 +39,7 @@ export function AddProject({
 
   useEffect(() => {
     if (!open) return
-    setId('')
+    setId(preset)
     setDet(undefined)
     setEngineDir('')
   }, [open])
