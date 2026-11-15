@@ -40,7 +40,19 @@ interface Diff {
 
 const show = (v: unknown) => (v === undefined || v === null ? '—' : typeof v === 'string' ? v : JSON.stringify(v))
 
-export function ForgeDetail({ entry, busy }: { entry: ForgeEntry; busy: boolean }) {
+/** 桩，右栏会替换：页签改由 Forge 受控 */
+export type ForgeTab = 'asset' | 'diff' | 'plan' | 'config'
+
+export function ForgeDetail({
+  entry,
+  busy,
+}: {
+  entry: ForgeEntry
+  busy: boolean
+  configRoot: string
+  tab?: ForgeTab
+  onTab: (t: ForgeTab) => void
+}) {
   const { project, go } = useUe()
   const { ui, cn } = h()
   const { busy: acting, run } = useAction()
