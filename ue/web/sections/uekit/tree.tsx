@@ -6,8 +6,24 @@ import { h } from '../../host.ts'
  * AssetForge、GameTest 左栏的文件树：样子和表格插件的文件树一样（用户 2026-11-15「类似表格的 UI」）——
  * 28px 行、每层缩进 14px、文件夹默认折叠、展开了才画里面的行（几千个资产也不卡），选中浅底加粗。
  * 搜索时只留命中的项和它们的上级目录，全部展开。
+ * 可选：多选（Ctrl / Cmd 点选加减、Shift 连选，选中的淡 accent 底）、文件夹换成自己的名字、外面发信号展开 / 收起全部；
+ * 不传这些参数时和原来一样（GameTest 也在用）。
  */
 const INDENT = 14
+
+/** 展开全部 / 收起全部的信号：n 变了才执行；under 给了只动这个目录和它下面的 */
+export interface ExpandSignal {
+  open: boolean
+  under?: string
+  n: number
+}
+
+/** 文件夹行换成自己的图标和名字（AssetForge 第一层显示成「类型图标 + 类型名 + dir/」） */
+export interface FolderLabel {
+  icon: LucideIcon
+  tone: string
+  label: ReactNode
+}
 
 export interface TreeLeaf<T> {
   /** 用 / 分隔的路径，最后一段是名字 */
@@ -21,6 +37,16 @@ interface Node<T> {
   leaf?: T
   children: Node<T>[]
   leaves: T[]
+}
+
+/** 树里全部目录的路径（展开全部用） */
+function dirPaths<T>(nodes: Node<T>[], out: string[] = []) {
+  for (const n of nodes)
+    if (n.leaf === undefined) {
+      out.push(n.path)
+      dirPaths(n.children, out)
+    }
+  return out
 }
 
 function build<T>(items: TreeLeaf<T>[]): Node<T>[] {
@@ -63,6 +89,10 @@ export function FileTree<T>({
   folderRight,
   onLeafMenu,
   onFolderMenu,
+  folderLabel,
+  picked,
+  onPick,
+  expand,
   label,
   empty,
 }: {
@@ -79,6 +109,17 @@ export function FileTree<T>({
   /** 右键一行（GameTest 场景的运行、改名、删除……）：文件夹给 path 和下面的全部叶子 */
   onLeafMenu?: (e: MouseEvent, path: string, data: T) => void
   onFolderMenu?: (e: MouseEvent, path: string, leaves: T[]) => void
+  /** 文件夹行自己的图标和名字；返回 undefined 用默认的文件夹图标和目录名 */
+  folderLabel?: (path: string, depth: number) => FolderLabel | undefined
+  /** 多选中的叶子路径：淡 accent 底 */
+  picked?: Set<string>
+  /**
+   * 按着 Ctrl / Cmd / Shift 点叶子时调它（多选），不调 onOpen；visible 是现在看得到的叶子（按显示顺序），
+   * Shift 连选按它算区间
+   */
+  onPick?: (path: string, data: T, e: MouseEvent, visible: TreeLeaf<T>[]) => void
+  /** 展开全部 / 收起全部（标题行、右键菜单发的信号） */
+  expand?: ExpandSignal
   label: string
   empty: ReactNode
 }) {
@@ -99,15 +140,32 @@ export function FileTree<T>({
       return next.size === s.size ? s : next
     })
   }, [active])
+  useEffect(() => {
+    if (!expand) return
+    const under = expand.under
+    const inside = (p: string) => !under || p === under || p.startsWith(`${under}/`)
+    setOpened((s) => {
+      const next = new Set([...s].filter((p) => !inside(p)))
+      if (expand.open) for (const p of dirPaths(tree)) if (inside(p)) next.add(p)
+      return next
+    })
+    // 只在信号变了时执行；树变了不重新展开
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [expand?.n])
   if (!items.length) return <>{empty}</>
+
+  const visible: TreeLeaf<T>[] = []
 
   const rows: ReactNode[] = []
   const walk = (nodes: Node<T>[], depth: number) => {
     for (const n of nodes) {
       const open = !!searching || opened.has(n.path)
       const leaf = n.leaf
-      const meta = leaf !== undefined ? leafIcon(leaf) : undefined
+      if (leaf !== undefined) visible.push({ path: n.path, data: leaf })
+      const custom = leaf === undefined ? folderLabel?.(n.path, depth) : undefined
+      const meta = leaf !== undefined ? leafIcon(leaf) : custom
       const Icon = meta?.icon ?? (open ? FolderOpen : Folder)
+      const isPicked = leaf !== undefined && !!picked?.has(n.path)
       rows.push(
         <button
           key={n.path}
@@ -117,9 +175,11 @@ export function FileTree<T>({
           aria-expanded={leaf !== undefined ? undefined : open}
           aria-selected={n.path === active}
           title={n.path}
-          onClick={() =>
+          onClick={(e) =>
             leaf !== undefined
-              ? onOpen(n.path, leaf)
+              ? onPick && (e.ctrlKey || e.metaKey || e.shiftKey)
+                ? onPick(n.path, leaf, e, visible)
+                : onOpen(n.path, leaf)
               : setOpened((s) => {
                   const next = new Set(s)
                   if (!next.delete(n.path)) next.add(n.path)
@@ -131,11 +191,12 @@ export function FileTree<T>({
           }
           style={{ paddingLeft: `${6 + depth * INDENT}px` }}
           className={cn(
-            'ue:flex ue:h-7 ue:w-full ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:pr-2 ue:text-left ue:text-body ue:transition-colors ue:hover:bg-sel/60',
+            'ue:flex ue:h-7 ue:w-full ue:shrink-0 ue:cursor-pointer ue:select-none ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:pr-2 ue:text-left ue:text-body ue:transition-colors ue:hover:bg-sel/60',
             leaf !== undefined
               ? 'ue:text-fg ue:aria-selected:bg-sel ue:aria-selected:font-semibold'
               : 'ue:font-medium ue:text-muted',
             leaf !== undefined && leafDim?.(leaf) && 'ue:text-subtle',
+            isPicked && 'ue:bg-accent-soft ue:hover:bg-accent-soft',
           )}
         >
           <ChevronRight
@@ -153,7 +214,7 @@ export function FileTree<T>({
               leaf !== undefined && leafDim?.(leaf) && 'ue:opacity-50',
             )}
           />
-          <span className="ue:min-w-0 ue:flex-1 ue:truncate">{n.name}</span>
+          <span className="ue:min-w-0 ue:flex-1 ue:truncate">{custom?.label ?? n.name}</span>
           <span className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:text-caption ue:font-normal ue:text-subtle ue:tabular-nums">
             {leaf !== undefined ? leafRight?.(leaf) : folderRight ? folderRight(n.leaves) : n.leaves.length}
           </span>
@@ -164,7 +225,12 @@ export function FileTree<T>({
   }
   walk(tree, 0)
   return (
-    <div role="tree" aria-label={label} className="ue:flex ue:flex-col ue:gap-px">
+    <div
+      role="tree"
+      aria-label={label}
+      aria-multiselectable={onPick ? true : undefined}
+      className="ue:flex ue:flex-col ue:gap-px"
+    >
       {rows}
     </div>
   )

@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h } from '../../host.ts'
 import { SplitHandle, usePane } from '../../split.tsx'
@@ -20,6 +20,7 @@ export function ListCol({
   tabs,
   children,
   footer,
+  onBodyMenu,
 }: {
   id: string
   title: string
@@ -31,6 +32,8 @@ export function ListCol({
   tabs?: ReactNode
   children: ReactNode
   footer?: ReactNode
+  /** 右键列表空白处（行自己的右键菜单会拦下冒泡，到这里的只有空白处） */
+  onBodyMenu?: (e: MouseEvent) => void
 }) {
   const pane = usePane(`list-${id}`, '316px', 240)
   const ref = useRef<HTMLElement>(null)
@@ -62,7 +65,10 @@ export function ListCol({
         </label>
         {tabs}
       </div>
-      <div className="ue:flex ue:max-h-[50vh] ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:px-2 ue:pb-2 ue:md:max-h-none">
+      <div
+        onContextMenu={onBodyMenu}
+        className="ue:flex ue:max-h-[50vh] ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:px-2 ue:pb-2 ue:md:max-h-none"
+      >
         {children}
       </div>
       {footer && (
