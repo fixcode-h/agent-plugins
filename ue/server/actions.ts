@@ -1,10 +1,11 @@
 import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
 import { backgroundState } from './editor.ts'
+import { launchProgress } from './launch/track.ts'
 import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
 import { availableVersion } from './uelink.ts'
 import { projectJobs } from './jobs.ts'
-import { clearOfflineLog, logFile, logSize, searchFile, tailFile } from './logs.ts'
+import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile, tailFile } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { readGm } from './store.ts'
 import type { ProjectState, UeProject } from './types.ts'
@@ -36,6 +37,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     background: backgroundState(p.id, cards),
     jobs: projectJobs(p.id),
     extensions,
+    launch: launchProgress(p.id),
   }
 }
 
@@ -59,6 +61,8 @@ export interface LogArgs {
   limit?: number
   category?: string
   verbosity?: string
+  /** 只要这一级（网页的级别分段），见 LineFilter.exact */
+  exact?: boolean
   contains?: string
 }
 
@@ -67,19 +71,23 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
   const cards = (await liveCards(ctx.project.root)).filter((x) => x.kind !== 'background')
   if (cards.length) {
     const r = await runOp(ctx, 'log.tail', { ...a, limit: a.limit ?? 300 })
-    return { live: true, ...r, lines: withWallTime(r.lines as RawLine[], r.now as number | undefined) }
+    // 桥接的 verbosity 是最低级别（Warning 连错误也给）；网页要「只看这一级」时在这里再筛一遍，旧桥接也适用
+    const got = (r.lines as (RawLine & { verbosity?: string })[]) ?? []
+    const lines = a.exact && a.verbosity ? got.filter((l) => levelMatches(l.verbosity ?? '', a.verbosity, true)) : got
+    return { live: true, ...r, lines: withWallTime(lines, r.now as number | undefined) }
   }
   // UE 没在运行：没筛选时只读文件尾部；有筛选时流式搜索最后 64 MB（大文件不整个读进内存）
   const filtered = !!(a.category || a.verbosity || a.contains)
   const r = filtered
     ? await searchFile(logFile(ctx.project), a, a.limit ?? 300)
-    : { ...(await tailFile(logFile(ctx.project), a.limit ?? 300)), truncated: false, matched: 0 }
+    : { ...(await tailFile(logFile(ctx.project), a.limit ?? 300)), truncated: false }
   return {
     live: false,
-    lines: r.lines.map((l) => ({ ...l, at: fileTime(l.time) })),
+    lines: r.lines.map(({ cont: _, ...l }: LogLine & { cont?: boolean }) => ({ ...l, at: fileTime(l.time) })),
     cursor: 0,
-    errors: r.lines.filter((l) => /error|fatal/i.test(l.verbosity)).length,
-    warnings: r.lines.filter((l) => /warning/i.test(l.verbosity)).length,
+    // 按读到的整段算（不是筛选后的行），和在跑时桥接给的总数一样不随筛选变
+    errors: r.errors,
+    warnings: r.warnings,
     file: r.file,
     size: r.size,
     truncated: r.truncated,
