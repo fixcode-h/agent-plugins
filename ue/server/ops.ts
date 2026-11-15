@@ -6,6 +6,7 @@ import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
+import { followJob } from './uekit/follow.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
 
@@ -406,6 +407,9 @@ export async function runOp(
     if (op === 'asset.save') res.vcs = await p4After(ctx.project, 'add', added)
     if (op === 'asset.delete' && res.onDisk)
       res.vcs = await p4After(ctx.project, 'delete', [String(res.file)], !!res.fileRemoved)
+    // 后台编辑器没有推送通道：AssetForge 作业的进度由服务端转成推送（uekit/follow.ts）
+    if (card.kind !== 'editor' && (op === 'forge.import' || op === 'forge.export') && typeof res.job === 'string')
+      followJob(ctx.project, card, res.job)
     if (op === 'asset.save' || op === 'asset.revert') release(ctx.project, (args.packages as string[]) ?? [])
     const item = await record(ctx.project.id, {
       ...base,

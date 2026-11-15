@@ -1218,5 +1218,11 @@
   "世界大纲要 UELink 2.2.0 及以上，到「桥接与权限」升级并在本地编译": "The outliner needs UELink 2.2.0 or later: upgrade under \"Bridge & permissions\" and rebuild locally",
   "共 {n} 个 Actor，只列前 {m} 个": "{n} Actors, showing the first {m}",
   "{n} 个 Actor": "{n} Actors",
-  "世界大纲": "Outliner"
+  "世界大纲": "Outliner",
+  "已导出到 JSON": "Exported to JSON",
+  "导出没成功：去 AssetForge 页看原因": "Export failed: see the AssetForge page for why",
+  "在 AssetForge 中查看": "View in AssetForge",
+  "用 AssetForge 把资产当前的状态写成 JSON 配置，放在项目文档目录下": "Use AssetForge to write the asset's current state as a JSON config in the project docs folder",
+  "更新 JSON": "Update JSON",
+  "导出到 JSON": "Export to JSON"
 }

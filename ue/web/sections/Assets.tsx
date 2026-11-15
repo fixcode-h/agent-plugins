@@ -11,6 +11,7 @@ import { useUe } from '../ctx.tsx'
 import { keep, useGoneFromList, useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
+import { ForgeExport } from './uekit/ForgeExport.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, ErrorText, Note, PageHead, SearchBox, kindLabel } from '../ui.tsx'
 
@@ -313,6 +314,8 @@ export function Assets() {
                     { id: 'info' as const, label: t('摘要与引用') },
                   ]}
                 />
+                <span className="ue:flex-1" />
+                <ForgeExport asset={asset} />
               </div>
               {tab === 'info' ? (
                 <AssetInfo key={asset} path={asset} onOpen={(p) => go('assets', p)} />

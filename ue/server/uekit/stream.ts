@@ -43,7 +43,8 @@ function drop(id: string) {
   links.delete(id)
 }
 
-const push = (id: string, data: Record<string, unknown>) => {
+/** 推给登记了这个项目的网页；follow.ts 也用它转后台编辑器里作业的进度 */
+export const pushExt = (id: string, data: Record<string, unknown>) => {
   const l = links.get(id)
   if (l?.conns.size) c().pages.push(EXT_EVENT, { project: id, ...data }, l.conns)
 }
@@ -59,7 +60,7 @@ async function connect(p: UeProject) {
   if (!l || l.sock) return
   const card = await streamCard(p.root)
   if (!card) {
-    push(p.id, { event: 'link', connected: false })
+    pushExt(p.id, { event: 'link', connected: false })
     return
   }
   const sock = net.createConnection({ host: '127.0.0.1', port: card.stream! })
@@ -87,20 +88,20 @@ async function connect(p: UeProject) {
       if (first) {
         first = false
         if (msg.ok === false) {
-          push(p.id, { event: 'link', connected: false, error: String(msg.message ?? 'subscribe failed') })
+          pushExt(p.id, { event: 'link', connected: false, error: String(msg.message ?? 'subscribe failed') })
           sock.destroy()
           return
         }
-        push(p.id, { event: 'link', connected: true, pid: card.pid })
+        pushExt(p.id, { event: 'link', connected: true, pid: card.pid })
         continue
       }
-      if (typeof msg.event === 'string' && EXT_TOPICS.includes(msg.event)) push(p.id, msg)
+      if (typeof msg.event === 'string' && EXT_TOPICS.includes(msg.event)) pushExt(p.id, msg)
     }
   })
   const onEnd = () => {
     if (links.get(p.id)?.sock !== sock) return
     l.sock = undefined
-    push(p.id, { event: 'link', connected: false })
+    pushExt(p.id, { event: 'link', connected: false })
     // 编辑器关了或重启：页面还开着就过一会儿再找一次名片
     if (l.conns.size && !l.retry)
       l.retry = setTimeout(() => {
