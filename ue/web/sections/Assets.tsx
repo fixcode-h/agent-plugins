@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DataTableView } from '../DataTable.tsx'
 import { takePending } from '../pending.ts'
 import { op, useAction, useLoad } from '../api.ts'
@@ -8,7 +8,7 @@ import { ClassPicker, type ClassOpt } from '../ClassPicker.tsx'
 import { loadBlueprintComps } from '../bp-comps.ts'
 import { CompTree } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
-import { keep, useKept } from '../keep.ts'
+import { keep, useGoneFromList, useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
@@ -127,6 +127,14 @@ export function Assets() {
     `${kk}/comps`,
   )
   const compItems = tab === 'main' && comps.data?.path === asset ? comps.data.items : null
+  // 切回来、刷新后：选中的组件没了回到资源本身；同样条件重搜后资源不在列表里了（删了、改名了）就清掉选中
+  useEffect(() => {
+    const items = comps.data?.path === asset ? comps.data.items : undefined
+    if (comp && items !== undefined && !items?.some((c) => c.path === comp)) go('assets', asset)
+    // 只在组件读回来时判断
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [comps.data])
+  useGoneFromList(found.data?.items, q, asset, () => go('assets'))
   const source = found.data?.instance?.kind
 
   const save = () =>

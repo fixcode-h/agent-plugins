@@ -5,7 +5,7 @@ import { isInstance } from '../CdoNote.tsx'
 import { ClassPicker, type ClassOpt } from '../ClassPicker.tsx'
 import { CompTree, type Comp } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
-import { useKept } from '../keep.ts'
+import { useGoneFromList, useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
 import { Props } from '../Props.tsx'
@@ -130,13 +130,23 @@ export function Objects() {
     () =>
       path
         ? op<{ items: Comp[] }>(project.id, 'components', { path }, target).then(
-            (r) => ({ path, items: r.items as Comp[] | null }),
-            () => ({ path, items: null }),
+            (r) => ({ path, items: r.items as Comp[] | null, gone: false }),
+            // 「找不到对象」是桥接按路径找不到这个对象（Actor 销毁了、PIE 停了），不是「不是 Actor」
+            (e: Error) => ({ path, items: null, gone: e.message.startsWith('找不到对象') }),
           )
         : Promise.resolve(undefined),
     [path, target.instance, target.world],
   )
   const ready = comps.data?.path === path
+  // 切回来、刷新后选中的对象或组件没了就清掉选中，还在的话上面已经重新读了组件、下面属性也是新读的
+  useEffect(() => {
+    if (!ready || !comps.data) return
+    if (comps.data.gone) go('objects')
+    else if (comp && comps.data.items && !comps.data.items.some((c) => c.path === comp)) go('objects', path)
+    // 只在组件读回来时判断
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [comps.data])
+  useGoneFromList(found.data?.items, q, path ?? '', () => go('objects'))
   const actorItems = ready ? comps.data?.items : null
   // 资源默认值和类默认收起（界面优化第 1 条）：同名的 Default__ 夹在实例中间最容易点错；选中的就在里面、或者没有实例时自动展开
   const [others, setOthers] = useKept(`${kk}/others`, false)

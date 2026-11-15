@@ -30,7 +30,8 @@ export function op<T = Record<string, unknown>>(
 
 /**
  * 取数据的小钩子：deps 变了重取；interval 给了就定时刷新（页面藏起来时不刷）。
- * 给了 keepKey 时结果记进 keep.ts 的表：切页面再回来、deps 没变就直接用上次的结果，不重取（搜资源可能要起后台编辑器，很慢）
+ * 给了 keepKey 时结果记进 keep.ts 的表：切页面再回来、deps 没变就先显示上次的结果，同时照常重取一次换成最新的
+ * （用户 2026-11-15：切回来要看到最新的，对象没了要清掉）
  */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0, keepKey?: string) {
   const sig = keepKey ? JSON.stringify(deps) : ''
@@ -47,8 +48,6 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
     },
     [keepKey],
   )
-  // 第一次挂上时表里已有同样条件的结果：跳过这一次取数
-  const skipFirst = useRef(!!keepKey && kept<{ sig: string }>(keepKey)?.sig === sig)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const seq = useRef(0)
@@ -71,8 +70,7 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
     }
   }, [])
   useEffect(() => {
-    if (skipFirst.current) skipFirst.current = false
-    else void reload()
+    void reload()
     if (!interval) return
     // 定时刷新：页面藏起来时不刷；上一次还没回来（UE 卡在断点、长帧里）就跳过这一拍，不让请求越堆越多
     const id = setInterval(() => {
