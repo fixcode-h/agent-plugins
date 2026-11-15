@@ -7,6 +7,7 @@ import { CompTree } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
 import type { OpenHow } from '../details/RefChip.tsx'
 import { DataTableView } from '../DataTable.tsx'
+import { PropMarksCtx } from '../details/marks.ts'
 import { h, t } from '../host.ts'
 import { useKept } from '../keep.ts'
 import { Props } from '../Props.tsx'
@@ -26,6 +27,8 @@ export interface AssetViewProps {
   onChanged?: () => void
   /** 属性上面的说明（不放在检视区里时用，例如「改动点保存才写回」）；检视区有资源提示条，不给 */
   hint?: string
+  /** 属性标注（AssetForge：导入会改的顶层属性 → 导入后的值）；只在看资源本身时标，看组件模板时不标 */
+  marks?: Map<string, unknown>
 }
 
 /** 按路径猜类型（类型还没读回来时先用，点引用跳过来的没有类名）：组件模板这类子对象路径带冒号，不算蓝图 */
@@ -39,7 +42,7 @@ const guessBlueprint = (p: string) => !p.includes(':') && /\/(BP|WBP|ABP|BPI|BPF
  * - 其他资源（StaticMesh、材质、DataAsset…）：属性 / 函数 / 摘要与引用。
  * 只管看和改，不管保存（保存在资源页页头，asset-save.tsx），也不管导航历史（onOpen 交给外面）
  */
-export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint }: AssetViewProps) {
+export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint, marks }: AssetViewProps) {
   const { project } = useUe()
   const { ui } = h()
   // 真实类型：摘要里的类名；读回来之前按路径猜
@@ -137,22 +140,24 @@ export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint }: 
             {tab === 'info' ? infoView : <DataTableView key={path} path={path} onChanged={() => onChanged?.()} />}
           </>
         ) : (
-          <Props
-            key={comp || path}
-            path={comp || path}
-            bar
-            onOpen={onOpen}
-            readOnlyHint={hint}
-            aside={<ForgeExport asset={path} />}
-            mainLabel={isBlueprint ? t('类默认值') : undefined}
-            noFns={isBlueprint}
-            more={[
-              ...(isBlueprint ? [{ id: 'graph', label: t('蓝图'), view: graph }] : []),
-              { id: 'info', label: t('摘要与引用'), view: infoView },
-            ]}
-            moreTab={tab}
-            onMoreTab={(id) => setView(id as typeof view)}
-          />
+          <PropMarksCtx.Provider value={comp ? null : (marks ?? null)}>
+            <Props
+              key={comp || path}
+              path={comp || path}
+              bar
+              onOpen={onOpen}
+              readOnlyHint={hint}
+              aside={<ForgeExport asset={path} />}
+              mainLabel={isBlueprint ? t('类默认值') : undefined}
+              noFns={isBlueprint}
+              more={[
+                ...(isBlueprint ? [{ id: 'graph', label: t('蓝图'), view: graph }] : []),
+                { id: 'info', label: t('摘要与引用'), view: infoView },
+              ]}
+              moreTab={tab}
+              onMoreTab={(id) => setView(id as typeof view)}
+            />
+          </PropMarksCtx.Provider>
         )}
       </Card>
     </div>

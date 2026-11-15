@@ -1,5 +1,6 @@
 import { Copy, CopyPlus, ListPlus, Pin, Trash2, Undo2 } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { usePropMark } from './marks.ts'
 import { show } from '../api.ts'
 import { h, t } from '../host.ts'
 import {
@@ -140,6 +141,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
   const [err, setErr] = useState('')
   const canOpen = expandable(n)
   const changed = d.isChanged(n.path)
+  const mark = usePropMark(n.path, depth)
   const ro = n.readOnly
   const why = ro ? n.readOnlyWhy || t('这个属性不能改') : undefined
 
@@ -170,6 +172,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
       <div
         className={cn(
           'ue:group ue:grid ue:min-h-8 ue:grid-cols-[var(--ue-name-w)_minmax(0,1fr)_4.5rem] ue:border-b ue:border-line/50 ue:transition-colors ue:hover:bg-hover/50',
+          mark && 'ue:bg-warning/8 ue:shadow-[inset_2px_0_0_var(--warning)]',
         )}
       >
         <div
@@ -206,6 +209,14 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
         </div>
         <div className="ue:flex ue:min-w-0 ue:flex-col ue:justify-center ue:gap-0.5 ue:px-3 ue:py-1">
           <Value n={n} why={why} changed={changed} />
+          {mark && (
+            <span
+              className="ue:truncate ue:font-mono ue:text-caption ue:text-warning"
+              title={t('导入后：{v}', { v: show(mark.after) })}
+            >
+              {t('导入后 → {v}', { v: show(mark.after) })}
+            </span>
+          )}
           {err && <span className="ue:text-caption ue:text-danger">{err}</span>}
         </div>
         <div className="ue:flex ue:items-center ue:justify-end ue:gap-0.5 ue:pr-2">

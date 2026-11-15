@@ -130,7 +130,15 @@ export function ForgeDetail({
         )}
       </div>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto">
-        {tab === 'asset' && <ForgeAssetTab entry={entry} />}
+        {tab === 'asset' && (
+          <ForgeAssetTab
+            entry={entry}
+            diff={against === 'asset' ? diff.data : undefined}
+            configText={desc.data?.configText}
+            configTruncated={desc.data?.configTextTruncated}
+            onShowDiff={() => pick('diff')}
+          />
+        )}
         {tab === 'diff' &&
           (diffable ? (
             <ForgeDiff loading={diff.loading} error={diff.error} diff={diff.data} against={against} />
