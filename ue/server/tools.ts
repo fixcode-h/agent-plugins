@@ -12,6 +12,7 @@ import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
 import { UE_GUIDES } from './tool-guides.ts'
+import { EXT_TOOLS } from './uekit/tools-ext.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -426,6 +427,8 @@ const DEFS = [
 
 // 性能和内存分析的工具在 tools-perf.ts（单独一个文件，免得和这里的改动挤在一起）
 DEFS.push(...PERF_DEFS)
+// UEKit 扩展（AssetForge、GameTest）的工具在 uekit/tools-ext.ts
+DEFS.push(...EXT_TOOLS)
 
 export const TOOL_NAMES = DEFS.map((d) => d.name)
 

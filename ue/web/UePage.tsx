@@ -1,9 +1,12 @@
 import {
+  Blocks,
   Box,
   Braces,
   Cpu,
   Database,
   Eye,
+  FileCode2,
+  FlaskConical,
   Gauge,
   LayoutGrid,
   List,
@@ -31,6 +34,9 @@ import { Lua } from './sections/Lua.tsx'
 import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
 import { Perf } from './sections/Perf.tsx'
+import { Forge } from './sections/uekit/Forge.tsx'
+import { GameTest } from './sections/uekit/GameTest.tsx'
+import { Plugins } from './sections/uekit/Plugins.tsx'
 import { Watch } from './sections/Watch.tsx'
 import { SplitHandle, usePane } from './split.tsx'
 import { usePendingPie } from './launch.ts'
@@ -66,10 +72,28 @@ const SECTIONS: Section[] = [
   },
   { id: 'objects', label: () => 'Object', icon: Box, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
+  // UEKit 扩展：项目里装了才列出（UE 插件页安装）
+  {
+    id: 'assetforge',
+    label: () => 'AssetForge',
+    icon: FileCode2,
+    group: () => t('扩展'),
+    View: Forge,
+    when: (s) => !!s?.extensions?.some((x) => x.name === 'AssetForge'),
+  },
+  {
+    id: 'gametest',
+    label: () => 'GameTest',
+    icon: FlaskConical,
+    group: () => t('扩展'),
+    View: GameTest,
+    when: (s) => !!s?.extensions?.some((x) => x.name === 'GameTest'),
+  },
   { id: 'watch', label: () => t('监视'), icon: Eye, group: () => t('观察'), View: Watch },
   { id: 'perf', label: () => t('性能'), icon: Gauge, group: () => t('观察'), View: Perf },
   { id: 'logs', label: () => t('运行日志'), icon: List, group: () => t('观察'), View: Logs },
   { id: 'history', label: () => t('操作记录'), icon: Undo2, group: () => t('观察'), View: History },
+  { id: 'plugins', label: () => t('UE 插件'), icon: Blocks, group: () => t('项目'), View: Plugins },
   { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
 ]
 

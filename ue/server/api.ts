@@ -8,6 +8,7 @@ import { cancelJob, getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
+import { extRoute } from './uekit/api-ext.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
 import type { GmStore, InstallMode, Target, UeProject } from './types.ts'
@@ -176,6 +177,10 @@ export async function handle(req: Request): Promise<Response> {
       case 'POST editor':
         return json({ pid: launchEditor(project) })
       default: {
+        // UEKit 扩展（UE 插件、AssetForge、GameTest）的接口在 uekit/api-ext.ts
+        const ext = await extRoute(ctx, `${req.method} ${route}`, b, url)
+        if (ext instanceof Response) return ext
+        if (ext !== undefined) return json(ext)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)

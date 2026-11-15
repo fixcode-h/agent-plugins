@@ -1,6 +1,7 @@
 import { Camera, ChevronDown, Plus, Search, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
+import { ppost } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
@@ -187,7 +188,51 @@ export function TargetCard() {
           <Dot /> {t('没有运行中的 UE')}
         </div>
       )}
+      <BackgroundLine />
     </section>
+  )
+}
+
+/**
+ * 后台编辑器（编辑器没开时读资源、AssetForge 导入导出用的不开窗口的编辑器）常驻显示在目标卡底部：
+ * 在跑就让人看得见、能手动关（用户 2026-11-15）；没在跑不占地方
+ */
+function BackgroundLine() {
+  const { project, state, reload } = useUe()
+  const [busy, setBusy] = useState(false)
+  const bg = state?.background
+  if (!bg || (!bg.running && !bg.starting && !bg.error)) return null
+  const stop = () => {
+    setBusy(true)
+    void ppost(project.id, 'background', { action: 'stop' })
+      .catch((e: Error) => h().toast.error(e.message))
+      .finally(() => {
+        setBusy(false)
+        reload()
+      })
+  }
+  return (
+    <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:border-t ue:border-line ue:pt-1.5 ue:text-caption ue:text-subtle">
+      <Dot tone={bg.running ? 'ok' : bg.starting ? 'run' : 'danger'} />
+      <span className="ue:min-w-0 ue:flex-1 ue:truncate" title={bg.error}>
+        {bg.running
+          ? t('后台编辑器运行中{pid}', { pid: bg.pid ? ` · PID ${bg.pid}` : '' })
+          : bg.starting
+            ? t('后台编辑器启动中…')
+            : t('后台编辑器出错：{e}', { e: bg.error ?? '' })}
+      </span>
+      {(bg.running || bg.starting) && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={stop}
+          title={t('关掉后台编辑器：正在做的导入导出会中断，下次读资源时再自动启动')}
+          className="ue:shrink-0 ue:cursor-pointer ue:rounded-md ue:px-1.5 ue:py-0.5 ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50"
+        >
+          {t('关闭')}
+        </button>
+      )}
+    </div>
   )
 }
 

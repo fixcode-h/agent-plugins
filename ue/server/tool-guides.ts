@@ -146,6 +146,25 @@ export const UE_GUIDES: Record<string, Guide> = {
     confirms: true,
     group: PERF,
   },
+  ue_forge: {
+    title: 'AssetForge 配置',
+    summary: '用 JSON 配置管理 UE 资产：看同步状态、属性差异，导入写成资产、导出写回配置',
+    useWhen:
+      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
+    avoidWhen:
+      '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；导入导出是后台作业，返回编号后用 action=job 查结果',
+    confirms: true,
+    group: ASSET,
+  },
+  ue_gametest: {
+    title: '游戏测试',
+    summary: '在 PIE 里跑 GameTest 场景、单步执行测试动作、看报告',
+    useWhen:
+      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下）用 run 跑，job / report 看结果',
+    avoidWhen:
+      '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」',
+    group: RUN,
+  },
 }
 
 /** 能力目录和 MCP 握手里说的「这个服务做什么」 */
