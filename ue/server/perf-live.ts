@@ -50,7 +50,7 @@ export async function liveRead(ctx: OpCtx, since: number, limit = 600): Promise<
     // 旧桥接没有这个操作：给出怎么升级，而不是只说「不支持」
     if (/perf\.live/.test(msg))
       throw new BridgeError(
-        t('这个 UE 里的桥接插件是旧版本，没有实时读数：到「桥接与权限」更新到 {v}，重新编译并重启 UE', {
+        t('这个 UE 里的桥接插件是旧版本，没有实时读数：到「UE 插件」更新到 {v}，重新编译并重启 UE', {
           v: LIVE_BRIDGE,
         }),
       )

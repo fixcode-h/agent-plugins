@@ -120,7 +120,7 @@ async function allow(ctx: OpCtx, title: string, detail: string): Promise<OpCtx> 
   if (ctx.actor.kind !== 'agent') return ctx
   const { runtime } = ctx.project.perms
   if (runtime === 'read')
-    throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对运行时是只读，不能执行：{what}', { what: title }))
+    throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what: title }))
   if (runtime === 'ask') {
     if (!ctx.confirm) throw new BridgeError(t('这一步要你确认，但这次调用不在对话里，没法弹出确认卡片'))
     const r = await ctx.confirm({ title, detail })

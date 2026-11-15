@@ -100,7 +100,7 @@ const SECTIONS: Section[] = [
   { id: 'logs', label: () => t('运行日志'), icon: List, group: () => t('观察'), View: Logs },
   { id: 'history', label: () => t('操作记录'), icon: Undo2, group: () => t('观察'), View: History },
   { id: 'plugins', label: () => t('UE 插件'), icon: Blocks, group: () => t('项目'), View: Plugins },
-  { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
+  { id: 'bridge', label: () => t('权限与设置'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
 ]
 
 /**

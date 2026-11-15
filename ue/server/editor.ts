@@ -55,7 +55,7 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
   if (bg.starting) return bg.starting
   const file = exe(p, true)
   if (!exists(file)) {
-    bg.error = t('没找到 {f}：确认引擎目录，或在「桥接与权限」里指定', { f: file })
+    bg.error = t('没找到 {f}：确认引擎目录，或在「权限与设置」里指定', { f: file })
     throw new Error(bg.error)
   }
   const idle = Number(c().config().idleMinutes) || 10
@@ -96,7 +96,7 @@ export function stopAllBackground() {
 /** 启动编辑器（不等它就绪：编辑器加载完桥接自己写名片，网页轮询会看到） */
 export function launchEditor(p: UeProject) {
   const file = exe(p, false)
-  if (!exists(file)) throw new Error(t('没找到 {f}：确认引擎目录，或在「桥接与权限」里指定', { f: file }))
+  if (!exists(file)) throw new Error(t('没找到 {f}：确认引擎目录，或在「权限与设置」里指定', { f: file }))
   const child = spawn(file, [p.uproject], { cwd: p.root, detached: true, stdio: 'ignore' })
   child.unref()
   return child.pid

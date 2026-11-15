@@ -148,7 +148,7 @@ export function Outliner({
         <SearchBox initial={filter} placeholder={t('筛 Actor 名字')} onSearch={setFilter} allowEmpty live />
         <ErrorText>{res.error}</ErrorText>
         {res.error.includes('不支持 outliner') && (
-          <Note>{t('世界大纲要 UELink 2.2.0 及以上，到「桥接与权限」升级并在本地编译')}</Note>
+          <Note>{t('世界大纲要 UELink 2.2.0 及以上，到「UE 插件」升级并在本地编译')}</Note>
         )}
         {res.data && (
           <span className="ue:text-footnote ue:text-subtle">

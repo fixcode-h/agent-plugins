@@ -22,7 +22,7 @@ export async function detectUe(project: { path: string }) {
 export async function ueReady(project: { id: string }) {
   const p = await getProject(project.id)
   if (!p) return t('还要在 UE 页接入这个项目')
-  if (!(await bridgeVersionIn(p.root))) return t('项目里还没装 UELink：到 UE 页「桥接与权限」安装')
+  if (!(await bridgeVersionIn(p.root))) return t('项目里还没装 UELink：到 UE 页「UE 插件」安装')
   return undefined
 }
 

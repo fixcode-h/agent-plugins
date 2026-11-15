@@ -51,7 +51,7 @@ export function RunBar() {
     run('build', async () => {
       setMenu(false)
       await ppost(project.id, 'build', force ? { force: true } : undefined)
-      go('bridge')
+      go('plugins')
     })
   const liveCoding = () =>
     run('lc', async () => {

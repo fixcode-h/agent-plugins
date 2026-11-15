@@ -96,7 +96,7 @@ export function ObjectTree({
     <>
       <ErrorText>{roots.error}</ErrorText>
       {roots.error?.includes('不支持 objects.children') && (
-        <Note>{t('UObject 树要 UELink 2.2.0 及以上，到「桥接与权限」升级并在本地编译')}</Note>
+        <Note>{t('UObject 树要 UELink 2.2.0 及以上，到「UE 插件」升级并在本地编译')}</Note>
       )}
       <TreeList lines={lines} label={t('UObject 树')} />
     </>

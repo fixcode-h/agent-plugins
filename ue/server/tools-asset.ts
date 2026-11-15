@@ -236,7 +236,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_save',
-    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「桥接与权限」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过。',
+    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过。',
     { packages: { type: 'array', items: { type: 'string' } }, target: TARGET },
     [],
     async (a, ctx) => {
@@ -271,7 +271,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_python',
-    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。要用户在 UE 页「桥接与权限」里打开，且每次都会请用户确认；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它：那些有事务、撤回和编译回读，Python 没有。',
+    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。要用户在 UE 页「权限与设置」里打开，且每次都会请用户确认；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它：那些有事务、撤回和编译回读，Python 没有。',
     { code: { type: 'string' }, timeoutMs: { type: 'number' }, target: TARGET },
     ['code'],
     async (a, ctx) => {

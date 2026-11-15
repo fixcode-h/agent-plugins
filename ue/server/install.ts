@@ -152,13 +152,14 @@ async function removeOldPlugins(job: Job, p: UeProject) {
   if (dropped.length) jobLog(job, t('已从 .uproject 的插件列表里去掉 {names}', { names: dropped.join('、') }))
 }
 
-export async function install(p: UeProject, mode: InstallMode) {
+/** prerelease：装 UEKit 目录里这一版 UELink 预发布（UE 插件页为装扩展升级时用），空 = 正式版和自带的取高 */
+export async function install(p: UeProject, mode: InstallMode, prerelease = '') {
   const job = newJob(p.id, 'install', t('安装 UELink'))
   let tmp = ''
   try {
     const dest = path.join(p.root, REL)
     const installed = await pluginVersion(path.join(dest, `${UELINK}.uplugin`))
-    const { source, remoteError } = await bestSource(true)
+    const { source, remoteError } = await bestSource(true, prerelease)
     if (remoteError)
       jobLog(job, t('公共库读不到（{e}），用插件自带的 UELink {v}', { e: remoteError, v: source.version }))
     await removeOldPlugins(job, p)
@@ -281,7 +282,7 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
     return job
   }
   if (!p.engine.dir) {
-    jobLog(job, t('没找到引擎目录，没法编译：在「桥接与权限」里指定引擎目录或填编译命令'))
+    jobLog(job, t('没找到引擎目录，没法编译：在「权限与设置」里指定引擎目录或填编译命令'))
     endJob(job, false)
     return job
   }

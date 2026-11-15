@@ -116,8 +116,8 @@ export async function blockers(project: UeProject, m: KitManifest) {
     if (!satisfies(have, need))
       out.push(
         have
-          ? c().t('要 UELink {need}，项目里是 {have}：先到「桥接与权限」升级 UELink', { need, have })
-          : c().t('要先装 UELink（{need}）：到「桥接与权限」安装', { need }),
+          ? c().t('要 UELink {need}，项目里是 {have}：先在上面升级 UELink', { need, have })
+          : c().t('要先装 UELink（{need}）：在上面安装', { need }),
       )
   }
   return out
@@ -132,7 +132,7 @@ export interface ExtensionStatus {
   latest?: string
   prerelease?: string
   /** 能装的那一版（有正式版装正式版，没有时用预发布版） */
-  offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string }
+  offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string; uelink?: string }
   /** 开着的 UE 进程里实际加载的版本（装了新版没重编时和磁盘上的不同） */
   loaded?: string
 }
@@ -145,6 +145,9 @@ export async function extensionStatus(
 ): Promise<{ items: ExtensionStatus[]; error?: string }> {
   const cat = await readCatalog(refresh)
   const entries = cat.plugins.filter((e) => e.kind !== 'base' && e.name !== UELINK)
+  // 扩展要的 UELink 只有预发布版时，UE 插件页给「升级到预发布」（正式版、自带的都不够新才用它）
+  const pre = cat.plugins.find((e) => e.name === UELINK)?.prerelease?.version
+  const have = await bridgeVersionIn(project.root)
   const names = [...new Set([...KNOWN_EXTENSIONS, ...entries.map((e) => e.name)])]
   const items = await Promise.all(
     names.map(async (name): Promise<ExtensionStatus> => {
@@ -169,6 +172,13 @@ export async function extensionStatus(
               prerelease: /-/.test(offerM.version),
               blockers: await blockers(project, offerM),
               notes: offerM.notes,
+              uelink:
+                pre &&
+                offerM.requires?.[UELINK] &&
+                !satisfies(have, offerM.requires[UELINK]) &&
+                satisfies(pre, offerM.requires[UELINK])
+                  ? pre
+                  : undefined,
             }
           : undefined,
         loaded: loaded.get(name),
