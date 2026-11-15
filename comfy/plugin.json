@@ -1,0 +1,19 @@
+{
+  "id": "comfy",
+  "name": "ComfyUI 工作流",
+  "version": "1.0.0",
+  "icon": "workflow",
+  "description": "管理本机 ComfyUI 的工作流：按游戏 / 网页 / 图片处理分组的列表、节点图画布和节点参数、试生成、模板商店、工作流链，AI 生成和优化工作流，导入导出 ComfyUI。原来是面板自带的「ComfyUI 工作流」页；装 ComfyUI、下模型和生图服务仍在面板设置的「本机生图」里。",
+  "author": "fixcode-h",
+  "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/comfy",
+  "activation": "global",
+  "api": 10,
+  "settings": [],
+  "skillGuide": {},
+  "agents": [],
+  "workflows": [],
+  "mcpServers": [],
+  "toolNames": {},
+  "web": "web/index.js",
+  "css": "web/index.css"
+}
