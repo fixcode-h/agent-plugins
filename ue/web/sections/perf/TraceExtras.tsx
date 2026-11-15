@@ -5,7 +5,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText, SearchBox } from '../../ui.tsx'
 import { LineChart } from './charts.tsx'
-import { copyText, openMenu } from './menu.tsx'
+import { copyText, openMenu } from '../../menu.tsx'
 import { Empty, Skeleton, fmtAt } from './parts.tsx'
 import { traceQuery, useDebounced, type Range, type TraceBase } from './trace.ts'
 

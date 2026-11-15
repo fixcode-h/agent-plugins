@@ -1,4 +1,4 @@
-import { Download, Info, Loader2, Upload } from 'lucide-react'
+import { Download, ExternalLink, Info, Loader2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { op, ppost, useAction, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -8,7 +8,8 @@ import type { ForgeEntry } from './Forge.tsx'
 import { kindMeta, stateMeta } from './kinds.ts'
 
 /**
- * AssetForge 选中项的详情：头部（类型图标、名字、所在目录、状态、导出 / 导入），路径和说明，
+ * AssetForge 选中配置的详情：头部（类型图标、配置文件名、所在目录、状态、导出 / 导入），配置路径、
+ * 导入后生成的资源（能跳到资源页看）和说明，
  * 三个页签：计划（演练导入会做的动作和诊断）、属性差异（和资产比，或和版本管理里上次提交的配置比）、配置原文。
  */
 interface Describe {
@@ -40,14 +41,20 @@ interface Diff {
 const show = (v: unknown) => (v === undefined || v === null ? '—' : typeof v === 'string' ? v : JSON.stringify(v))
 
 export function ForgeDetail({ entry, busy }: { entry: ForgeEntry; busy: boolean }) {
-  const { project } = useUe()
+  const { project, go } = useUe()
   const { ui, cn } = h()
   const { busy: acting, run } = useAction()
   const [tab, setTab] = useState<'plan' | 'diff' | 'config'>(entry.config ? 'diff' : 'config')
   const [against, setAgainst] = useState<'asset' | 'commit'>('asset')
   const k = kindMeta(entry.kind)
   const s = stateMeta(entry.state)
-  const where = entry.asset ? entry.asset.split('/').slice(0, -1).join('/') : (entry.config ?? '')
+  // 左边列的是配置文件，头部也以配置文件为主：名字是文件名，下面是它在配置根下的目录
+  const configRel = (entry.config ?? '').replace(/\\/g, '/')
+  const fileName = configRel.split('/').pop() || entry.name
+  const where = configRel.split('/').slice(0, -1).join('/') || t('配置根')
+  // 资源页认对象路径（/Game/A/B.B），配置里写的是包路径
+  const assetObject =
+    entry.asset && !entry.asset.includes('.') ? `${entry.asset}.${entry.asset.split('/').pop()}` : entry.asset
   const desc = useLoad(
     () => op<Describe>(project.id, 'forge.describe', entry.config ? { config: entry.config } : { asset: entry.asset }),
     [entry.key, entry.state],
@@ -92,7 +99,9 @@ export function ForgeDetail({ entry, busy }: { entry: ForgeEntry; busy: boolean 
           <k.icon className={cn('ue:h-4 ue:w-4', k.tone)} strokeWidth={1.75} />
         </span>
         <span className="ue:flex ue:min-w-0 ue:flex-col">
-          <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">{entry.name}</span>
+          <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg" title={entry.configPath}>
+            {fileName}
+          </span>
           <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
             {where} · {k.label()}
           </span>
@@ -137,7 +146,7 @@ export function ForgeDetail({ entry, busy }: { entry: ForgeEntry; busy: boolean 
       <dl className="ue:grid ue:grid-cols-[88px_1fr] ue:gap-x-3 ue:gap-y-1.5 ue:border-b ue:border-line ue:px-5 ue:py-3 ue:text-footnote">
         {entry.configPath && (
           <>
-            <dt className="ue:text-subtle">{t('配置')}</dt>
+            <dt className="ue:text-subtle">{t('配置文件')}</dt>
             <dd className="ue:min-w-0 ue:truncate ue:font-mono ue:text-fg" title={entry.configPath}>
               {entry.configPath}
             </dd>
@@ -145,8 +154,30 @@ export function ForgeDetail({ entry, busy }: { entry: ForgeEntry; busy: boolean 
         )}
         {entry.asset && (
           <>
-            <dt className="ue:text-subtle">{t('资产')}</dt>
-            <dd className="ue:min-w-0 ue:truncate ue:font-mono ue:text-fg">{entry.asset}</dd>
+            <dt className="ue:text-subtle">{t('生成的资源')}</dt>
+            <dd className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
+              <span
+                className={cn(
+                  'ue:min-w-0 ue:truncate ue:font-mono',
+                  entry.state === 'asset-missing' ? 'ue:text-subtle ue:line-through' : 'ue:text-fg',
+                )}
+                title={entry.asset}
+              >
+                {entry.asset}
+              </span>
+              {entry.state === 'asset-missing' || entry.state === 'never-imported' ? (
+                <span className="ue:shrink-0 ue:text-subtle">{t('（还没生成，导入后出现）')}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="ue:flex ue:shrink-0 ue:items-center ue:gap-1 ue:text-accent-text ue:hover:underline"
+                  onClick={() => assetObject && go('assets', assetObject)}
+                >
+                  <ExternalLink className="ue:h-3 ue:w-3" />
+                  {t('在资源页打开')}
+                </button>
+              )}
+            </dd>
           </>
         )}
         <dt className="ue:text-subtle">{t('说明')}</dt>

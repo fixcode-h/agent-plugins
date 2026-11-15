@@ -3,7 +3,7 @@ import { useMemo, useState, type MouseEvent } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText, SearchBox } from '../../ui.tsx'
-import { copyText, openMenu, type MenuItem } from './menu.tsx'
+import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
 import { Empty, Skeleton, fmtMs } from './parts.tsx'
 import { traceQuery, useDebounced, type Range, type TimerRow, type TraceBase } from './trace.ts'
 

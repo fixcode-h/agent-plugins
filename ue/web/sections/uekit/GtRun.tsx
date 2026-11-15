@@ -1,24 +1,18 @@
-import { CircleCheck, CircleDashed, CircleStop, CircleX, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { op, useLoad } from '../../api.ts'
+import { CircleStop, Copy, Crosshair, Loader2, Play } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { Badge, ErrorText, Term } from '../../ui.tsx'
+import { copyText, openMenu } from '../../menu.tsx'
+import { Badge, ErrorText } from '../../ui.tsx'
+import { StepDetail, StepIcon, ms, rowSummary, type GtStep, type StepDef, type StepRow } from './GtStepDetail.tsx'
 
 /**
- * 一个场景的运行结果：顶上一条结果（通过 / 失败 / 运行中和进度），中间每一步一行，右边是选中步骤的目标、说明、
- * 结果和截图。运行中的步骤来自推送事件（父组件拼好的 job），跑完的来自 gt.report。
+ * 一个场景：顶上一条结果（通过 / 失败 / 运行中和进度），中间列出场景文件里的每一步（没跑过也列），
+ * 跑过的步骤带上状态和结果；右边是选中步骤的参数、结果和截图。
+ * 场景文件由面板直接读（ext/gt/scenario）；运行中的结果来自推送事件（父组件拼好的 job），跑完的来自 gt.report
  */
-export interface GtStep {
-  index: number
-  action: string
-  status: 'succeeded' | 'failed' | 'skipped' | 'pending' | string
-  message?: string
-  target?: string
-  note?: string
-  payload?: Record<string, unknown>
-  durationMs?: number
-}
+export type { GtStep } from './GtStepDetail.tsx'
 
 export interface GtJob {
   runId?: string
@@ -42,20 +36,21 @@ export interface GtRunSummary {
   outputDir?: string
 }
 
-const ms = (n?: number) => (n === undefined ? '' : n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`)
-
-function StepIcon({ s, live }: { s: string; live?: boolean }) {
-  if (live) return <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin ue:text-warning" />
-  if (s === 'succeeded') return <CircleCheck className="ue:h-3.5 ue:w-3.5 ue:text-success" />
-  if (s === 'failed') return <CircleX className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
-  return <CircleDashed className="ue:h-3.5 ue:w-3.5 ue:text-subtle" />
+export interface GtScenarioFile {
+  name?: string
+  _note?: string
+  stepDelayMs?: number
+  steps: StepDef[]
 }
 
 export function GtRun({
   scenario,
+  root,
   job,
   last,
+  offset = 0,
   onStop,
+  onRunFrom,
 }: {
   scenario: {
     name: string
@@ -66,33 +61,68 @@ export function GtRun({
     _note?: string
     parseError?: string
   }
+  /** 场景根的绝对路径（gt.scenarios 的 absoluteRootDir）：面板按它读场景文件 */
+  root: string
   job?: GtJob
   last?: GtRunSummary
+  /** 这次运行是从场景第几步开始的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行 */
+  offset?: number
   onStop: () => void
+  /** 从第 i 步开始跑（右键菜单）：父组件拿场景文件里的步骤去 gt.run */
+  onRunFrom?: (file: GtScenarioFile, i: number) => void
 }) {
   const { project } = useUe()
   const { ui, cn } = h()
   const running = !!job?.busy
-  const report = useLoad(
+  const file = useLoad(
     () =>
-      !running && last
-        ? op<{ report: { steps: GtStep[]; succeeded: boolean; durationMs?: number } }>(project.id, 'gt.report', {
-            runId: last.runId,
-          }).then((r) => r.report)
-        : Promise.resolve(undefined),
+      scenario.parseError
+        ? Promise.resolve(undefined)
+        : ppost<GtScenarioFile>(project.id, 'ext/gt/scenario', { root, path: scenario.relativePath }),
+    [project.id, root, scenario.relativePath, scenario.revision, scenario.steps],
+  )
+  const report = useLoad(
+    () => (!running && last ? loadReport(project.id, last.runId) : Promise.resolve(undefined)),
     [last?.runId, running],
   )
-  const steps = running ? (job?.steps ?? []) : (report.data?.steps ?? [])
+  const results = running ? (job?.steps ?? []) : (report.data ?? [])
+  const rows = useMemo(() => {
+    const defs = file.data?.steps ?? []
+    const byRow = new Map(results.map((r) => [r.index + offset, r]))
+    const n = Math.max(defs.length, ...[...byRow.keys()].map((k) => k + 1))
+    return Array.from({ length: n }, (_, i): StepRow => ({ i, def: defs[i], res: byRow.get(i) }))
+  }, [file.data, results, offset])
   const [pick, setPick] = useState<number>()
-  // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败就第一步）
+  // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败、没跑过就第一步）
   useEffect(() => {
-    if (running) setPick(steps.at(-1)?.index)
-    else if (steps.length) setPick((steps.find((s) => s.status === 'failed') ?? steps[0]).index)
-    // 只在步骤数变化时跳
+    const done = rows.filter((r) => r.res)
+    if (running) setPick(done.at(-1)?.i ?? offset)
+    else setPick((done.find((r) => r.res?.status === 'failed') ?? rows[0])?.i)
+    // 只在结果数、行数变化时跳
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, steps.length])
-  const step = steps.find((s) => s.index === pick)
+  }, [running, results.length, rows.length])
+  const row = rows.find((r) => r.i === pick)
   const planned = job?.planned || scenario.steps
+  const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
+
+  const stepMenu = (e: React.MouseEvent, r: StepRow) => {
+    const s = rowSummary(r)
+    openMenu(e, [
+      { title: t('第 {n} 步 · {a}', { n: r.i + 1, a: r.def?.action || r.res?.action || '?' }) },
+      onRunFrom &&
+        file.data &&
+        r.def && {
+          label: t('从这一步开始运行'),
+          icon: Play,
+          disabled: running,
+          onClick: () => onRunFrom(file.data!, r.i),
+        },
+      'sep',
+      r.def && { label: t('复制这一步（JSON）'), icon: Copy, onClick: () => copyText(JSON.stringify(r.def, null, 2)) },
+      s.target && { label: t('复制目标选择器'), icon: Crosshair, onClick: () => copyText(s.target!) },
+      r.res?.message && { label: t('复制结果消息'), icon: Copy, onClick: () => copyText(r.res!.message!) },
+    ])
+  }
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:lg:flex-row ue:lg:overflow-hidden">
@@ -145,87 +175,66 @@ export function GtRun({
           </p>
         )}
         <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
-          {report.error && (
-            <div className="ue:p-4">
-              <ErrorText>{report.error}</ErrorText>
+          {(file.error || report.error) && (
+            <div className="ue:flex ue:flex-col ue:gap-2 ue:p-4">
+              {file.error && <ErrorText>{file.error}</ErrorText>}
+              {report.error && <ErrorText>{report.error}</ErrorText>}
             </div>
           )}
-          {steps.map((s, i) => (
-            <button
-              key={s.index}
-              type="button"
-              onClick={() => setPick(s.index)}
-              aria-selected={s.index === pick}
-              className={cn(
-                'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[22px_18px_104px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
-                s.status === 'failed' && 'ue:bg-danger/6',
-              )}
-            >
-              <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{s.index + 1}</span>
-              <StepIcon s={s.status} live={running && i === steps.length - 1 && s.status === 'pending'} />
-              <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{s.action}</span>
-              <span className="ue:truncate ue:text-footnote ue:text-muted">
-                {s.target && <span className="ue:font-mono">{s.target}</span>}
-                {s.target && (s.note || s.message) ? ' · ' : ''}
-                {s.note || s.message}
-              </span>
-              <span className="ue:text-caption ue:text-subtle ue:tabular-nums">{ms(s.durationMs)}</span>
-            </button>
-          ))}
+          {!rows.length && file.loading && (
+            <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
+              <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
+            </div>
+          )}
+          {rows.map((r) => {
+            const sum = rowSummary(r)
+            const status = r.res?.status
+            return (
+              <button
+                key={r.i}
+                type="button"
+                onClick={() => setPick(r.i)}
+                onContextMenu={(e) => {
+                  setPick(r.i)
+                  stepMenu(e, r)
+                }}
+                aria-selected={r.i === pick}
+                className={cn(
+                  'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[28px_18px_104px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
+                  status === 'failed' && 'ue:bg-danger/6',
+                  !r.res && (running || last) && 'ue:opacity-60',
+                )}
+              >
+                <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{r.i + 1}</span>
+                <StepIcon s={status} live={r.i === liveRow} />
+                <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
+                  {r.def?.action || r.res?.action}
+                </span>
+                <span className="ue:truncate ue:text-footnote ue:text-muted">
+                  {sum.target && <span className="ue:font-mono">{sum.target}</span>}
+                  {sum.target && sum.text ? ' · ' : ''}
+                  {sum.text}
+                </span>
+                <span className="ue:text-caption ue:text-subtle ue:tabular-nums">{ms(r.res?.durationMs)}</span>
+              </button>
+            )
+          })}
         </div>
       </section>
       <section className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:lg:flex-1">
-        {step ? <StepDetail step={step} /> : null}
+        {row ? <StepDetail row={row} live={row.i === liveRow} /> : null}
       </section>
     </div>
   )
 }
 
-/** 一步的详情：目标、说明、结果，payload 里有截图（path 是 png）就显示出来 */
-function StepDetail({ step }: { step: GtStep }) {
-  const { project } = useUe()
-  const { api } = h()
-  const shot = [step.payload?.path, step.payload?.screenshot, step.payload?.annotated].find(
-    (p): p is string => typeof p === 'string' && /\.(png|jpe?g)$/i.test(p),
-  )
-  return (
-    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto">
-      <header className="ue:flex ue:min-h-12 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
-        <span className="ue:text-caption ue:text-subtle">{t('第 {n} 步', { n: step.index + 1 })}</span>
-        <span className="ue:font-mono ue:text-body ue:font-medium ue:text-fg">{step.action}</span>
-        <StepIcon s={step.status} />
-        <span className="ue:ml-auto ue:text-caption ue:text-subtle">{ms(step.durationMs)}</span>
-      </header>
-      <dl className="ue:grid ue:grid-cols-[64px_1fr] ue:gap-x-3 ue:gap-y-1.5 ue:border-b ue:border-line ue:px-4 ue:py-3 ue:text-footnote">
-        {step.target && (
-          <>
-            <dt className="ue:text-subtle">{t('目标')}</dt>
-            <dd className="ue:min-w-0 ue:font-mono ue:break-all ue:text-fg">{step.target}</dd>
-          </>
-        )}
-        {step.note && (
-          <>
-            <dt className="ue:text-subtle">{t('说明')}</dt>
-            <dd className="ue:text-fg">{step.note}</dd>
-          </>
-        )}
-        <dt className="ue:text-subtle">{t('结果')}</dt>
-        <dd className={step.status === 'failed' ? 'ue:text-danger' : 'ue:text-fg'}>{step.message || '—'}</dd>
-      </dl>
-      {shot && (
-        <img
-          alt={t('步骤截图')}
-          src={api.url(`/p/${encodeURIComponent(project.id)}/ext/file?path=${encodeURIComponent(shot)}`)}
-          className="ue:mx-4 ue:mt-3 ue:rounded-lg ue:border ue:border-line"
-        />
-      )}
-      {step.payload && Object.keys(step.payload).length > 0 && (
-        <div className="ue:p-4">
-          <Term>
-            <pre className="ue:whitespace-pre-wrap">{JSON.stringify(step.payload, null, 2)}</pre>
-          </Term>
-        </div>
-      )}
-    </div>
-  )
+/**
+ * 一次运行每一步的结果：gt.report 直接回报告本身（不是 { report }）；超过 12000 字时 UE 把整份写进文件、
+ * 只回 file，这时由面板读那份文件
+ */
+async function loadReport(project: string, runId: string): Promise<GtStep[]> {
+  const r = await op<{ steps?: GtStep[]; truncated?: boolean; file?: string }>(project, 'gt.report', { runId })
+  if (r.steps) return r.steps
+  if (r.file) return (await ppost<{ steps?: GtStep[] }>(project, 'ext/gt/report', { file: r.file })).steps ?? []
+  return []
 }

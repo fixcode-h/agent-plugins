@@ -4,7 +4,7 @@ import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText } from '../../ui.tsx'
-import { copyText, openMenu, type MenuItem } from './menu.tsx'
+import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
 import { Empty, PctBar, Section, Skeleton, TREE_COLS, Tree, fmtAt, fmtMs, type TreeNode } from './parts.tsx'
 import {
   traceQuery,
