@@ -4,7 +4,7 @@ import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText } from '../../ui.tsx'
-import { ForgeDetail } from './ForgeDetail.tsx'
+import { ForgeDetail, type ForgeTab } from './ForgeDetail.tsx'
 import { FILTERS, kindMeta, stateMeta, type FilterId } from './kinds.ts'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
@@ -85,6 +85,7 @@ export function Forge() {
   const [filter, setFilter] = useState<FilterId>('all')
   const [kind, setKind] = useState('')
   const [job, setJob] = useState<ForgeJob>()
+  const [tab, setTab] = useState<ForgeTab>()
 
   const reload = (deep = false) => {
     setLoading(true)
@@ -258,7 +259,14 @@ export function Forge() {
       </ListCol>
       <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
         {selected ? (
-          <ForgeDetail key={selected.key} entry={selected} busy={running || !!busy} />
+          <ForgeDetail
+            key={selected.key}
+            entry={selected}
+            busy={running || !!busy}
+            configRoot={root}
+            tab={tab}
+            onTab={setTab}
+          />
         ) : (
           <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
             <FileCode2 className="ue:h-6 ue:w-6" />
