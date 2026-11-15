@@ -1,5 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { assetChildren } from './asset-folders.ts'
 import { assetQuery } from './asset-query.ts'
 import { ensureBackground } from './editor.ts'
 import { record } from './history.ts'
@@ -379,6 +380,8 @@ export async function runOp(
     }
   }
   await checkPerms(ctx, op, kind, args)
+  // 文件夹树：自己挑进程，没有编辑器或桥接旧时扫磁盘；不进 ASSET_OPS，免得为列目录启动后台编辑器（asset-folders.ts）
+  if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
   const card = await chooseCard(ctx, op, args)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world

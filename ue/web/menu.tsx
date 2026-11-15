@@ -1,5 +1,14 @@
 import { Check, Copy, Play, Trash2, type LucideIcon } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { h, t } from './host.ts'
 
@@ -22,6 +31,10 @@ export type MenuItem =
       hint?: string
       /** 打勾（开关类的菜单项） */
       checked?: boolean
+      /** 名字前面的小标记（「最近看过」里的实例 / 资源徽标） */
+      lead?: ReactNode
+      /** 淡显（还能点，例如换了世界、对象可能已经不在的历史记录） */
+      dim?: boolean
     }
   | { title: string }
   | 'sep'
@@ -55,6 +68,15 @@ export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: (MenuItem
   emit()
 }
 
+/** 挂在按钮下面打开（下拉菜单：导航条的「最近看过」、分类栏的「更多」），不是右键 */
+export function openMenuAt(el: HTMLElement, items: (MenuItem | false | '' | undefined | null)[]) {
+  const r = el.getBoundingClientRect()
+  openMenu(
+    { clientX: r.left, clientY: r.bottom + 4, preventDefault() {}, stopPropagation() {} } as unknown as MouseEvent,
+    items,
+  )
+}
+
 export function closeMenu() {
   if (!state) return
   state = undefined
@@ -70,7 +92,19 @@ export function copyText(text: string) {
     .catch(() => toast.error(t('复制失败：浏览器不让写剪贴板')))
 }
 
+/** 挂着的 MenuHost：同一页里可能挂了好几个（性能页、检视区、分类栏、设置里的示例），只让最早挂上的那个画，免得一个菜单画两份 */
+const hosts: string[] = []
+
 export function MenuHost() {
+  const id = useId()
+  useLayoutEffect(() => {
+    hosts.push(id)
+    emit()
+    return () => {
+      hosts.splice(hosts.indexOf(id), 1)
+      emit()
+    }
+  }, [id])
   const cur = useSyncExternalStore(
     (f) => {
       subs.add(f)
@@ -78,7 +112,14 @@ export function MenuHost() {
     },
     () => state,
   )
-  if (!cur) return null
+  const first = useSyncExternalStore(
+    (f) => {
+      subs.add(f)
+      return () => subs.delete(f)
+    },
+    () => hosts[0] === id,
+  )
+  if (!cur || !first) return null
   return createPortal(<Menu key={cur.seq} s={cur} />, document.body)
 }
 
@@ -191,7 +232,8 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
                 <Icon className={cn('ue:h-3.5 ue:w-3.5', it.danger && 'ue:text-danger')} />
               ) : null}
             </span>
-            <span className="ue:min-w-0 ue:flex-1 ue:truncate">{it.label}</span>
+            {it.lead}
+            <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', it.dim && 'ue:opacity-50')}>{it.label}</span>
             {it.hint && <span className="ue:shrink-0 ue:pl-3 ue:text-caption ue:text-subtle">{it.hint}</span>}
           </button>
         )

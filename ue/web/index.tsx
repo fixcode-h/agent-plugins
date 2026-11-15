@@ -2,10 +2,13 @@ import type { ActivateWeb, Task } from '../../sdk/web.ts'
 import type { UeProject } from '../server/types.ts'
 import { get } from './api.ts'
 import { AssetFile } from './AssetFile.tsx'
-import { setHost } from './host.ts'
+import { setHost, t } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
 import { MenuSpecimen } from './menu.tsx'
+import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
+import { RefChipSpecimen } from './details/RefChip.tsx'
+import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
 import { UePage } from './UePage.tsx'
@@ -47,6 +50,10 @@ const activate: ActivateWeb = (host) => {
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
+      // 对象页、资源页的检视区（设计稿 designs/对象页合并与资源导航-设计稿.md 第 9 节）：「最近看过」「更多」下拉跟面板「菜单」走
+      { id: 'inspect-bar', label: t('检视 · 导航条'), tune: ['menu'], Specimen: InspectorBarSpecimen },
+      { id: 'inspect-ref', label: t('检视 · 引用'), Specimen: RefChipSpecimen },
+      { id: 'inspect-cats', label: t('检视 · 分类栏'), tune: ['menu'], Specimen: CategoryBarSpecimen },
     ],
   }
 }

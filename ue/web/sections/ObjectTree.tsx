@@ -25,7 +25,7 @@ interface Kids {
 
 /**
  * UObject 树（用户 2026-11-15：Actor 和 UObject 分开）：根是 GameInstance、世界、引擎，往下按外层（Outer）一层层列，
- * 不含 Actor、组件、关卡（这些在 Actor 页的大纲里）。展开一层才读一层，只有名字和类，点了哪个右边才读属性
+ * 不含 Actor、组件、关卡（这些在对象页的「大纲」页签里）。展开一层才读一层，只有名字和类，点了哪个右边才读属性
  */
 export function ObjectTree({
   tick,

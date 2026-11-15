@@ -9,12 +9,12 @@ import {
   ContainerHead,
   EnumSelect,
   Muted,
-  RefValue,
   TextField,
   VecField,
   vecKeys,
 } from './controls.tsx'
 import { isNumberType, looksLikePath, toDisplay, type Prop } from './model.ts'
+import { RefChip, type OpenHow } from './RefChip.tsx'
 
 /** 一行（顶层属性，或展开后的结构体成员、数组元素）：path 是交给桥接的属性路径（Stats.MaxHP、Triggers[0]、Tags["Fire"]） */
 export interface Node {
@@ -72,7 +72,8 @@ export interface DetailsApi {
   arrayOp: (path: string, op: 'add' | 'insert' | 'duplicate' | 'remove' | 'clear', index?: number) => void
   reset: (n: Node) => void
   pin?: (path: string) => void
-  openRef: (p: string) => (() => void) | undefined
+  /** 点对象引用：via 是属性的显示名（导航条面包屑上写「经 Static Mesh」）；返回 undefined 表示这个引用不能点 */
+  openRef: (p: string, via?: string) => ((how: OpenHow) => void) | undefined
   loadFull: (path: string) => Promise<unknown>
 }
 export const DetailsCtx = createContext<DetailsApi | null>(null)
@@ -336,10 +337,10 @@ function Value({ n, why, changed }: { n: Node; why?: string; changed: boolean })
     ((v === null || v === '' || v === 'None') && /\*|Ptr<|Class<|^U[A-Z]|^A[A-Z]/.test(n.type ?? ''))
   if (isRef)
     return (
-      <RefValue
+      <RefChip
         path={typeof v === 'string' ? v : ''}
         disabled={ro}
-        onOpen={typeof v === 'string' ? d.openRef(v) : undefined}
+        onOpen={typeof v === 'string' ? d.openRef(v, viaOf(n)) : undefined}
         onClear={ro ? undefined : () => d.setValue(n, 'None')}
       />
     )
@@ -358,6 +359,9 @@ function Value({ n, why, changed }: { n: Node; why?: string; changed: boolean })
 }
 
 const noop = () => {}
+
+/** 面包屑上「经哪个属性」：顶层属性用显示名，数组元素、结构体成员用属性路径（Static Materials[0] 比「索引 [0]」看得懂） */
+const viaOf = (n: Node) => (n.path.includes('.') || n.path.includes('[') ? n.path : n.label)
 
 /** 分类折叠条：整行一条稍亮的底，左边箭头和名字；子分类、「高级」往里缩一级 */
 export function CategoryBar({

@@ -3,6 +3,7 @@ import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'r
 import { h, t } from '../host.ts'
 import { Collapse } from './controls.tsx'
 import { buildGroups, keep, matches, remember, type Group, type Prop } from './model.ts'
+import { CategoryBar as CategoryRow } from './CategoryBar.tsx'
 import { CategoryBar, DetailsCtx, Row, nodeOf, type DetailsApi } from './rows.tsx'
 
 const INTERNAL = '__internal'
@@ -140,17 +141,6 @@ export function Details({
     )
   }
 
-  const chipCls = (on: boolean, tone?: 'accent') =>
-    cn(
-      'ue:inline-flex ue:h-6 ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1 ue:border ue:px-2.5 ue:text-footnote ue:transition-colors',
-      on
-        ? 'ue:border-accent ue:bg-accent ue:text-on-accent'
-        : cn(
-            'ue:border-line ue:bg-field ue:hover:border-line-strong ue:hover:text-fg',
-            tone ? 'ue:text-accent-text' : 'ue:text-muted',
-          ),
-    )
-
   return (
     <DetailsCtx.Provider value={ctx}>
       <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2">
@@ -186,41 +176,27 @@ export function Details({
           />
         </div>
         {(roots.length > 1 || internal.length > 0 || changedProps.length > 0) && (
-          <nav aria-label={t('属性分类')} className="ue:flex ue:flex-wrap ue:gap-1">
-            <button type="button" className={chipCls(cur === '')} onClick={() => setChip('')}>
-              {t('所有')}
-            </button>
-            {roots.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                className={chipCls(cur === g.key)}
-                aria-current={cur === g.key ? 'true' : undefined}
-                onClick={() => setChip(cur === g.key ? '' : g.key)}
-              >
-                {g.title}
-              </button>
-            ))}
-            {internal.length > 0 && (
-              <button
-                type="button"
-                className={chipCls(cur === INTERNAL)}
-                title={t('UE 细节面板里不显示的内部状态（没有 EditAnywhere 这类标记），排查时常要看')}
-                onClick={() => setChip(cur === INTERNAL ? '' : INTERNAL)}
-              >
-                {t('内部')}
-              </button>
-            )}
-            {changedProps.length > 0 && (
-              <button
-                type="button"
-                className={chipCls(cur === CHANGED, 'accent')}
-                onClick={() => setChip(cur === CHANGED ? '' : CHANGED)}
-              >
-                {t('改过的')} <span className="ue:text-caption ue:opacity-80">{changedProps.length}</span>
-              </button>
-            )}
-          </nav>
+          <CategoryRow
+            label={t('属性分类')}
+            value={cur}
+            onChange={setChip}
+            items={[
+              { key: '', label: t('所有') },
+              ...roots.map((g) => ({ key: g.key, label: g.title })),
+              ...(internal.length
+                ? [
+                    {
+                      key: INTERNAL,
+                      label: t('内部'),
+                      title: t('UE 细节面板里不显示的内部状态（没有 EditAnywhere 这类标记），排查时常要看'),
+                    },
+                  ]
+                : []),
+              ...(changedProps.length
+                ? [{ key: CHANGED, label: t('改过的'), tone: 'accent' as const, count: changedProps.length }]
+                : []),
+            ]}
+          />
         )}
       </div>
       <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">

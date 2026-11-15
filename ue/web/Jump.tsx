@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 import { setPending } from './pending.ts'
+import { stageNav } from './inspect/history.ts'
 
 interface Opt {
   icon: LucideIcon
@@ -26,7 +27,7 @@ const isObjectPath = (s: string) => /:PersistentLevel|UEDPIE_|^\/Temp\/|^\/Engin
  * （用户 2026-11-10 定的「搜索点按钮才搜」，怕拖慢 UE）
  */
 export function Jump({ onClose }: { onClose: () => void }) {
-  const { go } = useUe()
+  const { go, project } = useUe()
   const { ui, cn, toast } = h()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
@@ -54,8 +55,10 @@ export function Jump({ onClose }: { onClose: () => void }) {
     kind = t('关卡里的对象路径')
     opts.push({
       icon: Cpu,
-      label: t('在 Object 页里打开'),
+      label: t('在对象页里打开'),
       run: () => {
+        // 进对象页、资源页共用的导航历史，「最近看过」里写「从 Ctrl+K」
+        stageNav(project.id, 'objects', s, { from: 'jump' })
         go('objects', s)
         onClose()
       },

@@ -114,6 +114,16 @@ export const looksLikePath = (s: string) => /^\/(Game|Script|Engine|Temp)\/|:Per
 export const isRuntimePath = (p: string) =>
   !p.startsWith('/') || /:PersistentLevel|UEDPIE_|^\/Temp\/|^\/Engine\/Transient/i.test(p)
 
+/**
+ * 资源本身（包里的顶层资产 /Game/A/B.B、插件内容 /MyPlugin/…）：检视区按它出资源的样子（AssetView）。
+ * 类默认值（Default__）、子对象（带冒号）、/Script 里的类和运行时对象都不算
+ */
+export const isAssetPath = (p: string) =>
+  /^\/(?!Script\/|Temp\/|Engine\/Transient)/i.test(p) &&
+  !p.includes(':') &&
+  !/\.Default__|_C$/.test(p) &&
+  !isRuntimePath(p)
+
 /** 对象引用显示的名字：路径最后一段，去掉蓝图类的 _C 后缀 */
 export function refName(p: string) {
   const last = p.split(/[.:/]/).pop() || p

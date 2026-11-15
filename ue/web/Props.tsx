@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Copy, MessageSquare } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { op, show, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
@@ -12,6 +12,7 @@ import { Details } from './details/Details.tsx'
 import { useDetailsApi } from './details/api.ts'
 import { Transform } from './details/Transform.tsx'
 import { isRuntimePath, looksLikePath, type Prop } from './details/model.ts'
+import type { OpenHow } from './details/RefChip.tsx'
 import type { World } from '../server/types.ts'
 
 export type { Prop }
@@ -28,18 +29,42 @@ export function Props({
   readOnlyHint,
   cdo,
   viewOnly,
+  bar,
+  aside,
+  mainLabel,
+  noFns,
+  more,
+  moreTab = '',
+  onMoreTab,
 }: {
   path: string
   title?: string
-  onOpen?: (path: string) => void
+  /**
+   * 点对象引用：via 是属性的显示名（导航条面包屑写「经 Static Mesh」），how.ctrl 是 Ctrl+点（资源在资源页打开）。
+   * 页面里交给导航历史（inspect/history.ts）；只有对话里点 .uasset 弹出的查看窗不给，那里用这里自己的小面包屑
+   */
+  onOpen?: (path: string, via?: string, how?: OpenHow) => void
   readOnlyHint?: string
   /** 运行时对象页：选到资源默认值（Default__）时醒目提示，给「改运行中的实例」（界面优化第 2 条） */
   cdo?: boolean
   /** 只看不改（对话里点 .uasset 弹出的查看窗口，那里没有保存、放弃改动的地方）：不出改值、函数、固定到监视 */
   viewOnly?: boolean
+  /** 放在检视区导航条下面（inspect/Inspector.tsx）：类型徽标、复制路径、发给对话都在导航条上，这里不重复；标题后面写完整路径 */
+  bar?: boolean
+  /** 标题行右边、页签前面的按钮（资源的「导出到 JSON」） */
+  aside?: ReactNode
+  /** 「属性」页签换个名字（蓝图资源叫「类默认值」） */
+  mainLabel?: string
+  /** 不出「函数」页签（蓝图资源的类默认值，设计稿第 3 节） */
+  noFns?: boolean
+  /** 标题行页签里多加的几页（资源的「蓝图」「摘要与引用」）：选中时下面换成它的内容，标题行不变 */
+  more?: { id: string; label: string; view: ReactNode }[]
+  moreTab?: string
+  onMoreTab?: (id: string) => void
 }) {
   const { project, target, setTarget } = useUe()
-  // 面包屑：在面板里点运行时对象的引用，就在这里往下看，← 回到上一个（以前跳到别的页回不来，界面优化第 8 条）
+  // 小面包屑：只给对话里的 .uasset 查看窗（没有页面历史）用，在面板里点运行时对象的引用就在这里往下看，← 回到上一个。
+  // 页面里统一交给导航历史（设计稿第 5 节），不再各管各的
   const [trail, setTrail] = useState<string[]>([])
   const path = trail.at(-1) ?? root
   const chat = useToChat()
@@ -67,15 +92,15 @@ export function Props({
       viewOnly ? { ...p, readOnly: true, readOnlyWhy: p.readOnlyWhy ?? t('这里只看不改，要改去 UE 页的资源分区') } : p,
     )
 
-  /** 点对象引用：运行时对象在这里往下看（面包屑能回来），资源交给外面（跳到资源页） */
-  const openRef = (p: string) =>
-    isRuntimePath(p)
-      ? () => {
-          setTrail((x) => [...x, p])
-          setTab('props')
-        }
-      : onOpen && looksLikePath(p)
-        ? () => onOpen(p)
+  /** 点对象引用：交给外面的导航历史；没给 onOpen（只读查看窗）时运行时对象在这里往下看 */
+  const openRef = (p: string, via?: string) =>
+    onOpen && (looksLikePath(p) || isRuntimePath(p))
+      ? (how: OpenHow) => onOpen(p, via, how)
+      : !onOpen && isRuntimePath(p)
+        ? () => {
+            setTrail((x) => [...x, p])
+            setTab('props')
+          }
         : undefined
   const api = useDetailsApi(path, {
     q: '',
@@ -120,29 +145,42 @@ export function Props({
             {(!trail.length && title) || data.data?.object.name || shortName(path)}
           </span>
         </nav>
-        <KindBadge kind={data.data?.kind} />
+        {!bar && <KindBadge kind={data.data?.kind} />}
         {data.data && <Badge>{data.data.object.class}</Badge>}
+        {bar && !isRuntimePath(path) && (
+          <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={path}>
+            {path.split('.')[0]}
+          </span>
+        )}
         <div className="ue:ml-auto ue:flex ue:items-center ue:gap-1">
-          {!viewOnly && (
+          {aside}
+          {(!viewOnly || !!more?.length) && (
             <ui.Segmented
               size="sm"
               label={t('属性 / 函数')}
-              value={tab}
-              onChange={setTab}
+              value={moreTab || tab}
+              onChange={(id: string) => {
+                if (more?.some((m) => m.id === id)) return onMoreTab?.(id)
+                onMoreTab?.('')
+                setTab(id as typeof tab)
+              }}
               options={[
-                { id: 'props', label: t('属性') },
-                { id: 'fns', label: t('函数') },
-                ...(hasLua ? [{ id: 'lua' as const, label: 'Lua' }] : []),
+                { id: 'props', label: mainLabel ?? t('属性') },
+                ...(viewOnly || noFns ? [] : [{ id: 'fns', label: t('函数') }]),
+                ...(hasLua && !viewOnly ? [{ id: 'lua' as const, label: 'Lua' }] : []),
+                ...(more ?? []).map((m) => ({ id: m.id, label: m.label })),
               ]}
             />
           )}
-          <ui.IconButton
-            icon={Copy}
-            label={t('复制路径')}
-            size="sm"
-            onClick={() => void navigator.clipboard.writeText(path).then(() => toast.success(t('已复制')))}
-          />
-          {chat.available && (
+          {!bar && (
+            <ui.IconButton
+              icon={Copy}
+              label={t('复制路径')}
+              size="sm"
+              onClick={() => void navigator.clipboard.writeText(path).then(() => toast.success(t('已复制')))}
+            />
+          )}
+          {!bar && chat.available && (
             <ui.Button
               size="sm"
               variant="secondary"
@@ -159,9 +197,11 @@ export function Props({
           <Note tone="info">{readOnlyHint || lockAll}</Note>
         </div>
       )}
-      {tab === 'lua' && hasLua ? (
-        <LuaTable path={path} onOpen={onOpen} />
-      ) : tab === 'fns' ? (
+      {moreTab && more?.some((m) => m.id === moreTab) ? (
+        more.find((m) => m.id === moreTab)!.view
+      ) : tab === 'lua' && hasLua ? (
+        <LuaTable path={path} onOpen={onOpen && ((p) => onOpen(p, 'Lua'))} />
+      ) : tab === 'fns' && !noFns ? (
         <Functions path={path} />
       ) : (
         <>
@@ -209,6 +249,7 @@ export function Props({
           />
         </>
       )}
+      {chat.dialog}
     </div>
   )
 }
@@ -219,7 +260,7 @@ export function shortName(p: string) {
 }
 
 /** 「发给对话」的内容：对象路径、类、目标世界，和当前列出来的属性值（最多 40 个，长值截断） */
-function describeObject(
+export function describeObject(
   path: string,
   d: { object: { class: string }; kind?: string } | undefined,
   props: Prop[],

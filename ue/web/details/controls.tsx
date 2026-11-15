@@ -1,14 +1,13 @@
-import { Check, CirclePlus, Trash2, X } from 'lucide-react'
+import { Check, CirclePlus, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
-import { refName } from './model.ts'
 
 /**
  * 细节面板的值控件，照 UE 细节面板：方形勾选框、紧凑的下拉和输入框（不铺满整列）、向量每个分量左边一道轴色竖条、
  * 对象引用是一个带名字的小框、数组是「N 个元素」加上加号和垃圾桶。只读时控件照样画、整体变灰，一眼看出是什么类型但改不了
  */
 
-const FIELD =
+export const FIELD =
   'ue:flex ue:h-7 ue:min-w-0 ue:items-center ue:rounded-[3px] ue:border ue:px-2 ue:transition-colors ue:focus-within:border-focus'
 /**
  * 能改和只读分开画（用户 2026-11-11：照 UE，两种要一眼分得清）：能改的是深色输入框、亮字、悬停边框变亮；
@@ -243,44 +242,6 @@ export function VecField({
       {/* 回车提交要有一个提交按钮；不显示 */}
       <button type="submit" hidden />
     </form>
-  )
-}
-
-/** 对象引用：名字小框（悬停看完整路径），点开跳过去；能改的给一个清空（设成 None） */
-export function RefValue({
-  path,
-  disabled,
-  onOpen,
-  onClear,
-}: {
-  path: string
-  disabled?: boolean
-  onOpen?: () => void
-  onClear?: () => void
-}) {
-  const { cn, ui } = h()
-  const none = !path || path === 'None'
-  return (
-    <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
-      <button
-        type="button"
-        title={none ? undefined : path}
-        onClick={none ? undefined : onOpen}
-        className={cn(
-          FIELD,
-          // 引用不能改时照样能点开看，只是底色按只读画
-          disabled
-            ? 'ue:border-transparent ue:bg-hover ue:text-subtle'
-            : 'ue:border-line ue:bg-card ue:text-fg ue:dark:bg-field',
-          'ue:w-56 ue:max-w-full ue:text-left ue:text-footnote',
-          none && 'ue:text-subtle',
-          !none && onOpen && 'ue:cursor-pointer ue:hover:border-line-strong ue:hover:text-accent-text',
-        )}
-      >
-        <span className="ue:truncate">{none ? t('无') : refName(path)}</span>
-      </button>
-      {!none && onClear && !disabled && <ui.IconButton icon={X} label={t('清空引用')} size="xs" onClick={onClear} />}
-    </div>
   )
 }
 

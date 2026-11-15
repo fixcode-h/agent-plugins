@@ -1,4 +1,4 @@
-import { ArrowDown, Search, type LucideIcon } from 'lucide-react'
+import { ArrowDown, Package, Search, type LucideIcon } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
 import { useLaunch } from './launch.ts'
@@ -230,10 +230,21 @@ export function WorldBadge({ world }: { world: World }) {
   return null
 }
 
-/** 对象是运行时实例、资源默认值还是类：颜色区分，运行时实例改了马上生效，默认值不影响正在跑的对象 */
-export function KindBadge({ kind }: { kind?: 'instance' | 'asset' | 'class' | 'unloaded' }) {
+/**
+ * 对象是运行时实例、资源默认值还是类：颜色区分，运行时实例改了马上生效，默认值不影响正在跑的对象。
+ * assetRef 是资源本身（检视区导航条上，设计稿第 5 节），简称「资源」带包裹图标；「资源默认值」留给 CDO
+ */
+export type ObjKind = 'instance' | 'asset' | 'class' | 'unloaded' | 'assetRef'
+export function KindBadge({ kind }: { kind?: ObjKind }) {
   if (!kind) return null
   if (kind === 'instance') return <Badge tone="run">{t('运行时实例')}</Badge>
+  if (kind === 'assetRef')
+    return (
+      <Badge tone="warn">
+        <Package className="ue:mr-1 ue:h-3 ue:w-3" />
+        {t('资源')}
+      </Badge>
+    )
   // 资源注册表里有、还没加载进内存的资源：执行函数时才加载
   if (kind === 'unloaded') return <Badge>{t('没加载的资源')}</Badge>
   if (kind === 'class') return <Badge>{t('类')}</Badge>

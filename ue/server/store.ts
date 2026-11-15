@@ -28,8 +28,10 @@ export interface LocalState {
   /** Object 页最近搜过的（「类::名字开头」，UObject 时只有名字开头）和固定的对象 */
   recent: string[]
   pinned: { path: string; label: string }[]
+  /** 资源页文件夹树里收藏的文件夹（包路径 /Game/Data） */
+  folders: string[]
 }
-const LOCAL: LocalState = { console: [], watch: [], recent: [], pinned: [] }
+const LOCAL: LocalState = { console: [], watch: [], recent: [], pinned: [], folders: [] }
 const localFile = (id: string) => path.join(c().dataDir, 'local', `${encodeURIComponent(id)}.json`)
 
 export async function readLocal(id: string): Promise<LocalState> {
@@ -39,6 +41,7 @@ export async function patchLocal(id: string, patch: Partial<LocalState>) {
   const next = { ...(await readLocal(id)), ...patch }
   next.console = next.console.slice(-200)
   next.recent = next.recent.slice(0, 12)
+  next.folders = (next.folders ?? []).slice(0, 50)
   await writeJson(localFile(id), next)
   return next
 }

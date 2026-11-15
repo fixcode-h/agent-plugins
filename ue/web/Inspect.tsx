@@ -23,8 +23,19 @@ interface Node {
  * 像 UE 的 UMG 编辑器的层级 + 细节面板，只是不画中间的样式预览；其他对象只显示属性。
  * 桥接是旧版本（没有 umg.tree）或对象不是控件时，退回只显示属性
  */
-export function Inspect({ path, onOpen, cdo }: { path: string; onOpen: (path: string) => void; cdo?: boolean }) {
-  const { project, target, go } = useUe()
+export function Inspect({
+  path,
+  onOpen,
+  cdo,
+  bar,
+}: {
+  path: string
+  onOpen: NonNullable<Parameters<typeof Props>[0]['onOpen']>
+  cdo?: boolean
+  /** 在检视区导航条下面：属性面板不重复画类型徽标、复制、发给对话 */
+  bar?: boolean
+}) {
+  const { project, target } = useUe()
   const [sel, setSel] = useState(path)
   // 控件树宽度可拖（md 以上左右排时），右边参数至少留 280px
   const pane = usePane('umg.tree', '42%', 180)
@@ -55,7 +66,7 @@ export function Inspect({ path, onOpen, cdo }: { path: string; onOpen: (path: st
   )
   // 先等控件树回来再决定布局，免得属性先按单栏读一遍、再换成两栏又读一遍
   if (!tree.data) return <p className="ue:p-4 ue:text-footnote ue:text-subtle">{t('读取中…')}</p>
-  if (!root) return <Props key={path} path={path} onOpen={onOpen} cdo={cdo} />
+  if (!root) return <Props key={path} path={path} onOpen={onOpen} cdo={cdo} bar={bar} />
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
       <div
@@ -68,7 +79,7 @@ export function Inspect({ path, onOpen, cdo }: { path: string; onOpen: (path: st
           {parent && (
             <button
               type="button"
-              onClick={() => go('objects', parent)}
+              onClick={() => onOpen(parent, t('上一层'))}
               title={parent}
               className="ue:ml-auto ue:inline-flex ue:cursor-pointer ue:items-center ue:gap-1 ue:text-caption ue:text-accent-text ue:hover:underline"
             >
@@ -95,7 +106,7 @@ export function Inspect({ path, onOpen, cdo }: { path: string; onOpen: (path: st
         <SplitHandle pane={pane} paneRef={treeRef} reserve={() => 280} edge />
       </div>
       <div className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col">
-        <Props key={sel} path={sel} onOpen={onOpen} />
+        <Props key={sel} path={sel} onOpen={onOpen} bar={bar} />
       </div>
     </div>
   )

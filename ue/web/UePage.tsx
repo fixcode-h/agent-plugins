@@ -9,7 +9,6 @@ import {
   FlaskConical,
   Gauge,
   LayoutGrid,
-  PersonStanding,
   List,
   Plus,
   SlidersHorizontal,
@@ -26,14 +25,16 @@ import { Ctx, type Badges, type UeCtx } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
 import { keep, kept } from './keep.ts'
-import { Assets } from './sections/Assets.tsx'
+import { Assets } from './sections/assets/Assets.tsx'
 import { Bridge } from './sections/Bridge.tsx'
 import { Console } from './sections/Console.tsx'
 import { Gm } from './sections/Gm.tsx'
 import { History } from './sections/History.tsx'
 import { Logs } from './sections/Logs.tsx'
 import { Lua } from './sections/Lua.tsx'
-import { Objects } from './sections/Objects.tsx'
+import { Objects } from './sections/objects/Objects.tsx'
+import { showOutline } from './sections/objects/Browse.tsx'
+import { scopeOf, syncNav } from './inspect/history.ts'
 import { Overview } from './sections/Overview.tsx'
 import { Perf } from './sections/Perf.tsx'
 import { Forge } from './sections/uekit/Forge.tsx'
@@ -60,8 +61,6 @@ interface Section {
   when?: (s: ProjectState | undefined) => boolean
 }
 
-const Actors = () => <Objects section="actors" />
-
 const SECTIONS: Section[] = [
   { id: 'overview', label: () => t('概览'), icon: LayoutGrid, group: () => t('运行时'), View: Overview },
   { id: 'console', label: () => t('控制台'), icon: SquareTerminal, group: () => t('运行时'), View: Console },
@@ -74,9 +73,9 @@ const SECTIONS: Section[] = [
     View: Lua,
     when: (s) => !!s?.instances.some((i) => i.lua),
   },
-  // Actor 和 UObject 分开（用户 2026-11-15）：Actor 页是世界大纲，Object 页是 UObject 树和按类搜，选中后的组件、属性栏两页共用
-  { id: 'actors', label: () => 'Actor', icon: PersonStanding, group: () => t('数据'), View: Actors },
-  { id: 'objects', label: () => 'Object', icon: Box, group: () => t('数据'), View: Objects },
+  // 对象页（用户 2026-11-15 定）：原来的 Actor 页（世界大纲）和 Object 页（UObject 树、按类搜）合成一页，
+  // 浏览栏三个页签；和资源页同一套检视区、共用一份导航历史（设计稿 designs/对象页合并与资源导航-设计稿.md）
+  { id: 'objects', label: () => t('对象'), icon: Box, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
   // UEKit 扩展：项目里装了才列出（UE 插件页安装）
   {
@@ -111,7 +110,8 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
   const [pid, rawSection = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
-  const sectionId = rawSection
+  // 旧地址 actors/…（Actor 页合进了对象页）：按对象页打开，下面的 effect 再把地址改过来
+  const sectionId = rawSection === 'actors' ? 'objects' : rawSection
   const sub = rest.join('/')
   const projects = useLoad(() => get<{ projects: UeProject[] }>('/projects').then((r) => r.projects), [])
   const [adding, setAdding] = useState(false)
@@ -121,8 +121,14 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const list = projects.data ?? []
   const project = fixed ? list.find((p) => p.id === fixed) : (list.find((p) => p.id === pid) ?? list[0])
 
-  const go = (section: string, s?: string) =>
+  const go = (section: string, s?: string) => {
+    // go('actors', p)：Actor 页合进了对象页，转过去并把浏览栏切到「大纲」，调用方不用改
+    if (section === 'actors') {
+      if (project) showOutline(project.id)
+      section = 'objects'
+    }
     route.go('main', [project?.id ?? '', section, s ?? ''].map(encodeURIComponent).join('/').replace(/\/+$/, ''))
+  }
   const state = useLoad(
     () => (project ? pget<ProjectState>(project.id, 'state') : Promise.resolve(undefined)),
     [project?.id],
@@ -156,6 +162,20 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   useEffect(() => {
     if (project) keep(`${project.id}/sub/${sectionId}`, sub || undefined)
   }, [project, sectionId, sub])
+  // 旧地址 actors/… 改成 objects/…，浏览栏切到「大纲」
+  useEffect(() => {
+    if (project && rawSection === 'actors') go('actors', sub)
+    // 只看地址
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, rawSection])
+  // 对象页、资源页的导航历史跟着地址走（inspect/history.ts）：点了东西、后退前进、从别处 go 进来都对得上
+  const scope = scopeOf({ instance: pidTarget ?? (project?.target.kind || undefined), world: project?.target.world })
+  useEffect(() => {
+    if (project && rawSection !== 'actors' && (sectionId === 'objects' || sectionId === 'assets'))
+      syncNav(project.id, sectionId, sub, scope)
+    // scope 只在记新条目时用，换了世界不用重新对一遍
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, sectionId, sub])
 
   const ctx: UeCtx | null = useMemo(
     () =>

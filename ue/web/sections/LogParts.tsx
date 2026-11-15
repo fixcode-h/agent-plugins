@@ -68,7 +68,7 @@ export function LineDetail({ line }: { line: Row }) {
             <button
               key={i}
               type="button"
-              title={isObject(p) ? t('在 Object 页里打开') : t('在资源里搜这个位置')}
+              title={isObject(p) ? t('在对象页里打开') : t('在资源里搜这个位置')}
               onClick={() => {
                 if (isObject(p)) go('objects', p)
                 else {
