@@ -6,7 +6,8 @@
 import { t } from './i18n.ts'
 import { validHeader, type SheetHeader, type SheetRole } from './sheet-header.ts'
 import { toSheetHeader, type TableHeader } from './table-header.ts'
-import { TYPE_NAMES, globHit, schemaColumn, schemaHeader, type TableEnum, type TableSchema } from './tables.ts'
+import { pickHeader } from './table-header-fit.ts'
+import { TYPE_NAMES, globHit, schemaColumn, type TableEnum, type TableSchema } from './tables.ts'
 import type { SheetData } from './files.ts'
 import { eachLeaf, isComplex, parseStore, typeNode, type Codec, type ScalarNode, type TypeNode } from './table-codec.ts'
 import { defaultFormats } from './table-types.ts'
@@ -393,9 +394,12 @@ export function checkHeader(rows: string[][], header: TableHeader, infos: ColInf
   return out
 }
 
-/** 一张表的表头：只按配置（按文件指定 > 项目表头），不看内容；配置的起点超出这张表时当没有表头 */
+/**
+ * 一张表的表头：按配置（按文件指定 > 项目表头），按通配来的先比一下这张表的结构，对不上就不套
+ * （辅助表、说明表本来就不是这个格式，见 table-header-fit.ts）；配置的起点超出这张表时当没有表头
+ */
 export function headerOf(schema: TableSchema, file: string, sheet: SheetData): TableHeader {
-  const h = toSheetHeader(schemaHeader(schema, file, sheet.name).rule)
+  const h = toSheetHeader(pickHeader(schema, file, sheet.name, sheet.rows).rule)
   return h.roles.length && validHeader(h, sheet.rows.length) ? h : { start: 0, roles: [], values: [] }
 }
 

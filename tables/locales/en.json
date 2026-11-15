@@ -1203,5 +1203,9 @@
   "筛选值": "Filter values",
   "搜索名字、值或说明": "Search name, value or description",
   "搜索后点选或回车选第一项": "Search, then click or press Enter for the first match",
-  "还没有值，从下面选": "No values yet; pick from the list below"
+  "还没有值，从下面选": "No values yet; pick from the list below",
+  "按文件指定的表头（{glob}）": "the per-file header ({glob})",
+  "这张表和{which}对不上（第 {n} 行不像「{label}」），没有套用，全部按数据显示": "This sheet doesn't match {which} (row {n} doesn't look like \"{label}\"), so it isn't applied; everything is shown as data",
+  "这张表和{which}对不上，没有套用，全部按数据显示": "This sheet doesn't match {which}, so it isn't applied; everything is shown as data",
+  "没套表头": "Header not applied"
 }
