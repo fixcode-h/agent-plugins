@@ -29,6 +29,7 @@ import { ConfirmDialog, dialogScrollClass } from '@/components/ui/dialog'
 import { Modal, ModalHeader } from '@/components/ui/modal'
 import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
+import { StyleThumb } from '@/components/ui/style-thumb'
 import { DirPicker, useDirInfo } from '@/components/projects/DirPicker'
 import { NavItem } from '@/components/ui/dialog-nav'
 import { ScopeRequests } from '@/components/chat/AskToggle'
@@ -358,26 +359,32 @@ function ImportStyle({ onImport }: { onImport: (s: SavedStyle) => void }) {
                       {k === 'game' ? t('游戏 UI') : t('网页 UI')}
                     </p>
                     {items.map((s) => (
-                      <button
+                      // 缩略图点开看参考图（不导入），右边点了才导入
+                      <div
                         key={s.id}
-                        onClick={() => {
-                          setOpen(false)
-                          onImport(s)
-                        }}
-                        className="ud:flex ud:w-full ud:cursor-pointer ud:flex-col ud:items-start ud:rounded-lg ud:px-2.5 ud:py-1.5 ud:text-left ud:hover:bg-sel"
+                        className="ud:flex ud:items-start ud:gap-2 ud:rounded-lg ud:px-1.5 ud:py-1.5 ud:hover:bg-sel"
                       >
-                        <span className="ud:flex ud:items-center ud:gap-1.5 ud:text-footnote">
-                          {s.name}
-                          {s.builtin && (
-                            <span className="ud:chip-lift ud:rounded-sm ud:bg-field ud:px-1 ud:text-micro ud:text-subtle">
-                              {t('内置')}
-                            </span>
-                          )}
-                        </span>
-                        <span className="ud:line-clamp-2 ud:text-caption ud:leading-snug ud:text-subtle">
-                          {s.summary || t('{n} 条提示词', { n: s.prompts.length })}
-                        </span>
-                      </button>
+                        <StyleThumb style={s} size="sm" />
+                        <button
+                          onClick={() => {
+                            setOpen(false)
+                            onImport(s)
+                          }}
+                          className="ud:flex ud:min-w-0 ud:flex-1 ud:cursor-pointer ud:flex-col ud:items-start ud:text-left"
+                        >
+                          <span className="ud:flex ud:items-center ud:gap-1.5 ud:text-footnote">
+                            {s.name}
+                            {s.builtin && (
+                              <span className="ud:chip-lift ud:rounded-sm ud:bg-field ud:px-1 ud:text-micro ud:text-subtle">
+                                {t('内置')}
+                              </span>
+                            )}
+                          </span>
+                          <span className="ud:line-clamp-2 ud:text-caption ud:leading-snug ud:text-subtle">
+                            {s.summary || t('{n} 条提示词', { n: s.prompts.length })}
+                          </span>
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )

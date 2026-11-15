@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { toast } from '@/lib/toast'
-import { BookmarkPlus, Check, Loader2, Palette } from 'lucide-react'
+import { BookmarkPlus, Check, Loader2 } from 'lucide-react'
 import type { DesignKind, SavedStyle, SavedStyleInput } from '@shared/design'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { StyleThumb } from '@/components/ui/style-thumb'
 import { ScopeRequests } from '@/components/chat/AskToggle'
 import { t } from '@shared/i18n'
 
@@ -49,30 +50,32 @@ export function StyleLibraryList({
   return (
     <div className="ud:flex ud:max-h-48 ud:flex-col ud:gap-1 ud:overflow-y-auto">
       {list.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => onPick(s)}
-          title={s.en}
-          className="ud:flex ud:cursor-pointer ud:items-start ud:gap-2 ud:rounded-lg ud:px-2 ud:py-1.5 ud:text-left ud:hover:bg-sel"
-        >
-          <Palette className="ud:mt-0.5 ud:h-3.5 ud:w-3.5 ud:shrink-0 ud:text-accent-text" />
-          <span className="ud:min-w-0 ud:flex-1">
-            <span className="ud:flex ud:items-center ud:gap-1.5 ud:text-footnote">
-              <span className="ud:truncate">{s.name}</span>
-              {s.builtin && (
-                <span className="ud:chip-lift ud:shrink-0 ud:rounded-sm ud:bg-field ud:px-1 ud:text-micro ud:text-subtle">
-                  {t('内置')}
-                </span>
+        // 缩略图点开看参考图（不选中），右边名字和说明点了才选：两个按钮并排，不嵌套
+        <div key={s.id} className="ud:flex ud:items-start ud:gap-2 ud:rounded-lg ud:px-1.5 ud:py-1.5 ud:hover:bg-sel">
+          <StyleThumb style={s} size="sm" />
+          <button
+            onClick={() => onPick(s)}
+            title={s.en}
+            className="ud:flex ud:min-w-0 ud:flex-1 ud:cursor-pointer ud:items-start ud:gap-2 ud:text-left"
+          >
+            <span className="ud:min-w-0 ud:flex-1">
+              <span className="ud:flex ud:items-center ud:gap-1.5 ud:text-footnote">
+                <span className="ud:truncate">{s.name}</span>
+                {s.builtin && (
+                  <span className="ud:chip-lift ud:shrink-0 ud:rounded-sm ud:bg-field ud:px-1 ud:text-micro ud:text-subtle">
+                    {t('内置')}
+                  </span>
+                )}
+              </span>
+              {s.summary && (
+                <span className="ud:line-clamp-2 ud:text-caption ud:leading-snug ud:text-subtle">{s.summary}</span>
               )}
             </span>
-            {s.summary && (
-              <span className="ud:line-clamp-2 ud:text-caption ud:leading-snug ud:text-subtle">{s.summary}</span>
+            {current.trim() === s.en.trim() && (
+              <Check className="ud:mt-0.5 ud:h-3.5 ud:w-3.5 ud:shrink-0 ud:text-accent-text" />
             )}
-          </span>
-          {current.trim() === s.en.trim() && (
-            <Check className="ud:mt-0.5 ud:h-3.5 ud:w-3.5 ud:shrink-0 ud:text-accent-text" />
-          )}
-        </button>
+          </button>
+        </div>
       ))}
     </div>
   )
