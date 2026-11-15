@@ -6,6 +6,7 @@ import { DSH_SUMMARY, MODEL_SUMMARY, withGuide } from './tool-guides.ts'
 import { MODEL_HINT } from './model-meta.ts'
 import { MODEL_TOOLS } from './model-tools.ts'
 import { blenderStatus, initModel, readGlb, readModelMeta, stopModel } from './model.ts'
+import { initStyle, lastStyle, modelStyles, setLastStyle, setTaskStyle, styleNotes, taskStyle } from './style.ts'
 
 /**
  * Blender 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059）。两块能力：
@@ -48,6 +49,7 @@ const RESTART_KEYS = [
 const activate: ActivateServer = async (ctx) => {
   initDsh(ctx)
   initModel(ctx)
+  initStyle(ctx)
   // 「打开插件时就启动 Gateway」：起失败不影响插件打开，状态面板和第一次调用工具时会报出来
   let startError = ''
   if (ctx.config().autoStart !== false)
@@ -84,7 +86,25 @@ const activate: ActivateServer = async (ctx) => {
           return json({ error: (e as Error).message }, 500)
         }
       }
+      // 模型风格：新建页选的记成「上次选的」，对话里换的记在这个对话上（style.ts）
+      if (
+        req.method === 'POST' &&
+        (parts[0] === 'style' || (parts[0] === 'models' && parts.length === 3 && parts[2] === 'style'))
+      ) {
+        const body = (await req.json().catch(() => ({}))) as { styleId?: string }
+        const id = String(body.styleId ?? '')
+        if (!id) return json({ error: ctx.t('没有选风格') }, 400)
+        if (parts[0] === 'style') {
+          await setLastStyle(id)
+          return json({ styleId: await lastStyle() })
+        }
+        return json({ styleId: await setTaskStyle(parts[1], id) })
+      }
       if (req.method !== 'GET') return json({ error: 'not found' }, 404)
+      if (parts[0] === 'styles' && parts.length === 1)
+        return json({ styles: await modelStyles(), last: await lastStyle() })
+      if (parts[0] === 'models' && parts.length === 3 && parts[2] === 'style')
+        return json({ styleId: await taskStyle(parts[1]) })
       if (parts[0] === 'addon' && parts[1] === 'targets' && parts.length === 2)
         return json(await addonTargets(String(ctx.config().blenderPath ?? '').trim()))
       if (parts[0] === 'status' && parts.length === 1) return json(await blenderStatus())
@@ -110,7 +130,7 @@ const activate: ActivateServer = async (ctx) => {
       return json({ error: 'not found' }, 404)
     },
 
-    tools(run) {
+    async tools(run) {
       const cfg = ctx.config()
       const model = run.pluginTask === MODEL_MODE
       const blenderAgent = run.skills.some((s) => BLENDER_SKILLS.includes(s))
@@ -127,7 +147,10 @@ const activate: ActivateServer = async (ctx) => {
         servers.push({ name: 'blender-model', summary: MODEL_SUMMARY, tools: async () => modelTools() })
         hints.unshift(MODEL_HINT)
       }
-      return { servers, hint: run.resume ? undefined : hints.join('\n\n') }
+      // 模型风格：建模的对话（模型设计对话、Blender 角色）都带；只是「全部挂」挂上的普通对话不带
+      const style = model || blenderAgent ? await styleNotes(run, model) : {}
+      if (style.hint) hints.push(style.hint)
+      return { servers, hint: run.resume ? undefined : hints.join('\n\n'), turnNote: style.turnNote }
     },
 
     // 设置 →「MCP」的能力目录（插件接口 8）
