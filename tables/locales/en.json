@@ -1207,5 +1207,8 @@
   "按文件指定的表头（{glob}）": "the per-file header ({glob})",
   "这张表和{which}对不上（第 {n} 行不像「{label}」），没有套用，全部按数据显示": "This sheet doesn't match {which} (row {n} doesn't look like \"{label}\"), so it isn't applied; everything is shown as data",
   "这张表和{which}对不上，没有套用，全部按数据显示": "This sheet doesn't match {which}, so it isn't applied; everything is shown as data",
-  "没套表头": "Header not applied"
+  "没套表头": "Header not applied",
+  "两版的表格内容完全一样（所有工作表都比过了）：这一版可能只改了格式（字体、颜色、列宽等），或者提交时文件内容没有改动。": "Both versions have identical table contents (all sheets compared): this revision may only change formatting (fonts, colors, column widths), or the file was submitted without content changes.",
+  "这张工作表没变，这一版改的是其他工作表：{s}": "This sheet is unchanged; this revision changed other sheets: {s}",
+  "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}"
 }
