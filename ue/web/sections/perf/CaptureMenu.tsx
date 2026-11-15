@@ -2,7 +2,7 @@ import { Copy, ExternalLink, FolderOpen, GitCompareArrows, MessageSquare, PanelR
 import { useEffect, useState } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, type MenuItem } from './menu.tsx'
+import { copyText, type MenuItem } from '../../menu.tsx'
 import { nameOf, type Capture } from './types.ts'
 
 /**
