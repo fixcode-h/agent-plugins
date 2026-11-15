@@ -24,6 +24,7 @@ import { get, pget, ppost, useLoad } from './api.ts'
 import { Ctx, type Badges, type UeCtx } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
+import { keep, kept } from './keep.ts'
 import { Assets } from './sections/Assets.tsx'
 import { Bridge } from './sections/Bridge.tsx'
 import { Console } from './sections/Console.tsx'
@@ -147,6 +148,10 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   useEffect(() => {
     setPidTarget(undefined)
   }, [project?.id])
+  // 记下每个分区最后停在哪（选中的对象、资源）：从左栏切回来时回到原处，不是回到空白页
+  useEffect(() => {
+    if (project) keep(`${project.id}/sub/${sectionId}`, sub || undefined)
+  }, [project, sectionId, sub])
 
   const ctx: UeCtx | null = useMemo(
     () =>
@@ -254,7 +259,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
                       icon={s.icon}
                       label={s.label()}
                       on={s.id === section.id}
-                      onClick={() => go(s.id)}
+                      onClick={() => go(s.id, kept<string>(`${project.id}/sub/${s.id}`))}
                       count={counts[s.id]}
                     />
                   ))}

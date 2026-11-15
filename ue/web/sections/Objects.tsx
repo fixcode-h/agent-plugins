@@ -5,6 +5,7 @@ import { isInstance } from '../CdoNote.tsx'
 import { ClassPicker, type ClassOpt } from '../ClassPicker.tsx'
 import { CompTree, type Comp } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
+import { useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
 import { Props } from '../Props.tsx'
@@ -92,11 +93,13 @@ export function Objects() {
   const { inst } = useTargetInfo()
   const { cn, ui } = h()
   const [path, comp] = sub.split('|')
-  const [cls, setCls] = useState<ClassOpt>(ANY)
-  const [prefix, setPrefix] = useState('')
-  const [lua, setLua] = useState(false)
-  const [mod, setMod] = useState('')
-  const [q, setQ] = useState<Query>()
+  // 搜索条件、结果切页面时留着（keep.ts）
+  const kk = `${project.id}/objects`
+  const [cls, setCls] = useKept<ClassOpt>(`${kk}/cls`, ANY)
+  const [prefix, setPrefix] = useKept(`${kk}/prefix`, '')
+  const [lua, setLua] = useKept(`${kk}/lua`, false)
+  const [mod, setMod] = useKept(`${kk}/mod`, '')
+  const [q, setQ] = useKept<Query | undefined>(`${kk}/q`, undefined)
   // 装了 UnLua 的项目：可以只看绑了 Lua 模块的对象、按模块名搜（桥接遍历 UnLua 的对象表，不扫全部 UObject，空条件也能搜）
   const hasLua = !!inst?.lua
   // 对象列表、组件两栏宽度可拖，属性占剩下的、至少留 352px
@@ -106,17 +109,22 @@ export function Objects() {
   const compRef = useRef<HTMLElement>(null)
   const widthOf = (r: { current: HTMLElement | null }) => r.current?.getBoundingClientRect().width ?? 0
   const local = useLoad(() => pget<Local>(project.id, 'local'), [project.id])
-  const found = useLoad(() => {
-    if (!q) return Promise.resolve(undefined)
-    // UObject 不当类名发：桥接拿到类名会把这个类的对象全取出来，UObject 就是几百万个；空类名走它限时的全表扫描
-    const c = isAny(q.cls) ? '' : q.cls.path || q.cls.name
-    return op<{ items: Row[]; more: boolean; partial?: boolean }>(
-      project.id,
-      q.lua ? 'lua.objects' : 'objects',
-      q.lua ? { class: c, prefix: q.prefix, module: q.mod, limit: 200 } : { class: c, prefix: q.prefix, limit: 200 },
-      target,
-    )
-  }, [q, target.instance, target.world])
+  const found = useLoad(
+    () => {
+      if (!q) return Promise.resolve(undefined)
+      // UObject 不当类名发：桥接拿到类名会把这个类的对象全取出来，UObject 就是几百万个；空类名走它限时的全表扫描
+      const c = isAny(q.cls) ? '' : q.cls.path || q.cls.name
+      return op<{ items: Row[]; more: boolean; partial?: boolean }>(
+        project.id,
+        q.lua ? 'lua.objects' : 'objects',
+        q.lua ? { class: c, prefix: q.prefix, module: q.mod, limit: 200 } : { class: c, prefix: q.prefix, limit: 200 },
+        target,
+      )
+    },
+    [q, target.instance, target.world],
+    0,
+    `${kk}/found`,
+  )
   // 选中的是不是 Actor：能读出组件的就是。不是 Actor 时桥接报错，这里当成「没有组件栏」，不显示成错误
   const comps = useLoad(
     () =>
@@ -131,7 +139,7 @@ export function Objects() {
   const ready = comps.data?.path === path
   const actorItems = ready ? comps.data?.items : null
   // 资源默认值和类默认收起（界面优化第 1 条）：同名的 Default__ 夹在实例中间最容易点错；选中的就在里面、或者没有实例时自动展开
-  const [others, setOthers] = useState(false)
+  const [others, setOthers] = useKept(`${kk}/others`, false)
 
   const luaOn = lua && hasLua
   const can = (c: ClassOpt, p: string) => luaOn || !isAny(c) || !!p.trim()

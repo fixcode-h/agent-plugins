@@ -100,7 +100,6 @@
   "固定到监视": "Pin to Watch",
   "这次还没有改过的属性": "No properties changed yet",
   "运行时改的值停止 PIE 后不保留": "Runtime changes are lost when PIE stops",
-  "函数名前缀": "Function name prefix",
   "没有能调的函数": "No callable functions",
   "运行状态": "Status",
   "刷新": "Refresh",
@@ -1002,7 +1001,6 @@
   "返回值": "Return value",
   "输出参数": "Output parameters",
   "这个函数没有返回值和输出参数": "This function has no return value or output parameters",
-  "公有": "Public",
   "受保护": "Protected",
   "私有": "Private",
   "搜索对象": "Search objects",
@@ -1206,5 +1204,9 @@
   "没写目标资产": "No target asset",
   "UEKit 插件目录": "UEKit plugin catalog",
   "装 AssetForge、GameTest 这些 UELink 扩展时去哪查。留空用 GitHub（fixcode-h/UEKit 的 catalog.json）；公司内网可以填镜像地址（放着 catalog.json 和源码包的网址）或本机目录": "Where to look for UELink extensions such as AssetForge and GameTest. Empty uses GitHub (catalog.json in fixcode-h/UEKit); on an intranet use a mirror URL (hosting catalog.json and the source packages) or a local folder",
-  "游戏测试": "Game test"
+  "游戏测试": "Game test",
+  "父蓝图": "Parent Blueprint",
+  "输入与绑定事件": "Input & Bound Events",
+  "搜函数名": "Search functions",
+  "没有匹配的函数": "No matching functions"
 }

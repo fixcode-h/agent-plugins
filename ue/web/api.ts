@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Target } from '../server/types.ts'
 import { h } from './host.ts'
+import { keep, kept } from './keep.ts'
 
 /** 插件接口：/api/plugins/ue/ 下（server/api.ts）。出错时服务端回 { error }，这里抛出来给界面原样显示 */
 async function unwrap<T>(p: Promise<T>): Promise<T> {
@@ -27,9 +28,27 @@ export function op<T = Record<string, unknown>>(
   return ppost<T>(project, 'op', { op: name, args, target, timeout })
 }
 
-/** 取数据的小钩子：deps 变了重取；interval 给了就定时刷新（页面藏起来时不刷） */
-export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0) {
-  const [data, setData] = useState<T>()
+/**
+ * 取数据的小钩子：deps 变了重取；interval 给了就定时刷新（页面藏起来时不刷）。
+ * 给了 keepKey 时结果记进 keep.ts 的表：切页面再回来、deps 没变就直接用上次的结果，不重取（搜资源可能要起后台编辑器，很慢）
+ */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0, keepKey?: string) {
+  const sig = keepKey ? JSON.stringify(deps) : ''
+  const [data, setDataRaw] = useState<T | undefined>(() => {
+    const k = keepKey ? kept<{ sig: string; data: T }>(keepKey) : undefined
+    return k && k.sig === sig ? k.data : undefined
+  })
+  const keySig = useRef(sig)
+  keySig.current = sig
+  const setData = useCallback(
+    (d: T | undefined) => {
+      setDataRaw(d)
+      if (keepKey) keep(keepKey, d === undefined ? undefined : { sig: keySig.current, data: d })
+    },
+    [keepKey],
+  )
+  // 第一次挂上时表里已有同样条件的结果：跳过这一次取数
+  const skipFirst = useRef(!!keepKey && kept<{ sig: string }>(keepKey)?.sig === sig)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const seq = useRef(0)
@@ -52,7 +71,8 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
     }
   }, [])
   useEffect(() => {
-    void reload()
+    if (skipFirst.current) skipFirst.current = false
+    else void reload()
     if (!interval) return
     // 定时刷新：页面藏起来时不刷；上一次还没回来（UE 卡在断点、长帧里）就跳过这一拍，不让请求越堆越多
     const id = setInterval(() => {

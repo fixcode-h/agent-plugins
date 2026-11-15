@@ -5,7 +5,10 @@ import { op, useAction, useLoad } from '../api.ts'
 import { AssetInfo } from '../AssetInfo.tsx'
 import { BlueprintView } from '../Blueprint.tsx'
 import { ClassPicker, type ClassOpt } from '../ClassPicker.tsx'
+import { loadBlueprintComps } from '../bp-comps.ts'
+import { CompTree } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
+import { keep, useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Props } from '../Props.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
@@ -54,18 +57,33 @@ export function Assets() {
   const { project, sub, go, state } = useUe()
   const { cn, ui, toast } = h()
   const { busy, run } = useAction()
-  // Ctrl+K 带过来的路径或名字：按所有类型搜一次（lazy 初始值只取一次，切回来不会再搜）
-  const [pend] = useState(() => takePending('assets'))
   const all: ClassOpt = { name: '', label: t('所有类型') }
-  const [cls, setCls] = useState<ClassOpt>(pend ? all : TABLE)
+  // 搜索条件、结果切页面时留着（keep.ts）
+  const kk = `${project.id}/assets`
+  // Ctrl+K 带过来的路径或名字：按所有类型搜一次，盖掉留着的条件（lazy 初始值只取一次，切回来不会再搜）
+  const [pend] = useState(() => {
+    const p = takePending('assets')
+    if (p) {
+      keep(`${kk}/cls`, all)
+      keep(`${kk}/prefix`, p)
+      keep(`${kk}/q`, { cls: '', prefix: p })
+    }
+    return p
+  })
+  const [cls, setCls] = useKept<ClassOpt>(`${kk}/cls`, TABLE)
   // 搜索框里的字收在这里：换类型时按现在的字重搜
-  const [prefix, setPrefix] = useState(pend ?? '')
-  const [q, setQ] = useState<{ cls: string; prefix: string } | undefined>(pend ? { cls: '', prefix: pend } : undefined)
+  const [prefix, setPrefix] = useKept(`${kk}/prefix`, '')
+  const [q, setQ] = useKept<{ cls: string; prefix: string } | undefined>(`${kk}/q`, undefined)
+  // 选中的资源和组件都写在地址里：「资源路径|组件模板路径」（和 Object 页的 Actor|组件 一样）
+  const [asset, comp = ''] = sub.split('|')
   // 有编辑器（或后台编辑器已经起来）才去取类型列表：只是点开下拉，不为它启动后台编辑器
   const canList = (state?.instances ?? []).some((i) => i.kind === 'editor' || i.kind === 'background')
-  // 左边资源列表宽度可拖；右边表格、属性至少留 420px
+  // 左边资源列表、组件树两栏宽度可拖；右边表格、属性至少留 420px
   const pane = usePane('assets', '28%', 220)
+  const compPane = usePane('assets.comps', '22%', 180)
   const left = useRef<HTMLElement>(null)
+  const compRef = useRef<HTMLElement>(null)
+  const widthOf = (r: { current: HTMLElement | null }) => r.current?.getBoundingClientRect().width ?? 0
   const found = useLoad(
     () =>
       q
@@ -77,6 +95,8 @@ export function Assets() {
           }>(project.id, 'assets', { class: q.cls, prefix: q.prefix, path: '/Game', limit: 200 }, undefined, 15 * 60000)
         : Promise.resolve(undefined),
     [q],
+    0,
+    `${kk}/found`,
   )
   const dirty = useLoad(
     () =>
@@ -86,14 +106,27 @@ export function Assets() {
     [project.id, (state?.instances ?? []).length],
   )
   const [confirmSave, setConfirmSave] = useState(false)
-  const selected = (found.data?.items ?? []).find((a) => a.path === sub)
-  const isTable = selected ? selected.class === 'DataTable' : /\/DT_/.test(sub)
+  const selected = (found.data?.items ?? []).find((a) => a.path === asset)
+  const isTable = selected ? selected.class === 'DataTable' : /\/DT_/.test(asset)
   // 蓝图资源（含控件蓝图、动画蓝图）；从别处跳过来、列表里没有这一项时按常见前缀猜。组件模板这类子对象路径带冒号，不算
   const isBlueprint =
-    !sub.includes(':') && (selected ? /Blueprint$/.test(selected.class) : /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(sub))
+    !asset.includes(':') &&
+    (selected ? /Blueprint$/.test(selected.class) : /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(asset))
   // 右栏看什么：内容（表格 / 属性）、蓝图（大纲和图表）、摘要（文件、标签、引用关系）
-  const [view, setView] = useState<'main' | 'graph' | 'info'>('main')
+  const [view, setView] = useKept<'main' | 'graph' | 'info'>(`${kk}/view`, 'main')
   const tab = view === 'graph' && !isBlueprint ? 'main' : view
+  // Actor 蓝图看类默认值时，中间多一栏组件树（照 Object 页的组件栏）：C++ 组件 + 蓝图里加的组件，点了右边看这个组件的默认值。
+  // 不是 Actor 蓝图（控件蓝图、函数库）时读出 null，不显示这一栏
+  const comps = useLoad(
+    () =>
+      isBlueprint && asset
+        ? loadBlueprintComps(project.id, asset).then((items) => ({ path: asset, items }))
+        : Promise.resolve(undefined),
+    [asset, isBlueprint],
+    0,
+    `${kk}/comps`,
+  )
+  const compItems = tab === 'main' && comps.data?.path === asset ? comps.data.items : null
   const source = found.data?.instance?.kind
 
   const save = () =>
@@ -138,7 +171,7 @@ export function Assets() {
         <Card
           ref={left}
           className={PANE_FIXED}
-          style={pane.style('calc(100% - 436px)')}
+          style={pane.style(compItems ? `calc(100% - ${compPane.size} - 436px)` : 'calc(100% - 436px)')}
           bodyClass="ue:flex ue:min-h-0 ue:flex-col"
         >
           <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3">
@@ -171,7 +204,7 @@ export function Assets() {
               }}
             />
             <SearchBox
-              initial={pend}
+              initial={prefix}
               placeholder={t('资源名开头（DT_Item），或目录（/Game/Data、磁盘上 Content 里的路径）')}
               hint={t('前缀')}
               allowEmpty={!!cls.name}
@@ -202,7 +235,7 @@ export function Assets() {
                   onClick={() => go('assets', a.path)}
                   className={cn(
                     'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
-                    sub === a.path && 'ue:bg-sel',
+                    asset === a.path && 'ue:bg-sel',
                   )}
                 >
                   <span className="ue:flex ue:items-center ue:gap-2">
@@ -232,9 +265,29 @@ export function Assets() {
             )}
           </ul>
         </Card>
-        <SplitHandle pane={pane} paneRef={left} reserve={() => 436} />
+        <SplitHandle pane={pane} paneRef={left} reserve={() => (compItems ? widthOf(compRef) + 436 : 436)} />
+        {compItems && (
+          <>
+            <Card
+              ref={compRef}
+              className={PANE_FIXED}
+              style={compPane.style(`calc(100% - ${pane.size} - 436px)`)}
+              title={t('组件')}
+              aside={<span className="ue:max-w-32 ue:truncate">{asset.split(/[./]/).pop()}</span>}
+              bodyClass="ue:overflow-auto"
+            >
+              <CompTree
+                actor={asset.split(/[./]/).pop() ?? asset}
+                items={compItems}
+                selected={comp}
+                onSelect={(c) => go('assets', c ? `${asset}|${c}` : asset)}
+              />
+            </Card>
+            <SplitHandle pane={compPane} paneRef={compRef} reserve={() => widthOf(left) + 436} />
+          </>
+        )}
         <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
-          {!sub ? (
+          {!asset ? (
             <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">
               {t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看大纲和图表')}
             </p>
@@ -254,11 +307,11 @@ export function Assets() {
                 />
               </div>
               {tab === 'info' ? (
-                <AssetInfo key={sub} path={sub} onOpen={(p) => go('assets', p)} />
+                <AssetInfo key={asset} path={asset} onOpen={(p) => go('assets', p)} />
               ) : tab === 'graph' ? (
                 <BlueprintView
-                  key={sub}
-                  path={sub}
+                  key={asset}
+                  path={asset}
                   onOpen={(p) => {
                     setView('main')
                     go('assets', p)
@@ -266,11 +319,11 @@ export function Assets() {
                   onChanged={() => void dirty.reload()}
                 />
               ) : isTable ? (
-                <DataTableView key={sub} path={sub} onChanged={() => void dirty.reload()} />
+                <DataTableView key={asset} path={asset} onChanged={() => void dirty.reload()} />
               ) : (
                 <Props
-                  key={sub}
-                  path={sub}
+                  key={comp || asset}
+                  path={comp || asset}
                   onOpen={(p) => go('assets', p)}
                   readOnlyHint={t('资源的改动只暂存在编辑器里，点右上「保存」才写回文件；蓝图资源改的是类默认值')}
                 />
