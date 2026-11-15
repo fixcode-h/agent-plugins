@@ -69,4 +69,4 @@
 | 单件场景出图（用技能脚本）         | `python blender_cli.py capture_views.py parts/wheel.blend --focus SM_Tank --out ...` |
 | 装配整机                           | `python blender_cli.py <项目>/scripts/assemble_tank.py`                              |
 
-完整方法论见 `references/part-workshop.md`；参考复刻全流程见 `references/reference-rebuild.md`。
+完整方法论见 `references/headless/part-workshop.md`；参考复刻全流程见 `references/headless/reference-rebuild.md`。

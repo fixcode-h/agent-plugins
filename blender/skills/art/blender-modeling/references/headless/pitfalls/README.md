@@ -51,8 +51,8 @@
 | 履带链板不动 / 逐帧烘焙文件爆炸         | 动画预览           | 相位驱动 `u=(u_i+s/L)%1`；直线 10 帧、圆弧 1–2 帧自适应采样               | `animation.md`                    |
 | 碎块/烟团穿地或提前可见                 | 动画预览           | 落地按半高夹紧；出生前补不可见关键帧（scale 0.001）                       | `animation.md`                    |
 | 缩放动画导致 transform_applied FAIL     | 场景体检           | 空物体承载缩放动画，网格子件 scale=1                                      | `animation.md`                    |
-| 复杂模型一把梭导致质量上不去            | 整体方法           | 分件工坊：拆件→单件预览精修→装配表组装                                    | `references/part-workshop.md`     |
-| 参考视频/图片变不成可用素材             | 参考复刻           | `reference_frames.py` 出元数据/接触表/单帧/放大/对照图                    | `references/reference-rebuild.md` |
+| 复杂模型一把梭导致质量上不去            | 整体方法           | 分件工坊：拆件→单件预览精修→装配表组装                                    | `references/headless/part-workshop.md`     |
+| 参考视频/图片变不成可用素材             | 参考复刻           | `reference_frames.py` 出元数据/接触表/单帧/放大/对照图                    | `references/headless/reference-rebuild.md` |
 | 高模倒角压坏细薄件 / 倒角后 ngons FAIL  | 高模建模           | 倒角宽度按中位边长自适应；倒角顶点补面立即三角化                          | `scripting.md`                    |
 | 平滑着色后形体发糊（高模像塑料）        | 高模建模           | 锐边阈值 20°；环境光压到 0.3–0.5；主光置于展示面一侧                      | `materials-uv.md`                 |
 

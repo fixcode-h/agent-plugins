@@ -104,6 +104,6 @@ python blender_cli.py <项目>/scripts/preview_parts.py --res 900 wheel sprocket
 
 ## 相关
 
-- `references/reference-rebuild.md`（参考素材 → 复刻的完整流程）
-- `references/pitfalls/scripting.md`（keep-parent 过期矩阵 / 环形管 / 多材质槽）
-- `references/evaluation.md`（多视角评估）
+- `references/headless/reference-rebuild.md`（参考素材 → 复刻的完整流程）
+- `references/headless/pitfalls/scripting.md`（keep-parent 过期矩阵 / 环形管 / 多材质槽）
+- `references/headless/evaluation.md`（多视角评估）

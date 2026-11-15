@@ -219,4 +219,4 @@ for e in bm.edges:
 
 ### 相关
 
-`references/part-workshop.md`（按参考特征决定部件做法）；`pitfalls/evaluation.md`
+`references/headless/part-workshop.md`（按参考特征决定部件做法）；`pitfalls/evaluation.md`
