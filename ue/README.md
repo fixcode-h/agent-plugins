@@ -10,7 +10,7 @@
   - 对话右栏的「UE」页签。
   - `.uasset` 的查看窗口（面板 SDK 的 `fileViewers`，`web/AssetFile.tsx`）：对话里的文件标记、文件浏览页点 `.uasset` 时弹出，DataTable 显示成表格，DataAsset 等显示属性，蓝图多一页大纲和图表伪代码，都有「摘要与引用」；只看不改，底栏可以跳到资源分区去改。旧面板没有这个扩展点，照旧交给系统打开。
   - Agent 工具。
-- **UE 端插件 UELink**（`bridge/UELink/`，C++，公共库 [fixcode-h/UELink](https://github.com/fixcode-h/UELink) 发布版的副本，见 `bridge/VENDORED.md`）：和 UEToVS 共用。安装时和公共库最新正式版取高的，复制到 `<项目>/Plugins/UELink/`，并清掉旧的 `AgentPanelBridge`、`UEToVSLink`；更新源可在插件参数「UELink 更新源」里换成内网镜像或本机目录。
+- **UE 端插件 UELink**（`bridge/UELink/`，C++，UEKit 插件库 [fixcode-h/UEKit](https://github.com/fixcode-h/UEKit) 里 UELink 发布版的副本，见 `bridge/VENDORED.md`）。安装时和插件库里 UELink 的最新正式版取高的，复制到 `<项目>/Plugins/UELink/`，并清掉旧的 `AgentPanelBridge`、`UEToVSLink`；更新源可在插件参数「UELink 更新源」里换成内网镜像或本机目录。
   - 进程里起一个只听 127.0.0.1 的 HTTP 服务，名片写在 `Saved/AgentPanel/instances/<PID>.json`。
   - 运行时模块负责控制台、GM、反射读写、日志和截图。
   - 编辑器模块负责资源读写和保存、蓝图图表读写和编译、PIE 和 Live Coding。

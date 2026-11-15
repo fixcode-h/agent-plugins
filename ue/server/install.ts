@@ -21,7 +21,7 @@ import { c, exists, run, t } from './util.ts'
 export { bundledVersion }
 
 /**
- * UE 端插件 UELink 的安装、卸载和编译（设计文档 4.4；安装约定见 UELink 仓库 docs/protocol.md 第 5 节）：
+ * UE 端插件 UELink 的安装、卸载和编译（设计文档 4.4；安装约定见 UEKit 仓库 docs/protocol.md 第 5 节）：
  * 自带的和公共库最新的取高的，项目里已经是更新的（UEToVS 装的）就不动；源码复制到 <项目>/Plugins/UELink/，
  * 顺手清掉合进 UELink 的旧插件（AgentPanelBridge、UEToVSLink）。
  * 「只在本机」写进 ignore（git 的 info/exclude、P4 的 .p4ignore），「加入版本管理」就 git add / p4 add（进默认变更列表，不提交）。

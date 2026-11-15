@@ -2,18 +2,20 @@ import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { cmpVersion } from './semver.ts'
+import { readCatalog } from './uekit/catalog.ts'
+import { netGet } from './uekit/net.ts'
 import { c, readJson } from './util.ts'
 
 export { cmpVersion }
 
 /**
- * UE 端插件 UELink（公共库 fixcode-h/UELink，Agent 面板和 UEToVS 共用）的版本来源：插件包里自带的一份、公共库发布的最新正式版。
- * 安装约定见 UELink 仓库的 docs/protocol.md 第 5 节：三份里取最高版本、只升不降、下载要校验 sha256、清掉旧插件。
+ * UE 端插件 UELink（UEKit 插件库 fixcode-h/UEKit 里的基础插件）的版本来源：插件包里自带的一份、插件库发布的最新正式版。
+ * 安装约定见 UEKit 仓库的 docs/protocol.md 第 4、5 节：三份里取最高版本、只升不降、下载要校验 sha256、清掉旧插件。
+ * 原来的 fixcode-h/UELink 仓库已经删掉，2.2 起版本从 UEKit 的插件目录 catalog.json 里取（UELink 那条的 latest）。
  */
 export const UELINK = 'UELink'
 /** 合进 UELink 的旧插件（目录名 = .uplugin 文件名）：装 UELink 时清掉 */
 export const OLD_PLUGINS = ['AgentPanelBridge', 'UEToVSLink']
-const DEFAULT_SOURCE = 'https://github.com/fixcode-h/UELink/releases/latest/download/manifest.json'
 
 export interface UELinkManifest {
   name: string
@@ -50,12 +52,12 @@ export async function pluginVersion(uplugin: string) {
 }
 
 /**
- * 更新源：插件参数 uelinkSource。空 = GitHub 最新正式版；http(s) 地址 = 镜像上的 manifest.json（或放着它的目录）；
+ * 更新源：插件参数 uelinkSource。空 = UEKit 插件目录里 UELink 的最新正式版（跟着「UEKit 插件目录」走）；http(s) 地址 = 镜像上的 manifest.json（或放着它的目录）；
  * 本机目录 = 里面放着 manifest.json 和源码包（公司内网、断网时用）
  */
 function sourceSpec() {
   const s = String(c().config().uelinkSource ?? '').trim()
-  if (!s) return { url: DEFAULT_SOURCE }
+  if (!s) return { catalog: true as const }
   if (/^https?:\/\//i.test(s)) return { url: s.endsWith('.json') ? s : `${s.replace(/\/+$/, '')}/manifest.json` }
   return { dir: s }
 }
@@ -69,14 +71,19 @@ export async function remoteManifest(refresh = false) {
   const spec = sourceSpec()
   let result: { manifest?: UELinkManifest; base: string; error?: string }
   try {
-    if ('dir' in spec && spec.dir) {
+    if ('catalog' in spec) {
+      // 只认正式版（protocol.md 第 4 节）：预发布的 C++ 还没在本地编译验证过，不推给用户
+      const cat = await readCatalog(refresh)
+      if (cat.error) throw new Error(cat.error)
+      const entry = cat.plugins.find((x) => x.name === UELINK)
+      result = { manifest: entry?.latest ?? undefined, base: cat.base }
+    } else if ('dir' in spec && spec.dir) {
       const manifest = await readJson<UELinkManifest | null>(path.join(spec.dir, 'manifest.json'), null)
       result = manifest ? { manifest, base: spec.dir } : { base: spec.dir, error: `${spec.dir} 里没有 manifest.json` }
     } else {
       const url = spec.url!
-      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000) })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      result = { manifest: (await res.json()) as UELinkManifest, base: url.slice(0, url.lastIndexOf('/')) }
+      const manifest = JSON.parse((await netGet(url)).toString('utf8')) as UELinkManifest
+      result = { manifest, base: url.slice(0, url.lastIndexOf('/')) }
     }
     if (result.manifest && (!result.manifest.version || !result.manifest.sha256))
       result = { base: result.base, error: 'manifest.json 缺 version 或 sha256' }
@@ -109,7 +116,9 @@ export async function bestSource(refresh = false): Promise<{ source: UELinkSourc
   const remote = await remoteManifest(refresh)
   if (!remote.manifest) return { source: bundled, remoteError: remote.error }
   if (cmpVersion(remote.manifest.version, bundled.version) > 0)
-    return { source: { kind: 'remote', version: remote.manifest.version, manifest: remote.manifest, base: remote.base } }
+    return {
+      source: { kind: 'remote', version: remote.manifest.version, manifest: remote.manifest, base: remote.base },
+    }
   return { source: bundled }
 }
 
@@ -121,12 +130,11 @@ export async function downloadZip(src: Extract<UELinkSource, { kind: 'remote' }>
     buf = await readFile(path.join(base, manifest.asset))
   } else {
     const url = base && !base.includes('github.com') ? `${base}/${manifest.asset}` : manifest.url
-    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(120000) })
-    if (!res.ok) throw new Error(`下载 ${url} 失败：HTTP ${res.status}`)
-    buf = Buffer.from(await res.arrayBuffer())
+    buf = await netGet(url)
   }
   const sha = createHash('sha256').update(buf).digest('hex')
-  if (sha !== manifest.sha256) throw new Error(`UELink ${manifest.version} 的源码包校验不对（sha256 ${sha}，清单里是 ${manifest.sha256}）`)
+  if (sha !== manifest.sha256)
+    throw new Error(`UELink ${manifest.version} 的源码包校验不对（sha256 ${sha}，清单里是 ${manifest.sha256}）`)
   return buf
 }
 

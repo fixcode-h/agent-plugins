@@ -5,13 +5,14 @@ import { cmpVersion } from '../semver.ts'
 import type { UeProject } from '../types.ts'
 import { findPluginDirs, pluginVersion, UELINK, type UELinkManifest } from '../uelink.ts'
 import { c, readJson } from '../util.ts'
+import { netGet } from './net.ts'
 
 /**
  * UEKit 插件库（fixcode-h/UEKit）里 UELink 的扩展插件（AssetForge、GameTest）：查插件目录 catalog.json、
  * 看项目里装了哪个版本、能不能装（引擎版本、UELink 版本）。安装约定见 UEKit 仓库 docs/protocol.md 第 4–6 节。
  * UELink 自己仍走 uelink.ts（自带一份，和 UEToVS 共用的安装约定），这里只管扩展。
  */
-const DEFAULT_CATALOG = 'https://raw.githubusercontent.com/fixcode-h/UEKit/main/catalog.json'
+export const DEFAULT_CATALOG = 'https://raw.githubusercontent.com/fixcode-h/UEKit/main/catalog.json'
 
 /** 面板认得的扩展：有专门的页面和工具。目录里别的扩展照样列出、能装，只是没有页面 */
 export const KNOWN_EXTENSIONS = ['AssetForge', 'GameTest'] as const
@@ -67,9 +68,7 @@ export async function readCatalog(refresh = false): Promise<CatalogResult> {
         : { plugins: [], base: spec.dir, error: `${spec.dir} 里没有 catalog.json` }
     } else {
       const url = spec.url!
-      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000) })
-      if (!res.ok) throw new Error(`${url}：HTTP ${res.status}`)
-      const doc = (await res.json()) as { plugins?: CatalogEntry[] }
+      const doc = JSON.parse((await netGet(url)).toString('utf8')) as { plugins?: CatalogEntry[] }
       // GitHub 上的 catalog.json 和源码包不在同一处：按清单里的 url 下载（base 留空）
       result = { plugins: doc.plugins ?? [], base: url === DEFAULT_CATALOG ? '' : url.slice(0, url.lastIndexOf('/')) }
     }

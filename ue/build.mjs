@@ -1,5 +1,5 @@
 // UE 插件的构建钩子（scripts/build.mjs 在通用步骤之后调用 extra(out)）：
-// 把 UE 端插件 UELink 的源码（bridge/UELink，公共库 fixcode-h/UELink 发布版的副本）原样放进包里：
+// 把 UE 端插件 UELink 的源码（bridge/UELink，UEKit 插件库里 UELink 发布版的副本）原样放进包里：
 // 安装时和公共库的最新版取高的复制进项目（server/install.ts），断网也能装。
 import { cpSync } from 'node:fs'
 import path from 'node:path'
