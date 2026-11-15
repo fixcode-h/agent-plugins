@@ -4,9 +4,10 @@ import { t } from '@shared/i18n'
 import type { SheetData } from '@shared/files'
 import type { TableSchema } from '@shared/tables'
 import type { CellSet } from '@shared/table-edit'
-import type { DiffRow } from '@shared/sheet-diff'
+import type { DiffRow, SheetDiff } from '@shared/sheet-diff'
 import { useSheetDiff } from '@/lib/sheet-diff-async'
 import { sideOf } from './diff-side'
+import { revNote, type RevNote } from './history-note'
 import { tablesApi, type TableHistory } from '@/lib/tables-api'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
@@ -57,7 +58,7 @@ export function TableHistoryDialog({
   const [switching, setSwitching] = useState<{ id: string; label: string } | null>(null)
   const [hist, setHist] = useState<TableHistory | null>(null)
   const [error, setError] = useState('')
-  const [pick, setPick] = useState<Pick>('local')
+  const [pick, setPickRaw] = useState<Pick>('local')
   const [only, setOnly] = useState(true)
   const [both, setBoth] = useDiffBoth()
   // 摘要里点了「改 / 加 / 删」：只看那一种行
@@ -72,6 +73,12 @@ export function TableHistoryDialog({
   }, [projectId, path])
   // 和哪一版比：默认是上一版（本地改动的上一版是基准版），也能选任意一版
   const [against, setAgainst] = useState('')
+  // 换一个版本就回到「和上一版比」：选过的对比版留着的话，点到那一版本身会变成自己和自己比，永远「数据没变」，
+  // 下拉框里又把它滤掉了、显示成「和上一版比」，看不出比的是谁
+  const setPick = (p: Pick) => {
+    setPickRaw(p)
+    setAgainst('')
+  }
   // 取两版内容：本地改动只取左边那一版
   const prevOf = (p: Pick) => (!hist ? '' : p === 'local' ? hist.base : (hist.revs[p + 1]?.id ?? ''))
   const left = against || prevOf(pick)
@@ -112,6 +119,8 @@ export function TableHistoryDialog({
     const b = sideOf(schema, path, bSheet)
     return { a, b }
   }, [ready, schema, path, sheet, rows])
+  // 当前表没变时说清楚：改的是别的工作表，还是整个文件的内容都没变（本地改动只有当前表，不比）
+  const note = useMemo(() => (ready?.b ? revNote(ready.a, ready.b, sheet) : null), [ready, sheet])
   // 差异在后台线程算：大表没有主键时要做 LCS，放主线程上算页面会卡
   const { diff, error: diffError } = useSheetDiff(sides, schema.style.key)
 
@@ -232,6 +241,7 @@ export function TableHistoryDialog({
               ]}
             />
           </header>
+          {note && diff && !error && !diffError && <RevNoteLine note={note} diff={diff} />}
           <div className="tb:flex tb:min-h-0 tb:flex-1 tb:flex-col">
             {error || diffError ? (
               <p className="tb:p-4 tb:text-body tb:text-danger">{error || diffError}</p>
@@ -292,6 +302,24 @@ export function TableHistoryDialog({
       />
     </Modal>
   )
+}
+
+/** 当前表看不出变化时的说明：两版完全一样，或者改的是别的工作表 */
+function RevNoteLine({ note, diff }: { note: RevNote; diff: SheetDiff }) {
+  const s = diff.stats
+  const quiet =
+    !s.cells && !s.add && !s.del && !diff.addedCols.length && !diff.removedCols.length && !diff.headerChanged.length
+  const text = note.allSame
+    ? t(
+        '两版的表格内容完全一样（所有工作表都比过了）：这一版可能只改了格式（字体、颜色、列宽等），或者提交时文件内容没有改动。',
+      )
+    : note.others.length === 0
+      ? ''
+      : quiet
+        ? t('这张工作表没变，这一版改的是其他工作表：{s}', { s: note.others.join('、') })
+        : t('这一版还改了其他工作表：{s}', { s: note.others.join('、') })
+  if (!text) return null
+  return <p className="tb:shrink-0 tb:border-b tb:bg-sel tb:px-3 tb:py-1.5 tb:text-footnote tb:text-muted">{text}</p>
 }
 
 function RevItem({
