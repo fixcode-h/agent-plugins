@@ -1,10 +1,12 @@
-import { Check, type LucideIcon } from 'lucide-react'
+import { Check, Copy, Play, Trash2, type LucideIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { h, t } from '../../host.ts'
+import { h, t } from './host.ts'
 
 /**
- * 性能页的右键菜单（用户 2026-11-11：各个部位都要有右键菜单，照 Unreal Insights）。
+ * UE 页共用的右键菜单（最早给性能页做的，用户 2026-11-11：各个部位都要有右键菜单，照 Unreal Insights；
+ * 2026-11-15 GameTest 也用上，挪到这里共用）。圆角、底色、边框跟面板设置 →「组件」里「菜单」的调节项走，
+ * 和面板自己的菜单一起改。
  * 一页只有一个菜单：任何地方调 openMenu(e, items) 打开，MenuHost 挂在页面里一次、画到 body 上
  * （挂在 body 上不被分栏的 overflow 裁掉，也不受父级动画的 transform 影响定位）。
  * 打开时从鼠标处淡入放大；点外面、Esc、滚动、窗口失焦都关；上下键选、回车执行。
@@ -37,7 +39,7 @@ const subs = new Set<() => void>()
 const emit = () => subs.forEach((f) => f())
 
 /** 在鼠标位置打开菜单；空菜单不开。会拦掉浏览器自己的右键菜单 */
-export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: (MenuItem | false | undefined | null)[]) {
+export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: (MenuItem | false | '' | undefined | null)[]) {
   e.preventDefault()
   e.stopPropagation()
   // 去掉条件不满足的项，以及开头、结尾、连着的分隔线
@@ -83,7 +85,8 @@ export function MenuHost() {
 const isAction = (it: MenuItem): it is Extract<MenuItem, { onClick: () => void }> =>
   typeof it === 'object' && 'onClick' in it && !it.disabled
 
-function Menu({ s }: { s: State }) {
+/** inline：设置 →「组件」里的示例，原地画一份不响应外部点击的菜单 */
+function Menu({ s, inline }: { s: State; inline?: boolean }) {
   const { cn } = h()
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: s.x, top: s.y, ox: 'left', oy: 'top' })
@@ -92,7 +95,7 @@ function Menu({ s }: { s: State }) {
   // 贴着屏幕边时往左 / 往上翻，动画的原点跟着换
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el) return
+    if (!el || inline) return
     const r = el.getBoundingClientRect()
     const flipX = s.x + r.width > innerWidth - 8
     const flipY = s.y + r.height > innerHeight - 8
@@ -105,6 +108,7 @@ function Menu({ s }: { s: State }) {
   }, [s])
 
   useEffect(() => {
+    if (inline) return
     const away = (e: Event) => {
       if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return
       closeMenu()
@@ -141,15 +145,18 @@ function Menu({ s }: { s: State }) {
       removeEventListener('resize', closeMenu)
       removeEventListener('wheel', closeMenu)
     }
-  }, [s, act])
+  }, [s, act, inline])
 
   return (
     <div
       ref={ref}
       role="menu"
       onContextMenu={(e) => e.preventDefault()}
-      className="ue:fixed ue:z-[1000] ue:min-w-48 ue:max-w-80 ue:rounded-lg ue:border ue:border-line ue:bg-card ue:p-1 ue:text-footnote ue:shadow-lg ue:motion-safe:animate-pop"
-      style={{ left: pos.left, top: pos.top, transformOrigin: `${pos.oy} ${pos.ox}` }}
+      className={cn(
+        inline ? 'ue:relative' : 'ue:fixed ue:z-[1000]',
+        'ue:min-w-48 ue:max-w-80 ue:rounded-(--c-menu-radius) ue:border-(length:--c-menu-border) ue:border-pop-edge ue:bg-(--c-menu-bg) ue:p-1 ue:text-footnote ue:shadow-pop ue:motion-safe:animate-pop',
+      )}
+      style={inline ? undefined : { left: pos.left, top: pos.top, transformOrigin: `${pos.oy} ${pos.ox}` }}
     >
       {s.items.map((it, i) => {
         if (it === 'sep') return <div key={i} className="ue:mx-1 ue:my-1 ue:h-px ue:bg-line" />
@@ -172,7 +179,7 @@ function Menu({ s }: { s: State }) {
               it.onClick()
             }}
             className={cn(
-              'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-md ue:px-2 ue:py-1 ue:text-left ue:transition-colors ue:duration-100 ue:disabled:opacity-40',
+              'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:py-1 ue:text-left ue:transition-colors ue:duration-100 ue:disabled:opacity-40',
               act === i && !it.disabled && 'ue:bg-hover',
               it.danger ? 'ue:text-danger' : 'ue:text-fg',
             )}
@@ -189,6 +196,29 @@ function Menu({ s }: { s: State }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/** 设置 →「组件」里的示例：原地一份菜单看样子，下面一块区域点右键弹真的 */
+export function MenuSpecimen() {
+  const items: MenuItem[] = [
+    { title: t('新录制') },
+    { label: t('运行'), icon: Play, onClick: () => undefined, hint: 'Enter' },
+    { label: t('复制路径'), icon: Copy, onClick: () => undefined },
+    'sep',
+    { label: t('删除'), icon: Trash2, danger: true, onClick: () => undefined },
+  ]
+  return (
+    <div className="ue:flex ue:w-full ue:flex-wrap ue:items-start ue:gap-4">
+      <Menu s={{ x: 0, y: 0, items, seq: 0 }} inline />
+      <div
+        onContextMenu={(e) => openMenu(e, items)}
+        className="ue:flex ue:h-32 ue:min-w-48 ue:flex-1 ue:items-center ue:justify-center ue:rounded-lg ue:border ue:border-dashed ue:border-line-strong ue:text-footnote ue:text-subtle"
+      >
+        {t('在这里点右键')}
+      </div>
+      <MenuHost />
     </div>
   )
 }

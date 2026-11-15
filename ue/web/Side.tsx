@@ -46,6 +46,10 @@ export function ProjectCard({
   }, [open])
   const meta = (p: UeProject) =>
     [`UE ${p.engine.version || '?'}`, p.cpp ? 'C++' : t('纯蓝图'), VCS_NAME[p.vcs]].filter(Boolean).join(' · ')
+  // 从项目工具打开时 UE 页盖住会话侧栏（PluginPage.cover）：项目卡片换成面板的「回到项目」卡片，点一下回到项目对话。
+  // 旧面板没有这个组件，照旧显示不能点的卡片
+  const Back = h().ui.ProjectBackCard
+  if (pinned && Back) return <Back projectId={project.id} name={project.name} meta={meta(project)} icon={GamepadIcon} />
   if (pinned)
     return (
       <div className="ue:flex ue:w-full ue:items-center ue:gap-2.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:px-2.5 ue:py-2 ue:shadow-card">

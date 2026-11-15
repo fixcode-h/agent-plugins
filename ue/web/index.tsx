@@ -5,7 +5,9 @@ import { AssetFile } from './AssetFile.tsx'
 import { setHost } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
+import { MenuSpecimen } from './menu.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
+import { TreeSearchSpecimen } from './tree-search.tsx'
 import { UePage } from './UePage.tsx'
 
 /** 接入了 UE 的面板项目（对话右栏的「UE」页签按它判断）：激活时取一次，之后每分钟刷新 */
@@ -26,7 +28,8 @@ const activate: ActivateWeb = (host) => {
   setInterval(() => void refresh(), 60000)
   return {
     // 按项目生效（插件接口 9）：页面进侧栏的「项目工具」，面板给出当前项目
-    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, scope: 'project', Page: UePage }],
+    // cover：从项目工具打开时 UE 页的左栏盖住会话侧栏，左栏顶上的项目卡片点一下回到项目对话
+    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, scope: 'project', cover: true, Page: UePage }],
     taskTabs: [
       {
         id: 'ue',
@@ -39,6 +42,12 @@ const activate: ActivateWeb = (host) => {
     // 对话里的文件标记、文件浏览页点 .uasset：弹窗里看 DataTable、DataAsset、蓝图默认值（旧面板没有这一项，照旧交给系统打开）
     fileViewers: [{ id: 'asset', exts: ['uasset'], icon: GamepadIcon, Viewer: AssetFile }],
     Status,
+    // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
+    specimens: [
+      { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
+      // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
+      { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
+    ],
   }
 }
 

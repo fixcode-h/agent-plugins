@@ -2,7 +2,7 @@ import { ChevronRight, Copy, Crosshair, GitFork, Highlighter, Layers, Maximize2,
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
 import { readTheme, setup, tickLabel, tickStep, useThemeTick, useWidth } from './canvas.ts'
-import { copyText, openMenu, type MenuItem } from './menu.tsx'
+import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
 import { fmtAt, fmtMs } from './parts.tsx'
 import type { PanelActions } from './TracePanels.tsx'
 import {
