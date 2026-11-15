@@ -93,7 +93,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '编译蓝图',
     summary: '编译蓝图，给出错误和警告所在的图和节点；通过的结果进完成依据',
     useWhen: '改完蓝图、保存之前，确认编译通过时',
-    avoidWhen: 'C++ 代码用 ue_editor 的 build 或 livecoding',
+    avoidWhen: 'C++ 代码用面板的 request_build 编译，或 ue_editor 的 livecoding 热重载',
     group: ASSET,
   },
   ue_python: {
@@ -120,8 +120,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_editor: {
     title: '编辑器控制',
-    summary: '启动编辑器、开停 PIE、编译项目、Live Coding、后台编辑器',
-    useWhen: '要运行游戏复现问题（pie_start）、改了 C++ 要编译或热重载、编辑器没开但要读资源时',
+    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器',
+    useWhen: '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时',
+    avoidWhen: '完整编译 C++ 用面板的 request_build，结果会推回来',
     group: EDITOR,
   },
   ue_undo: {

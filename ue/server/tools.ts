@@ -2,7 +2,6 @@ import type { McpCallContext, McpTool } from '../../sdk/server.ts'
 import { clearLogs, logTail, projectState, runMacro, undo } from './actions.ts'
 import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { readHistory } from './history.ts'
-import { build } from './install.ts'
 import { crashes } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { parseLuaPath } from './luapath.ts'
@@ -342,7 +341,7 @@ const DEFS = [
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；build 编译项目（含桥接插件，返回作业 id，用 UE 页看输出）；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）。',
+    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）。',
     {
       action: {
         type: 'string',
@@ -351,7 +350,6 @@ const DEFS = [
           'pie_start',
           'pie_stop',
           'pie_status',
-          'build',
           'livecoding',
           'background_start',
           'background_stop',
@@ -378,15 +376,13 @@ const DEFS = [
           return out(await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', { action: 'stop' }))
         case 'pie_status':
           return out(await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', { action: 'status' }))
-        case 'build': {
-          const job = await build(ctx.project)
-          if (job.hint)
-            return mcpText(
-              `编译没开始：${job.log.join('\n')}\n请用户保存并关掉编辑器后再编译；只改了已加载模块的代码时可以改用 action=livecoding。`,
-              true,
-            )
-          return out({ job: job.id, status: job.status })
-        }
+        // build 不再给 Agent（ADR 0066 梳理，2026-11-15）：结果只能在 UE 页看、Agent 拿不到，又和面板的 request_build 重复；
+        // 老会话还这么调时说清楚该用哪个，不悄悄吞掉
+        case 'build':
+          return mcpText(
+            'ue_editor 不再提供 build：编译 C++ 由面板的 request_build（父对话）或 run_background 交编译命令，结果会推回给你；只改了已加载模块的代码时用 action=livecoding。',
+            true,
+          )
         case 'livecoding':
           return out(await runOp({ ...ctx, target: { instance: 'editor' } }, 'livecoding', {}, 120000))
         case 'background_start': {
