@@ -1,12 +1,8 @@
----
-name: blender-model-animation-workflow
-description: 编排 Blender 模型创建与模型动画任务：以参考图片实际内容决定几何细节、纹理、材质、颜色与风格，不设高模/低模档位；从参考解析、尺寸锚点和分件设计，到模块装配、材质 UV、控制器动画、多视角对照、体检和交付证据。用户要求创建可拆分模型、建筑/机械场景、循环动画或需要把 Blender 资产做成可继续编辑的交付物时使用。
-user-invocable: true
----
+# 模型与模型动画的阶段编排（原 `blender-model-animation-workflow` 技能）
 
-# Blender 创建模型与模型动画工作流
+> 已并入 `blender-modeling`。下文路径相对 `blender-modeling` 技能根目录；无头脚本见 `references/headless/README.md`。
 
-这是面向任务的 workflow 编排层，负责把“想做一个模型/动画”收敛为可执行规格、阶段产物和验收证据；具体的 Blender 启动器、脚本参数、指标阈值和导出规则由 `blender` 技能提供。默认以可拆分、可继续编辑和可复查为交付目标。
+这是面向任务的 workflow 编排层，负责把“想做一个模型/动画”收敛为可执行规格、阶段产物和验收证据；具体的 Blender 启动器、脚本参数、指标阈值和导出规则见 `references/headless/README.md`（有 blender_* 工具时按 SKILL.md 正文走工具链）。默认以可拆分、可继续编辑和可复查为交付目标。
 
 ## 参考图片决定制作标准
 
@@ -133,9 +129,9 @@ FBX/UE 导出是可选后续步骤：只有用户明确授权时才执行；导�
 - 只生成了一张主视角或静态首帧，缺少多视角/多帧证据。
 - 用户未授权却要求导出、发布或覆盖外部资产。
 
-## 复用的 Blender 技能参考
+## 复用的参考
 
-- `blender` 技能：命令行启动器、体检、多视角截图、视口和导出门禁。
-- `blender` 技能中的 `references/model-animation-contract.md`：模块、装配、控制器、相交分类和证据等级。
-- `blender` 技能中的 `references/part-workshop.md`：单件脚本、预览和装配表。
-- `blender` 技能中的 `references/reference-rebuild.md`：参考图/视频解析和对照验收。
+- `references/headless/README.md`：命令行启动器、体检、多视角截图、视口和导出门禁。
+- `references/headless/model-animation-contract.md`：模块、装配、控制器、相交分类和证据等级。
+- `references/headless/part-workshop.md`：单件脚本、预览和装配表。
+- `references/headless/reference-rebuild.md`：参考图/视频解析和对照验收。

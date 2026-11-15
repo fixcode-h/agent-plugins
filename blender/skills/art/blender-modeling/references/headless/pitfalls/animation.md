@@ -263,7 +263,7 @@ Blender 4.4 起动作引入槽（slot）与通道包（channelbag）分层结构
 
 ### 相关
 
-`pitfalls/animation.md`（轮子打滑 / 低频承载）；`references/part-workshop.md`
+`pitfalls/animation.md`（轮子打滑 / 低频承载）；`references/headless/part-workshop.md`
 
 ## 症状：碎块/烟团穿地或「提前出现在出生点」
 
@@ -326,4 +326,4 @@ mesh_obj.parent = pivot                        # 网格自身 scale 恒为 1
 
 ### 相关
 
-`references/metrics.md`；`pitfalls/animation.md`
+`references/headless/metrics.md`；`pitfalls/animation.md`
