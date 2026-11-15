@@ -1,10 +1,12 @@
-import { CircleStop, Copy, Crosshair, Loader2, Play } from 'lucide-react'
+import { CircleStop, Copy, Crosshair, Loader2, MousePointerClick, Play, TriangleAlert } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import { Badge, ErrorText } from '../../ui.tsx'
+import { coordClickAt } from './gt-steps.ts'
+import { useToWidget } from './gt-convert.ts'
 import { StepDetail, StepIcon, ms, rowSummary, type GtStep, type StepDef, type StepRow } from './GtStepDetail.tsx'
 
 /**
@@ -40,6 +42,8 @@ export interface GtScenarioFile {
   name?: string
   _note?: string
   stepDelayMs?: number
+  /** 1 的场景里 click / type 没写 via 时是旧的代码级操作（「从这一步开始运行」要照样补上） */
+  schemaVersion?: number
   steps: StepDef[]
 }
 
@@ -51,6 +55,7 @@ export function GtRun({
   offset = 0,
   onStop,
   onRunFrom,
+  onChanged,
 }: {
   scenario: {
     name: string
@@ -70,6 +75,8 @@ export function GtRun({
   onStop: () => void
   /** 从第 i 步开始跑（右键菜单）：父组件拿场景文件里的步骤去 gt.run */
   onRunFrom?: (file: GtScenarioFile, i: number) => void
+  /** 场景文件被面板改过（转成控件步骤）：父组件重新要场景列表，步数变了这里会重新读文件 */
+  onChanged: () => void
 }) {
   const { project } = useUe()
   const { ui, cn } = h()
@@ -104,9 +111,11 @@ export function GtRun({
   const row = rows.find((r) => r.i === pick)
   const planned = job?.planned || scenario.steps
   const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
+  const toWidget = useToWidget({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
 
   const stepMenu = (e: React.MouseEvent, r: StepRow) => {
     const s = rowSummary(r)
+    const coord = file.data && coordClickAt(file.data.steps, r.i)
     openMenu(e, [
       { title: t('第 {n} 步 · {a}', { n: r.i + 1, a: r.def?.action || r.res?.action || '?' }) },
       onRunFrom &&
@@ -117,6 +126,12 @@ export function GtRun({
           disabled: running,
           onClick: () => onRunFrom(file.data!, r.i),
         },
+      coord && {
+        label: t('转成控件步骤'),
+        icon: MousePointerClick,
+        disabled: running || !!toWidget.busy,
+        onClick: () => void toWidget.convert(file.data!, coord),
+      },
       'sep',
       r.def && { label: t('复制这一步（JSON）'), icon: Copy, onClick: () => copyText(JSON.stringify(r.def, null, 2)) },
       s.target && { label: t('复制目标选择器'), icon: Crosshair, onClick: () => copyText(s.target!) },
@@ -210,11 +225,26 @@ export function GtRun({
                 <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
                   {r.def?.action || r.res?.action}
                 </span>
-                <span className="ue:truncate ue:text-footnote ue:text-muted">
-                  {sum.target && <span className="ue:font-mono">{sum.target}</span>}
-                  {sum.target && sum.text ? ' · ' : ''}
-                  {sum.text}
-                </span>
+                {sum.human ? (
+                  <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
+                    {sum.ambiguous && (
+                      <span title={t('选择器可能不唯一：{r}', { r: sum.ambiguous })} className="ue:shrink-0">
+                        <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
+                      </span>
+                    )}
+                    <span className="ue:min-w-0 ue:truncate ue:text-fg">{sum.human}</span>
+                    {sum.target && (
+                      <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-subtle">{sum.target}</span>
+                    )}
+                    {r.res?.message && <span className="ue:truncate ue:text-muted">· {r.res.message}</span>}
+                  </span>
+                ) : (
+                  <span className="ue:truncate ue:text-footnote ue:text-muted">
+                    {sum.target && <span className="ue:font-mono">{sum.target}</span>}
+                    {sum.target && sum.text ? ' · ' : ''}
+                    {sum.text}
+                  </span>
+                )}
                 <span className="ue:text-caption ue:text-subtle ue:tabular-nums">{ms(r.res?.durationMs)}</span>
               </button>
             )

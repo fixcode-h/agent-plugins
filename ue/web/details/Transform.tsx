@@ -5,7 +5,7 @@ import { t } from '../host.ts'
 import { useDetailsApi } from './api.ts'
 import { Collapse } from './controls.tsx'
 import { keep, remember, type Prop } from './model.ts'
-import { CategoryBar, DetailsCtx, Row, nodeOf } from './rows.tsx'
+import { CategoryBar, DetailsCtx, Row, nodeOf, type DetailsApi } from './rows.tsx'
 
 const LABELS: Record<string, () => string> = {
   RelativeLocation: () => t('位置'),
@@ -17,15 +17,7 @@ const LABELS: Record<string, () => string> = {
  * Actor 细节面板最上面的「变换」（UE 也是这样）：位置、旋转、缩放其实是根组件的 RelativeLocation 等，
  * 这里读根组件、改也改根组件（走同一套改值、重置）
  */
-export function Transform({
-  root,
-  q,
-  openRef,
-}: {
-  root: string
-  q: string
-  openRef: (p: string) => (() => void) | undefined
-}) {
+export function Transform({ root, q, openRef }: { root: string; q: string; openRef: DetailsApi['openRef'] }) {
   const { project, target } = useUe()
   const [open, setOpen] = useState(() => remember('open:transform', true))
   const data = useLoad(

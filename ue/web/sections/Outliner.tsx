@@ -62,10 +62,13 @@ function buildFolders(items: OutActor[], paths: Set<string>) {
 export function Outliner({
   tick,
   selected,
+  from,
   onSelect,
 }: {
   tick: number
   selected: string
+  /** 检视区正在看的是从哪个 Actor 点引用过去的：那一行标「from」 */
+  from?: string
   onSelect: (path: string) => void
 }) {
   const { project, target } = useUe()
@@ -95,6 +98,7 @@ export function Outliner({
       expandable: kids > 0,
       open: !closed[a.path],
       selected: selected === a.path,
+      from: !!from && from === a.path && from !== selected,
       title: `${nameOf(a)} (${a.class})`,
       aside: aside ?? (a.player ? t('玩家') : a.class),
       onToggle: () => setClosed((m) => ({ ...m, [a.path]: !m[a.path] })),
@@ -140,7 +144,7 @@ export function Outliner({
     }
     folder(buildFolders(items, paths), 0)
     return out
-  }, [res.data, closed, filter, selected, onSelect, setClosed])
+  }, [res.data, closed, filter, selected, from, onSelect, setClosed])
 
   return (
     <>

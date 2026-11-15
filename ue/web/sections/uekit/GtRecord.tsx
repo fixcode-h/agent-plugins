@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
+import { Note } from '../../ui.tsx'
+import { humanStep } from './gt-steps.ts'
 
 /**
  * 录制中的界面（效果图 5）：顶上红点、名字、时长和步数，检查点 / 截图检查点 / 停止并保存；
@@ -14,11 +16,28 @@ export interface RecordStatus {
   steps?: number
   seconds?: number
   last?: Record<string, unknown>[]
+  /** 录制器认「谁接住了输入」靠什么：slateDebugging 准；hitPath 是这个进程没编 Slate 调试，按命中路径推断 */
+  handlerSource?: 'slateDebugging' | 'hitPath' | string
+  keepPace?: boolean
 }
 
+/** handlerSource=hitPath 时的提示：开始录制前（对话框里）和录制中都显示 */
+export function HitPathNote() {
+  return (
+    <Note>
+      {t(
+        '这个进程没编 Slate 调试（WITH_SLATE_DEBUGGING 关着），录制器只能按光标下的控件推断：点击照样能录，输入框里打的字录不到，要录输入换 Development 编辑器或手写 type 步骤',
+      )}
+    </Note>
+  )
+}
+
+/** 录到的一步写成一行：有 hint 的 UI 步骤用人话（选择器放后面），其余列出参数 */
 function describe(s: Record<string, unknown>) {
+  const human = humanStep(s)
+  if (human) return [human, s.target as string | undefined].filter(Boolean).join(' · ')
   const rest = Object.entries(s)
-    .filter(([k]) => k !== 'action' && k !== 'note')
+    .filter(([k]) => k !== 'action' && k !== 'note' && k !== 'hint')
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
     .join(' ')
   return [s.target as string | undefined, s.note as string | undefined, rest].filter(Boolean).join(' · ')
@@ -55,6 +74,7 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: () 
           </span>
           <span className="ue:shrink-0 ue:text-footnote ue:text-subtle ue:tabular-nums">
             {time} · {t('{n} 步', { n: status.steps ?? steps.length })}
+            {status.keepPace ? ` · ${t('保留节奏')}` : ''}
           </span>
         </div>
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
@@ -82,9 +102,14 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: () 
       </div>
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
-          '在游戏窗口里正常操作就行：点控件录成选择器，按键录成真实按键，停顿录成等待。编辑器其他面板上的操作不录。停止后存到场景根下的 recorded/。',
+          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。编辑器其他面板上的操作不录。停止后存到场景根下的 recorded/。',
         )}
       </p>
+      {status.handlerSource === 'hitPath' && (
+        <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
+          <HitPathNote />
+        </div>
+      )}
       <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
         {steps.map((s, i) => {
           const newest = i === steps.length - 1

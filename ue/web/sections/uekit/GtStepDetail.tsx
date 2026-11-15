@@ -2,7 +2,8 @@ import { CircleCheck, CircleDashed, CircleX, Loader2 } from 'lucide-react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { show } from '../../api.ts'
-import { Term } from '../../ui.tsx'
+import { Note, Term } from '../../ui.tsx'
+import { ambiguousOf, humanStep } from './gt-steps.ts'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -41,16 +42,24 @@ export function StepIcon({ s, live }: { s?: string; live?: boolean }) {
   return <CircleDashed className="ue:h-3.5 ue:w-3.5 ue:text-subtle" />
 }
 
-/** 一行里显示的说明：目标 + 说明 / 结果消息；没有目标时把关键参数拼一行（key、map、seconds……） */
+/**
+ * 一行里显示的说明：目标 + 说明 / 结果消息；没有目标时把关键参数拼一行（key、map、seconds……）。
+ * 录制附了 hint 的 UI 步骤多一句人话（human），选择器退成次要信息；ambiguous 是录制时选择器没核对通过的原因
+ */
 export function rowSummary(r: StepRow) {
   const target = r.res?.target ?? (typeof r.def?.target === 'string' ? r.def.target : undefined)
   const note = r.res?.note ?? (typeof r.def?.note === 'string' ? r.def.note : undefined)
   const params = r.def ? paramsOf(r.def) : []
   const brief = params
-    .filter(([k]) => k !== 'target' && k !== 'note')
+    .filter(([k]) => k !== 'target' && k !== 'note' && k !== 'hint')
     .map(([k, v]) => `${k}=${show(v)}`)
     .join(' ')
-  return { target, text: r.res?.message || note || brief }
+  return {
+    target,
+    text: r.res?.message || note || brief,
+    human: humanStep(r.def),
+    ambiguous: ambiguousOf(r.def),
+  }
 }
 
 /** 步骤定义里除了 action 之外的字段，按场景文件里的顺序 */
@@ -68,6 +77,8 @@ export function StepDetail({ row, live }: { row: StepRow; live?: boolean }) {
         ['target', res?.target],
         ['note', res?.note],
       ].filter(([, v]) => v) as [string, unknown][])
+  const human = humanStep(def)
+  const ambiguous = ambiguousOf(def)
   const shot = [res?.payload?.path, res?.payload?.screenshot, res?.payload?.annotated].find(
     (p): p is string => typeof p === 'string' && /\.(png|jpe?g)$/i.test(p),
   )
@@ -79,6 +90,18 @@ export function StepDetail({ row, live }: { row: StepRow; live?: boolean }) {
         <StepIcon s={res?.status} live={live} />
         <span className="ue:ml-auto ue:text-caption ue:text-subtle">{ms(res?.durationMs)}</span>
       </header>
+      {(human || ambiguous) && (
+        <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-3 ue:text-footnote">
+          {human && <p className="ue:text-body ue:text-fg">{human}</p>}
+          {ambiguous && (
+            <Note>
+              {t('选择器可能不唯一：{r}。回放不会自动换目标，点错时改 target 或用「复制目标选择器」核对', {
+                r: ambiguous,
+              })}
+            </Note>
+          )}
+        </div>
+      )}
       <Block title={t('参数')}>
         {params.length ? (
           <dl className="ue:grid ue:grid-cols-[minmax(64px,auto)_1fr] ue:gap-x-3 ue:gap-y-1.5">

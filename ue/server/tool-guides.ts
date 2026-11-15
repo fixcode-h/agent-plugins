@@ -161,9 +161,9 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '游戏测试',
     summary: '在 PIE 里跑 GameTest 场景、单步执行测试动作、看报告',
     useWhen:
-      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下）用 run 跑，job / report 看结果',
+      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下）用 run 跑，job / report 看结果；不知道某个控件的选择器怎么写时用 inspect 指着它看',
     avoidWhen:
-      '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」',
+      '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
     group: RUN,
   },
 }

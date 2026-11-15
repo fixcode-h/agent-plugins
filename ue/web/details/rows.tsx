@@ -1,5 +1,6 @@
 import { Copy, CopyPlus, ListPlus, Pin, Trash2, Undo2 } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { usePropMark } from './marks.ts'
 import { show } from '../api.ts'
 import { h, t } from '../host.ts'
 import {
@@ -9,12 +10,12 @@ import {
   ContainerHead,
   EnumSelect,
   Muted,
-  RefValue,
   TextField,
   VecField,
   vecKeys,
 } from './controls.tsx'
 import { isNumberType, looksLikePath, toDisplay, type Prop } from './model.ts'
+import { RefChip, type OpenHow } from './RefChip.tsx'
 
 /** 一行（顶层属性，或展开后的结构体成员、数组元素）：path 是交给桥接的属性路径（Stats.MaxHP、Triggers[0]、Tags["Fire"]） */
 export interface Node {
@@ -72,7 +73,8 @@ export interface DetailsApi {
   arrayOp: (path: string, op: 'add' | 'insert' | 'duplicate' | 'remove' | 'clear', index?: number) => void
   reset: (n: Node) => void
   pin?: (path: string) => void
-  openRef: (p: string) => (() => void) | undefined
+  /** 点对象引用：via 是属性的显示名（导航条面包屑上写「经 Static Mesh」）；返回 undefined 表示这个引用不能点 */
+  openRef: (p: string, via?: string) => ((how: OpenHow) => void) | undefined
   loadFull: (path: string) => Promise<unknown>
 }
 export const DetailsCtx = createContext<DetailsApi | null>(null)
@@ -139,6 +141,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
   const [err, setErr] = useState('')
   const canOpen = expandable(n)
   const changed = d.isChanged(n.path)
+  const mark = usePropMark(n.path, depth)
   const ro = n.readOnly
   const why = ro ? n.readOnlyWhy || t('这个属性不能改') : undefined
 
@@ -169,6 +172,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
       <div
         className={cn(
           'ue:group ue:grid ue:min-h-8 ue:grid-cols-[var(--ue-name-w)_minmax(0,1fr)_4.5rem] ue:border-b ue:border-line/50 ue:transition-colors ue:hover:bg-hover/50',
+          mark && 'ue:bg-warning/8 ue:shadow-[inset_2px_0_0_var(--warning)]',
         )}
       >
         <div
@@ -205,6 +209,14 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
         </div>
         <div className="ue:flex ue:min-w-0 ue:flex-col ue:justify-center ue:gap-0.5 ue:px-3 ue:py-1">
           <Value n={n} why={why} changed={changed} />
+          {mark && (
+            <span
+              className="ue:truncate ue:font-mono ue:text-caption ue:text-warning"
+              title={t('导入后：{v}', { v: show(mark.after) })}
+            >
+              {t('导入后 → {v}', { v: show(mark.after) })}
+            </span>
+          )}
           {err && <span className="ue:text-caption ue:text-danger">{err}</span>}
         </div>
         <div className="ue:flex ue:items-center ue:justify-end ue:gap-0.5 ue:pr-2">
@@ -336,10 +348,10 @@ function Value({ n, why, changed }: { n: Node; why?: string; changed: boolean })
     ((v === null || v === '' || v === 'None') && /\*|Ptr<|Class<|^U[A-Z]|^A[A-Z]/.test(n.type ?? ''))
   if (isRef)
     return (
-      <RefValue
+      <RefChip
         path={typeof v === 'string' ? v : ''}
         disabled={ro}
-        onOpen={typeof v === 'string' ? d.openRef(v) : undefined}
+        onOpen={typeof v === 'string' ? d.openRef(v, viaOf(n)) : undefined}
         onClear={ro ? undefined : () => d.setValue(n, 'None')}
       />
     )
@@ -358,6 +370,9 @@ function Value({ n, why, changed }: { n: Node; why?: string; changed: boolean })
 }
 
 const noop = () => {}
+
+/** 面包屑上「经哪个属性」：顶层属性用显示名，数组元素、结构体成员用属性路径（Static Materials[0] 比「索引 [0]」看得懂） */
+const viaOf = (n: Node) => (n.path.includes('.') || n.path.includes('[') ? n.path : n.label)
 
 /** 分类折叠条：整行一条稍亮的底，左边箭头和名字；子分类、「高级」往里缩一级 */
 export function CategoryBar({

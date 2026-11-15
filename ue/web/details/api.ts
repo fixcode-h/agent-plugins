@@ -39,7 +39,7 @@ export function useDetailsApi(
     q: string
     reload: () => void
     onReplicatedClient?: (prop: string) => void
-    openRef: (p: string) => (() => void) | undefined
+    openRef: DetailsApi['openRef']
     viewOnly?: boolean
   },
 ): DetailsApi {
