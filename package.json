@@ -12,7 +12,7 @@
     "panel": "node scripts/panel.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p ui-design && tsc --noEmit -p video && tsc --noEmit -p tables && tsc --noEmit -p comfy",
     "test": "node scripts/test.mjs",
-    "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs && node scripts/check-sdk.mjs"
+    "check": "npm run typecheck && node scripts/i18n-check.mjs && node scripts/check-index.mjs && node scripts/check-sdk.mjs && node scripts/check-wraps.mjs"
   },
   "devDependencies": {
     "@radix-ui/react-dialog": "^1.3.1",
