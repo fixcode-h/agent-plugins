@@ -21,12 +21,18 @@ const ctx = {
   t: (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v?.[k] ?? '')),
 }
 
-// 面板开放给插件的模块（风格库）：冒烟测试没有面板，给替身：用户风格库是空的，内置只有一个通用模型风格
+// 面板开放给插件的模块（风格库）：冒烟测试不起面板，给两个模型风格的替身
+const MODEL_STYLES = [
+  { id: 'builtin-model-general', kind: 'model', name: '通用', summary: '', rules: [], builtin: true },
+  { id: 'builtin-model-anime', kind: 'model', name: '日式二次元卡通', summary: '', rules: [], builtin: true },
+]
 globalThis.__agentPanelServer = {
   modules: {
     'server/styles': { loadStyles: async () => [] },
-    'shared/styles': { BUILTIN_STYLES: [{ id: 'builtin-model-general', name: '通用', kind: 'model' }] },
-    'shared/style/rules-text': { styleBrief: (s) => `模型风格：${s.name}` },
+    'shared/styles': { BUILTIN_STYLES: MODEL_STYLES },
+    'shared/style/rules-text': {
+      styleBrief: (s, changed) => (changed ? `## 模型风格改成了：${s.name}` : `## 模型风格：${s.name}`),
+    },
   },
 }
 const { default: activate } = await import(pathToFileURL(path.join(dir, 'server', 'index.js')).href)
@@ -45,6 +51,14 @@ try {
     run.servers.map((s) => s.name),
     ['blender', 'blender-model'],
   )
+  // 模型风格：新会话的说明里带上（默认通用）；页面上换了风格，续接的会话下一轮用 turnNote 说「改成了」，之后不再重复
+  assert.match(run.hint, /## 模型风格：通用/)
+  const post = (p, body) =>
+    plugin.fetch(new Request(`http://x${p}`, { method: 'POST', body: JSON.stringify(body) })).then((r) => r.json())
+  assert.equal((await post('/models/m/style', { styleId: 'builtin-model-anime' })).styleId, 'builtin-model-anime')
+  const again = { taskId: 'm', agentName: 'x', skills: [], resume: true, pluginTask: 'blender.model' }
+  assert.equal((await plugin.tools(again)).turnNote, '## 模型风格改成了：日式二次元卡通')
+  assert.equal((await plugin.tools(again)).turnNote, undefined)
   const dsh = await run.servers[0].tools()
   assert.deepEqual(dsh.map((t) => t.name).sort(), [
     'blender_inspect',
