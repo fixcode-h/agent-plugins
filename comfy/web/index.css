@@ -1,0 +1,11 @@
+/*
+ * ComfyUI 工作流插件的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 cf:（写成 cf:flex、cf:hover:bg-sel）：插件的样式表在面板之后加载，同名的工具类
+ * 会排在面板的响应式类后面把它盖掉；加了前缀两边的类名不会重叠。主题变量是面板的（sdk/theme.css）。
+ * panel、thin-scroll 这类面板自己的类不带前缀，用面板的样式；节点图画布的样式由面板开放的 xyflow-style 带上。
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(cf);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';

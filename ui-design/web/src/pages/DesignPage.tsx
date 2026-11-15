@@ -1241,7 +1241,12 @@ function Designer({ id }: { id: string }) {
                 )}
               </MenuItem>
               <MenuSeparator />
-              <MenuItem onSelect={() => go({ page: 'comfy', id: server.kind === 'web' ? 'web' : 'game' })}>
+              {/* ComfyUI 工作流页在 Comfy 插件里（清单 requires 写了它，装 UI 设计时一起装上） */}
+              <MenuItem
+                onSelect={() =>
+                  go({ page: 'plugin', id: 'comfy', sub: 'comfy', msg: server.kind === 'web' ? 'web' : 'game' })
+                }
+              >
                 <Workflow className="ud:h-4 ud:w-4" />
                 {server.kind === 'web' ? t('网页工作流管理') : t('游戏工作流管理')}
               </MenuItem>
