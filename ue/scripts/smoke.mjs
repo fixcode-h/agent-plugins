@@ -34,6 +34,12 @@ const big = Array.from(
   { length: 20000 },
   (_, i) => `[2026.11.10-15.00.00:000][  0]LogTemp: ${i === 12345 ? 'Error: needle found' : `line ${i}`}`,
 )
+// 级别筛选：一条带续行的警告（UE 多行消息只有第一行带前缀），网页选「警告」时不能混进上面的错误
+big.push(
+  '[2026.11.10-15.00.01:000][  0]LogScript: Warning: Script Msg: careful',
+  'Script call stack:',
+  '    /Game/Foo.Foo:Bar',
+)
 writeFileSync(path.join(offline, 'Saved', 'Logs', 'Offline.log'), big.join('\n') + '\n')
 
 const cfg = { attach: 'project', offline: 'off', idleMinutes: 10, dangerous: 'quit, open *', historyDays: 30 }
@@ -338,6 +344,13 @@ try {
   const more = await call('ue_log', { action: 'tail', since: cursor })
   assert.doesNotMatch(text(more), /connection timeout/)
   assert.match(text(more), /ran stat unit/)
+  // 在跑时桥接按最低级别给，面板再筛：选警告时只剩警告
+  const liveWarn = await api('POST', '/p/p1/logs', { verbosity: 'Warning', exact: true })
+  assert.ok(liveWarn.live && liveWarn.lines.length > 0)
+  assert.ok(
+    liveWarn.lines.every((l) => l.verbosity === 'Warning'),
+    JSON.stringify(liveWarn.lines),
+  )
   const cleared = await call('ue_log', { action: 'clear' })
   assert.ok(!cleared.isError, text(cleared))
 
@@ -346,6 +359,22 @@ try {
   assert.equal(off.live, false)
   assert.equal(off.lines.length, 1)
   assert.equal(off.lines[0].verbosity, 'Error')
+  // 网页的级别分段只看这一级：警告不混错误、错误不混警告；续行跟着上一条的级别；计数不随筛选变
+  const offWarn = await api('POST', '/p/p2/logs', { verbosity: 'Warning', exact: true })
+  assert.deepEqual(
+    offWarn.lines.map((l) => [l.verbosity, l.category]),
+    Array(3).fill(['Warning', 'LogScript']),
+  )
+  assert.deepEqual([offWarn.errors, offWarn.warnings], [1, 1])
+  const offErr = await api('POST', '/p/p2/logs', { verbosity: 'Error', exact: true })
+  assert.deepEqual(
+    offErr.lines.map((l) => l.text),
+    ['needle found'],
+  )
+  assert.deepEqual([offErr.errors, offErr.warnings], [1, 1])
+  // Agent 的 ue_log 仍按最低级别：Warning 连错误也给
+  const offMin = await api('POST', '/p/p2/logs', { verbosity: 'Warning' })
+  assert.equal(offMin.lines.length, 4)
   // 运行时操作给出说明，不起后台编辑器（参数里关了）
   const noUe = await plugin.tools({
     taskId: 't2',

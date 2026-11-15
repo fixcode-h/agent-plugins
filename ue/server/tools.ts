@@ -378,7 +378,10 @@ const DEFS = [
     async (a, ctx) => {
       switch (a.action) {
         case 'start_editor':
-          return out({ pid: launchEditor(ctx.project), note: '编辑器启动中，加载完桥接会自动连上，用 ue_status 看' })
+          return out({
+            pid: (await launchEditor(ctx.project)).pid,
+            note: '编辑器启动中，加载完桥接会自动连上，用 ue_status 看',
+          })
         case 'pie_start':
           return out(
             await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', {

@@ -6,6 +6,7 @@ import type { InstallMode } from '../types.ts'
 import { run, t } from '../util.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { forgeFileAction } from './forge-files.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { watch } from './stream.ts'
 
@@ -68,6 +69,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示
       return scenarioAction(p.root, b)
+    case 'POST ext/forge/file':
+      // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
+      return forgeFileAction(p.root, b)
     case 'GET ext/file': {
       // GameTest 的截图（Saved/GameTest/... 下的 png）：页面上看步骤截图用
       const rel = url.searchParams.get('path') ?? ''

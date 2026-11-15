@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { liveCards, type Card } from './instances.ts'
+import { trackLaunch } from './launch/track.ts'
 import type { UeProject } from './types.ts'
 import { c, exists, t } from './util.ts'
 
@@ -93,11 +94,11 @@ export function stopAllBackground() {
   for (const id of bgs.keys()) stopBackground(id)
 }
 
-/** 启动编辑器（不等它就绪：编辑器加载完桥接自己写名片，网页轮询会看到） */
-export function launchEditor(p: UeProject) {
+/** 启动编辑器（不等它就绪：编辑器加载完桥接自己写名片；这期间读日志把启动进度推给网页，见 launch/track.ts） */
+export async function launchEditor(p: UeProject) {
   const file = exe(p, false)
   if (!exists(file)) throw new Error(t('没找到 {f}：确认引擎目录，或在「权限与设置」里指定', { f: file }))
   const child = spawn(file, [p.uproject], { cwd: p.root, detached: true, stdio: 'ignore' })
   child.unref()
-  return child.pid
+  return trackLaunch(p, child)
 }

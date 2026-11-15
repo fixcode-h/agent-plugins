@@ -192,4 +192,25 @@ export interface ProjectState {
   jobs: Job[]
   /** 项目里装了的 UEKit 扩展（磁盘上的版本） */
   extensions?: { name: string; version: string }[]
+  /** 面板刚启动的编辑器的启动进度（server/launch/），没在启动时为空 */
+  launch?: LaunchProgress
+}
+
+/**
+ * 编辑器启动进度：stage 是日志里认出的阶段（server/launch/stages.ts 的 id），percent 是估算的
+ * （UE 不往日志写百分比，按阶段和上次启动用时推），shadersLeft 是日志里读到的实数
+ */
+export interface LaunchProgress {
+  pid: number
+  startedAt: number
+  /** 预计总用时：这个项目上次启动连上用了多久，没有记录时 90 秒 */
+  expectedMs: number
+  stage: string
+  percent: number
+  shadersLeft?: number
+  shadersMax?: number
+  /** rebuild：UE 弹窗问要不要重新编译模块，等人点；link：引擎起来了但 UELink 一直没连上 */
+  waiting?: 'rebuild' | 'link'
+  status: 'running' | 'ready' | 'failed'
+  error?: string
 }
