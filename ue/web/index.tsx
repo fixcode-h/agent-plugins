@@ -27,7 +27,8 @@ const activate: ActivateWeb = (host) => {
   setInterval(() => void refresh(), 60000)
   return {
     // 按项目生效（插件接口 9）：页面进侧栏的「项目工具」，面板给出当前项目
-    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, scope: 'project', Page: UePage }],
+    // cover：从项目工具打开时 UE 页的左栏盖住会话侧栏，左栏顶上的项目卡片点一下回到项目对话
+    pages: [{ id: 'main', label: 'UE', icon: GamepadIcon, scope: 'project', cover: true, Page: UePage }],
     taskTabs: [
       {
         id: 'ue',
