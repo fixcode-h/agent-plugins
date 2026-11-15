@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Box, Loader2, Plus } from 'lucide-react'
 import type { Task } from '../../sdk/web.ts'
 import { h, t } from './host.ts'
 import { MODE } from './mode.ts'
 import { SimpleComposer } from './SimpleComposer.tsx'
+import { NewModelStyle } from './StyleChoice.tsx'
 import type { BlenderStatus } from './types.ts'
 
 /** 模型设计页列表要用的对话字段（面板 useTasks 给的是对话摘要） */
@@ -100,8 +101,14 @@ function NewModel({ onCreated }: { onCreated: (task: Task) => void }) {
     // api 是宿主给的同一个对象，只在打开新建页时查一次
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // 新建页选中的风格：对话建好后明确记到这个对话上。这一步失败不要紧：对话第一次跑时认领「上次选的」，
+  // 选的时候已经存过，是同一个
+  const style = useRef('')
+  const onStyle = useCallback((id: string) => (style.current = id), [])
   const created = (x: Task) => {
     upsertTask(x)
+    if (style.current)
+      void api.post(`/models/${encodeURIComponent(x.id)}/style`, { styleId: style.current }).catch(() => {})
     onCreated(x)
   }
   return (
@@ -129,6 +136,12 @@ function NewModel({ onCreated }: { onCreated: (task: Task) => void }) {
             </ui.Button>
           </div>
         )}
+        <div className="bl:flex bl:flex-col bl:gap-1.5">
+          <NewModelStyle onValue={onStyle} />
+          <p className="bl:text-footnote bl:leading-relaxed bl:text-subtle">
+            {t('风格约束造型、拓扑和材质，建模前先选好；点缩略图看参考图。对话里也能在「模型」页签换。')}
+          </p>
+        </div>
         {ui.TaskComposer ? (
           <ui.TaskComposer standalone plugin={MODE} autoFocus onCreated={created} />
         ) : (

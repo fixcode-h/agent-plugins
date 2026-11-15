@@ -201,6 +201,12 @@ license: MIT（融合自 RobLe3/cc-blender-skill 与 arjun988/blender-skills，�
 - 体检 `inspect_scene.py`（FAIL 先修）、相交定位 `diagnose_overlap.py`、多视角截图 `capture_views.py`（≥6 视角，动画加 `--frames`）、参考解析 `reference_frames.py`、视口展示 `setup_viewport.py --gui`。
 - **UE 导出**：`export_ue.py`（体检门槛 + FBX（UE 标准）+ 重导入自检），参数以 `references/headless/export-ue.md` 的实测表为准；默认不导出，用户明确要 UE 交付并确认后才导。
 
+## 0.10 模型风格
+
+消息里有「## 模型风格：…」（面板按用户选的风格接上的约束要点）时，造型、比例、拓扑、材质和质检都按它做；要点没提到的方面按通用做法。
+Blender 里怎么做到（卡通着色和描边、PBR 数值、拓扑密度、机械间隙、网页预览看不到什么）见 `references/模型风格.md`。
+出现「模型风格改成了：…」时只管之后的步骤，已建好的部分不推倒重来，用户要求时再返工。
+
 ## 1. 架构优先：这个插件就是建模流程本身（强制）
 
 > 这一节不是建议，是**返工判据**。AI 建模必须跟着插件架构走：先查能力目录，再用 plan 通道的 op 做，每一步拿回执，最后用同一条链验收。不要绕开插件自写一套几何/验收。

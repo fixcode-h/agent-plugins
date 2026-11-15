@@ -1,7 +1,7 @@
 {
   "id": "blender",
   "name": "Blender",
-  "version": "3.1.0-alpha.5",
+  "version": "3.1.0-alpha.6",
   "icon": "box",
   "description": "让 Agent 直接驱动你的 Blender：GUI 会话里执行 Python、看视口、跑 228 个建模算子，无头作业和渲染排队执行；附带模型设计页。",
   "author": "fixcode-h",
@@ -12,7 +12,7 @@
     "version": "3.1.0-alpha.1",
     "license": "BSD-3-Clause"
   },
-  "api": 8,
+  "api": 12,
   "settings": [
     {
       "key": "blenderPath",
@@ -156,9 +156,31 @@
             "key": "stage",
             "label": "阶段",
             "default": "分件建模"
+          },
+          {
+            "type": "select",
+            "options": [
+              "通用",
+              "日式二次元卡通",
+              "写实",
+              "真实机械结构",
+              "风格化手绘",
+              "低多边形",
+              "Q 版萌系",
+              "体素",
+              "科幻硬表面",
+              "中式古风",
+              "哥特",
+              "欧美写实卡通"
+            ],
+            "ask": false,
+            "description": "约束造型、拓扑和材质的模型风格（面板设置 →「风格」的「3D 模型」类，可以看参考图）；自己复制改过的风格在模型设计页选",
+            "key": "style",
+            "label": "模型风格",
+            "default": "通用"
           }
         ],
-        "instructions": "你按 blender-modeling 技能工作：阶段编排和型号目录约定见技能里的 references/model-animation-workflow.md，建模流程、参考图量测、装配和验收按技能正文，无头脚本、体检和 UE 导出见 references/headless/README.md，以参考图的实际内容为准。\n\n## Blender 工具\n面板挂了 Blender 工具（blender_session / blender_op / blender_py / blender_see / blender_run / blender_inspect）时：\n- 先 blender_session(action=\"doctor\")，kind=ok 才算就绪；没有 GUI 会话时说明情况，请用户打开 Blender 并在「DSH Blender Bridge」面板点连接，不要绕过。\n- GUI 优先：改场景用 blender_py，看结果用 blender_see；超过约 1 秒的重活、批量渲染用 blender_run（kind=headless / render）。\n- 写操作前用 blender_session 的 txn 打快照，改坏了回滚；pause、resume 只有用户能做。\n- 没有挂 Blender 工具时，用 blender-modeling 技能 scripts/ 下的无头脚本完成同样的步骤。\n\n当前阶段：{{stage}}。\n{{#if stage=解析与规格}}用 reference_frames.py 解析参考，确定交付用途、尺寸锚点（米）、可见和需要补全的部分，写出部件清单、GRP_* 根 Empty、局部原点和轴、命名规则。{{/if}}\n{{#if stage=分件建模}}每个部件走「单件脚本 → 单件预览 / 体检 → 精修」，和参考裁切并排对照。{{/if}}\n{{#if stage=装配与材质|装配到减面}}按模块契约装配，处理材质和 UV，确认每个 GRP_* 能整体平移和恢复。{{/if}}\n{{#if stage=动画|装配到减面}}用控制器驱动动画，Action 命名 A_*，30fps。{{/if}}\n{{#if stage=减面|装配到减面}}保留基线，在相同条件下对照，质量退化就恢复。{{/if}}\n{{#if stage=质检}}\n这一阶段只做质检，不修改模型：\n1. 运行 inspect_scene.py 体检，FAIL 项必须列出。\n2. 相交诊断并分类（预期的贴合 / 需要修的穿插）。\n3. capture_views 出至少 6 个视角，并和参考图并排对照；有动画时加 --frames 多帧检查。\n4. 重新打开 .blend，平移再恢复每个 GRP_*，证明可以拆分。\n逐条给出结果和截图路径。有 FAIL 或明显偏离参考时按不通过交，否则按通过交。最后调用面板工具 submit_verdict 交结论：通过写 verdict: \"pass\"；不通过写 \"fail\"，并在 blockers 里逐条列出失败项（id 写 F1、F2…，text 写失败的是什么、证据和该怎么改，must 写 true）。面板只认这次工具调用，不读回复里的文字：没交会被追问一次，还没交就按出错停下。\n{{/if}}\n{{#if stage=导出 UE}}用 export_ue.py 导出 FBX：模型到 Asset/Mesh/，动画到 Asset/Anim/，并更新 <型号>/制作进度.md。{{/if}}\n\n每步都要有截图或体检结果作为证据，不能只凭单个视角下结论。"
+        "instructions": "你按 blender-modeling 技能工作：阶段编排和型号目录约定见技能里的 references/model-animation-workflow.md，建模流程、参考图量测、装配和验收按技能正文，无头脚本、体检和 UE 导出见 references/headless/README.md，以参考图的实际内容为准。\n\n## Blender 工具\n面板挂了 Blender 工具（blender_session / blender_op / blender_py / blender_see / blender_run / blender_inspect）时：\n- 先 blender_session(action=\"doctor\")，kind=ok 才算就绪；没有 GUI 会话时说明情况，请用户打开 Blender 并在「DSH Blender Bridge」面板点连接，不要绕过。\n- GUI 优先：改场景用 blender_py，看结果用 blender_see；超过约 1 秒的重活、批量渲染用 blender_run（kind=headless / render）。\n- 写操作前用 blender_session 的 txn 打快照，改坏了回滚；pause、resume 只有用户能做。\n- 没有挂 Blender 工具时，用 blender-modeling 技能 scripts/ 下的无头脚本完成同样的步骤。\n\n当前阶段：{{stage}}。模型风格：{{style}}（这个风格的约束要点面板会接在消息后面：造型、拓扑、材质都按它做，质检时逐条核对其中的「验收」）。\n{{#if stage=解析与规格}}用 reference_frames.py 解析参考，确定交付用途、尺寸锚点（米）、可见和需要补全的部分，写出部件清单、GRP_* 根 Empty、局部原点和轴、命名规则。{{/if}}\n{{#if stage=分件建模}}每个部件走「单件脚本 → 单件预览 / 体检 → 精修」，和参考裁切并排对照。{{/if}}\n{{#if stage=装配与材质|装配到减面}}按模块契约装配，处理材质和 UV，确认每个 GRP_* 能整体平移和恢复。{{/if}}\n{{#if stage=动画|装配到减面}}用控制器驱动动画，Action 命名 A_*，30fps。{{/if}}\n{{#if stage=减面|装配到减面}}保留基线，在相同条件下对照，质量退化就恢复。{{/if}}\n{{#if stage=质检}}\n这一阶段只做质检，不修改模型：\n1. 运行 inspect_scene.py 体检，FAIL 项必须列出。\n2. 相交诊断并分类（预期的贴合 / 需要修的穿插）。\n3. capture_views 出至少 6 个视角，并和参考图并排对照；有动画时加 --frames 多帧检查。\n4. 重新打开 .blend，平移再恢复每个 GRP_*，证明可以拆分。\n逐条给出结果和截图路径。有 FAIL 或明显偏离参考时按不通过交，否则按通过交。最后调用面板工具 submit_verdict 交结论：通过写 verdict: \"pass\"；不通过写 \"fail\"，并在 blockers 里逐条列出失败项（id 写 F1、F2…，text 写失败的是什么、证据和该怎么改，must 写 true）。面板只认这次工具调用，不读回复里的文字：没交会被追问一次，还没交就按出错停下。\n{{/if}}\n{{#if stage=导出 UE}}用 export_ue.py 导出 FBX：模型到 Asset/Mesh/，动画到 Asset/Anim/，并更新 <型号>/制作进度.md。{{/if}}\n\n每步都要有截图或体检结果作为证据，不能只凭单个视角下结论。"
       }
     }
   ],

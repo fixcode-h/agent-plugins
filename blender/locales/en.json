@@ -101,5 +101,7 @@
   "这个角色没有 Blender 技能（{skills}），插件设置为只给 Blender 角色和模型设计对话挂": "This role has no Blender skills ({skills}); the plugin is set to attach only to Blender roles and model design conversations",
   "所有对话（插件设置为全部挂）": "All conversations (plugin set to attach everywhere)",
   "带 Blender 技能的角色的对话，以及模型设计对话": "Conversations of roles with Blender skills, and model design conversations",
-  "只在 Blender 页的模型设计对话里": "Only in model design conversations on the Blender page"
+  "只在 Blender 页的模型设计对话里": "Only in model design conversations on the Blender page",
+  "没有选风格": "No style selected",
+  "风格约束造型、拓扑和材质，建模前先选好；点缩略图看参考图。对话里也能在「模型」页签换。": "The style constrains shape, topology and materials, so pick it before modeling. Click a thumbnail to see the reference image. You can also change it later in the Model tab of the conversation."
 }

@@ -21,6 +21,14 @@ const ctx = {
   t: (s, v) => s.replace(/\{(\w+)\}/g, (_, k) => String(v?.[k] ?? '')),
 }
 
+// 面板开放给插件的模块（风格库）：冒烟测试没有面板，给替身：用户风格库是空的，内置只有一个通用模型风格
+globalThis.__agentPanelServer = {
+  modules: {
+    'server/styles': { loadStyles: async () => [] },
+    'shared/styles': { BUILTIN_STYLES: [{ id: 'builtin-model-general', name: '通用', kind: 'model' }] },
+    'shared/style/rules-text': { styleBrief: (s) => `模型风格：${s.name}` },
+  },
+}
 const { default: activate } = await import(pathToFileURL(path.join(dir, 'server', 'index.js')).href)
 const plugin = await activate(ctx)
 try {

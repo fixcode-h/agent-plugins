@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { ModelMeta } from '../server/model-meta.ts'
 import { h, t } from './host.ts'
+import { TaskStyleChoice } from './StyleChoice.tsx'
 
 const modelPath = (taskId: string) => `/models/${encodeURIComponent(taskId)}`
 const glbUrl = (taskId: string, version: number) => h().api.url(`${modelPath(taskId)}/scene.glb?v=${version}`)
@@ -209,6 +210,9 @@ export function ModelPreview({ taskId, running }: { taskId: string; running: boo
             </a>
           )}
         </div>
+      </div>
+      <div className="bl:flex bl:shrink-0 bl:items-center bl:border-b bl:px-3 bl:py-1.5">
+        <TaskStyleChoice taskId={taskId} />
       </div>
       <div className="bl:relative bl:min-h-[240px] bl:flex-1">
         <div
