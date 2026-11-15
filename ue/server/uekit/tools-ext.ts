@@ -81,9 +81,12 @@ export const EXT_TOOLS = [
   ),
   tool(
     'ue_gametest',
-    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，status 返回实际位置，每步一个动作：click、type、key、wait、assert、snapshot、screenshot……）。action=status 看 PIE 状态、场景根和有没有 run 在跑；actions 列出能用的动作和参数（写步骤前先看）；scenarios 列场景（query 筛）；run 跑一个场景（scenario 相对场景根）或临时步骤（steps + name），马上返回 runId；step 立即执行一步（step: {action, ...}），探路和调试用；job 看当前或最近一次 run 的进度和最后几步；report 取一次 run 的完整报告（runId）；stop 取消正在跑的 run。',
+    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，schemaVersion 2，status 返回实际位置）。每步一个动作，参数以 actions 为准：click（默认真实指针：自动等控件出现、可见、可用、不动、没被挡再点，点完核对接住的是不是目标；at=[x,y] 控件内位置，button；via="code" 是旧的代码点击，点屏幕外或被挡的控件做准备时用）、drag（target+at → toTarget+toAt 或 by=[dx,dy]）、wheel（delta，target 可省）、type（默认真实按键，append 接着打，commit 回车）、key（可带 target 发给控件）、wait、assert、snapshot、screenshot……不用在 UI 操作前插 wait。步骤上的 hint 是录制记的控件说明，回放不读。选择器：`屏:路径`（屏写 WBP 名或资源路径，`屏:.` 是屏本身）、`List[3]` / `List[Id=5]` 列表条目、`A>B` 进嵌套 WBP、`A>>SButton[text=确定][0]` 或 `>>…` 找纯 Slate 控件，解析失败会报候选。action=status 看 PIE、场景根和有没有 run 在跑；actions 列动作和参数（写步骤前先看）；scenarios 列场景（query 筛）；run 跑场景（scenario）或临时步骤（steps + name），马上返回 runId；step 立即执行一步（step: {action, ...}），探路调试用；inspect 看视口某点（x,y 归一化，省略=光标处）是哪个控件接住、对应的选择器和是否核对唯一；job 看进度和最后几步；report 取完整报告（runId）；stop 取消 run。',
     {
-      action: { type: 'string', enum: ['status', 'actions', 'scenarios', 'run', 'step', 'job', 'report', 'stop'] },
+      action: {
+        type: 'string',
+        enum: ['status', 'actions', 'scenarios', 'run', 'step', 'inspect', 'job', 'report', 'stop'],
+      },
       scenario: { type: 'string', description: '场景文件（相对场景根，如 smoke/main-menu.json）' },
       steps: { type: 'array', items: { type: 'object' }, description: '临时步骤（不存文件），和 scenario 二选一' },
       name: { type: 'string' },
@@ -92,6 +95,8 @@ export const EXT_TOOLS = [
       query: { type: 'string' },
       runId: { type: 'string' },
       last: { type: 'number', description: 'job 只回最后几步（默认 20）' },
+      x: { type: 'number', description: 'inspect：视口内归一化横坐标 0–1（和 y 一起给，省略看光标处）' },
+      y: { type: 'number' },
     },
     ['action'],
     async (a, ctx) => {
@@ -112,6 +117,13 @@ export const EXT_TOOLS = [
           )
         case 'step':
           return out(await op('gt.step', { step: a.step ?? {} }, 120000))
+        case 'inspect':
+          return out(
+            await op(
+              'gt.inspect',
+              a.x !== undefined && a.y !== undefined ? { x: num(a.x, 0.5), y: num(a.y, 0.5) } : {},
+            ),
+          )
         case 'job':
           return out(await op('gt.job', { steps: num(a.last, 20) }))
         case 'report':

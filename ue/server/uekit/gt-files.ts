@@ -49,6 +49,7 @@ export interface ScenarioDoc {
   name?: string
   _note?: string
   stepDelayMs?: number
+  schemaVersion?: number
   steps: ScenarioStep[]
 }
 
@@ -74,6 +75,7 @@ export async function readScenario(projectRoot: string, scenarioRoot: string, re
     name: typeof doc.name === 'string' ? doc.name : undefined,
     _note: typeof doc._note === 'string' ? doc._note : undefined,
     stepDelayMs: typeof doc.stepDelayMs === 'number' ? doc.stepDelayMs : undefined,
+    schemaVersion: typeof doc.schemaVersion === 'number' ? doc.schemaVersion : undefined,
     steps: steps.map((s) =>
       s && typeof s === 'object' && !Array.isArray(s)
         ? ({ action: '', ...(s as Record<string, unknown>) } as ScenarioStep)
@@ -107,12 +109,48 @@ async function writeWithName(abs: string, doc: Record<string, unknown>, name: st
 }
 
 /**
- * 场景的右键菜单：改名（文件名和场景里的 name 一起改）、复制一份、删除、在文件夹中显示。
+ * 把第 index 步起的几步换成新的步骤（GameTest 页「转成控件步骤」）。expect 是网页看到的原步骤：文件在这期间被改过
+ * （重新录制、Agent 改了）就对不上，报错让用户刷新，不按行号硬改。
+ * 新步骤是 GameTest 1.1 的写法（click 走真实指针）：schemaVersion 1 的文件顺带升到 2，并给原有没写 via 的
+ * click / type 补上 via:"code"——和 GameTest 读 v1 文件时做的一样，旧步骤行为不变
+ */
+async function replaceSteps(abs: string, rel: string, doc: Record<string, unknown>, b: Record<string, unknown>) {
+  const steps = Array.isArray(doc.steps) ? [...(doc.steps as Record<string, unknown>[])] : []
+  const index = Number(b.index)
+  const expect = Array.isArray(b.expect) ? b.expect : []
+  const next = Array.isArray(b.steps) ? (b.steps as Record<string, unknown>[]) : []
+  if (!Number.isInteger(index) || index < 0 || !expect.length || !next.length)
+    throw new BridgeError(t('替换步骤缺参数：index、expect、steps'))
+  // 网页拿到的步骤经过 readScenario 的整理（action 排在最前），这里照样整理再比，字段顺序不同不算改过
+  const same = (x: unknown) => JSON.stringify(x && typeof x === 'object' ? { action: '', ...x } : x)
+  if (
+    steps
+      .slice(index, index + expect.length)
+      .map(same)
+      .join() !== expect.map(same).join()
+  )
+    throw new BridgeError(t('场景文件在这期间被改过（{p}），刷新后再试', { p: rel }))
+  const version = typeof doc.schemaVersion === 'number' ? doc.schemaVersion : 1
+  const kept =
+    version >= 2
+      ? steps
+      : steps.map((s) => ((s?.action === 'click' || s?.action === 'type') && !('via' in s) ? { ...s, via: 'code' } : s))
+  kept.splice(index, expect.length, ...next)
+  await writeFile(
+    abs,
+    JSON.stringify({ ...doc, schemaVersion: Math.max(version, 2), steps: kept }, null, '\t') + '\n',
+    'utf8',
+  )
+  return { path: rel, steps: kept.length }
+}
+
+/**
+ * 场景的右键菜单：改名（文件名和场景里的 name 一起改）、复制一份、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）。
  * 删除前网页已经弹窗确认过；同一个目录里重名时报错，不覆盖
  */
 export async function scenarioAction(
   projectRoot: string,
-  b: { root?: unknown; path?: unknown; action?: unknown; name?: unknown },
+  b: { root?: unknown; path?: unknown; action?: unknown; name?: unknown; [k: string]: unknown },
 ) {
   const action = String(b.action ?? '')
   const f = scenarioFile(projectRoot, String(b.root ?? ''), String(b.path ?? ''), action === 'reveal')
@@ -128,6 +166,7 @@ export async function scenarioAction(
     return { path: f.rel }
   }
   const doc = await readDoc(f.abs, f.rel)
+  if (action === 'replace') return replaceSteps(f.abs, f.rel, doc, b)
   const dir = path.dirname(f.abs)
   const toRel = (abs: string) => path.relative(f.rootAbs, abs).replace(/\\/g, '/')
   if (action === 'rename') {

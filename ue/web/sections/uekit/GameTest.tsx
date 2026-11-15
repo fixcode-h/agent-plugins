@@ -6,7 +6,8 @@ import { h, t } from '../../host.ts'
 import { MenuHost } from '../../menu.tsx'
 import { Confirm, ErrorText, NotRunning } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
-import { GtRecord, type RecordStatus } from './GtRecord.tsx'
+import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
+import { legacySteps } from './gt-steps.ts'
 import { GtRun, type GtJob, type GtRunSummary, type GtScenarioFile } from './GtRun.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
@@ -39,6 +40,10 @@ export function GameTest() {
   const [rec, setRec] = useState<RecordStatus>()
   const [asking, setAsking] = useState(false)
   const [recName, setRecName] = useState('')
+  // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
+  const [keepPace, setKeepPace] = useState(false)
+  // 录制器认控件靠什么：hitPath 表示这个进程没编 Slate 调试，打字录不到，开始录制前就提示
+  const [handlerSource, setHandlerSource] = useState<string>()
   // 从第几步开始跑的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行；只在这次打开页面里记
   const [offsets, setOffsets] = useState<Record<string, number>>({})
   // 推送里已经结束的 run：第一步就失败的 run 在 gt.run 返回之前就推了「结束」，返回后不能再标成运行中
@@ -62,7 +67,10 @@ export function GameTest() {
       .then((j) => j.busy && setJob(j))
       .catch(() => undefined)
     void op<RecordStatus>(project.id, 'gt.record.status', { last: 20 })
-      .then((r) => r.recording && setRec(r))
+      .then((r) => {
+        setHandlerSource(r.handlerSource)
+        if (r.recording) setRec(r)
+      })
       .catch(() => undefined)
     // 换项目、编辑器起来时重拉；reload 每次渲染都是新函数
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -129,7 +137,11 @@ export function GameTest() {
     })
   const runScenario = (s: Scenario) => startRun(s.name, { scenario: s.relativePath }, 0)
   const runFrom = (s: Scenario, file: GtScenarioFile, i: number) =>
-    startRun(s.name, { name: s.name, steps: file.steps.slice(i), stepDelayMs: file.stepDelayMs }, i)
+    startRun(
+      s.name,
+      { name: s.name, steps: legacySteps(file.steps, file.schemaVersion ?? 1).slice(i), stepDelayMs: file.stepDelayMs },
+      i,
+    )
   /**
    * 停止：gt.stop 只是请求取消，结果以 UE 的作业状态为准——已经不在跑（例如早就失败结束、推送没到）时
    * 直接收尾，不让按钮按了没反应
@@ -156,7 +168,10 @@ export function GameTest() {
   const startRecord = () =>
     run('record', async () => {
       setAsking(false)
-      const r = await op<RecordStatus>(project.id, 'gt.record.start', { name: recName.trim() || t('新录制') })
+      const r = await op<RecordStatus>(project.id, 'gt.record.start', {
+        name: recName.trim() || t('新录制'),
+        keepPace,
+      })
       setRec({ ...r, last: [] })
     })
 
@@ -292,6 +307,7 @@ export function GameTest() {
             offset={offsets[(running ? job?.runId : lastRun.get(selected.name)?.runId) ?? ''] ?? 0}
             onStop={() => void stop()}
             onRunFrom={running || recording ? undefined : (file, i) => void runFrom(selected, file, i)}
+            onChanged={reload}
           />
         ) : (
           <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
@@ -316,11 +332,26 @@ export function GameTest() {
             placeholder={t('场景名，例如 新手引导')}
             onChange={(e: { target: { value: string } }) => setRecName(e.target.value)}
           />
+          <label className="ue:flex ue:cursor-pointer ue:items-start ue:gap-2 ue:text-footnote ue:text-fg">
+            <input
+              type="checkbox"
+              className="ue:mt-0.5 ue:accent-(--accent)"
+              checked={keepPace}
+              onChange={(e) => setKeepPace(e.target.checked)}
+            />
+            <span className="ue:flex ue:flex-col ue:gap-0.5">
+              {t('保留节奏')}
+              <span className="ue:text-subtle">
+                {t('点界面之间的停顿也录成等待，原样复现手速。默认不录：回放时点击、输入会自己等控件可以操作')}
+              </span>
+            </span>
+          </label>
           <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
             {t(
-              'PIE 没开时会先开 PIE。之后在游戏窗口里正常操作：点控件录成选择器，按键录成真实按键，停顿录成等待。停止后存到场景根下的 recorded/。',
+              'PIE 没开时会先开 PIE。之后在游戏窗口里正常操作：点控件录成对这个控件的点击（不看控件类，谁接住了就录谁），在输入框里打字录成输入，点在游戏画面上和按键录成真实按键。按住 Ctrl+Alt 点一个控件录成断言。停止后存到场景根下的 recorded/。',
             )}
           </p>
+          {handlerSource === 'hitPath' && <HitPathNote />}
         </div>
       </Confirm>
     </div>
