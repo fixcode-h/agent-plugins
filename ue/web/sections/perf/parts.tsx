@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useState, type MouseEvent, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
-import { openMenu, type MenuItem } from './menu.tsx'
+import { openMenu, type MenuItem } from '../../menu.tsx'
 
 /**
  * 性能页共用的小部件（用户 2026-11-11：部件都做成组件、该有动效的加动效）。

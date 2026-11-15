@@ -18,11 +18,21 @@ const NOT_SCENE = /Movement|InputComponent|Perception|PawnNoise|^ActorComponent$
  * 不是 Actor 蓝图（控件蓝图、函数库）时返回 null，资源页就不显示组件栏
  */
 export async function loadBlueprintComps(project: string, path: string): Promise<Comp[] | null> {
-  let r: { items: Comp[]; scs?: boolean }
+  type R = { items: Comp[]; scs?: boolean }
+  const read = () => op<R>(project, 'components', { path }, undefined, 120000)
+  let r: R
   try {
-    r = await op<{ items: Comp[]; scs?: boolean }>(project, 'components', { path }, undefined, 120000)
+    r = await read()
   } catch {
-    return null
+    // 桥接的 components 只找内存里已有的对象、不加载（为 Actor 页设计的）：刚搜到、还没打开过的蓝图资源在这里会报「找不到对象」，
+    // 和右边属性同时发出去时也会抢在属性加载它之前。先用属性读取（会加载，筛一个不存在的名字，几乎不回内容）把资源加载进来再读一次；
+    // 再失败才算不是 Actor 蓝图（控件蓝图、函数库）
+    try {
+      await op(project, 'props', { path, filter: '__agent_panel_load__', maxChars: 1 }, undefined, 120000)
+      r = await read()
+    } catch {
+      return null
+    }
   }
   if (r.scs) return r.items
   const outline = await op<{ components?: ScsNode[] }>(project, 'bp.outline', { path }, undefined, 120000).catch(

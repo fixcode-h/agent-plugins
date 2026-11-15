@@ -11,8 +11,9 @@ import { NotInstalled } from './NotInstalled.tsx'
 import { FileTree, type TreeLeaf } from './tree.tsx'
 
 /**
- * AssetForge 页（UEKit 扩展，效果图 designs/UEKit-扩展页面-效果图/1、2）：左边按 /Game 目录分层的文件树 + 状态筛选，
- * 右边是选中项的计划、属性差异和配置原文。导入导出是后台作业，进度靠推送事件（forge.job），不轮询。
+ * AssetForge 页（UEKit 扩展，效果图 designs/UEKit-扩展页面-效果图/1、2）：左边是配置根下的 JSON 配置文件树 + 状态筛选，
+ * 右边是选中配置导入后生成的资源、计划、属性差异和配置原文。
+ * 用户 2026-11-15：左边只列 JSON 配置，没有配置的资源不显示（导出成配置在资源页的「导出到 JSON」）。导入导出是后台作业，进度靠推送事件（forge.job），不轮询。
  * 编辑器没开时这些操作由后台编辑器做（服务端 ops.ts 把 forge.* 当资源操作）。
  */
 export interface ForgeEntry {
@@ -42,14 +43,9 @@ export interface ForgeJob {
   current?: string
 }
 
-/** 树里的路径：资产按 /Game 后面的目录分层（插件内容保留插件名一段），没写资产的放进「没写资产」 */
+/** 树里的路径：配置文件相对配置根的路径（如 umg/UI/WBP_HUD.json），按配置根下的目录分层 */
 export function treePath(e: ForgeEntry) {
-  if (e.asset)
-    return e.asset
-      .replace(/^\/Game\//, '')
-      .replace(/^\//, '')
-      .split('.')[0]
-  return `${t('（没写资产）')}/${e.config ?? e.key}`
+  return (e.config ?? e.key).replace(/\\/g, '/').replace(/^\//, '')
 }
 
 const PAGE = 1000
@@ -64,7 +60,7 @@ async function loadAll(project: string, deep: boolean) {
     const r = await op<{ entries: ForgeEntry[]; total: number; instance?: { kind: string } }>(
       project,
       'forge.entries',
-      { unmanaged: true, deep, offset, limit: PAGE },
+      { unmanaged: false, deep, offset, limit: PAGE },
       undefined,
       deep ? 300000 : 120000,
     )
@@ -162,7 +158,7 @@ export function Forge() {
         count={data?.total ?? '…'}
         query={query}
         onQuery={setQuery}
-        placeholder={t('按资产名或路径找')}
+        placeholder={t('按配置文件或资产路径找')}
         extra={
           <>
             <ui.IconButton
@@ -230,7 +226,7 @@ export function Forge() {
           </div>
         ) : (
           <FileTree
-            label={t('AssetForge 配置和资产')}
+            label={t('AssetForge 配置文件')}
             items={items}
             searching={!!q || filter !== 'all' || !!kind}
             active={selected ? treePath(selected) : undefined}
@@ -239,11 +235,9 @@ export function Forge() {
               const m = kindMeta(e.kind)
               return { icon: m.icon, tone: m.tone }
             }}
-            leafDim={(e) => e.state === 'unmanaged'}
             leafRight={(e) => {
               if (e.state === 'synced') return null
               const s = stateMeta(e.state)
-              if (e.state === 'unmanaged') return s.label()
               return (
                 <span className={cn('ue:flex ue:items-center ue:gap-1', s.tone)}>
                   <span className={cn('ue:h-1.5 ue:w-1.5 ue:rounded-full', s.dot)} />
@@ -254,7 +248,9 @@ export function Forge() {
             folderRight={(leaves) => <FolderCount leaves={leaves} />}
             empty={
               <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
-                {entries.length ? t('没有符合筛选的项') : t('还没有配置，也没找到可以导出的资产')}
+                {entries.length
+                  ? t('没有符合筛选的配置')
+                  : t('配置根下还没有 JSON 配置：在资源页选中资产，点「导出到 JSON」生成')}
               </p>
             }
           />
@@ -266,7 +262,7 @@ export function Forge() {
         ) : (
           <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
             <FileCode2 className="ue:h-6 ue:w-6" />
-            {t('选左边的一项，看导入计划、属性差异和配置原文')}
+            {t('选左边的一份配置，看它导入后生成的资源、导入计划、属性差异和配置原文')}
           </div>
         )}
       </main>

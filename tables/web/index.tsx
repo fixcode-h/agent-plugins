@@ -53,6 +53,8 @@ const plugin = (): WebPlugin => ({
       icon: TableIcon,
       // 按项目生效（插件接口 9）：页面进侧栏的「项目工具」，面板给出当前项目
       scope: 'project',
+      // 从项目工具打开时表格页的列表栏盖住会话侧栏，顶上的项目卡片点一下回到项目对话（和 UE 页一样）
+      cover: true,
       keep: true,
       Page: ({ path, active, project }) => (
         <Suspense fallback={null}>
