@@ -1,0 +1,191 @@
+import path from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { bridgeVersionIn } from '../instances.ts'
+import { cmpVersion } from '../semver.ts'
+import type { UeProject } from '../types.ts'
+import { findPluginDirs, pluginVersion, UELINK, type UELinkManifest } from '../uelink.ts'
+import { c, readJson } from '../util.ts'
+
+/**
+ * UEKit 插件库（fixcode-h/UEKit）里 UELink 的扩展插件（AssetForge、GameTest）：查插件目录 catalog.json、
+ * 看项目里装了哪个版本、能不能装（引擎版本、UELink 版本）。安装约定见 UEKit 仓库 docs/protocol.md 第 4–6 节。
+ * UELink 自己仍走 uelink.ts（自带一份，和 UEToVS 共用的安装约定），这里只管扩展。
+ */
+const DEFAULT_CATALOG = 'https://raw.githubusercontent.com/fixcode-h/UEKit/main/catalog.json'
+
+/** 面板认得的扩展：有专门的页面和工具。目录里别的扩展照样列出、能装，只是没有页面 */
+export const KNOWN_EXTENSIONS = ['AssetForge', 'GameTest'] as const
+
+export interface KitManifest extends UELinkManifest {
+  displayName?: string
+  description?: string
+  kind?: 'base' | 'extension'
+  requires?: Record<string, string>
+  engineTested?: string
+}
+
+export interface CatalogEntry {
+  name: string
+  displayName?: string
+  description?: string
+  kind?: 'base' | 'extension'
+  latest: KitManifest | null
+  prerelease: KitManifest | null
+}
+
+interface CatalogResult {
+  plugins: CatalogEntry[]
+  /** 源码包的位置：http(s) 地址的目录或本机目录；GitHub 上按清单里的 url 下载 */
+  base: string
+  error?: string
+}
+
+/**
+ * 更新源：插件参数 uekitSource。空 = GitHub 上 UEKit 的 main 分支；http(s) 地址 = 镜像上的 catalog.json（或放着它的目录）；
+ * 本机目录 = 里面放着 catalog.json 和各插件的源码包（公司内网、断网时用）
+ */
+function sourceSpec() {
+  const s = String(c().config().uekitSource ?? '').trim()
+  if (!s) return { url: DEFAULT_CATALOG }
+  if (/^https?:\/\//i.test(s)) return { url: s.endsWith('.json') ? s : `${s.replace(/\/+$/, '')}/catalog.json` }
+  return { dir: s }
+}
+
+let cache: { at: number; result: CatalogResult } | undefined
+const CACHE_MS = 3600 * 1000
+
+/** 读插件目录（1 小时内用缓存，refresh 时重读）。读不到不抛，error 里说原因 */
+export async function readCatalog(refresh = false): Promise<CatalogResult> {
+  if (!refresh && cache && Date.now() - cache.at < CACHE_MS) return cache.result
+  const spec = sourceSpec()
+  let result: CatalogResult
+  try {
+    if (spec.dir) {
+      const doc = await readJson<{ plugins?: CatalogEntry[] } | null>(path.join(spec.dir, 'catalog.json'), null)
+      result = doc
+        ? { plugins: doc.plugins ?? [], base: spec.dir }
+        : { plugins: [], base: spec.dir, error: `${spec.dir} 里没有 catalog.json` }
+    } else {
+      const url = spec.url!
+      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000) })
+      if (!res.ok) throw new Error(`${url}：HTTP ${res.status}`)
+      const doc = (await res.json()) as { plugins?: CatalogEntry[] }
+      // GitHub 上的 catalog.json 和源码包不在同一处：按清单里的 url 下载（base 留空）
+      result = { plugins: doc.plugins ?? [], base: url === DEFAULT_CATALOG ? '' : url.slice(0, url.lastIndexOf('/')) }
+    }
+  } catch (e) {
+    result = { plugins: [], base: '', error: (e as Error).message }
+  }
+  cache = { at: Date.now(), result }
+  return result
+}
+
+/** 项目里装着的插件：目录（相对项目根）和 .uplugin 里的版本，没装为 undefined */
+export async function installedIn(root: string, name: string) {
+  const dirs = await findPluginDirs(root, name)
+  if (!dirs.length) return undefined
+  const version = await pluginVersion(path.join(dirs[0], `${name}.uplugin`))
+  const record = await readFile(path.join(dirs[0], '.install.json'), 'utf8')
+    .then((s) => JSON.parse(s) as { mode?: string })
+    .catch(() => undefined)
+  return { dir: dirs[0], rel: path.relative(root, dirs[0]), version, mode: record?.mode }
+}
+
+/** "5.8" 这类引擎版本前两段比较：项目引擎读不出来时不拦 */
+function engineTooOld(project: UeProject, min?: string) {
+  const v = project.engine?.version
+  if (!min || !v) return false
+  const two = (s: string) => s.split('.').slice(0, 2).join('.')
+  return cmpVersion(two(v), two(min)) < 0
+}
+
+/** requires 里的 ">=2.2.0-beta.1"：只支持 >=（UEKit 的 kit.json 只这么写） */
+export function satisfies(installed: string, range: string) {
+  const m = /^>=\s*(\S+)$/.exec(range.trim())
+  if (!m) return true
+  return !!installed && installed !== '?' && cmpVersion(installed, m[1]) >= 0
+}
+
+/** 这一版装进这个项目前要先解决的问题（引擎太旧、UELink 没装或太旧）；没有问题返回空数组 */
+export async function blockers(project: UeProject, m: KitManifest) {
+  const out: string[] = []
+  if (engineTooOld(project, m.engineMin))
+    out.push(c().t('要 UE {min} 或更新，这个项目是 {v}', { min: m.engineMin ?? '', v: project.engine.version }))
+  const need = m.requires?.[UELINK]
+  if (need) {
+    const have = await bridgeVersionIn(project.root)
+    if (!satisfies(have, need))
+      out.push(
+        have
+          ? c().t('要 UELink {need}，项目里是 {have}：先到「桥接与权限」升级 UELink', { need, have })
+          : c().t('要先装 UELink（{need}）：到「桥接与权限」安装', { need }),
+      )
+  }
+  return out
+}
+
+export interface ExtensionStatus {
+  name: string
+  displayName: string
+  description: string
+  known: boolean
+  installed?: { version: string; rel: string; mode?: string }
+  latest?: string
+  prerelease?: string
+  /** 能装的那一版（有正式版装正式版，没有时用预发布版） */
+  offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string }
+  /** 开着的 UE 进程里实际加载的版本（装了新版没重编时和磁盘上的不同） */
+  loaded?: string
+}
+
+/** UE 插件页用：目录里的每个扩展 + 项目里装着、目录里没有的（旧镜像、手动放的） */
+export async function extensionStatus(
+  project: UeProject,
+  loaded: Map<string, string>,
+  refresh = false,
+): Promise<{ items: ExtensionStatus[]; error?: string }> {
+  const cat = await readCatalog(refresh)
+  const entries = cat.plugins.filter((e) => e.kind !== 'base' && e.name !== UELINK)
+  const names = [...new Set([...KNOWN_EXTENSIONS, ...entries.map((e) => e.name)])]
+  const items = await Promise.all(
+    names.map(async (name): Promise<ExtensionStatus> => {
+      const e = entries.find((x) => x.name === name)
+      const inst = await installedIn(project.root, name)
+      const pick = e?.latest ?? e?.prerelease ?? null
+      const offerM =
+        e?.latest && e.prerelease && inst?.version && cmpVersion(inst.version, e.latest.version) > 0
+          ? e.prerelease // 已经装着预发布版的，继续给它更新的预发布版
+          : pick
+      return {
+        name,
+        displayName: e?.displayName || name,
+        description: e?.description || '',
+        known: (KNOWN_EXTENSIONS as readonly string[]).includes(name),
+        installed: inst && { version: inst.version, rel: inst.rel, mode: inst.mode },
+        latest: e?.latest?.version,
+        prerelease: e?.prerelease?.version,
+        offer: offerM
+          ? {
+              version: offerM.version,
+              prerelease: /-/.test(offerM.version),
+              blockers: await blockers(project, offerM),
+              notes: offerM.notes,
+            }
+          : undefined,
+        loaded: loaded.get(name),
+      }
+    }),
+  )
+  return { items, error: cat.error }
+}
+
+/** 按名字和版本取清单（安装用） */
+export async function manifestFor(name: string, version?: string) {
+  const cat = await readCatalog(true)
+  const e = cat.plugins.find((x) => x.name === name)
+  if (!e) throw new Error(cat.error || c().t('插件目录里没有 {name}', { name }))
+  const all = [e.latest, e.prerelease].filter((m): m is KitManifest => !!m)
+  const m = version ? all.find((x) => x.version === version) : (e.latest ?? e.prerelease)
+  if (!m) throw new Error(c().t('插件目录里没有 {name} {v}', { name, v: version ?? '' }))
+  return { manifest: m, base: cat.base }
+}

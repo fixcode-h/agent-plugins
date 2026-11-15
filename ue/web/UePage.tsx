@@ -1,11 +1,15 @@
 import {
+  Blocks,
   Box,
   Braces,
   Cpu,
   Database,
   Eye,
+  FileCode2,
+  FlaskConical,
   Gauge,
   LayoutGrid,
+  PersonStanding,
   List,
   Plus,
   SlidersHorizontal,
@@ -21,6 +25,7 @@ import { get, pget, ppost, useLoad } from './api.ts'
 import { Ctx, type Badges, type UeCtx } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
+import { keep, kept } from './keep.ts'
 import { Assets } from './sections/Assets.tsx'
 import { Bridge } from './sections/Bridge.tsx'
 import { Console } from './sections/Console.tsx'
@@ -31,6 +36,9 @@ import { Lua } from './sections/Lua.tsx'
 import { Objects } from './sections/Objects.tsx'
 import { Overview } from './sections/Overview.tsx'
 import { Perf } from './sections/Perf.tsx'
+import { Forge } from './sections/uekit/Forge.tsx'
+import { GameTest } from './sections/uekit/GameTest.tsx'
+import { Plugins } from './sections/uekit/Plugins.tsx'
 import { Watch } from './sections/Watch.tsx'
 import { SplitHandle, usePane } from './split.tsx'
 import { usePendingPie } from './launch.ts'
@@ -52,6 +60,8 @@ interface Section {
   when?: (s: ProjectState | undefined) => boolean
 }
 
+const Actors = () => <Objects section="actors" />
+
 const SECTIONS: Section[] = [
   { id: 'overview', label: () => t('概览'), icon: LayoutGrid, group: () => t('运行时'), View: Overview },
   { id: 'console', label: () => t('控制台'), icon: SquareTerminal, group: () => t('运行时'), View: Console },
@@ -64,12 +74,32 @@ const SECTIONS: Section[] = [
     View: Lua,
     when: (s) => !!s?.instances.some((i) => i.lua),
   },
+  // Actor 和 UObject 分开（用户 2026-11-15）：Actor 页是世界大纲，Object 页是 UObject 树和按类搜，选中后的组件、属性栏两页共用
+  { id: 'actors', label: () => 'Actor', icon: PersonStanding, group: () => t('数据'), View: Actors },
   { id: 'objects', label: () => 'Object', icon: Box, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
+  // UEKit 扩展：项目里装了才列出（UE 插件页安装）
+  {
+    id: 'assetforge',
+    label: () => 'AssetForge',
+    icon: FileCode2,
+    group: () => t('扩展'),
+    View: Forge,
+    when: (s) => !!s?.extensions?.some((x) => x.name === 'AssetForge'),
+  },
+  {
+    id: 'gametest',
+    label: () => 'GameTest',
+    icon: FlaskConical,
+    group: () => t('扩展'),
+    View: GameTest,
+    when: (s) => !!s?.extensions?.some((x) => x.name === 'GameTest'),
+  },
   { id: 'watch', label: () => t('监视'), icon: Eye, group: () => t('观察'), View: Watch },
   { id: 'perf', label: () => t('性能'), icon: Gauge, group: () => t('观察'), View: Perf },
   { id: 'logs', label: () => t('运行日志'), icon: List, group: () => t('观察'), View: Logs },
   { id: 'history', label: () => t('操作记录'), icon: Undo2, group: () => t('观察'), View: History },
+  { id: 'plugins', label: () => t('UE 插件'), icon: Blocks, group: () => t('项目'), View: Plugins },
   { id: 'bridge', label: () => t('桥接与权限'), icon: SlidersHorizontal, group: () => t('项目'), View: Bridge },
 ]
 
@@ -81,8 +111,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
   const [pid, rawSection = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
-  // Actor 页并进了 Object 页：以前记下的地址、别处写死的链接照样能打开
-  const sectionId = rawSection === 'actors' ? 'objects' : rawSection
+  const sectionId = rawSection
   const sub = rest.join('/')
   const projects = useLoad(() => get<{ projects: UeProject[] }>('/projects').then((r) => r.projects), [])
   const [adding, setAdding] = useState(false)
@@ -123,6 +152,10 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   useEffect(() => {
     setPidTarget(undefined)
   }, [project?.id])
+  // 记下每个分区最后停在哪（选中的对象、资源）：从左栏切回来时回到原处，不是回到空白页
+  useEffect(() => {
+    if (project) keep(`${project.id}/sub/${sectionId}`, sub || undefined)
+  }, [project, sectionId, sub])
 
   const ctx: UeCtx | null = useMemo(
     () =>
@@ -230,7 +263,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
                       icon={s.icon}
                       label={s.label()}
                       on={s.id === section.id}
-                      onClick={() => go(s.id)}
+                      onClick={() => go(s.id, kept<string>(`${project.id}/sub/${s.id}`))}
                       count={counts[s.id]}
                     />
                   ))}

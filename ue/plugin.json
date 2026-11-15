@@ -1,9 +1,9 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "icon": "gamepad",
-  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图。",
+  "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
   "activation": "project",
@@ -50,6 +50,14 @@
       "group": "UELink",
       "label": "UELink 更新源",
       "desc": "装和升级 UE 端插件 UELink 时去哪查新版本。留空用 GitHub（fixcode-h/UELink 的最新正式版）；公司内网可以填镜像地址（放着 manifest.json 和源码包的网址）或本机目录。读不到时用插件自带的那份",
+      "default": ""
+    },
+    {
+      "key": "uekitSource",
+      "type": "text",
+      "group": "UELink",
+      "label": "UEKit 插件目录",
+      "desc": "装 AssetForge、GameTest 这些 UELink 扩展时去哪查。留空用 GitHub（fixcode-h/UEKit 的 catalog.json）；公司内网可以填镜像地址（放着 catalog.json 和源码包的网址）或本机目录",
       "default": ""
     },
     {
@@ -122,7 +130,9 @@
     "ue_editor": "编辑器",
     "ue_undo": "撤回修改",
     "ue_perf": "性能抓取",
-    "ue_capture": "抓取分析"
+    "ue_capture": "抓取分析",
+    "ue_forge": "AssetForge",
+    "ue_gametest": "游戏测试"
   },
   "server": "server/index.js",
   "web": "web/index.js",

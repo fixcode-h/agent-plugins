@@ -4,6 +4,9 @@ import { availableVersion } from './uelink.ts'
 import { bridgeVersionIn, olderVersion } from './instances.ts'
 import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
+import { stopAllStreams } from './uekit/stream.ts'
+import { installedIn } from './uekit/catalog.ts'
+import { EXT_TOOL_PLUGIN } from './uekit/tools-ext.ts'
 import { listProjects, projectForRun } from './registry.ts'
 import { ueTextifier } from './textify.ts'
 import { ueToolDefs, ueTools } from './tools.ts'
@@ -40,14 +43,19 @@ async function bridgeNotice(root: string) {
   const [installed, bundled] = await Promise.all([bridgeVersionIn(root), availableVersion()])
   if (!installed || installed === '?' || !bundled || !olderVersion(installed, bundled)) return undefined
   return [
-    t(
-      '项目里的 UE 桥接是 {old}，UELink 已经有 {new}：新功能要更新后才能用。到 UE 页「桥接与权限」更新，再重新编译。',
-      {
-        old: installed,
-        new: bundled,
-      },
-    ),
+    t('项目里的 UE 桥接是 {old}，UELink 已经有 {new}：新功能要更新后才能用。到 UE 页「桥接与权限」更新，再重新编译。', {
+      old: installed,
+      new: bundled,
+    }),
   ]
+}
+
+/** ue_forge / ue_gametest 只在项目里装了对应的 UEKit 扩展时挂：没装的工具 Agent 用不了，挂上只占说明 */
+async function withExtensions<T extends { name: string }>(root: string, tools: T[]) {
+  const missing = new Set<string>()
+  for (const [tool, plugin] of Object.entries(EXT_TOOL_PLUGIN))
+    if (!(await installedIn(root, plugin))) missing.add(tool)
+  return tools.filter((x) => !missing.has(x.name))
 }
 
 const activate: ActivateServer = async (ctx) => {
@@ -66,7 +74,13 @@ const activate: ActivateServer = async (ctx) => {
       if (ctx.config().attach === 'role' && !run.skills.some((s) => UE_SKILLS.includes(s)))
         return { skip: t('插件设置为只给 UE 角色挂，这个角色没有 {skills} 技能', { skills: UE_SKILLS.join(' / ') }) }
       return {
-        servers: [{ name: 'ue', summary: UE_SUMMARY, tools: () => ueTools(project.id, project.root, run.agentName) }],
+        servers: [
+          {
+            name: 'ue',
+            summary: UE_SUMMARY,
+            tools: () => withExtensions(project.root, ueTools(project.id, project.root, run.agentName)),
+          },
+        ],
         hint: run.resume ? undefined : HINT,
         notices: run.resume ? undefined : await bridgeNotice(project.root),
       }
@@ -113,6 +127,7 @@ const activate: ActivateServer = async (ctx) => {
 
     stop() {
       stopAllBackground()
+      stopAllStreams()
     },
   }
 }

@@ -292,6 +292,7 @@ export function SearchBox({
   onSearch,
   busy,
   allowEmpty,
+  live,
 }: {
   initial?: string
   placeholder: string
@@ -301,6 +302,8 @@ export function SearchBox({
   busy?: boolean
   /** 空的也能搜（资源按类型列、日志清掉筛选） */
   allowEmpty?: boolean
+  /** 筛的是已经取到网页上的列表（函数、GM）：边打字边筛，不要「搜索」按钮（用户 2026-11-15） */
+  live?: boolean
 }) {
   const [q, setQ] = useState(initial)
   const { Button } = h().ui
@@ -319,16 +322,21 @@ export function SearchBox({
         <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
         <input
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value)
+            if (live) onSearch(e.target.value.trim())
+          }}
           placeholder={placeholder}
           aria-label={placeholder}
           className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
         />
         {hint && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{hint}</span>}
       </label>
-      <Button type="submit" size="sm" variant="secondary" disabled={busy || (!q.trim() && !allowEmpty)}>
-        {t('搜索')}
-      </Button>
+      {!live && (
+        <Button type="submit" size="sm" variant="secondary" disabled={busy || (!q.trim() && !allowEmpty)}>
+          {t('搜索')}
+        </Button>
+      )}
     </form>
   )
 }

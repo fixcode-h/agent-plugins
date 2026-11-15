@@ -36,6 +36,8 @@ export interface Comp {
   scene?: boolean
   /** 怎么来的：native（C++ 构造函数）、blueprint（蓝图组件列表）、script（构造脚本）、instance（关卡里加的） */
   created?: 'native' | 'blueprint' | 'script' | 'instance'
+  /** 蓝图资源的组件树里：这个蓝图组件是父蓝图加的（UELink 2.2.0 起） */
+  inherited?: boolean
 }
 
 /** 按类名挑图标，和 UE 组件面板的意思对上（骨骼网格、静态网格、弹簧臂、灯、相机…），认不出的用拼图 */
@@ -60,7 +62,7 @@ const ICONS: [RegExp, LucideIcon][] = [
   [/Decal/i, Stamp],
   [/Scene|Transform/i, Axis3d],
 ]
-const iconOf = (cls: string) => ICONS.find(([re]) => re.test(cls))?.[1] ?? Puzzle
+export const iconOf = (cls: string) => ICONS.find(([re]) => re.test(cls))?.[1] ?? Puzzle
 
 const ORIGIN: Record<string, () => string> = {
   native: () => 'C++',
@@ -141,7 +143,7 @@ export function CompTree({
           </span>
           {c.created && (
             <span className="ue:ml-auto ue:shrink-0 ue:pl-2 ue:text-caption ue:text-subtle">
-              {ORIGIN[c.created]?.()}
+              {c.inherited ? t('父蓝图') : ORIGIN[c.created]?.()}
             </span>
           )}
         </div>

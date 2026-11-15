@@ -6,6 +6,7 @@ import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
+import { followJob } from './uekit/follow.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
 
@@ -61,8 +62,19 @@ const ASSET_OPS = new Set([
   'bp.edit',
   'bp.compile',
   'python',
+  // AssetForge（UEKit 扩展）：读配置和资产，编辑器没开时后台编辑器也能做
+  'forge.health',
+  'forge.kinds',
+  'forge.entries',
+  'forge.describe',
+  'forge.plan',
+  'forge.diff',
+  'forge.import',
+  'forge.export',
+  'forge.job',
+  'forge.stop',
 ])
-const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call', 'umg.tree', 'object.refs'])
+const PATH_OPS = new Set(['props', 'get', 'functions', 'set', 'call', 'umg.tree', 'object.refs', 'components'])
 
 function kindOf(op: string, args: Record<string, unknown>): Kind {
   switch (op) {
@@ -77,6 +89,18 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
+    // GameTest（UEKit 扩展）：跑场景、单步、录制都在驱动正在运行的游戏
+    case 'gt.run':
+    case 'gt.step':
+    case 'gt.record.start':
+    case 'gt.record.mark':
+    case 'gt.record.stop':
+      return 'runtime'
+    // AssetForge：导入把配置写成资产并保存（演练只读），导出把资产写回配置文件
+    case 'forge.import':
+      return args.dryRun ? 'read' : 'save'
+    case 'forge.export':
+      return 'asset'
     case 'set':
       return isRuntimePath(String(args.path ?? '')) ? 'runtime' : 'asset'
     case 'datatable.set':
@@ -167,6 +191,22 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
     case 'lua.exec':
       return `${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+    case 'forge.import':
+      return `AssetForge ${t('导入')}${args.dryRun ? ` · ${t('演练')}` : ''}\n${args.pending ? t('全部待导入') : ((args.configs as string[]) ?? []).join('\n')}`
+    case 'forge.export':
+      return `AssetForge ${t('导出到配置')}\n${((args.assets as string[]) ?? []).join('\n')}`
+    case 'gt.run':
+      return `GameTest ${t('运行')} ${args.scenario ?? args.name ?? ''}`.trim()
+    case 'gt.step': {
+      const step = (args.step ?? args) as Record<string, unknown>
+      return `GameTest ${step.action ?? ''} ${step.target ?? ''}`.trim()
+    }
+    case 'gt.record.start':
+      return `GameTest ${t('开始录制')} ${args.name ?? ''}`.trim()
+    case 'gt.record.mark':
+      return `GameTest ${t('检查点')} ${args.text ?? ''}`.trim()
+    case 'gt.record.stop':
+      return `GameTest ${t('停止录制')}${args.save === false ? ` · ${t('不保存')}` : ''}`
     case 'pie':
       return `PIE ${args.action}${args.players ? ` × ${args.players}` : ''}${args.netMode ? ` ${args.netMode}` : ''}`
     default:
@@ -309,6 +349,8 @@ function undoOf(op: string, args: Record<string, unknown>, res: Record<string, u
   if (typeof res.tx === 'string' && res.tx && op !== 'asset.undo')
     return { undo: { op: 'asset.undo', args: { tx: res.tx, path: args.path } } }
   if (op === 'python') return { noUndo: t('执行的 Python 代码不能自动撤回') }
+  if (op.startsWith('forge.')) return { noUndo: t('AssetForge 的导入导出不能自动撤回：用版本管理还原文件') }
+  if (op.startsWith('gt.')) return { noUndo: t('测试步骤和录制不能撤回') }
   if (['struct', 'delete'].includes(kindOf(op, args)))
     return { noUndo: t('新建、复制、改名、删除不能自动撤回：没保存前用「放弃改动」，或反向再做一次') }
   if (kindOf(op, args) === 'asset') return { noUndo: t('资源改动用「放弃改动」撤回') }
@@ -365,6 +407,9 @@ export async function runOp(
     if (op === 'asset.save') res.vcs = await p4After(ctx.project, 'add', added)
     if (op === 'asset.delete' && res.onDisk)
       res.vcs = await p4After(ctx.project, 'delete', [String(res.file)], !!res.fileRemoved)
+    // 后台编辑器没有推送通道：AssetForge 作业的进度由服务端转成推送（uekit/follow.ts）
+    if (card.kind !== 'editor' && (op === 'forge.import' || op === 'forge.export') && typeof res.job === 'string')
+      followJob(ctx.project, card, res.job)
     if (op === 'asset.save' || op === 'asset.revert') release(ctx.project, (args.packages as string[]) ?? [])
     const item = await record(ctx.project.id, {
       ...base,

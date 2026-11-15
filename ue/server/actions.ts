@@ -1,3 +1,4 @@
+import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
 import { backgroundState } from './editor.ts'
 import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
@@ -18,7 +19,24 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     bridgeVersionIn(p.root),
     availableVersion(),
   ])
-  return { project: p, instances, bridge, bundled, background: backgroundState(p.id, cards), jobs: projectJobs(p.id) }
+  // UEKit 扩展装没装（看磁盘上的插件目录）：左栏按它列出 AssetForge、GameTest
+  const extensions = (
+    await Promise.all(
+      KNOWN_EXTENSIONS.map(async (name) => {
+        const inst = await installedIn(p.root, name)
+        return inst ? { name, version: inst.version } : undefined
+      }),
+    )
+  ).filter((x) => !!x)
+  return {
+    project: p,
+    instances,
+    bridge,
+    bundled,
+    background: backgroundState(p.id, cards),
+    jobs: projectJobs(p.id),
+    extensions,
+  }
 }
 
 export async function undo(ctx: OpCtx, id: string) {

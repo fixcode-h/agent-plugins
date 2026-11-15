@@ -77,7 +77,7 @@ export const mcpText = (text: string, isError = false): McpResult => ({
 /** 给 Agent 的结果限长：超长的截断并说明怎么取全量 */
 export function clip(s: string, max = 12000) {
   if (s.length <= max) return s
-  return `${s.slice(0, max)}\n…（还有 ${s.length - max} 个字符没列出：缩小范围，或按属性路径单独取）`
+  return `${s.slice(0, max)}\n…（还有 ${s.length - max} 个字符没列出：缩小范围、按属性路径单独取，或用 file=true 写成文件只回路径（ue_get、ue_asset export 支持））`
 }
 
 /** 通配：* 匹配任意字符，不区分大小写，整句匹配 */

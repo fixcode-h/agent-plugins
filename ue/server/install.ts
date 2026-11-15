@@ -62,20 +62,20 @@ async function gitRel(root: string, name: string) {
 
 const p4ignore = (p: UeProject) => path.join(p.root, process.env.P4IGNORE?.split(/[;:]/)[0] || '.p4ignore')
 
-async function markLocal(job: Job, p: UeProject) {
+export async function markLocal(job: Job, p: UeProject, name = UELINK) {
   if (p.vcs === 'git') {
     const f = await gitExclude(p.root)
-    if (f && (await appendLine(f, await gitRel(p.root, UELINK)))) jobLog(job, t('已写进 {f}', { f }))
+    if (f && (await appendLine(f, await gitRel(p.root, name)))) jobLog(job, t('已写进 {f}', { f }))
   } else if (p.vcs === 'p4') {
     const f = p4ignore(p)
-    if (await appendLine(f, ignoreLine(UELINK))) jobLog(job, t('已写进 {f}', { f }))
+    if (await appendLine(f, ignoreLine(name))) jobLog(job, t('已写进 {f}', { f }))
   } else if (p.vcs === 'svn') {
     jobLog(job, t('SVN 不会自动加入新文件，不用改忽略设置'))
   }
 }
 
 /** 去掉某个插件的本机忽略行（卸载 UELink、清掉旧插件时用） */
-async function unmarkLocal(p: UeProject, name: string) {
+export async function unmarkLocal(p: UeProject, name: string) {
   if (p.vcs === 'git') {
     const f = await gitExclude(p.root)
     if (f) await removeLine(f, await gitRel(p.root, name))
@@ -84,11 +84,12 @@ async function unmarkLocal(p: UeProject, name: string) {
   }
 }
 
-async function vcsAdd(job: Job, p: UeProject) {
-  const dir = path.join(p.root, REL)
+export async function vcsAdd(job: Job, p: UeProject, name = UELINK) {
+  const rel = path.join('Plugins', name)
+  const dir = path.join(p.root, rel)
   const r =
     p.vcs === 'git'
-      ? await run('git', ['-C', p.root, 'add', '--', REL])
+      ? await run('git', ['-C', p.root, 'add', '--', rel])
       : p.vcs === 'p4'
         ? await run('p4', ['-d', p.root, 'add', '-c', 'default', path.join(dir, '...')], {
             cwd: p.root,
@@ -102,7 +103,7 @@ async function vcsAdd(job: Job, p: UeProject) {
 }
 
 /** 删一个插件目录；编辑器开着时 DLL 被占用删不掉，报清楚 */
-async function removeDir(dir: string) {
+export async function removeDir(dir: string) {
   try {
     await rm(dir, { recursive: true, force: true })
   } catch {
@@ -111,7 +112,7 @@ async function removeDir(dir: string) {
 }
 
 /** .uproject 的 Plugins 列表里去掉这些插件的条目（显式启用过旧插件的项目，删了目录不删条目会报找不到插件） */
-async function dropFromUproject(p: UeProject, names: string[]) {
+export async function dropFromUproject(p: UeProject, names: string[]) {
   const txt = await readFile(p.uproject, 'utf8').catch(() => '')
   if (!txt) return []
   let doc: { Plugins?: { Name?: string }[] }
@@ -158,7 +159,8 @@ export async function install(p: UeProject, mode: InstallMode) {
     const dest = path.join(p.root, REL)
     const installed = await pluginVersion(path.join(dest, `${UELINK}.uplugin`))
     const { source, remoteError } = await bestSource(true)
-    if (remoteError) jobLog(job, t('公共库读不到（{e}），用插件自带的 UELink {v}', { e: remoteError, v: source.version }))
+    if (remoteError)
+      jobLog(job, t('公共库读不到（{e}），用插件自带的 UELink {v}', { e: remoteError, v: source.version }))
     await removeOldPlugins(job, p)
     if (installed && installed !== '?' && cmpVersion(installed, source.version) >= 0) {
       // 只升不降：另一个工具（UEToVS）装了更新的就不动
@@ -205,7 +207,10 @@ export async function uninstall(p: UeProject) {
       const rel = path.relative(p.root, dest)
       if (p.install?.mode === 'vcs' && p.vcs === 'p4') {
         // 已经 p4 add 过还没提交的先撤掉；提交过的要删就交给用户（不自动提交，设计文档 3.6）
-        const r = await run('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], { cwd: p.root, timeout: 60000 })
+        const r = await run('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], {
+          cwd: p.root,
+          timeout: 60000,
+        })
         jobLog(job, r.out + r.err)
       } else if (p.install?.mode === 'vcs' && p.vcs === 'git') {
         const r = await run('git', ['-C', p.root, 'rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', rel])

@@ -182,7 +182,7 @@ export function Gm() {
           <SplitHandle pane={pane} paneRef={left} reserve={() => 376} />
 
           <div className={cn('ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-4', PANE_FILL)}>
-            <SearchBox initial={q} placeholder={t('GM 名字前缀')} hint={t('前缀')} onSearch={setQ} allowEmpty />
+            <SearchBox initial={q} placeholder={t('GM 名字前缀')} hint={t('前缀')} onSearch={setQ} allowEmpty live />
             <ErrorText>{list.error}</ErrorText>
             {list.loading && !items.length && <p className="ue:text-footnote ue:text-subtle">{t('正在列出 GM…')}</p>}
             <div className="ue:grid ue:min-h-0 ue:flex-1 ue:auto-rows-min ue:gap-2 ue:overflow-auto ue:xl:grid-cols-2">

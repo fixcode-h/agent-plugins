@@ -61,7 +61,8 @@ export function Bridge() {
                 },
               )}
               {upgrade && ` ${t('公共库有 {v}，可以升级。', { v: state?.bundled ?? '' })}`}
-              {legacy && ` ${t('现在装的是旧版桥接 AgentPanelBridge，升级会换成 UELink 并删掉旧插件；项目代码依赖了 AgentPanelBridge 模块的，Build.cs 里改成 UELinkCore。')}`}
+              {legacy &&
+                ` ${t('现在装的是旧版桥接 AgentPanelBridge，升级会换成 UELink 并删掉旧插件；项目代码依赖了 AgentPanelBridge 模块的，Build.cs 里改成 UELinkCore。')}`}
               {live && ` ${t('编辑器开着：装好、编译完要重启编辑器才加载新版本。')}`}
             </p>
             <div className="ue:flex ue:flex-wrap ue:gap-2">

@@ -92,6 +92,8 @@ export interface Instance {
   worlds: World[]
   /** 装了 UnLua 的项目：桥接编进了 Lua 支持时有这个字段；available 表示现在拿得到 Lua 环境 */
   lua?: { available: boolean; error?: string; version?: string }
+  /** 进程里加载了的 UELink 扩展（UEKit 的 AssetForge、GameTest），旧 UELink 没有这个字段 */
+  extensions?: { name: string; version: string }[]
 }
 
 export interface Target {
@@ -188,4 +190,6 @@ export interface ProjectState {
   bundled: string
   background: { running: boolean; starting: boolean; pid?: number; error?: string }
   jobs: Job[]
+  /** 项目里装了的 UEKit 扩展（磁盘上的版本） */
+  extensions?: { name: string; version: string }[]
 }

@@ -18,6 +18,11 @@ export interface Card {
   bridge: string
   project: string
   startedAt: string
+  /** 推送通道端口（只有编辑器进程有，UEKit docs/protocol.md 第 1、3 节） */
+  stream?: number
+  features?: string[]
+  /** 这个进程里实际加载了的 UELink 扩展（AssetForge、GameTest） */
+  extensions?: { name: string; version: string }[]
 }
 
 const cardDirs = (root: string) => [
@@ -121,6 +126,7 @@ export async function info(card: Card): Promise<Instance> {
     bridge: card.bridge,
     startedAt: card.startedAt,
     online: false,
+    extensions: card.extensions,
     worlds: [],
   }
   try {
@@ -130,7 +136,14 @@ export async function info(card: Card): Promise<Instance> {
     })
     const body = (await res.json()) as Partial<Instance> & { ok?: boolean; error?: string }
     if (!body.ok) return { ...base, error: body.error || `HTTP ${res.status}` }
-    return { ...base, online: true, log: body.log, worlds: body.worlds ?? [], lua: body.lua }
+    return {
+      ...base,
+      online: true,
+      log: body.log,
+      worlds: body.worlds ?? [],
+      lua: body.lua,
+      extensions: body.extensions ?? card.extensions,
+    }
   } catch (e) {
     return { ...base, error: (e as Error).message }
   }

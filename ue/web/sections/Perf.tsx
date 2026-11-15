@@ -95,10 +95,7 @@ export function Perf() {
         title={t('性能')}
         desc={
           cur ? (
-            <span
-              className="ue:flex ue:min-w-0 ue:items-center ue:gap-2"
-              onContextMenu={(e) => menuFor(e, cur)}
-            >
+            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-2" onContextMenu={(e) => menuFor(e, cur)}>
               <span className="ue:truncate ue:font-medium ue:text-fg">{nameOf(cur)}</span>
               <span className="ue:truncate" title={cur.file}>
                 {fmtTime(cur.at)} · {fmtSize(cur.sizeKB * 1024)}
