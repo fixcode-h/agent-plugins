@@ -24,12 +24,44 @@ export function parseLine(raw: string, seq: number): LogLine {
   return { seq, time: m[1], category: m[2], verbosity: m[3] ?? 'Log', text: m[4] }
 }
 
+/**
+ * 按顺序解析日志文件的行：UE 写多行消息（调用栈、脚本报错）时只有第一行带 [时间][帧] 前缀，后面的续行没有。
+ * 续行沿用上一条的时间、分类和级别，不然一条 Error 的后半截会被当成 Log，按级别筛选时丢掉，全部里也显示成普通色。
+ * 只在上一行带时间前缀时才算续行：文件开头还没开时间戳的那几行照常按「分类: 级别:」解析。
+ */
+export function lineParser() {
+  let prev: LogLine | undefined
+  return (raw: string, seq: number): LogLine & { cont?: boolean } => {
+    if (prev?.time && !raw.startsWith('[')) {
+      const { time, category, verbosity } = prev
+      return { seq, time, category, verbosity, text: raw, cont: true }
+    }
+    prev = parseLine(raw, seq)
+    return prev
+  }
+}
+
+const isError = (v: string) => /^(error|fatal)$/i.test(v)
+const isWarning = (v: string) => /^warning$/i.test(v)
+
+/** 一段行里的错误、警告条数（续行不重复算，一条多行消息只算一次） */
+export function countLevels(lines: (LogLine & { cont?: boolean })[]) {
+  let errors = 0
+  let warnings = 0
+  for (const l of lines) {
+    if (l.cont) continue
+    if (isError(l.verbosity)) errors++
+    else if (isWarning(l.verbosity)) warnings++
+  }
+  return { errors, warnings }
+}
+
 export const logFile = (p: UeProject) => path.join(p.root, 'Saved', 'Logs', `${p.uname}.log`)
 
 /** 读文件尾部（最多 maxBytes），按行解析；seq 用行号，离线日志没有桥接的游标 */
 export async function tailFile(file: string, limit = 500, maxBytes = 2 * 1024 * 1024) {
   const st = await stat(file).catch(() => null)
-  if (!st) return { lines: [] as LogLine[], size: 0, file }
+  if (!st) return { lines: [] as LogLine[], size: 0, file, errors: 0, warnings: 0 }
   const fh = await open(file, 'r')
   try {
     const start = Math.max(0, st.size - maxBytes)
@@ -37,8 +69,10 @@ export async function tailFile(file: string, limit = 500, maxBytes = 2 * 1024 * 
     await fh.read(buf, 0, buf.length, start)
     const all = buf.toString('utf8').split(/\r?\n/)
     if (start > 0) all.shift()
-    const raw = all.filter((l) => l.length).slice(-limit)
-    return { lines: raw.map((l, i) => parseLine(l, i + 1)), size: st.size, file }
+    const parse = lineParser()
+    // 整段（最多 maxBytes）都解析：续行要看前一行，计数也按读到的整段算，不只算最后 limit 行
+    const parsed = all.filter((l) => l.length).map((l, i) => parse(l, i + 1))
+    return { lines: parsed.slice(-limit), size: st.size, file, ...countLevels(parsed) }
   } finally {
     await fh.close()
   }
@@ -47,16 +81,29 @@ export async function tailFile(file: string, limit = 500, maxBytes = 2 * 1024 * 
 export interface LineFilter {
   category?: string
   verbosity?: string
+  /**
+   * true：只要这一级（Warning 只要警告，Error 要错误和致命错误），网页的级别分段用；
+   * 不填：verbosity 是最低级别（Warning 连错误也要），给 Agent 的 ue_log 用
+   */
+  exact?: boolean
   contains?: string
 }
 
 const RANK = ['fatal', 'error', 'warning', 'display', 'log', 'verbose', 'veryverbose']
 
+/** 级别筛选：exact 时 Error 和 Fatal 算同一级（都是「错误」），其余按名字相等 */
+export function levelMatches(verbosity: string, want: string | undefined, exact?: boolean) {
+  const w = (want ?? '').toLowerCase()
+  if (!w) return true
+  const v = verbosity.toLowerCase()
+  if (exact) return isError(w) ? isError(v) : v === w
+  return RANK.indexOf(v) <= RANK.indexOf(w)
+}
+
 export function lineMatches(l: LogLine, f: LineFilter) {
-  const want = (f.verbosity ?? '').toLowerCase()
   return (
     (!f.category || l.category.toLowerCase().startsWith(f.category.toLowerCase())) &&
-    (!want || RANK.indexOf(l.verbosity.toLowerCase()) <= RANK.indexOf(want)) &&
+    levelMatches(l.verbosity, f.verbosity, f.exact) &&
     (!f.contains || l.text.toLowerCase().includes(f.contains.toLowerCase()))
   )
 }
@@ -67,12 +114,17 @@ export function lineMatches(l: LogLine, f: LineFilter) {
  */
 export async function searchFile(file: string, f: LineFilter, limit = 500, maxBytes = 64 * 1024 * 1024) {
   const st = await stat(file).catch(() => null)
-  if (!st) return { lines: [] as LogLine[], size: 0, file, scanned: 0, truncated: false, matched: 0 }
+  if (!st)
+    return { lines: [] as LogLine[], size: 0, file, scanned: 0, truncated: false, matched: 0, errors: 0, warnings: 0 }
   const start = Math.max(0, st.size - maxBytes)
   const rl = createInterface({ input: createReadStream(file, { start, encoding: 'utf8' }), crlfDelay: Infinity })
   const keep: LogLine[] = []
   let n = 0
   let matched = 0
+  // 计数按扫过的所有行算，和当前筛选无关：选「警告」时「错误 N」不会变成 0
+  let errors = 0
+  let warnings = 0
+  const parse = lineParser()
   let first = start > 0
   for await (const raw of rl) {
     // 从文件中间开始读时第一行是半行，丢掉
@@ -82,13 +134,17 @@ export async function searchFile(file: string, f: LineFilter, limit = 500, maxBy
     }
     n++
     if (!raw) continue
-    const l = parseLine(raw, n)
+    const l = parse(raw, n)
+    if (!l.cont) {
+      if (isError(l.verbosity)) errors++
+      else if (isWarning(l.verbosity)) warnings++
+    }
     if (!lineMatches(l, f)) continue
     matched++
     keep.push(l)
     if (keep.length > limit) keep.shift()
   }
-  return { lines: keep, size: st.size, file, scanned: st.size - start, truncated: start > 0, matched }
+  return { lines: keep, size: st.size, file, scanned: st.size - start, truncated: start > 0, matched, errors, warnings }
 }
 
 export async function logSize(p: UeProject) {

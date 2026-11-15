@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GitCompareArrows, Loader2, RefreshCw, Settings2 } from 'lucide-react'
+import { GitCompareArrows, Loader2, RefreshCw, Settings2, Table2 } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { tablesOf, type TableDoc, type TableHit, type TableSchema, type TablesIndex } from '@shared/tables'
 import { useNav } from '@/lib/data'
@@ -35,6 +35,7 @@ import { ConfirmDialog } from '@/components/ui/dialog'
 import { KEEP_RUNS, TableOutputPanel, type ExportRunInfo } from '@/components/tables/TableOutput'
 import { TableSkeleton, TablesSetupCard } from '@/components/tables/TableEmpty'
 import { TablesHome } from '@/components/tables/TablesHome'
+import { tablesHost } from '@/lib/tables-host'
 import type { SheetEdit } from '@shared/table-edit'
 import type { TableExport } from '@shared/table-export'
 
@@ -417,9 +418,13 @@ function Workbench({
   const files = index?.files ?? []
   const fileSet = useMemo(() => new Set((index?.files ?? []).map((f) => f.path)), [index])
   const quick = marks.prune((p) => fileSet.has(p))
+  const Back = tablesHost()?.ui.ProjectBackCard
   return (
     <>
       <ListPane
+        // 从项目工具打开时表格页盖住会话侧栏（PluginPage.cover）：列表栏顶上放面板的「回到项目」卡片，点一下回到项目对话。
+        // 旧面板没有这个组件、ListPane 也不认 top，照旧和侧栏并排
+        top={pinned && Back ? <Back projectId={projectId} icon={Table2} /> : undefined}
         title={t('表格')}
         count={files.length}
         // 新建表格：按项目的表头配置填每一列（表格目录还没有时不给）

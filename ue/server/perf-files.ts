@@ -1,7 +1,6 @@
-import { spawn } from 'node:child_process'
-import path from 'node:path'
 import { getCapture, setMeta } from './captures.ts'
 import { BridgeError } from './instances.ts'
+import { revealInFolder } from './reveal.ts'
 import type { UeProject } from './types.ts'
 import { t } from './util.ts'
 
@@ -11,15 +10,7 @@ import { t } from './util.ts'
  */
 export async function revealCapture(p: UeProject, id: string) {
   const cap = await getCapture(p, id)
-  const [cmd, args] =
-    process.platform === 'win32'
-      ? ['explorer.exe', [`/select,${cap.file}`]]
-      : process.platform === 'darwin'
-        ? ['open', ['-R', cap.file]]
-        : ['xdg-open', [path.dirname(cap.file)]]
-  const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
-  child.on('error', () => undefined)
-  child.unref()
+  revealInFolder(cap.file)
   return { revealed: cap.file }
 }
 

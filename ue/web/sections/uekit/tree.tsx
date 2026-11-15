@@ -1,5 +1,5 @@
 import { ChevronRight, Folder, FolderOpen, type LucideIcon } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { h } from '../../host.ts'
 
 /**
@@ -61,6 +61,8 @@ export function FileTree<T>({
   leafRight,
   leafDim,
   folderRight,
+  onLeafMenu,
+  onFolderMenu,
   label,
   empty,
 }: {
@@ -74,6 +76,9 @@ export function FileTree<T>({
   /** 变灰的行（没有配置的资产） */
   leafDim?: (d: T) => boolean
   folderRight?: (leaves: T[]) => ReactNode
+  /** 右键一行（GameTest 场景的运行、改名、删除……）：文件夹给 path 和下面的全部叶子 */
+  onLeafMenu?: (e: MouseEvent, path: string, data: T) => void
+  onFolderMenu?: (e: MouseEvent, path: string, leaves: T[]) => void
   label: string
   empty: ReactNode
 }) {
@@ -120,6 +125,9 @@ export function FileTree<T>({
                   if (!next.delete(n.path)) next.add(n.path)
                   return next
                 })
+          }
+          onContextMenu={(e) =>
+            leaf !== undefined ? onLeafMenu?.(e, n.path, leaf) : onFolderMenu?.(e, n.path, n.leaves)
           }
           style={{ paddingLeft: `${6 + depth * INDENT}px` }}
           className={cn(

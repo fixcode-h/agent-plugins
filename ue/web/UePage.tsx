@@ -42,6 +42,7 @@ import { Plugins } from './sections/uekit/Plugins.tsx'
 import { Watch } from './sections/Watch.tsx'
 import { SplitHandle, usePane } from './split.tsx'
 import { usePendingPie } from './launch.ts'
+import { useLaunchEvents } from './launch-progress/store.ts'
 import { Jump } from './Jump.tsx'
 import { ShotDialog } from './Shot.tsx'
 import { NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
@@ -288,8 +289,9 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   )
 }
 
-/** 「启动编辑器并开始 PIE」排着的 PIE：要在 Ctx 里面才拿得到项目和状态 */
+/** 「启动编辑器并开始 PIE」排着的 PIE、编辑器启动进度的推送：要在 Ctx 里面才拿得到项目和状态 */
 function PendingPie() {
   usePendingPie()
+  useLaunchEvents()
   return null
 }

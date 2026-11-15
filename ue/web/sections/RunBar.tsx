@@ -4,6 +4,7 @@ import { op, ppost, useAction } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { useLaunch } from '../launch.ts'
+import { LaunchButton } from '../launch-progress/LaunchButton.tsx'
 
 const NET = [
   { value: 'standalone', label: () => t('单机') },
@@ -137,9 +138,15 @@ export function RunBar() {
           </button>
         </div>
       ) : (
-        <ui.Button size="sm" disabled={launch.busy || !state?.bridge} onClick={() => void launch.start(false)}>
-          <Play className="ue:h-3.5 ue:w-3.5" /> {t('启动编辑器')}
-        </ui.Button>
+        <LaunchButton
+          size="sm"
+          icon={Play}
+          progress={launch.progress}
+          disabled={launch.busy || !state?.bridge}
+          onClick={() => void launch.start(false)}
+        >
+          {t('启动编辑器')}
+        </LaunchButton>
       )}
     </>
   )

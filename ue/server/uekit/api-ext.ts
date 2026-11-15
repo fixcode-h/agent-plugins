@@ -5,13 +5,15 @@ import { liveCards } from '../instances.ts'
 import type { InstallMode } from '../types.ts'
 import { run, t } from '../util.ts'
 import { extensionStatus } from './catalog.ts'
+import { insideProject, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { forgeFileAction } from './forge-files.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { watch } from './stream.ts'
 
 /**
  * UE 页「UE 插件」「AssetForge」「GameTest」用的接口（挂在 /api/plugins/ue/p/<项目>/ext/ 下）。
  * forge.* / gt.* 操作本身走通用的 POST op（ops.ts 按操作分权限、记操作记录），这里只放面板这边的事：
- * 插件目录和安装、推送事件登记、git 里上次提交的配置（属性差异的对比基线）、测试截图。
+ * 插件目录和安装、推送事件登记、git 里上次提交的配置（属性差异的对比基线）、测试截图、GameTest 场景文件。
  */
 type Body = Record<string, unknown>
 
@@ -21,21 +23,6 @@ async function loadedVersions(root: string) {
   for (const card of await liveCards(root))
     for (const e of card.extensions ?? []) if (!out.has(e.name)) out.set(e.name, e.version)
   return out
-}
-
-/**
- * 只认项目目录和项目外层同级的 ProjectDoc 里的文件（P4 / SVN 项目的文档根在那，AssetForge 配置、GameTest 场景跟着它）。
- * 相对路径按项目根算（gt 报告里的 path 就是这样）
- */
-function insideProject(root: string, rel: string) {
-  const abs = path.resolve(root, rel)
-  const ok = (dir: string) => {
-    const r = path.relative(dir, abs)
-    return !!r && !r.startsWith('..') && !path.isAbsolute(r)
-  }
-  if (!ok(root) && !ok(path.join(path.dirname(root), 'ProjectDoc')))
-    throw new Error(t('只能读项目目录和 ProjectDoc 里的文件：{p}', { p: rel }))
-  return abs
 }
 
 export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Promise<Response | Body | undefined> {
@@ -73,6 +60,18 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
       if (r.code !== 0) return { error: t('git 里还没有这份配置（新文件，或还没提交）') }
       return { text: r.out }
     }
+    case 'POST ext/gt/scenario':
+      // GameTest 页的步骤列表：场景文件里的每一步（没跑过的场景也要能看到）
+      return { ...(await readScenario(p.root, String(b.root ?? ''), String(b.path ?? ''))) }
+    case 'POST ext/gt/report':
+      // gt.report 太长时 UE 写成文件只回路径：页面要每一步的结果，从这份文件取
+      return readReportFile(p.root, String(b.file ?? ''))
+    case 'POST ext/gt/file':
+      // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示
+      return scenarioAction(p.root, b)
+    case 'POST ext/forge/file':
+      // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
+      return forgeFileAction(p.root, b)
     case 'GET ext/file': {
       // GameTest 的截图（Saved/GameTest/... 下的 png）：页面上看步骤截图用
       const rel = url.searchParams.get('path') ?? ''

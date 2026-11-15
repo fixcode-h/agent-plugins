@@ -78,6 +78,8 @@ export function Logs() {
       try {
         const r = await ppost<TailRes>(project.id, 'logs', {
           ...filter,
+          // 级别分段是「只看这一级」：选警告时不混进错误（Agent 的 ue_log 仍按最低级别）
+          exact: true,
           since: cursor.current,
           limit: cursor.current ? 1000 : 500,
         })
