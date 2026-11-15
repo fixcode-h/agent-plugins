@@ -6,6 +6,7 @@ import { setHost } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
 import { MenuSpecimen } from './menu.tsx'
+import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
@@ -50,6 +51,13 @@ const activate: ActivateWeb = (host) => {
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 启动编辑器按钮上的启动进度：跟面板「按钮」「进度条」的调节项
       { id: 'launch-button', label: 'UE · LaunchButton', tune: ['button', 'progress'], Specimen: LaunchButtonSpecimen },
+      // AssetForge 页的同步状态徽标、配置 → 资源关系条、作业报告：跟面板「徽标」「行」的调节项
+      {
+        id: 'forge-parts',
+        label: 'AssetForge · StatePill · ForgeLink · JobReport',
+        tune: ['badge', 'row'],
+        Specimen: ForgeSpecimen,
+      },
     ],
   }
 }
