@@ -976,7 +976,6 @@
   "搜资源类型，例如 Material、InputAction": "Search asset types, e.g. Material, InputAction",
   "{n} 个": "{n}",
   "self 对象路径（可选，从 Object 页里复制）": "self object path (optional, copy from the Object page)",
-  "选类，再按名字前缀搜索；不列场景树": "Pick a class, then search by name prefix; no scene tree",
   "固定这个对象": "Pin this object",
   "对象要在运行中的编辑器或游戏里找；资源在「资源」里看。": "Objects live in a running editor or game; view assets on the Assets page.",
   "搜类名，例如 Character、MyInventorySubsystem": "Search class names, e.g. Character, MyInventorySubsystem",
@@ -1208,5 +1207,16 @@
   "父蓝图": "Parent Blueprint",
   "输入与绑定事件": "Input & Bound Events",
   "搜函数名": "Search functions",
-  "没有匹配的函数": "No matching functions"
+  "没有匹配的函数": "No matching functions",
+  "UObject 树要 UELink 2.2.0 及以上，到「桥接与权限」升级并在本地编译": "The UObject tree needs UELink 2.2.0 or later: upgrade under \"Bridge & permissions\" and rebuild locally",
+  "UObject 树": "UObject tree",
+  "当前世界的大纲，点了哪个才读它的组件和属性": "Outliner of the current world; components and properties are read only for the one you click",
+  "UObject 按外层一层层展开，或者选类按名字前缀搜索": "Expand UObjects level by level by outer, or pick a class and search by name prefix",
+  "UObject 树 / 按类搜": "UObject tree / search by class",
+  "按类搜": "Search by class",
+  "筛 Actor 名字": "Filter Actor names",
+  "世界大纲要 UELink 2.2.0 及以上，到「桥接与权限」升级并在本地编译": "The outliner needs UELink 2.2.0 or later: upgrade under \"Bridge & permissions\" and rebuild locally",
+  "共 {n} 个 Actor，只列前 {m} 个": "{n} Actors, showing the first {m}",
+  "{n} 个 Actor": "{n} Actors",
+  "世界大纲": "Outliner"
 }

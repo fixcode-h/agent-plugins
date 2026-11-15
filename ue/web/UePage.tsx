@@ -9,6 +9,7 @@ import {
   FlaskConical,
   Gauge,
   LayoutGrid,
+  PersonStanding,
   List,
   Plus,
   SlidersHorizontal,
@@ -59,6 +60,8 @@ interface Section {
   when?: (s: ProjectState | undefined) => boolean
 }
 
+const Actors = () => <Objects section="actors" />
+
 const SECTIONS: Section[] = [
   { id: 'overview', label: () => t('概览'), icon: LayoutGrid, group: () => t('运行时'), View: Overview },
   { id: 'console', label: () => t('控制台'), icon: SquareTerminal, group: () => t('运行时'), View: Console },
@@ -71,6 +74,8 @@ const SECTIONS: Section[] = [
     View: Lua,
     when: (s) => !!s?.instances.some((i) => i.lua),
   },
+  // Actor 和 UObject 分开（用户 2026-11-15）：Actor 页是世界大纲，Object 页是 UObject 树和按类搜，选中后的组件、属性栏两页共用
+  { id: 'actors', label: () => 'Actor', icon: PersonStanding, group: () => t('数据'), View: Actors },
   { id: 'objects', label: () => 'Object', icon: Box, group: () => t('数据'), View: Objects },
   { id: 'assets', label: () => t('资源'), icon: Database, group: () => t('数据'), View: Assets },
   // UEKit 扩展：项目里装了才列出（UE 插件页安装）
@@ -106,8 +111,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const { ui, hooks } = h()
   const route = hooks.usePluginRoute()
   const [pid, rawSection = 'overview', ...rest] = path.split('/').map(decodeURIComponent)
-  // Actor 页并进了 Object 页：以前记下的地址、别处写死的链接照样能打开
-  const sectionId = rawSection === 'actors' ? 'objects' : rawSection
+  const sectionId = rawSection
   const sub = rest.join('/')
   const projects = useLoad(() => get<{ projects: UeProject[] }>('/projects').then((r) => r.projects), [])
   const [adding, setAdding] = useState(false)

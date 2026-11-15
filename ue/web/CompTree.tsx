@@ -62,7 +62,7 @@ const ICONS: [RegExp, LucideIcon][] = [
   [/Decal/i, Stamp],
   [/Scene|Transform/i, Axis3d],
 ]
-const iconOf = (cls: string) => ICONS.find(([re]) => re.test(cls))?.[1] ?? Puzzle
+export const iconOf = (cls: string) => ICONS.find(([re]) => re.test(cls))?.[1] ?? Puzzle
 
 const ORIGIN: Record<string, () => string> = {
   native: () => 'C++',

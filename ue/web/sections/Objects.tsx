@@ -8,6 +8,8 @@ import { useUe } from '../ctx.tsx'
 import { useGoneFromList, useKept } from '../keep.ts'
 import { h, t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
+import { ObjectTree } from './ObjectTree.tsx'
+import { Outliner } from './Outliner.tsx'
 import { Props } from '../Props.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { takePending } from '../pending.ts'
@@ -88,7 +90,7 @@ function dec(s: string): { cls: ClassOpt; prefix: string } {
  * 选中的是 Actor 时中间多一栏组件树（照 UE 组件面板），其他对象右边直接是属性（UMG 控件带控件树）。
  * 类型是 UObject 时桥接要扫全部对象，限时 50 毫秒，超时只给部分结果并提示选具体的类
  */
-export function Objects() {
+export function Objects({ section = 'objects' }: { section?: 'objects' | 'actors' } = {}) {
   const { project, target, sub, go } = useUe()
   const { inst } = useTargetInfo()
   const { cn, ui } = h()
@@ -111,7 +113,7 @@ export function Objects() {
   const local = useLoad(() => pget<Local>(project.id, 'local'), [project.id])
   const found = useLoad(
     () => {
-      if (!q) return Promise.resolve(undefined)
+      if (!q || section === 'actors') return Promise.resolve(undefined)
       // UObject 不当类名发：桥接拿到类名会把这个类的对象全取出来，UObject 就是几百万个；空类名走它限时的全表扫描
       const c = isAny(q.cls) ? '' : q.cls.path || q.cls.name
       return op<{ items: Row[]; more: boolean; partial?: boolean }>(
@@ -123,7 +125,7 @@ export function Objects() {
     },
     [q, target.instance, target.world],
     0,
-    `${kk}/found`,
+    `${project.id}/${section}/found`,
   )
   // 选中的是不是 Actor：能读出组件的就是。不是 Actor 时桥接报错，这里当成「没有组件栏」，不显示成错误
   const comps = useLoad(
@@ -141,15 +143,19 @@ export function Objects() {
   // 切回来、刷新后选中的对象或组件没了就清掉选中，还在的话上面已经重新读了组件、下面属性也是新读的
   useEffect(() => {
     if (!ready || !comps.data) return
-    if (comps.data.gone) go('objects')
-    else if (comp && comps.data.items && !comps.data.items.some((c) => c.path === comp)) go('objects', path)
+    if (comps.data.gone) go(section)
+    else if (comp && comps.data.items && !comps.data.items.some((c) => c.path === comp)) go(section, path)
     // 只在组件读回来时判断
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [comps.data])
-  useGoneFromList(found.data?.items, q, path ?? '', () => go('objects'))
+  useGoneFromList(found.data?.items, q, section === 'objects' ? (path ?? '') : '', () => go('objects'))
   const actorItems = ready ? comps.data?.items : null
   // 资源默认值和类默认收起（界面优化第 1 条）：同名的 Default__ 夹在实例中间最容易点错；选中的就在里面、或者没有实例时自动展开
   const [others, setOthers] = useKept(`${kk}/others`, false)
+  // 「刷新」也让大纲、UObject 树重读
+  const [tick, setTick] = useState(0)
+  // Object 页左栏：UObject 树（默认）或按类搜
+  const [leftTab, setLeftTab] = useKept<'tree' | 'search'>(`${kk}/tab`, 'tree')
 
   const luaOn = lua && hasLua
   const can = (c: ClassOpt, p: string) => luaOn || !isAny(c) || !!p.trim()
@@ -221,7 +227,14 @@ export function Objects() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <PageHead title="Object" desc={t('选类，再按名字前缀搜索；不列场景树')}>
+      <PageHead
+        title={section === 'actors' ? 'Actor' : 'Object'}
+        desc={
+          section === 'actors'
+            ? t('当前世界的大纲，点了哪个才读它的组件和属性')
+            : t('UObject 按外层一层层展开，或者选类按名字前缀搜索')
+        }
+      >
         {path && (
           <ui.Button size="sm" variant="secondary" onClick={togglePin}>
             {isPinned ? <X className="ue:h-3.5 ue:w-3.5" /> : <Pin className="ue:h-3.5 ue:w-3.5" />}
@@ -234,6 +247,7 @@ export function Objects() {
           onClick={() => {
             void found.reload()
             void comps.reload()
+            setTick((n) => n + 1)
           }}
         >
           <RefreshCw className="ue:h-3.5 ue:w-3.5" /> {t('刷新')}
@@ -249,224 +263,259 @@ export function Objects() {
             style={listPane.style(actorItems ? `calc(100% - ${compPane.size} - 352px)` : 'calc(100% - 376px)')}
             bodyClass="ue:flex ue:min-h-0 ue:flex-col"
           >
-            <form
-              className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3"
-              onSubmit={(e) => {
-                e.preventDefault()
-                search()
-              }}
-            >
-              <ClassPicker
-                value={isAny(cls) ? ANY : cls}
-                common={COMMON}
-                placeholder={t('搜类名，例如 Character、MyInventorySubsystem')}
-                load={(s) =>
-                  s
-                    ? op<{ items: { name: string; path: string; parent?: string }[] }>(
-                        project.id,
-                        'classes',
-                        { q: s, limit: 50 },
-                        target,
-                      ).then((r) =>
-                        r.items
-                          .filter((c) => c.name !== 'Object')
-                          .map((c) => ({ name: c.name, path: c.path, note: c.parent })),
-                      )
-                    : Promise.resolve([])
-                }
-                onChange={(c) => {
-                  setCls(c)
-                  // 换了类就按现在的名字开头重搜：下面的搜索始终是「在这个类里」
-                  search(c, prefix)
-                }}
-              />
-              <div className="ue:flex ue:items-center ue:gap-2">
-                <label className="ue:flex ue:h-8 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-line-strong ue:bg-field ue:px-2.5 ue:focus-within:border-focus">
-                  <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-                  <input
-                    value={prefix}
-                    onChange={(e) => setPrefix(e.target.value)}
-                    placeholder={isAny(cls) ? t('名字开头，例如 BP_Hero') : t('名字开头（可选）')}
-                    aria-label={t('名字开头')}
-                    className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+            {section === 'actors' ? (
+              <Outliner tick={tick} selected={path ?? ''} onSelect={(p) => go('actors', p)} />
+            ) : (
+              <>
+                <div className="ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2">
+                  <ui.Segmented
+                    size="sm"
+                    label={t('UObject 树 / 按类搜')}
+                    value={leftTab}
+                    onChange={setLeftTab}
+                    options={[
+                      { id: 'tree' as const, label: t('UObject 树') },
+                      { id: 'search' as const, label: t('按类搜') },
+                    ]}
                   />
-                  <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{t('前缀')}</span>
-                </label>
-                <ui.Button size="sm" variant="secondary" type="submit" disabled={found.loading || !can(cls, prefix)}>
-                  {t('搜索')}
-                </ui.Button>
-              </div>
-              {hasLua && (
-                <div className="ue:flex ue:items-center ue:gap-2">
-                  <label className="ue:flex ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
-                    <input
-                      type="checkbox"
-                      checked={lua}
-                      onChange={(e) => setLua(e.target.checked)}
-                      className="ue:accent-accent"
-                    />
-                    {t('只看绑了 Lua 的')}
-                  </label>
-                  {lua && (
-                    <ui.Input
-                      size="sm"
-                      className="ue:flex-1"
-                      value={mod}
-                      placeholder={t('Lua 模块名包含（可选）')}
-                      onChange={(e: { target: { value: string } }) => setMod(e.target.value)}
-                    />
-                  )}
                 </div>
-              )}
-              <div className="ue:flex ue:flex-wrap ue:gap-1">
-                {quicks.map((x) => (
-                  <button
-                    key={x.key}
-                    type="button"
-                    disabled={!!quickRun.busy}
-                    onClick={() => void x.run()}
-                    className="ue:h-6 ue:cursor-pointer ue:rounded-md ue:border ue:border-line ue:px-2 ue:text-footnote ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50"
-                  >
-                    {quickRun.busy === x.key ? t('找…') : x.label}
-                  </button>
-                ))}
-              </div>
-              <ErrorText>{quickErr}</ErrorText>
-              <ErrorText>{found.error}</ErrorText>
-              {found.data?.partial && (
-                <Note>{t('类型是 UObject 时对象太多，只搜了一部分。在上面选具体的类搜得更快也更全。')}</Note>
-              )}
-              {found.data && (
-                <span className="ue:text-footnote ue:text-subtle">
-                  {found.data.more
-                    ? t('超过 {n} 个，只列前 {n} 个，再多输几个字', { n: found.data.items.length })
-                    : t('{c} 里找到 {n} 个', {
-                        c: q && !isAny(q.cls) ? q.cls.name : 'UObject',
-                        n: found.data.items.length,
-                      })}
-                </span>
-              )}
-            </form>
-            <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-1.5">
-              {(() => {
-                const items = found.data?.items ?? []
-                const inst = items.filter((o) => kindOf(o) === 'instance')
-                const rest = items.filter((o) => kindOf(o) !== 'instance')
-                const nAsset = rest.filter((o) => kindOf(o) === 'asset').length
-                const show = others || !inst.length || rest.some((o) => o.path === path)
-                const row = (o: Row) => (
-                  <li key={o.path}>
-                    <button
-                      type="button"
-                      onClick={() => go('objects', o.path)}
-                      title={o.path}
-                      className={cn(
-                        'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
-                        path === o.path && 'ue:bg-sel',
-                      )}
-                    >
-                      <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
-                        {o.actor && <PersonStanding className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />}
-                        <span className="ue:truncate ue:text-body ue:text-fg">{o.label || o.name}</span>
-                        {o.module && <Badge tone="accent">{o.module}</Badge>}
-                        {o.player && <span className="ue:ml-auto ue:text-caption ue:text-subtle">{t('玩家')}</span>}
-                      </span>
-                      <span className="ue:truncate ue:text-caption ue:text-subtle">
-                        {o.class} · {o.actor && o.level ? o.level : o.path}
-                      </span>
-                    </button>
-                  </li>
-                )
-                const head = (id: (typeof KINDS)[number]['id'], n: number) => {
-                  const k = KINDS.find((x) => x.id === id)!
-                  return (
-                    <div className="ue:flex ue:items-center ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1" title={k.hint()}>
-                      <KindBadge kind={id} />
-                      <span className="ue:truncate ue:text-caption ue:text-subtle">
-                        {n} · {k.hint()}
-                      </span>
-                    </div>
-                  )
-                }
-                return (
+                {leftTab === 'tree' ? (
+                  <ObjectTree tick={tick} selected={path ?? ''} onSelect={(p) => go('objects', p)} />
+                ) : (
                   <>
-                    {inst.length > 0 && (
-                      <section className="ue:mb-2">
-                        {head('instance', inst.length)}
-                        <ul>{inst.map(row)}</ul>
-                      </section>
-                    )}
-                    {rest.length > 0 && inst.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setOthers((v) => !v)}
-                        aria-expanded={show}
-                        className="ue:mx-1 ue:mb-2 ue:flex ue:w-[calc(100%-0.5rem)] ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-dashed ue:border-line-strong ue:px-2.5 ue:py-2 ue:text-left ue:hover:bg-hover"
-                      >
-                        {show ? (
-                          <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-                        ) : (
-                          <ChevronRight className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-                        )}
-                        <span className="ue:min-w-0">
-                          <span className="ue:block ue:text-footnote ue:text-fg">
-                            {t('资源和默认值 {a} · 类 {c}', { a: nAsset, c: rest.length - nAsset })}
-                          </span>
-                          <span className="ue:block ue:text-caption ue:text-subtle">
-                            {t('改的是以后新建的对象，正在跑的不会变')}
-                          </span>
-                        </span>
-                      </button>
-                    )}
-                    {show &&
-                      (['asset', 'class'] as const).map((id) => {
-                        const rows = rest.filter((o) => kindOf(o) === id)
-                        return rows.length ? (
-                          <section key={id} className="ue:mb-2">
-                            {head(id, rows.length)}
-                            <ul>{rows.map(row)}</ul>
-                          </section>
-                        ) : null
-                      })}
-                  </>
-                )
-              })()}
-              {found.data && !found.data.items.length && (
-                <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</p>
-              )}
-              {!q && (
-                <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">
-                  {t('选类、输入名字开头点「搜索」；不列全部对象')}
-                </p>
-              )}
-            </div>
-            {(!!pinned.length || !!local.data?.recent.length) && (
-              <div className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:p-3">
-                {!!pinned.length && <span className="ue:text-footnote ue:text-subtle">{t('固定的对象')}</span>}
-                <div className="ue:flex ue:flex-wrap ue:gap-1.5">
-                  {pinned.map((p) => (
-                    <button
-                      key={p.path}
-                      type="button"
-                      className={chip}
-                      onClick={() => go('objects', p.path)}
-                      title={p.path}
+                    <form
+                      className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-3"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        search()
+                      }}
                     >
-                      <Pin className="ue:h-3 ue:w-3 ue:text-subtle" /> <span className="ue:truncate">{p.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {!!local.data?.recent.length && (
-                  <span className="ue:text-footnote ue:text-subtle">{t('最近搜过')}</span>
+                      <ClassPicker
+                        value={isAny(cls) ? ANY : cls}
+                        common={COMMON}
+                        placeholder={t('搜类名，例如 Character、MyInventorySubsystem')}
+                        load={(s) =>
+                          s
+                            ? op<{ items: { name: string; path: string; parent?: string }[] }>(
+                                project.id,
+                                'classes',
+                                { q: s, limit: 50 },
+                                target,
+                              ).then((r) =>
+                                r.items
+                                  .filter((c) => c.name !== 'Object')
+                                  .map((c) => ({ name: c.name, path: c.path, note: c.parent })),
+                              )
+                            : Promise.resolve([])
+                        }
+                        onChange={(c) => {
+                          setCls(c)
+                          // 换了类就按现在的名字开头重搜：下面的搜索始终是「在这个类里」
+                          search(c, prefix)
+                        }}
+                      />
+                      <div className="ue:flex ue:items-center ue:gap-2">
+                        <label className="ue:flex ue:h-8 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-line-strong ue:bg-field ue:px-2.5 ue:focus-within:border-focus">
+                          <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+                          <input
+                            value={prefix}
+                            onChange={(e) => setPrefix(e.target.value)}
+                            placeholder={isAny(cls) ? t('名字开头，例如 BP_Hero') : t('名字开头（可选）')}
+                            aria-label={t('名字开头')}
+                            className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+                          />
+                          <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{t('前缀')}</span>
+                        </label>
+                        <ui.Button
+                          size="sm"
+                          variant="secondary"
+                          type="submit"
+                          disabled={found.loading || !can(cls, prefix)}
+                        >
+                          {t('搜索')}
+                        </ui.Button>
+                      </div>
+                      {hasLua && (
+                        <div className="ue:flex ue:items-center ue:gap-2">
+                          <label className="ue:flex ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
+                            <input
+                              type="checkbox"
+                              checked={lua}
+                              onChange={(e) => setLua(e.target.checked)}
+                              className="ue:accent-accent"
+                            />
+                            {t('只看绑了 Lua 的')}
+                          </label>
+                          {lua && (
+                            <ui.Input
+                              size="sm"
+                              className="ue:flex-1"
+                              value={mod}
+                              placeholder={t('Lua 模块名包含（可选）')}
+                              onChange={(e: { target: { value: string } }) => setMod(e.target.value)}
+                            />
+                          )}
+                        </div>
+                      )}
+                      <div className="ue:flex ue:flex-wrap ue:gap-1">
+                        {quicks.map((x) => (
+                          <button
+                            key={x.key}
+                            type="button"
+                            disabled={!!quickRun.busy}
+                            onClick={() => void x.run()}
+                            className="ue:h-6 ue:cursor-pointer ue:rounded-md ue:border ue:border-line ue:px-2 ue:text-footnote ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50"
+                          >
+                            {quickRun.busy === x.key ? t('找…') : x.label}
+                          </button>
+                        ))}
+                      </div>
+                      <ErrorText>{quickErr}</ErrorText>
+                      <ErrorText>{found.error}</ErrorText>
+                      {found.data?.partial && (
+                        <Note>{t('类型是 UObject 时对象太多，只搜了一部分。在上面选具体的类搜得更快也更全。')}</Note>
+                      )}
+                      {found.data && (
+                        <span className="ue:text-footnote ue:text-subtle">
+                          {found.data.more
+                            ? t('超过 {n} 个，只列前 {n} 个，再多输几个字', { n: found.data.items.length })
+                            : t('{c} 里找到 {n} 个', {
+                                c: q && !isAny(q.cls) ? q.cls.name : 'UObject',
+                                n: found.data.items.length,
+                              })}
+                        </span>
+                      )}
+                    </form>
+                    <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:p-1.5">
+                      {(() => {
+                        const items = found.data?.items ?? []
+                        const inst = items.filter((o) => kindOf(o) === 'instance')
+                        const rest = items.filter((o) => kindOf(o) !== 'instance')
+                        const nAsset = rest.filter((o) => kindOf(o) === 'asset').length
+                        const show = others || !inst.length || rest.some((o) => o.path === path)
+                        const row = (o: Row) => (
+                          <li key={o.path}>
+                            <button
+                              type="button"
+                              onClick={() => go('objects', o.path)}
+                              title={o.path}
+                              className={cn(
+                                'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
+                                path === o.path && 'ue:bg-sel',
+                              )}
+                            >
+                              <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+                                {o.actor && <PersonStanding className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />}
+                                <span className="ue:truncate ue:text-body ue:text-fg">{o.label || o.name}</span>
+                                {o.module && <Badge tone="accent">{o.module}</Badge>}
+                                {o.player && (
+                                  <span className="ue:ml-auto ue:text-caption ue:text-subtle">{t('玩家')}</span>
+                                )}
+                              </span>
+                              <span className="ue:truncate ue:text-caption ue:text-subtle">
+                                {o.class} · {o.actor && o.level ? o.level : o.path}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                        const head = (id: (typeof KINDS)[number]['id'], n: number) => {
+                          const k = KINDS.find((x) => x.id === id)!
+                          return (
+                            <div
+                              className="ue:flex ue:items-center ue:gap-2 ue:px-2.5 ue:pt-1.5 ue:pb-1"
+                              title={k.hint()}
+                            >
+                              <KindBadge kind={id} />
+                              <span className="ue:truncate ue:text-caption ue:text-subtle">
+                                {n} · {k.hint()}
+                              </span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <>
+                            {inst.length > 0 && (
+                              <section className="ue:mb-2">
+                                {head('instance', inst.length)}
+                                <ul>{inst.map(row)}</ul>
+                              </section>
+                            )}
+                            {rest.length > 0 && inst.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setOthers((v) => !v)}
+                                aria-expanded={show}
+                                className="ue:mx-1 ue:mb-2 ue:flex ue:w-[calc(100%-0.5rem)] ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-dashed ue:border-line-strong ue:px-2.5 ue:py-2 ue:text-left ue:hover:bg-hover"
+                              >
+                                {show ? (
+                                  <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+                                ) : (
+                                  <ChevronRight className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+                                )}
+                                <span className="ue:min-w-0">
+                                  <span className="ue:block ue:text-footnote ue:text-fg">
+                                    {t('资源和默认值 {a} · 类 {c}', { a: nAsset, c: rest.length - nAsset })}
+                                  </span>
+                                  <span className="ue:block ue:text-caption ue:text-subtle">
+                                    {t('改的是以后新建的对象，正在跑的不会变')}
+                                  </span>
+                                </span>
+                              </button>
+                            )}
+                            {show &&
+                              (['asset', 'class'] as const).map((id) => {
+                                const rows = rest.filter((o) => kindOf(o) === id)
+                                return rows.length ? (
+                                  <section key={id} className="ue:mb-2">
+                                    {head(id, rows.length)}
+                                    <ul>{rows.map(row)}</ul>
+                                  </section>
+                                ) : null
+                              })}
+                          </>
+                        )
+                      })()}
+                      {found.data && !found.data.items.length && (
+                        <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">{t('没有找到')}</p>
+                      )}
+                      {!q && (
+                        <p className="ue:p-4 ue:text-center ue:text-footnote ue:text-subtle">
+                          {t('选类、输入名字开头点「搜索」；不列全部对象')}
+                        </p>
+                      )}
+                    </div>
+                    {(!!pinned.length || !!local.data?.recent.length) && (
+                      <div className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:p-3">
+                        {!!pinned.length && <span className="ue:text-footnote ue:text-subtle">{t('固定的对象')}</span>}
+                        <div className="ue:flex ue:flex-wrap ue:gap-1.5">
+                          {pinned.map((p) => (
+                            <button
+                              key={p.path}
+                              type="button"
+                              className={chip}
+                              onClick={() => go('objects', p.path)}
+                              title={p.path}
+                            >
+                              <Pin className="ue:h-3 ue:w-3 ue:text-subtle" />{' '}
+                              <span className="ue:truncate">{p.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {!!local.data?.recent.length && (
+                          <span className="ue:text-footnote ue:text-subtle">{t('最近搜过')}</span>
+                        )}
+                        <div className="ue:flex ue:flex-wrap ue:gap-1.5">
+                          {local.data?.recent.map((r) => (
+                            <button key={r} type="button" className={chip} onClick={() => replay(r)}>
+                              {r.replace('::', ' · ').replace(/ · $/, '')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-                <div className="ue:flex ue:flex-wrap ue:gap-1.5">
-                  {local.data?.recent.map((r) => (
-                    <button key={r} type="button" className={chip} onClick={() => replay(r)}>
-                      {r.replace('::', ' · ').replace(/ · $/, '')}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              </>
             )}
           </Card>
           <SplitHandle pane={listPane} paneRef={listRef} reserve={() => (actorItems ? widthOf(compRef) + 352 : 376)} />
@@ -484,7 +533,7 @@ export function Objects() {
                   actor={path}
                   items={actorItems}
                   selected={comp ?? ''}
-                  onSelect={(c) => go('objects', c ? `${path}|${c}` : path)}
+                  onSelect={(c) => go(section, c ? `${path}|${c}` : path)}
                 />
               </Card>
               <SplitHandle pane={compPane} paneRef={compRef} reserve={() => widthOf(listRef) + 352} />
