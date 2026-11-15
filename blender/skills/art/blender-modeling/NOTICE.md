@@ -15,5 +15,6 @@
 - `mcp__blender__execute_blender_code` / `get_scene_info` / `get_object_info` → `blender_py` / `blender_run` / `blender_inspect` / `blender_see` / `blender_session`。
 - 新增「通道语义」一节（MCP 的「每次重新 import」假设在本机只对 headless 成立）。
 - 正文改写为中文，结构精简合并。
+- 并入本仓库原有的 `blender`（无头脚本，现 `scripts/` 与 `references/headless/`）和 `blender-model-animation-workflow`（现 `references/model-animation-workflow.md`）两个技能，新增 0.9 节作入口。这两部分是本插件自写内容，不来自上游。
 
 MIT 许可要求保留版权与许可声明；完整许可文本见对应上游仓库的 LICENSE。本派生作品同样以 MIT 提供。

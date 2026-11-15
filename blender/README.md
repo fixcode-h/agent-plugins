@@ -10,7 +10,7 @@ Agent 面板的 Blender 插件：一比一接入 [dsh-blender-plugin](https://gi
   驱动的是用户自己开着的 Blender：在 Blender 里装上 DSH Blender Bridge 扩展（插件页上能下载），在 N 面板里点连接。
 - **模型设计**（MCP 服务 `blender-model`）：图标栏里的「模型设计」页，直接写要建的模型就开一个对话（不用选项目），每个模型对话在后台开一个 Blender，
   Agent 用 `blender_python` / `blender_scene` 建模，对话右栏的「模型」页签实时预览（three.js 读导出的 glb）。
-- **技能**：`blender-modeling`（上游）、`blender`（无头脚本、体检、多视角截图、UE 导出）、`blender-model-animation-workflow`。
+- **技能**：`blender-modeling`（上游教程，并入了原来的 `blender` 无头脚本 / 体检 / 多视角截图 / UE 导出，和 `blender-model-animation-workflow` 的阶段编排与型号目录约定）。
 - **角色和工作流**：「Blender 建模」角色、「Blender 建模与动画」工作流。打开插件时建出来，关掉或删除时没改过、没人用的副本删掉（先备份）。
 
 哪些对话挂 Blender 工具：模型设计对话、用到上面技能的角色，或者参数里选了「所有对话」。
@@ -40,7 +40,7 @@ plugin.json        清单
 server/            服务端入口（dsh 宿主适配、模型设计的后台 Blender 和桥接脚本 bridge/bridge.py）
 web/               网页入口（模型设计页、3D 预览页签、插件页状态面板和扩展一键安装）和样式
 locales/en.json    英文文案
-skills/art/        三个技能
+skills/art/        blender-modeling 技能（含无头脚本 scripts/）
 dsh/               dsh-blender-plugin 副本，改动见 dsh/VENDORED.md
 build.mjs          构建钩子：转译 dsh、复制 Python 资产和 Blender 扩展
 ```

@@ -443,7 +443,7 @@ def keep_parent(obj, grp):
 
 ### 相关
 
-`references/part-workshop.md`（装配表）；`commands.md`（blender_cli）
+`references/headless/part-workshop.md`（装配表）；`commands.md`（blender_cli）
 
 ## 症状：嵌套旋转件互相穿插（轮胎里嵌实心圆柱）
 
@@ -479,7 +479,7 @@ def make_tube(r_out, r_in, depth, segments=16):
 
 ### 相关
 
-`references/part-workshop.md`；`pitfalls/topology.md`（路径件方向/穿透）
+`references/headless/part-workshop.md`；`pitfalls/topology.md`（路径件方向/穿透）
 
 ## 症状：一个部件需要多材质（深底板 + 浅垫片）被迫拆成多个对象
 
@@ -514,7 +514,7 @@ p.finish('SM_Tank_Link', 'M_Metal_Dark', extra_mats=('M_Metal_Light',))
 
 ### 相关
 
-`references/part-workshop.md`
+`references/headless/part-workshop.md`
 
 ## 症状：高模倒角把细薄件压变形 / 体检 ngons FAIL
 
@@ -554,4 +554,4 @@ if ngons:
 
 ### 相关
 
-`references/part-workshop.md`（按参考特征决定部件做法）；`pitfalls/topology.md`
+`references/headless/part-workshop.md`（按参考特征决定部件做法）；`pitfalls/topology.md`

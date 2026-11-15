@@ -17,7 +17,10 @@ import { blenderStatus, initModel, readGlb, readModelMeta, stopModel } from './m
 
 /** 模型设计对话的 task.plugin（和网页部分模型设计页的 taskPlugin 一致） */
 const MODEL_MODE = 'blender.model'
-/** 用到这些技能的角色视为 Blender 角色：对话挂上 dsh 的工具 */
+/**
+ * 用到这些技能的角色视为 Blender 角色：对话挂上 dsh 的工具。
+ * blender、blender-model-animation-workflow 已并进 blender-modeling，留着是因为用户本机的角色副本里可能还点着旧名字
+ */
 const BLENDER_SKILLS = ['blender-modeling', 'blender', 'blender-model-animation-workflow']
 
 /** 给 Agent 的 dsh 工具说明：上游的工具说明已经很全，这里只说就绪检查和 GUI 优先 */
@@ -115,7 +118,7 @@ const activate: ActivateServer = async (ctx) => {
       if (!model && !blenderAgent && !all)
         return {
           skip: ctx.t('这个角色没有 Blender 技能（{skills}），插件设置为只给 Blender 角色和模型设计对话挂', {
-            skills: BLENDER_SKILLS.join(' / '),
+            skills: BLENDER_SKILLS[0],
           }),
         }
       const servers = [dshServer(run)]

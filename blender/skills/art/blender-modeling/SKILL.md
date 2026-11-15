@@ -1,6 +1,6 @@
 ---
 name: blender-modeling
-description: Blender 建模与交付教程（v3.1.0-alpha.1，GUI 优先，后台作业备用）——先按决策树选形（分面硬表面 / 光滑硬表面 / 有机 / 重复阵列 / 布尔），再走流水线（冻结规格 → 场景准备 → 白模 → 粗形精修 → 修改器栈 → 清理 → 装配/验收 → 交付）。覆盖参考图量测（img_digest/probe/measure/calib）、无头多视轮廓拟合（shapesolve）、装配扫描/清单/合并/修复/门/导出（asm_*）、白模与 Seedance 参考包（blockout_*，含 4 视图与转台 MP4）、同机位 QC（visualreport_report）、缺陷注入评估（eval_run）、GUI 会话内 Python 与取帧（blender_py / blender_see）、后台作业（blender_run，render/headless）与强制门（gate_/deliver_export require_gate）。用于做 3D 物体、按参考图还原、量比例、装配体检、修穿模/浮空、批量白模、交付导出与验收。
+description: Blender 建模与交付教程（v3.1.0-alpha.1，GUI 优先，后台作业备用）——先按决策树选形（分面硬表面 / 光滑硬表面 / 有机 / 重复阵列 / 布尔），再走流水线（冻结规格 → 场景准备 → 白模 → 粗形精修 → 修改器栈 → 清理 → 装配/验收 → 交付）。覆盖参考图量测（img_digest/probe/measure/calib）、无头多视轮廓拟合（shapesolve）、装配扫描/清单/合并/修复/门/导出（asm_*）、白模与 Seedance 参考包（blockout_*，含 4 视图与转台 MP4）、同机位 QC（visualreport_report）、缺陷注入评估（eval_run）、GUI 会话内 Python 与取帧（blender_py / blender_see）、后台作业（blender_run，render/headless）与强制门（gate_/deliver_export require_gate）。另含型号目录约定与模型动画阶段编排、无头脚本兜底（体检 / 多视角截图 / UE 标准 FBX 导出与重导入自检）。用于做 3D 物体、按参考图还原、量比例、装配体检、修穿模/浮空、批量白模、模型动画、交付导出（含 UE）与验收。
 license: MIT（融合自 RobLe3/cc-blender-skill 与 arjun988/blender-skills，见 NOTICE.md）
 ---
 
@@ -183,6 +183,23 @@ license: MIT（融合自 RobLe3/cc-blender-skill 与 arjun988/blender-skills，�
 - 交付物必须有 manifest（units/bbox/objects/md5）+ 回执 + 限制说明；没有 md5 的“交付”不可复现。
 - 非合并的 asm_export 若 gate 非 pass：文件会写出但 verdict=fail + warnings，不可直接当出厂件；合并导出门不过不写盘。
 - 拓扑改动前先 txn.snapshot / gate_checkpoint；对象级 mark/revert 不含拓扑。
+
+## 0.9 型号目录、无头兜底与 UE 导出（原 `blender-model-animation-workflow`、`blender` 技能）
+
+这两个技能已并入本技能；角色说明或旧对话里提到它们时，按下面对应到本技能的文件。
+
+**阶段编排与型号目录约定**（全文：`references/model-animation-workflow.md`）：
+- 制作标准以参考图实际内容为准，不分高模/低模档位；参考看不到的部分标为补全/待确认。
+- 输入是型号参考目录（如 `SourceArt/Tank/M10/`，内含 `设计图/`、可选 `扩展部件/`）时，产物都围着该目录放：
+  Blender 工作区 `<型号>/Blender/`（脚本、`.blend`、渲染、体检报告）；UE 导出模型 FBX 放 `<型号>/Asset/Mesh/`、动画 FBX 放 `<型号>/Asset/Anim/`；
+  进度文档 `<型号>/制作进度.md` 开工前先读、完成或新增部件后立即更新。
+- `扩展部件/` 里每张图是一个单独导出的可替换部件，不和主体合并；坦克等可动资产必须建骨架，可替换部件和主体共用同一套骨骼（骨名、原点、坐标系一致），导出时带全部骨骼、部件自身不带动画。
+- 阶段：需求与参考解析 → 规格/命名/模块契约（`GRP_*` 根 Empty、`SM_*`/`M_*`/`A_*`）→ 分件建模 → 装配与材质 → 控制器动画（独立 Action、30fps）→ 保持质量的减面 → 体检与多视角/多帧验收 → 交付。
+
+**无头脚本**（入口：`references/headless/README.md`，脚本在 `scripts/`）：
+- 面板没挂 blender_* 工具时，用 `python scripts/blender_cli.py <脚本> <参数...>` 完成同样的步骤；挂了工具时按本文工具链走，下面的脚本可作补充证据。
+- 体检 `inspect_scene.py`（FAIL 先修）、相交定位 `diagnose_overlap.py`、多视角截图 `capture_views.py`（≥6 视角，动画加 `--frames`）、参考解析 `reference_frames.py`、视口展示 `setup_viewport.py --gui`。
+- **UE 导出**：`export_ue.py`（体检门槛 + FBX（UE 标准）+ 重导入自检），参数以 `references/headless/export-ue.md` 的实测表为准；默认不导出，用户明确要 UE 交付并确认后才导。
 
 ## 1. 架构优先：这个插件就是建模流程本身（强制）
 
