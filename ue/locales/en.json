@@ -1290,5 +1290,9 @@
   "已用 {s} 秒，约 {pct}%": "{s}s elapsed, about {pct}%",
   "阶段从项目日志里读；百分比按阶段和上次启动用时（约 {e} 秒）估算": "The stage is read from the project log; the percentage is estimated from the stage and the last startup time (about {e}s)",
   "项目模块要重新编译：切到 UE 的弹窗点「是」，编完会接着启动": "Project modules need rebuilding: switch to UE's dialog and click Yes; startup continues after the build",
-  "引擎已经起来了，但一直没收到 UELink 的名片：确认项目里装了并启用了 UELink": "The engine is up but UELink never reported in: make sure UELink is installed and enabled in the project"
+  "引擎已经起来了，但一直没收到 UELink 的名片：确认项目里装了并启用了 UELink": "The engine is up but UELink never reported in: make sure UELink is installed and enabled in the project",
+  "不知道配置根在哪：先刷新 AssetForge 页": "Config root unknown: refresh the AssetForge page first",
+  "只能操作配置根里的文件：{p}": "Only files inside the config root can be used: {p}",
+  "只能用编辑器打开 .json 配置": "Only .json configs can be opened in an editor",
+  "不认识的操作：{a}": "Unknown action: {a}"
 }
