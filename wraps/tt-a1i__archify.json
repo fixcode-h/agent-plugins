@@ -1,0 +1,23 @@
+{
+  "repo": "tt-a1i/archify",
+  "id": "archify",
+  "name": "Archify 架构图",
+  "icon": "layout-template",
+  "description": "让 Agent 把系统、流程、问题画成能交互的单页 HTML（十种图和一页式讲解页）。生成的页面点开在对话右栏的网页页签里看。",
+  "track": "release",
+  "activation": "global",
+  "skills": [{ "from": "archify", "category": "diagram", "name": "archify" }],
+  "settings": [
+    {
+      "key": "chromePath",
+      "type": "path",
+      "label": "Chrome 路径",
+      "desc": "archify 出图后用真浏览器检查页面；留空时它自己找本机的 Chrome",
+      "default": "",
+      "placeholder": "留空自动找本机的 Chrome",
+      "env": "ARCHIFY_CHROME"
+    }
+  ],
+  "env": { "ARCHIFY_CHROME": "{config.chromePath}", "ARCHIFY_UPDATE_CHECK_DISABLED": "1" },
+  "exclude": ["archify/examples/**"]
+}
