@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CirclePlus, Trash2, X } from 'lucide-react'
+import { Check, CirclePlus, Trash2, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
 import { refName } from './model.ts'
@@ -84,28 +84,23 @@ export function EnumSelect({
   label: string
   onChange: (v: string) => void
 }) {
-  const { cn } = h()
+  const { ui } = h()
   // 桥接给的枚举值可能带前缀（EInputActionValueType::Axis1D），值里只有后半截
   const opts = names.map((n, i) => ({ value: n, label: labels?.[i] || n }))
   const hit = opts.find((o) => o.value === value || o.value.endsWith(`::${value}`))
   if (!hit && value) opts.unshift({ value, label: value })
+  // 用面板的共用下拉框（原来是系统原生下拉）：列表跟随主题，枚举项多（碰撞通道、混合模式这类）时打开带搜索框
   return (
-    <label className={cn(FIELD, fieldTone(disabled), 'ue:relative ue:w-56 ue:max-w-full ue:pr-1')} title={title}>
-      <select
-        aria-label={label}
-        value={hit?.value ?? value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:appearance-none ue:truncate ue:bg-transparent ue:pr-5 ue:text-footnote ue:text-inherit ue:outline-none ue:disabled:cursor-not-allowed"
-      >
-        {opts.map((o) => (
-          <option key={o.value} value={o.value} className="ue:bg-card ue:text-fg">
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="ue:pointer-events-none ue:absolute ue:right-1.5 ue:h-3.5 ue:w-3.5 ue:opacity-70" />
-    </label>
+    <ui.Select
+      size="xs"
+      aria-label={label}
+      title={title}
+      value={hit?.value ?? value}
+      disabled={disabled}
+      onChange={(e: { target: { value: string } }) => onChange(e.target.value)}
+      options={opts}
+      className="ue:w-56 ue:max-w-full ue:font-mono"
+    />
   )
 }
 

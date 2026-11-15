@@ -1038,7 +1038,6 @@
   "公共库有 {v}，可以升级。": "UELink {v} is available to upgrade to.",
   "现在装的是旧版桥接 AgentPanelBridge，升级会换成 UELink 并删掉旧插件；项目代码依赖了 AgentPanelBridge 模块的，Build.cs 里改成 UELinkCore。": "This is the old bridge AgentPanelBridge. Upgrading replaces it with UELink and removes the old plugin; if your project code depends on the AgentPanelBridge module, change it to UELinkCore in Build.cs.",
   "UELink 更新源": "UELink update source",
-  "装和升级 UE 端插件 UELink 时去哪查新版本。留空用 GitHub（fixcode-h/UELink 的最新正式版）；公司内网可以填镜像地址（放着 manifest.json 和源码包的网址）或本机目录。读不到时用插件自带的那份": "Where to look for new versions when installing or upgrading the UE plugin UELink. Leave empty for GitHub (latest release of fixcode-h/UELink); on an intranet, enter a mirror URL (serving manifest.json and the source package) or a local folder. Falls back to the bundled copy when unreachable",
   "找到 {name}": "Found {name}",
   "还要在 UE 页接入这个项目": "Connect this project on the UE page first",
   "项目里还没装 UELink：到 UE 页「桥接与权限」安装": "UELink isn't installed in this project yet: install it under \"Bridge & permissions\" on the UE page",
@@ -1224,5 +1223,7 @@
   "在 AssetForge 中查看": "View in AssetForge",
   "用 AssetForge 把资产当前的状态写成 JSON 配置，放在项目文档目录下": "Use AssetForge to write the asset's current state as a JSON config in the project docs folder",
   "更新 JSON": "Update JSON",
-  "导出到 JSON": "Export to JSON"
+  "导出到 JSON": "Export to JSON",
+  "装和升级 UE 端插件 UELink 时去哪查新版本。留空跟着「UEKit 插件目录」，用其中 UELink 的最新正式版；公司内网也可以单独填镜像地址（放着 manifest.json 和源码包的网址）或本机目录。读不到时用插件自带的那份": "Where to look for new versions when installing or upgrading the UE plugin UELink. Leave empty to follow \"UEKit plugin catalog\" and use its latest UELink release; on an intranet you can also enter a separate mirror URL (serving manifest.json and the source package) or a local folder. Falls back to the bundled copy when unreachable",
+  "请求 {url} 没成功：{e}": "Request to {url} failed: {e}"
 }

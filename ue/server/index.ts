@@ -18,7 +18,7 @@ import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
  * 插件接口 9 起按项目生效：只在项目「能力」里打开了 UE 的项目挂工具（面板把关），目录里有 .uproject 时推荐打开。
  * 网页的 UE 管理页、添加项目和桥接安装走 fetch；Agent 的 ue_* 工具只挂给接入了 UE 的项目里的对话；
- * UE 端是项目里的 UELink 插件（公共库 fixcode-h/UELink，和 UEToVS 共用；包里 bridge/UELink 带一份，安装时和公共库最新版取高的复制进项目）。
+ * UE 端是项目里的 UELink 插件（UEKit 插件库 fixcode-h/UEKit 里的基础插件；包里 bridge/UELink 带一份，安装时和插件库最新正式版取高的复制进项目）。
  */
 
 /** 用到这个技能的角色视为 UE 角色（attach=role 时只给它们挂工具） */

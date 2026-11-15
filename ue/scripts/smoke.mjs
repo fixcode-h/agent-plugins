@@ -53,6 +53,19 @@ const ctx = {
 }
 const enabledFor = new Set()
 const bridge = await startFakeBridge(proj)
+// 面板开放给插件的模块（server/download）：冒烟测试不连外网，给一份用 fetch 写文件的替身
+globalThis.__agentPanelServer = {
+  modules: {
+    'server/download': {
+      downloadFile: async (url, to) => {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        mkdirSync(path.dirname(to), { recursive: true })
+        writeFileSync(to, Buffer.from(await res.arrayBuffer()))
+      },
+    },
+  },
+}
 const { default: activate } = await import(pathToFileURL(path.join(dir, 'server', 'index.js')).href)
 const plugin = await activate(ctx)
 const api = async (method, p, body) => {
