@@ -2,6 +2,7 @@ import { ArrowDown, Search, type LucideIcon } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
 import { useLaunch } from './launch.ts'
+import { LaunchButton } from './launch-progress/LaunchButton.tsx'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 
@@ -411,12 +412,14 @@ export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: strin
           <ui.Button onClick={() => go('plugins')}>{t('先装桥接插件')}</ui.Button>
         ) : (
           <div className="ue:flex ue:flex-wrap ue:justify-center ue:gap-2">
-            <ui.Button disabled={launch.busy} onClick={() => void launch.start(false)}>
+            <LaunchButton progress={launch.progress} disabled={launch.busy} onClick={() => void launch.start(false)}>
               {t('启动编辑器')}
-            </ui.Button>
-            <ui.Button variant="secondary" disabled={launch.busy} onClick={() => void launch.start(true)}>
-              {t('启动编辑器并开始 PIE')}
-            </ui.Button>
+            </LaunchButton>
+            {launch.progress?.status !== 'running' && (
+              <ui.Button variant="secondary" disabled={launch.busy} onClick={() => void launch.start(true)}>
+                {t('启动编辑器并开始 PIE')}
+              </ui.Button>
+            )}
           </div>
         )}
         <p className="ue:flex ue:flex-wrap ue:justify-center ue:gap-x-2 ue:text-footnote ue:text-subtle">

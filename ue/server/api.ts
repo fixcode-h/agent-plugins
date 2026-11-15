@@ -175,7 +175,7 @@ export async function handle(req: Request): Promise<Response> {
         }
         return json(await ensureBackground(project).then((c) => ({ pid: c.pid })))
       case 'POST editor':
-        return json({ pid: launchEditor(project) })
+        return json(await launchEditor(project))
       default: {
         // UEKit 扩展（UE 插件、AssetForge、GameTest）的接口在 uekit/api-ext.ts
         const ext = await extRoute(ctx, `${req.method} ${route}`, b, url)

@@ -1,5 +1,6 @@
 import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
 import { backgroundState } from './editor.ts'
+import { launchProgress } from './launch/track.ts'
 import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
 import { availableVersion } from './uelink.ts'
@@ -36,6 +37,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     background: backgroundState(p.id, cards),
     jobs: projectJobs(p.id),
     extensions,
+    launch: launchProgress(p.id),
   }
 }
 
