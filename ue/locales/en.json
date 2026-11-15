@@ -1226,5 +1226,9 @@
   "UEKit 插件库：UELink 让面板连上 UE，AssetForge、GameTest 等扩展挂在它上面。都装进项目的 Plugins/，界面在这里，Agent 也能用": "The UEKit plugin library: UELink connects the panel to UE, and extensions like AssetForge and GameTest plug into it. All are installed into the project's Plugins/, with their UI here; the Agent can use them too",
   "UEKit 里有 {v}，可以升级。": "UEKit has {v}; you can upgrade.",
   "下面的扩展要 UELink {v}，它还是预发布版（C++ 没经本地编译验证），升级后要完整编译一次。": "The extensions below need UELink {v}, which is still a pre-release (its C++ hasn't been verified by a local build); do a full build after upgrading.",
-  "升级到 {v}（预发布）": "Upgrade to {v} (pre-release)"
+  "升级到 {v}（预发布）": "Upgrade to {v} (pre-release)",
+  "按名字或类名筛": "Filter by name or class",
+  "{n} 个匹配": "{n} matches",
+  "没有匹配的": "No matches",
+  "只搜已经展开过的层，没展开的层先展开再搜": "Only levels already expanded are searched; expand a level first to search inside it"
 }
