@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { liveCards, type Card } from './instances.ts'
+import { backgroundExitWhy, editorStartingWhy } from './launch/bg-guard.ts'
 import { trackLaunch } from './launch/track.ts'
 import type { UeProject } from './types.ts'
 import { c, exists, t } from './util.ts'
@@ -27,19 +28,29 @@ function exe(p: UeProject, cmd: boolean) {
 export function backgroundState(id: string, cards: Card[]) {
   const card = cards.find((x) => x.kind === 'background')
   const bg = bgs.get(id)
+  // 编辑器连上以后读写都走它，上一次起后台编辑器的报错已经没意义，清掉（不然左栏一直挂着一条红字）
+  if (bg?.error && cards.some((x) => x.kind === 'editor')) bg.error = undefined
   return { running: !!card, starting: !!bg?.starting, pid: card?.pid, error: bg?.error }
 }
 
 /** 等名片出现：首次启动要加载引擎和扫资源，30–60 秒常见，大项目更久 */
-async function waitCard(root: string, kind: string, ms: number, child?: ChildProcess) {
-  const end = Date.now() + ms
+async function waitCard(p: UeProject, kind: string, ms: number, child?: ChildProcess) {
+  const root = p.root
+  const begin = Date.now()
+  const end = begin + ms
   let exited: number | null = null
   child?.once('exit', (code) => (exited = code ?? -1))
   while (Date.now() < end) {
     const card = (await liveCards(root)).find((x) => x.kind === kind)
     if (card) return card
-    if (exited !== null)
-      throw new Error(t('后台编辑器启动后退出了（退出码 {code}），看 Saved/Logs 里的日志', { code: exited }))
+    if (exited !== null) {
+      const why = await backgroundExitWhy(p, begin)
+      throw new Error(
+        why
+          ? t('后台编辑器启动后退出了（退出码 {code}）：{why}', { code: exited, why })
+          : t('后台编辑器启动后退出了（退出码 {code}），看 Saved/Logs 里的日志', { code: exited }),
+      )
+    }
     await new Promise((r) => setTimeout(r, 1000))
   }
   throw new Error(t('等了 {s} 秒后台编辑器还没就绪', { s: Math.round(ms / 1000) }))
@@ -53,6 +64,10 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
   if (cards.some((x) => x.kind === 'editor')) throw new Error(t('编辑器开着，读写走编辑器，不起后台编辑器'))
   const bg = bgs.get(p.id) ?? {}
   bgs.set(p.id, bg)
+  if (bg.starting) return bg.starting
+  // 编辑器正在启动、或开着还没连上：不起第二个进程抢同一个项目，报一句等它就绪（不记成后台编辑器的错误）
+  const busy = await editorStartingWhy(p)
+  if (busy) throw new Error(busy)
   if (bg.starting) return bg.starting
   const file = exe(p, true)
   if (!exists(file)) {
@@ -72,7 +87,7 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
       if (bg.child === child) bg.child = undefined
     })
     try {
-      return await waitCard(p.root, 'background', 10 * 60 * 1000, child)
+      return await waitCard(p, 'background', 10 * 60 * 1000, child)
     } catch (e) {
       bg.error = (e as Error).message
       child.kill()
