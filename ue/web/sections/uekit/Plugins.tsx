@@ -7,16 +7,17 @@ import { get, pget, ppost, useAction, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { STACK } from '../../split.tsx'
+import { UELinkCard } from './UELinkCard.tsx'
 import { Badge, Card, Confirm, ErrorText, PageHead, Term } from '../../ui.tsx'
 
 /**
  * UE 插件页：UEKit 插件库里 UELink 的扩展（AssetForge、GameTest）在这个项目里装没装、能不能升级，
- * 一键安装 / 升级 / 卸载（服务端 uekit/install-ext.ts）。UELink 本身仍在「桥接与权限」里装。
+ * 一键安装 / 升级 / 卸载（服务端 uekit/install-ext.ts）。最上面是 UELink 本身（UELinkCard，服务端仍是 install.ts）。
  */
 const ICONS: Record<string, LucideIcon> = { AssetForge: FileCode2, GameTest: FlaskConical }
 
 export function Plugins() {
-  const { project, state, reload, go } = useUe()
+  const { project, reload, go } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
   const [refresh, setRefresh] = useState(0)
@@ -36,6 +37,12 @@ export function Plugins() {
     run(`install-${x.name}`, () =>
       ppost<{ job: string }>(project.id, 'ext/install', { name: x.name, version: x.offer?.version, mode }).then(done),
     )
+  const needPre = list.data?.items.find((x) => x.offer?.uelink && !x.installed)?.offer?.uelink
+  const build = () =>
+    run('build', async () => {
+      await ppost(project.id, 'build')
+      reload()
+    })
   const uninstall = (x: ExtensionStatus) =>
     run(`uninstall-${x.name}`, () => ppost<{ job: string }>(project.id, 'ext/uninstall', { name: x.name }).then(done))
 
@@ -43,7 +50,9 @@ export function Plugins() {
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead
         title={t('UE 插件')}
-        desc={t('UEKit 插件库里挂在 UELink 上的扩展：装进项目的 Plugins/，界面在这个页面，Agent 也能用')}
+        desc={t(
+          'UEKit 插件库：UELink 让面板连上 UE，AssetForge、GameTest 等扩展挂在它上面。都装进项目的 Plugins/，界面在这里，Agent 也能用',
+        )}
       >
         <ui.Button size="sm" variant="secondary" disabled={list.loading} onClick={() => setRefresh((n) => n + 1)}>
           {list.loading ? (
@@ -64,15 +73,7 @@ export function Plugins() {
             </ErrorText>
           </div>
         )}
-        {!state?.bridge && (
-          <div className="ue:px-5 ue:py-3 ue:text-footnote ue:text-warning">
-            {t('扩展都挂在 UELink 上：先到')}{' '}
-            <button type="button" className="ue:cursor-pointer ue:underline" onClick={() => go('bridge')}>
-              {t('桥接与权限')}
-            </button>{' '}
-            {t('装 UELink。')}
-          </div>
-        )}
+        <UELinkCard needPre={needPre} onChanged={() => list.reload()} />
         {(list.data?.items ?? []).map((x) => {
           const Icon = ICONS[x.name] ?? Blocks
           const upgrade = !!x.installed && !!x.offer && canUpgrade(x.installed.version, x.offer.version)
@@ -179,7 +180,7 @@ export function Plugins() {
               {job.data.status === 'done' && (
                 <div className="ue:mt-3 ue:flex ue:items-center ue:gap-2 ue:text-footnote ue:text-muted">
                   {t('要完整编译一次才能用：')}
-                  <ui.Button size="sm" variant="secondary" onClick={() => go('bridge')}>
+                  <ui.Button size="sm" variant="secondary" disabled={!!busy} onClick={() => void build()}>
                     {t('去编译')}
                   </ui.Button>
                 </div>

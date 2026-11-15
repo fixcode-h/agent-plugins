@@ -55,16 +55,16 @@ export function Overview() {
     {
       icon: Plug,
       title: t('桥接插件'),
-      to: () => go('bridge'),
+      to: () => go('plugins'),
       value: state?.bridge ? t('已安装') : t('未安装'),
       badge: state?.bridge ? (
         <Badge tone={canUpgrade(state.bridge, state.bundled) ? 'warn' : 'ok'}>{state.bridge}</Badge>
       ) : null,
       desc: state?.bridge
         ? canUpgrade(state.bridge, state.bundled)
-          ? t('有新版本 {v}，到「桥接与权限」升级', { v: state.bundled })
+          ? t('有新版本 {v}，到「UE 插件」升级', { v: state.bundled })
           : `Plugins/UELink · ${project.install?.mode === 'vcs' ? t('已加入版本管理') : t('只在本机')}`
-        : t('到「桥接与权限」安装，装好后编辑器重启生效'),
+        : t('到「UE 插件」安装，装好后编辑器重启生效'),
     },
     {
       icon: Plug,

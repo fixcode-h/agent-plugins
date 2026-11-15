@@ -79,7 +79,7 @@ export function AddProject({
         mode: det?.bridge && mode !== 'none' ? mode : mode,
         perms: { runtime, asset },
       })
-      toast.success(mode === 'none' ? t('已接入') : t('已接入，桥接插件在编译，进度在「桥接与权限」里看'))
+      toast.success(mode === 'none' ? t('已接入') : t('已接入，桥接插件在编译，进度在「UE 插件」里看'))
       onOpenChange(false)
       onAdded(r.project)
     })
@@ -185,7 +185,7 @@ export function AddProject({
                   ? t('复制 UELink 到 Plugins/UELink，写进本机忽略文件，不影响团队')
                   : mode === 'vcs'
                     ? t('复制后加入版本管理（P4 进默认变更列表，不提交），团队都能用')
-                    : t('先不装，之后在「桥接与权限」里装；没装时只能读日志文件')
+                    : t('先不装，之后在「UE 插件」里装；没装时只能读日志文件')
               }
             >
               <Segmented

@@ -260,31 +260,31 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
   const what = describe(op, args)
   if (kind === 'runtime') {
     if (runtime === 'read')
-      throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对运行时是只读，不能执行：{what}', { what }))
+      throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what }))
     // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
     if (op === 'lua.exec') await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
     else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
   } else if (kind === 'asset') {
     if (asset === 'read')
-      throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对资源是只读，不能修改：{what}', { what }))
+      throw new BridgeError(t('UE 页「权限与设置」里 Agent 对资源是只读，不能修改：{what}', { what }))
   } else if (kind === 'struct') {
     if (struct === 'read')
       throw new BridgeError(
-        t('UE 页「桥接与权限」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
+        t('UE 页「权限与设置」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
       )
     if (struct === 'ask') await ask(ctx, { title: t('Agent 要新建 / 复制 / 改名 UE 资源'), detail: what })
   } else if (kind === 'delete') {
     if (struct === 'read')
-      throw new BridgeError(t('UE 页「桥接与权限」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
+      throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
     // 删除不管权限设成什么，每次都确认
     await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
   } else if (kind === 'python') {
     if (!python)
-      throw new BridgeError(t('UE 页「桥接与权限」里没有打开「执行 Python」，Agent 不能在编辑器里执行 Python'))
+      throw new BridgeError(t('UE 页「权限与设置」里没有打开「执行 Python」，Agent 不能在编辑器里执行 Python'))
     // 任意 Python 能做的事没有边界：和 Lua 一样每次都确认
     await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
   } else if (kind === 'save') {
-    if (asset === 'read') throw new BridgeError(t('UE 页「桥接与权限」里 Agent 对资源是只读，不能保存'))
+    if (asset === 'read') throw new BridgeError(t('UE 页「权限与设置」里 Agent 对资源是只读，不能保存'))
     if (asset === 'ask')
       await ask(ctx, {
         title: t('Agent 要保存 UE 资源（P4 项目会先签出）'),

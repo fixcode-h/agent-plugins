@@ -116,7 +116,7 @@ export async function handle(req: Request): Promise<Response> {
         return json({ ok: true })
       case 'POST install': {
         const mode = b.mode === 'vcs' ? 'vcs' : 'local'
-        const job = await install(project, mode)
+        const job = await install(project, mode, typeof b.prerelease === 'string' ? b.prerelease : '')
         const det = await detect(project.root, project.engineDir)
         await patchProject(project.id, { install: { mode, version: det.bridge, at: now() } })
         return json({ job: job.id, build: (await build(project)).id })

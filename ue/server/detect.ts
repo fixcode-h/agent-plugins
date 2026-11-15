@@ -88,7 +88,7 @@ async function sourceBuilds(): Promise<Record<string, string>> {
   return out
 }
 
-/** 按 EngineAssociation 找引擎；custom 是用户在「桥接与权限」里手填的引擎目录 */
+/** 按 EngineAssociation 找引擎；custom 是用户在「权限与设置」里手填的引擎目录 */
 export async function findEngine(uproject: string, association: string, custom = ''): Promise<EngineInfo> {
   if (custom && exists(path.join(custom, 'Engine'))) {
     return { association, dir: custom, version: (await buildVersion(custom)) || association, source: 'custom' }
@@ -161,7 +161,7 @@ export async function detect(dir: string, customEngine = ''): Promise<Detection>
       ? undefined
       : engine.version
         ? t('引擎 {v} 不支持：UE 插件要求 5.4 及以上', { v: engine.version })
-        : t('没找到这个项目用的引擎（EngineAssociation：{a}），可以在「桥接与权限」里手动指定引擎目录', {
+        : t('没找到这个项目用的引擎（EngineAssociation：{a}），可以在「权限与设置」里手动指定引擎目录', {
             a: desc.EngineAssociation || '-',
           }),
     root,

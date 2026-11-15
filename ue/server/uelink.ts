@@ -110,8 +110,30 @@ export async function availableVersion() {
   return remote && cmpVersion(remote, bundled) > 0 ? remote : bundled
 }
 
-/** 自带的和公共库的哪个新就用哪个；公共库读不到时用自带的，原因放在 remoteError 里 */
-export async function bestSource(refresh = false): Promise<{ source: UELinkSource; remoteError?: string }> {
+/**
+ * UEKit 插件目录里 UELink 的预发布版（没有为 undefined）。只在用户为了装要新 UELink 的扩展、
+ * 在「UE 插件」页明确点了「升级 UELink（预发布）」时用；查更新、普通安装仍只认正式版
+ */
+export async function uelinkPrerelease(refresh = false) {
+  const cat = await readCatalog(refresh)
+  const m = cat.plugins.find((x) => x.name === UELINK)?.prerelease
+  return m ? { manifest: m, base: cat.base } : undefined
+}
+
+/**
+ * 自带的和公共库的哪个新就用哪个；公共库读不到时用自带的，原因放在 remoteError 里。
+ * prerelease 给了版本号时装 UEKit 目录里这一版预发布（见 uelinkPrerelease）
+ */
+export async function bestSource(
+  refresh = false,
+  prerelease = '',
+): Promise<{ source: UELinkSource; remoteError?: string }> {
+  if (prerelease) {
+    const pre = await uelinkPrerelease(true)
+    if (!pre || pre.manifest.version !== prerelease)
+      throw new Error(c().t('UEKit 插件目录里没有 UELink {v} 预发布版', { v: prerelease }))
+    return { source: { kind: 'remote', version: prerelease, manifest: pre.manifest, base: pre.base } }
+  }
   const bundled: UELinkSource = { kind: 'bundled', version: await bundledVersion(), dir: bundledDir() }
   const remote = await remoteManifest(refresh)
   if (!remote.manifest) return { source: bundled, remoteError: remote.error }

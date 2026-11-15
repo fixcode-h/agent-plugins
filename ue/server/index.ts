@@ -43,7 +43,7 @@ async function bridgeNotice(root: string) {
   const [installed, bundled] = await Promise.all([bridgeVersionIn(root), availableVersion()])
   if (!installed || installed === '?' || !bundled || !olderVersion(installed, bundled)) return undefined
   return [
-    t('项目里的 UE 桥接是 {old}，UELink 已经有 {new}：新功能要更新后才能用。到 UE 页「桥接与权限」更新，再重新编译。', {
+    t('项目里的 UE 桥接是 {old}，UELink 已经有 {new}：新功能要更新后才能用。到 UE 页「UE 插件」更新，再重新编译。', {
       old: installed,
       new: bundled,
     }),

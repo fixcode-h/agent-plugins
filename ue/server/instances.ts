@@ -112,7 +112,7 @@ async function oldBridgeError(card: Card, op: string, error?: string) {
   const bundled = await bundledVersion()
   if (!bundled || !olderVersion(card.bridge, bundled)) return ''
   return t(
-    'UE 进程 {pid} 里的 UELink（桥接）是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「桥接与权限」更新，重新编译并重启 UE。用不到新操作的功能照常能用',
+    'UE 进程 {pid} 里的 UELink（桥接）是 {old}，没有「{op}」这个操作（插件带的是 {new}）：到 UE 页「UE 插件」更新，重新编译并重启 UE。用不到新操作的功能照常能用',
     { pid: card.pid, old: card.bridge, op, new: bundled },
   )
 }

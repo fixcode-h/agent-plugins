@@ -33,7 +33,7 @@ async function analysisCard(p: UeProject): Promise<Card> {
     )
   if (!newer(card.bridge || '0', TRACE_BRIDGE))
     throw new BridgeError(
-      t('{kind} 里的桥接是 {v}，分析 trace 要 {min} 以上：在「桥接与权限」里更新桥接插件，重新编译后再打开', {
+      t('{kind} 里的桥接是 {v}，分析 trace 要 {min} 以上：在「UE 插件」里更新桥接插件，重新编译后再打开', {
         kind: card.kind === 'editor' ? t('编辑器') : t('后台编辑器'),
         v: card.bridge || '?',
         min: TRACE_BRIDGE,

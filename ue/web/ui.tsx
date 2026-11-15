@@ -384,7 +384,7 @@ export function Confirm({
 
 /**
  * UE 没在运行时的空页面：说明 + 直接启动（不用回概览），下面给不开编辑器也能做的事。
- * 桥接没装时启动了也连不上，按钮换成去「桥接与权限」
+ * 桥接没装时启动了也连不上，按钮换成去「UE 插件」
  */
 export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: string }) {
   const { state, go } = useUe()
@@ -408,7 +408,7 @@ export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: strin
         <h2 className="ue:text-heading ue:font-medium ue:text-fg">{t('UE 没在运行')}</h2>
         <p className="ue:text-body ue:leading-relaxed ue:text-subtle">{what}</p>
         {state && !state.bridge ? (
-          <ui.Button onClick={() => go('bridge')}>{t('先装桥接插件')}</ui.Button>
+          <ui.Button onClick={() => go('plugins')}>{t('先装桥接插件')}</ui.Button>
         ) : (
           <div className="ue:flex ue:flex-wrap ue:justify-center ue:gap-2">
             <ui.Button disabled={launch.busy} onClick={() => void launch.start(false)}>
