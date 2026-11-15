@@ -30,6 +30,8 @@ user-invocable: true
   - 数组元素 `Items[2].Count`
   - Map 的键 `Tags["Fire"]`
   - 跟进对象引用 `InventoryComp.Owner.Health`
+- `ue_get path=<对象> props=["Health","Stats.MaxHP"]` 一次读几个变量（最多 30 个）。
+- `ue_get path=<对象> file=true` 把整个对象的属性不截断写成 JSON 文件，只回路径和条数；Actor 默认带上每个组件的属性（`components=false` 不带）。再用读文件、搜索看需要的部分，别把整份贴进回复。加 `prop` 时只导那个属性的完整值（大数组、大 Map）。
 - 蓝图资源路径（`/Game/Blueprints/BP_Hero`）读的是类默认值（CDO）。
 
 ## 改值、调函数、GM

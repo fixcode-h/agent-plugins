@@ -1,5 +1,5 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；19 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；21 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
@@ -90,7 +90,7 @@ try {
     ['ue'],
   )
   const catTools = await cat.servers[0].tools()
-  assert.equal(catTools.length, 19)
+  assert.equal(catTools.length, 21)
   assert.deepEqual(
     catTools.filter((x) => !x.guide?.useWhen).map((x) => x.name),
     [],
@@ -143,6 +143,23 @@ try {
   const undone = await call('ue_undo', { id: mine[0].id })
   assert.ok(!undone.isError, text(undone))
   assert.equal(bridge.state.hero.Health, 80)
+
+  // 一次读几个变量；整个对象导出成文件（Actor 带组件，读不了的组件留下原因），回复里只有路径和条数
+  const many = JSON.parse(text(await call('ue_get', { path: bridge.hero, props: ['Health', 'MaxHealth', 'NoSuch'] })))
+  assert.deepEqual(
+    many.items.slice(0, 2).map((i) => i.value),
+    [80, 120],
+    JSON.stringify(many),
+  )
+  assert.ok(many.items[2].error, JSON.stringify(many))
+  const dump = JSON.parse(text(await call('ue_get', { path: bridge.hero, file: true })))
+  assert.ok(dump.file.startsWith(path.join(proj, 'Saved', 'AgentPanel', 'dump')), JSON.stringify(dump))
+  const dumped = JSON.parse(readFileSync(dump.file, 'utf8'))
+  assert.equal(dumped.props.length, dump.props)
+  assert.equal(dumped.components.length, dump.components)
+  assert.ok(dumped.components.some((c) => c.props?.length) && dumped.components.some((c) => c.error), dump.file)
+  const one = JSON.parse(text(await call('ue_get', { path: bridge.hero, prop: 'Health', file: true })))
+  assert.equal(JSON.parse(readFileSync(one.file, 'utf8')).value, 80)
 
   // 桥接比插件带的旧、又没有这个操作：统一提示更新桥接（插件框架改进 C1），不是只说「不支持」
   const old = await api('POST', '/p/p1/op', { op: 'stat.nosuch', args: {} })

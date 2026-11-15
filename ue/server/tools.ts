@@ -11,6 +11,7 @@ import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
 
@@ -123,11 +124,14 @@ const DEFS = [
   ),
   tool(
     'ue_get',
-    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
+    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。props 给属性路径数组时一次读几个（最多 30 个）。file=true 把整个对象不截断写成 JSON 文件、只回路径和条数（Actor 带上各组件的属性，components=false 不带；写了 prop 时只导这个属性的完整值），要看全部数据、或值太大被截断时用它。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
+      props: { type: 'array', items: { type: 'string' } },
       filter: { type: 'string' },
+      file: { type: 'boolean' },
+      components: { type: 'boolean' },
       lua: { type: 'string' },
       offset: { type: 'number' },
       limit: { type: 'number' },
@@ -148,6 +152,16 @@ const DEFS = [
         )
       if (!a.path) return mcpText('要给 path（对象路径），读 Lua 全局表时给 lua', true)
       if (a.tree) return out(await runOp(ctx, 'umg.tree', { path: a.path }))
+      const objPath = str(a.path)
+      if (a.file)
+        return out(
+          await dumpObject(ctx, objPath, {
+            prop: a.prop ? str(a.prop) : undefined,
+            filter: str(a.filter),
+            components: a.components !== false,
+          }),
+        )
+      if (Array.isArray(a.props) && a.props.length) return out(await readProps(ctx, objPath, a.props))
       return a.prop
         ? out(await runOp(ctx, 'get', { path: a.path, prop: a.prop }))
         : out(await runOp(ctx, 'props', { path: a.path, filter: a.filter ?? '', maxChars: 600 }))
@@ -202,7 +216,7 @@ const DEFS = [
   ),
   tool(
     'ue_call',
-    '调函数：action=list 列出对象（path）上能调的函数（BlueprintCallable、Exec、标了 AgentPanel 元数据的）和参数；action=call 调 function，args 是对象（按参数名）或数组（按顺序）。返回值和输出参数在结果里。',
+    '调函数：action=list 列出对象（path）上能调的函数（BlueprintCallable、Exec、标了 AgentPanel 元数据的）和参数；action=call 调 function，args 是对象（按参数名）或数组（按顺序）。返回值和输出参数在结果里。调用按 UE 页的运行时权限放行或请用户确认，不能自动撤回。',
     {
       action: { type: 'string', enum: ['list', 'call'] },
       path: { type: 'string' },

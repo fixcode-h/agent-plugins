@@ -41,8 +41,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_get: {
     title: '读属性',
-    summary: '读对象或资源的属性、UMG 控件树、UnLua 实例表和全局表',
-    useWhen: '查看运行时数值、资源默认值、控件层级，或 UnLua 项目里 Lua 侧的字段时',
+    summary: '读对象或资源的属性（一个、几个或整个对象导出成文件）、UMG 控件树、UnLua 实例表和全局表',
+    useWhen:
+      '查看运行时数值、资源默认值、控件层级，或 UnLua 项目里 Lua 侧的字段时；要一个对象的全部数据（含 Actor 的组件）或值太大被截断时写 file=true，再读返回的文件',
     avoidWhen: 'DataTable 的行用 ue_asset，蓝图的图和节点用 ue_blueprint',
     group: RUN,
   },
