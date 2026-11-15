@@ -1203,5 +1203,8 @@
   "筛选值": "Filter values",
   "搜索名字、值或说明": "Search name, value or description",
   "搜索后点选或回车选第一项": "Search, then click or press Enter for the first match",
-  "还没有值，从下面选": "No values yet; pick from the list below"
+  "还没有值，从下面选": "No values yet; pick from the list below",
+  "两版的表格内容完全一样（所有工作表都比过了）：这一版可能只改了格式（字体、颜色、列宽等），或者提交时文件内容没有改动。": "Both versions have identical table contents (all sheets compared): this revision may only change formatting (fonts, colors, column widths), or the file was submitted without content changes.",
+  "这张工作表没变，这一版改的是其他工作表：{s}": "This sheet is unchanged; this revision changed other sheets: {s}",
+  "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}"
 }
