@@ -37,7 +37,13 @@ export function SelectionCard() {
         </div>
         {empty && <p className="ue:px-4 ue:py-2 ue:text-footnote ue:text-subtle">{t('编辑器里现在什么都没选中')}</p>}
         {d?.actors.slice(0, 5).map((a) => (
-          <Row key={a.path} icon={Box} label={a.label || a.name} aside={a.class} onClick={() => go('objects', a.path)} />
+          <Row
+            key={a.path}
+            icon={Box}
+            label={a.label || a.name}
+            aside={a.class}
+            onClick={() => go('objects', a.path)}
+          />
         ))}
         {d && d.actorCount > 5 && <More n={d.actorCount - 5} />}
         {d?.assets.slice(0, 5).map((a) => (
@@ -57,7 +63,17 @@ export function SelectionCard() {
   )
 }
 
-function Row({ icon: Icon, label, aside, onClick }: { icon: typeof Box; label: ReactNode; aside?: string; onClick: () => void }) {
+function Row({
+  icon: Icon,
+  label,
+  aside,
+  onClick,
+}: {
+  icon: typeof Box
+  label: ReactNode
+  aside?: string
+  onClick: () => void
+}) {
   const { cn } = h()
   return (
     <button

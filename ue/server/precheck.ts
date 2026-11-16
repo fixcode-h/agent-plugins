@@ -16,7 +16,13 @@ export async function precheck(ctx: OpCtx) {
     const g = toGamePath(p.root, f)
     if (g) paths.add(g)
   }
-  if (!paths.size) return { items: [], errors: 0, warnings: 0, empty: t('没有改过的资源：编辑器里没有没保存的，版本管理里也没有改过的 .uasset') }
+  if (!paths.size)
+    return {
+      items: [],
+      errors: 0,
+      warnings: 0,
+      empty: t('没有改过的资源：编辑器里没有没保存的，版本管理里也没有改过的 .uasset'),
+    }
   const list = [...paths].slice(0, 200)
   const res = await runOp(ctx, 'asset.validate', { paths: list }, 600000)
   return { ...res, checked: list.length, skipped: paths.size - list.length }

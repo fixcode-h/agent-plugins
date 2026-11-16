@@ -21,8 +21,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_console: {
     title: '控制台命令',
-    summary: '执行控制台命令、查和改控制台变量',
-    useWhen: '要跑 stat、show 这类控制台命令，或者查 / 临时改 CVar 时',
+    summary: '执行控制台命令、查和改控制台变量，看项目配置的各层和 GameplayTag',
+    useWhen:
+      '要跑 stat、show 这类控制台命令，或者查 / 临时改 CVar 时；排查「这个配置值从哪来、哪层 ini 改的」用 action=config（先 query 搜键名）；要知道有哪些 GameplayTag、谁引用了某个 Tag 用 action=tags',
     avoidWhen: '改对象属性用 ue_set，调函数用 ue_call；quit、open 这类会请用户确认',
     confirms: true,
     group: RUN,
@@ -56,10 +57,11 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_lua: {
     title: 'Lua',
-    summary: '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数',
+    summary: '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数，在本机跑项目配好的 Lua 增量 / 全编译',
     useWhen:
-      'UnLua 项目里改完 .lua 要验证时按 check → reload → 触发 → errors 走一遍；要调一个 Lua 函数用 action=call；ue_get / ue_set 做不到的复杂读写才用 exec',
-    avoidWhen: '只读字段用 ue_get（functions=true 看函数），改简单字段用 ue_set（能撤回）；exec 每次都要用户确认，能用 call 就别用 exec',
+      'UnLua 项目里改完 .lua 要验证时按 check（或 compile 跑项目配好的编译）→ reload → 触发 → errors 走一遍，按返回的 文件:行 修；要调一个 Lua 函数用 action=call；ue_get / ue_set 做不到的复杂读写才用 exec',
+    avoidWhen:
+      '只读字段用 ue_get（functions=true 看函数），改简单字段用 ue_set（能撤回）；exec 每次都要用户确认，能用 call 就别用 exec',
     confirms: true,
     group: RUN,
   },
@@ -122,9 +124,12 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_editor: {
     title: '编辑器控制',
-    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器',
-    useWhen: '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时',
-    avoidWhen: '完整编译 C++ 用面板的 request_build，结果会推回来',
+    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器，在关卡里放和删 Actor',
+    useWhen:
+      '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时；用户让你在关卡里摆测试场景、放或删某个 Actor 时用 spawn / destroy',
+    avoidWhen:
+      '完整编译 C++ 用面板的 request_build，结果会推回来；新建资源（蓝图、DataTable）用 ue_asset create，不是 spawn；运行中的游戏里生成对象用 ue_call / ue_gm',
+    confirms: true,
     group: EDITOR,
   },
   ue_undo: {
@@ -152,7 +157,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: 'AssetForge 配置',
     summary: '用 JSON 配置管理 UE 资产：看同步状态、属性差异，导入写成资产、导出写回配置',
     useWhen:
-      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
+      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：写配置前先 schema kind=<kind> 看结构、schema class=<类> 看 props 能写哪些属性，改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
     avoidWhen:
       '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；导入导出是后台作业，返回编号后用 action=job 查结果',
     confirms: true,
@@ -162,7 +167,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '游戏测试',
     summary: '在 PIE 里跑 GameTest 场景、单步执行测试动作、看报告',
     useWhen:
-      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下）用 run 跑，job / report 看结果；不知道某个控件的选择器怎么写时用 inspect 指着它看',
+      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下），写完用 resolve 核对选择器，再用 run 跑，job / report 看结果；失败时读 report 里 payload.evidence 的截图、控件快照和日志找原因；改完代码要回归时 run tag=… 批量跑；不知道某个控件的选择器怎么写时用 inspect 指着它看',
     avoidWhen:
       '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
     group: RUN,

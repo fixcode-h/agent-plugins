@@ -29,13 +29,23 @@ export function luaDevOps({ state, hero, gi, bp, luaRoot, luaWalk, luaDesc }) {
     },
     'lua.check': (a) => {
       const errors = []
-      if (/syntax error/.test(a.code ?? '')) errors.push({ file: a.name ?? 'code', line: 1, message: "'=' expected near 'error'" })
-      for (const f of a.files ?? []) if (/Bad/.test(f)) errors.push({ file: f, line: 3, message: "'end' expected near <eof>" })
+      if (/syntax error/.test(a.code ?? ''))
+        errors.push({ file: a.name ?? 'code', line: 1, message: "'=' expected near 'error'" })
+      for (const f of a.files ?? [])
+        if (/Bad/.test(f)) errors.push({ file: f, line: 3, message: "'end' expected near <eof>" })
       return { passed: !errors.length, checked: (a.files ?? []).length + (a.code ? 1 : 0), errors }
     },
     'lua.modules': (a) => {
-      const items = state.lua.modules.filter((m) => !a.filter || m.name.toLowerCase().includes(String(a.filter).toLowerCase()))
-      return { items, total: items.length, stale: items.filter((m) => m.stale).length, root: 'Content/Script', reloader: false }
+      const items = state.lua.modules.filter(
+        (m) => !a.filter || m.name.toLowerCase().includes(String(a.filter).toLowerCase()),
+      )
+      return {
+        items,
+        total: items.length,
+        stale: items.filter((m) => m.stale).length,
+        root: 'Content/Script',
+        reloader: false,
+      }
     },
     'lua.reload': (a) => {
       const names = a.changed ? state.lua.modules.filter((m) => m.stale).map((m) => m.name) : (a.modules ?? [])
@@ -51,7 +61,11 @@ export function luaDevOps({ state, hero, gi, bp, luaRoot, luaWalk, luaDesc }) {
     'lua.errors': (a) => {
       if (a.clear) state.lua.errors = []
       const since = Number(a.since) || 0
-      return { items: state.lua.errors.filter((e) => e.seq > since), seq: state.lua.errSeq, total: state.lua.errors.length }
+      return {
+        items: state.lua.errors.filter((e) => e.seq > since),
+        seq: state.lua.errSeq,
+        total: state.lua.errors.length,
+      }
     },
     'lua.inspect': (a) => {
       const v = luaWalk(luaRoot(a), a.keys ?? [])

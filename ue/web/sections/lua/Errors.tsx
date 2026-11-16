@@ -85,14 +85,8 @@ export function LuaErrors() {
               e={cur}
               root={root}
               onOpen={(file) => open(file, root)}
-              onChat={
-                chat.available
-                  ? () => chat.send(chatText(cur))
-                  : undefined
-              }
-              onCopy={() =>
-                void navigator.clipboard.writeText(chatText(cur)).then(() => toast.success(t('已复制')))
-              }
+              onChat={chat.available ? () => chat.send(chatText(cur)) : undefined}
+              onCopy={() => void navigator.clipboard.writeText(chatText(cur)).then(() => toast.success(t('已复制')))}
             />
           )}
         </div>
@@ -187,7 +181,12 @@ function ErrorDetail({
           <div className="ue:flex ue:flex-col ue:font-mono ue:text-footnote">
             {e.stack.map((s, i) => {
               const m = STACK_LOC.exec(s)
-              if (!m) return <span key={i} className="ue:text-muted">{s}</span>
+              if (!m)
+                return (
+                  <span key={i} className="ue:text-muted">
+                    {s}
+                  </span>
+                )
               return (
                 <span key={i} className="ue:text-muted">
                   {m[1]}
@@ -210,10 +209,18 @@ function ErrorDetail({
         {e.locals?.length ? (
           <div className="ue:flex ue:flex-col">
             {e.locals.map((l) => (
-              <div key={l.name} className="ue:flex ue:gap-3 ue:border-b ue:border-line/60 ue:py-1 ue:font-mono ue:text-footnote">
+              <div
+                key={l.name}
+                className="ue:flex ue:gap-3 ue:border-b ue:border-line/60 ue:py-1 ue:font-mono ue:text-footnote"
+              >
                 <span className="ue:w-40 ue:shrink-0 ue:truncate ue:text-fg">{l.name}</span>
                 <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-muted">
-                  {l.obj ?? (l.v !== undefined ? JSON.stringify(l.v) : l.t === 'table' ? `{ ${t('{n} 项', { n: l.n ?? 0 })} }` : l.t)}
+                  {l.obj ??
+                    (l.v !== undefined
+                      ? JSON.stringify(l.v)
+                      : l.t === 'table'
+                        ? `{ ${t('{n} 项', { n: l.n ?? 0 })} }`
+                        : l.t)}
                 </span>
               </div>
             ))}
@@ -221,7 +228,9 @@ function ErrorDetail({
         ) : (
           <p className="ue:text-caption ue:text-subtle">
             {e.source === 'log'
-              ? t('这条是从日志里认出来的，没有局部变量：项目在 UnLua 的报错回调里调 FAgentPanelLua::CaptureError 后会有')
+              ? t(
+                  '这条是从日志里认出来的，没有局部变量：项目在 UnLua 的报错回调里调 FAgentPanelLua::CaptureError 后会有',
+                )
               : t('没有局部变量')}
           </p>
         )}

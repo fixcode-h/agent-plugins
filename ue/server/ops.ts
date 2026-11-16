@@ -63,6 +63,9 @@ const ASSET_OPS = new Set([
   'bp.edit',
   'bp.compile',
   'python',
+  // 编辑器小工具：重定向器、Tag 的引用方都只有资源注册表知道，编辑器没开时后台编辑器也能做
+  'asset.redirectors',
+  'tags.refs',
   // AssetForge（UEKit 扩展）：读配置和资产，编辑器没开时后台编辑器也能做
   'forge.health',
   'forge.kinds',
@@ -121,6 +124,12 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return args.dryRun ? 'read' : 'struct'
     case 'asset.delete':
       return args.dryRun ? 'read' : 'delete'
+    // 修复重定向器会改写、保存引用方并删掉重定向器；在关卡里放 / 删 Actor 改的是关卡：都按结构性操作确认
+    case 'asset.redirectors':
+      return args.fix ? 'struct' : 'read'
+    case 'editor.spawn':
+    case 'editor.destroy':
+      return 'struct'
     case 'python':
       return 'python'
     case 'asset.save':
@@ -185,6 +194,12 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${t('删除')} ${args.path}${args.force ? ` · ${t('强删（引用它的资源会断开）')}` : ''}`
     case 'asset.undo':
       return `${t('撤回')} ${args.path ?? ''} · ${args.tx}`
+    case 'asset.redirectors':
+      return `${t('修复重定向器')} ${args.path}`
+    case 'editor.spawn':
+      return `${t('在关卡里放')} ${args.class}${Array.isArray(args.location) ? ` @ ${(args.location as unknown[]).join(', ')}` : ''}${args.level ? ` · ${args.level}` : ''}`
+    case 'editor.destroy':
+      return `${t('从关卡里删掉')}\n${((args.actors as string[]) ?? []).join('\n')}`
     case 'bp.edit':
       return `${args.path}${args.dryRun ? ` · ${t('演练')}` : ''}\n${describeOps(args.ops)}`
     case 'bp.compile':
@@ -204,7 +219,7 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'forge.export':
       return `AssetForge ${t('导出到配置')}\n${((args.assets as string[]) ?? []).join('\n')}`
     case 'gt.run':
-      return `GameTest ${t('运行')} ${args.scenario ?? args.name ?? ''}`.trim()
+      return `GameTest ${t('运行')} ${args.scenario ?? (args.tag ? `tag:${args.tag}` : (args.name ?? ''))}`.trim()
     case 'gt.step': {
       const step = (args.step ?? args) as Record<string, unknown>
       return `GameTest ${step.action ?? ''} ${step.target ?? ''}`.trim()
@@ -280,7 +295,11 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
       throw new BridgeError(
         t('UE 页「权限与设置」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
       )
-    if (struct === 'ask') await ask(ctx, { title: t('Agent 要新建 / 复制 / 改名 UE 资源'), detail: what })
+    if (struct === 'ask')
+      await ask(ctx, {
+        title: op.startsWith('editor.') ? t('Agent 要改编辑器里打开的关卡') : t('Agent 要新建 / 复制 / 改名 UE 资源'),
+        detail: what,
+      })
   } else if (kind === 'delete') {
     if (struct === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))

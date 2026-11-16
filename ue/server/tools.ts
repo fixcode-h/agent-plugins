@@ -16,6 +16,8 @@ import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
 import { LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
 import { selectionBrief } from './selection.ts'
+import { luaCompileTool } from './lua-build/tool.ts'
+import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -51,19 +53,28 @@ const DEFS = [
   ),
   tool(
     'ue_console',
-    '执行 UE 控制台命令，返回这条命令执行期间的输出；也能查和改控制台变量。action=run 执行 command；action=cvars 按 query 查变量（changed=true 只看改过的）；action=set 把变量 name 设成 value（可撤回）。危险命令（quit、open 等）会请用户确认。',
+    '执行 UE 控制台命令，返回这条命令执行期间的输出；也能查和改控制台变量、看项目配置和 GameplayTag。action=run 执行 command；action=cvars 按 query 查变量（changed=true 只看改过的）；action=set 把变量 name 设成 value（可撤回）。危险命令（quit、open 等）会请用户确认。' +
+      'action=config 看项目 ini 配置（UE 没开也能看磁盘上的各层）：不给 file 列有哪些配置；file=Engine 列 section（filter 筛名字）；再给 section（key 可选）看每个键在 Base / Default / 平台 / Saved 各层怎么写的、叠出来的值、最后定它的那层（last），UE 在运行时带上进程里的最终值（live），不一致标 differs；query 在全部配置里按键名、值搜。' +
+      'action=tags 列 GameplayTag（query 按名字筛）；给 tag 列引用它的资源。',
     {
-      action: { type: 'string', enum: ['run', 'cvars', 'set'] },
+      action: { type: 'string', enum: ['run', 'cvars', 'set', 'config', 'tags'] },
       command: { type: 'string' },
       query: { type: 'string' },
       changed: { type: 'boolean' },
       name: { type: 'string' },
       value: { type: 'string' },
+      file: { type: 'string' },
+      section: { type: 'string' },
+      key: { type: 'string' },
+      filter: { type: 'string' },
+      tag: { type: 'string' },
       target: TARGET,
     },
     [],
     async (a, ctx) => {
       const action = str(a.action) || (a.command ? 'run' : a.name ? 'set' : 'cvars')
+      if (action === 'config') return mcpText(await consoleConfig(ctx, a))
+      if (action === 'tags') return mcpText(await consoleTags(ctx, a))
       if (action === 'run') return out(await runOp(ctx, 'console', { command: a.command }))
       if (action === 'set') return out(await runOp(ctx, 'cvar.set', { name: a.name, value: str(a.value) }))
       return out(await runOp(ctx, 'cvars', { query: a.query ?? '', changed: !!a.changed, limit: 80 }))
@@ -217,9 +228,10 @@ const DEFS = [
     'ue_lua',
     'UnLua 项目的 Lua：action=exec（默认）执行 code（每次都会请用户确认）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
       '改完 .lua 的验证：check 只编译不执行（files 是 .lua 路径，相对项目目录；不开游戏也能查）→ reload 重载 modules（模块名）或 changed=true 重载改过还没重载的 → 触发后 errors 看有没有新报错（按消息和位置归并，带次数、调用栈；since 写上次结果的 seq 只看新的，clear=true 清空）。modules 列改过还没重载的模块（all=true 或 filter 列全部）。' +
-      'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。',
+      'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。\n' +
+      'compile 在本机跑项目设置里配好的 Lua 编译（不经过 UE）：mode=incremental（默认）只编上次成功以来改过的，full 全编译；最多等 20 秒，没编完返回 job，再带 job 调一次接着等；完整输出在 logFile。',
     {
-      action: { type: 'string', enum: ['exec', ...LUA_DEV_ACTIONS] },
+      action: { type: 'string', enum: ['exec', 'compile', ...LUA_DEV_ACTIONS] },
       code: { type: 'string' },
       path: { type: 'string' },
       lua: { type: 'string' },
@@ -233,13 +245,16 @@ const DEFS = [
       since: { type: 'number' },
       clear: { type: 'boolean' },
       timeoutMs: { type: 'number' },
+      mode: { type: 'string', enum: ['incremental', 'full'] },
+      job: { type: 'string' },
       target: TARGET,
     },
     [],
     async (a, ctx) => {
+      if (a.action === 'compile') return luaCompileTool(a, ctx)
       const dev = await luaDevAction(a, ctx)
       if (dev) return dev
-      if (!a.code) return mcpText('要给 code（执行 Lua），或写 action', true)
+      if (!str(a.code).trim()) return mcpText('要给 code（执行 Lua），或写 action', true)
       const timeoutMs = Math.min(Math.max(Number(a.timeoutMs) || 5000, 100), 60000)
       return out(await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs }, timeoutMs + 10000))
     },
@@ -387,7 +402,8 @@ const DEFS = [
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）。',
+    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
+      'spawn 在编辑器打开的关卡里放 Actor（class 写类名或蓝图路径，location [x,y,z]、rotation [pitch,yaw,roll]、label、level、folder 可选），destroy 删掉 actors（Actor 路径数组，ue_find kind=actor 找）。spawn / destroy 进撤销栈（ue_undo 能撤）、按结构性操作权限确认，PIE 运行中不能用，改完关卡要 ue_save 才落盘。',
     {
       action: {
         type: 'string',
@@ -399,10 +415,19 @@ const DEFS = [
           'livecoding',
           'background_start',
           'background_stop',
+          'spawn',
+          'destroy',
         ],
       },
       players: { type: 'number' },
       netMode: { type: 'string' },
+      class: { type: 'string' },
+      location: { type: 'array', items: { type: 'number' } },
+      rotation: { type: 'array', items: { type: 'number' } },
+      label: { type: 'string' },
+      level: { type: 'string' },
+      folder: { type: 'string' },
+      actors: { type: 'array', items: { type: 'string' } },
       target: TARGET,
     },
     ['action'],
@@ -441,6 +466,10 @@ const DEFS = [
         case 'background_stop':
           stopBackground(ctx.project.id)
           return out('已停止')
+        case 'spawn':
+          return out(await editorSpawn(ctx, a))
+        case 'destroy':
+          return out(await editorDestroy(ctx, a))
         default:
           return mcpText(`不认识的 action：${a.action}`, true)
       }

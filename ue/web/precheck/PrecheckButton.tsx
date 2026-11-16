@@ -33,7 +33,9 @@ export function PrecheckButton({ onOpen }: { onOpen: (path: string) => void }) {
   const { busy, run } = useAction()
   const [res, setRes] = useState<Res>()
   const [error, setError] = useState('')
-  const supported = (state?.instances ?? []).some((i) => i.ops?.includes('asset.validate') && i.ops.includes('editor.selection'))
+  const supported = (state?.instances ?? []).some(
+    (i) => i.ops?.includes('asset.validate') && i.ops.includes('editor.selection'),
+  )
   if (!supported) return null
   const check = () =>
     run('precheck', async () => {
@@ -78,7 +80,9 @@ export function PrecheckButton({ onOpen }: { onOpen: (path: string) => void }) {
                           'ue:flex ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:text-left ue:hover:text-accent-text',
                         )}
                       >
-                        <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{i.path}</span>
+                        <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
+                          {i.path}
+                        </span>
                         {i.errors > 0 && <Badge tone="danger">{i.errors}</Badge>}
                         {i.warnings > 0 && <Badge tone="warn">{i.warnings}</Badge>}
                         {!i.errors && !i.warnings && <Badge tone="ok">{t('通过')}</Badge>}

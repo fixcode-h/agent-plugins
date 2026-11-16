@@ -32,6 +32,12 @@ async function resolveLua(ctx: OpCtx, b: Record<string, unknown>) {
   const rel = path.relative(proj, abs)
   if (!raw || rel.startsWith('..') || path.isAbsolute(rel) || !/\.lua$/i.test(abs))
     throw new BridgeError(t('只能打开项目目录里的 .lua 文件：{file}', { file: raw }))
-  if (!(await stat(abs).then((s) => s.isFile(), () => false))) throw new BridgeError(t('找不到文件：{file}', { file: abs }))
+  if (
+    !(await stat(abs).then(
+      (s) => s.isFile(),
+      () => false,
+    ))
+  )
+    throw new BridgeError(t('找不到文件：{file}', { file: abs }))
   return abs
 }

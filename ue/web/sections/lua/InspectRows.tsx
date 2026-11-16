@@ -9,7 +9,8 @@ import { Badge, ErrorText } from '../../ui.tsx'
 import { parseArg, signature, type CallRes, type LuaFn, type LuaRoot } from './inspect-data.ts'
 
 const SCALAR = new Set(['nil', 'boolean', 'number', 'string'])
-export const keyOf = (f: LuaField): LuaKey | undefined => (f.kt === 'number' ? f.kn : f.kt === 'string' ? f.k : undefined)
+export const keyOf = (f: LuaField): LuaKey | undefined =>
+  f.kt === 'number' ? f.kn : f.kt === 'string' ? f.k : undefined
 const keyLabel = (f: LuaField) => (f.kt === 'number' ? `[${f.k}]` : f.k)
 
 /**
@@ -151,7 +152,9 @@ export function FnRow({ root, fn, onChanged }: { root: LuaRoot; fn: LuaFn; onCha
         onClick={() => setOpen((v) => !v)}
         className="ue:flex ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:px-4 ue:py-1.5 ue:text-left ue:hover:bg-hover"
       >
-        <ChevronRight className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle ue:transition-transform', open && 'ue:rotate-90')} />
+        <ChevronRight
+          className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle ue:transition-transform', open && 'ue:rotate-90')}
+        />
         <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-body ue:text-fg">{signature(fn)}</span>
         {fn.from > 0 && <Badge>{t('继承 · 第 {n} 层', { n: fn.from })}</Badge>}
         <span className="ue:ml-auto ue:shrink-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
@@ -197,7 +200,12 @@ function CallForm({ root, fn, onChanged }: { root: LuaRoot; fn: LuaFn; onChanged
   return (
     <div className="ue:flex ue:flex-col ue:gap-2 ue:bg-panel ue:px-4 ue:py-3 ue:pl-10">
       <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
-        <input type="checkbox" checked={self} onChange={(e) => setSelf(e.target.checked)} className="ue:accent-accent" />
+        <input
+          type="checkbox"
+          checked={self}
+          onChange={(e) => setSelf(e.target.checked)}
+          className="ue:accent-accent"
+        />
         {t('把这张表当 self 传入（obj:{fn}()）', { fn: fn.name })}
       </label>
       {params.map((p) => (

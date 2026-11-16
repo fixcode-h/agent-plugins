@@ -116,6 +116,11 @@ try {
     [],
   )
   assert.ok(catTools.every((x) => !('call' in x)))
+  // 面板 ADR 0067：一个工具的定义（说明 + 参数 schema）不超过 3000 字
+  for (const x of catTools) {
+    const len = String(x.description ?? '').length + JSON.stringify(x.inputSchema ?? x.parameters ?? {}).length
+    assert.ok(len <= 3000, `${x.name} 的定义 ${len} 字，超过 3000`)
+  }
   const runTools = await plugin.tools({
     taskId: 't1',
     agentName: 'UE 调试',
@@ -280,6 +285,38 @@ try {
   assert.ok((await call('ue_python', { code: 'print(1)' })).isError)
   const py = await call('ue_python', { code: 'print(1)' }, yes)
   assert.ok(!py.isError && bridge.state.calls.some((c) => /^py ".*run-\d+\.py"$/.test(c)), text(py))
+
+  // 编辑器小工具（UELink 2.4）：配置分层 + 进程里的最终值、Tag（进程 + ini 注释）、放删 Actor 按结构性操作确认并能撤回、修复重定向器
+  mkdirSync(path.join(proj, 'Config'), { recursive: true })
+  writeFileSync(path.join(proj, 'Config', 'DefaultEngine.ini'), '[/Script/Engine.RendererSettings]\nr.Shadow=0\n')
+  writeFileSync(
+    path.join(proj, 'Config', 'DefaultGameplayTags.ini'),
+    '[/Script/GameplayTags.GameplayTagsSettings]\n+GameplayTagList=(Tag="Ability.Fire",DevComment="开火")\n',
+  )
+  const cfgKeys = await api('POST', '/p/p1/tools/config', { file: 'Engine', section: '/Script/Engine.RendererSettings' })
+  const shadow = cfgKeys.keys.find((k) => k.key === 'r.Shadow')
+  assert.deepEqual([shadow.values, shadow.live, shadow.differs], [['0'], ['3'], true], JSON.stringify(cfgKeys))
+  assert.ok(cfgKeys.keys.some((k) => k.key === 'r.FromPlugin' && !k.layers.length))
+  const cfgSecs = await api('POST', '/p/p1/tools/config', { file: 'Engine' })
+  assert.ok(cfgSecs.sections.some((x) => x.name === 'Plugin.OnlyLive' && x.liveOnly), JSON.stringify(cfgSecs))
+  assert.match(text(await call('ue_console', { action: 'config', query: 'r.shadow' })), /DefaultEngine/)
+  const tagRes = await api('POST', '/p/p1/tools/tags', {})
+  assert.equal(tagRes.items.find((x) => x.tag === 'Ability.Fire').comment, '开火')
+  assert.match(text(await call('ue_console', { action: 'tags', tag: 'Ability.Fire' })), /BP_Hero/)
+  assert.ok((await call('ue_editor', { action: 'spawn', class: 'PointLight' })).isError, '结构性操作默认要确认')
+  assert.ok(!(await call('ue_editor', { action: 'spawn', class: 'PointLight', location: [0, 0, 100] }, yes)).isError)
+  assert.equal(bridge.state.tools.spawned.length, 1)
+  const spawnHist = (await api('GET', '/p/p1/history')).items.find((i) => i.op === 'editor.spawn')
+  assert.ok(spawnHist?.undo, JSON.stringify(spawnHist))
+  assert.ok(!(await call('ue_undo', { id: spawnHist.id })).isError)
+  assert.equal(bridge.state.tools.spawned.length, 0)
+  const redir = await api('POST', '/p/p1/tools/redirectors', { path: '/Game/Old' })
+  assert.equal(redir.items.length, 1)
+  const fixed = await api('POST', '/p/p1/tools/redirectors/fix', { path: '/Game/Old' })
+  assert.equal(fixed.fixed.length, 1, JSON.stringify(fixed))
+  const diag = await api('GET', '/p/p1/tools/diagnose')
+  assert.ok(diag.items.some((i) => i.id === 'installed' && i.state === 'fail'), JSON.stringify(diag))
+  assert.ok(diag.items.some((i) => i.id.startsWith('port-') && i.state === 'ok'), JSON.stringify(diag))
 
   // 危险命令：没有确认卡片 → 报错；拒绝 → 不执行；允许 → 执行
   assert.ok((await call('ue_console', { command: 'quit' })).isError)

@@ -1,15 +1,16 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
-import { liveCards } from '../instances.ts'
+import { BridgeError, liveCards } from '../instances.ts'
 import type { InstallMode } from '../types.ts'
-import { run, t } from '../util.ts'
+import { c, run, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
-import { insideProject, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { forgeFileAction } from './forge-files.ts'
+import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
-import { watch } from './stream.ts'
+import { EXT_EVENT, watch } from './stream.ts'
 
 /**
  * UE 页「UE 插件」「AssetForge」「GameTest」用的接口（挂在 /api/plugins/ue/p/<项目>/ext/ 下）。
@@ -71,12 +72,21 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/report':
       // gt.report 太长时 UE 写成文件只回路径：页面要每一步的结果，从这份文件取
       return readReportFile(p.root, String(b.file ?? ''))
+    case 'POST ext/gt/text':
+      // 步骤详情里展开失败证据的日志（log.txt）、控件快照（widgets.json）
+      return readEvidenceText(p.root, String(b.file ?? ''))
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)
     case 'POST ext/forge/file':
       // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
       return forgeFileAction(p.root, b)
+    case 'POST ext/forge/watch':
+      // AssetForge 页右栏选中的配置：存盘了推 forge.file，页面重拉差异、重新演练（不轮询）
+      if (!b.root) throw new BridgeError(t('不知道配置根在哪：先刷新 AssetForge 页'))
+      return forgeWatch(p.id, insideProject(p.root, String(b.root)), b, (data, conn) =>
+        c().pages.push(EXT_EVENT, data, conn),
+      )
     case 'GET ext/file': {
       // GameTest 的截图（Saved/GameTest/... 下的 png）：页面上看步骤截图用
       const rel = url.searchParams.get('path') ?? ''

@@ -99,7 +99,12 @@ export function LuaInspector({
             ]}
           />
           <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
-            <input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} className="ue:accent-accent" />
+            <input
+              type="checkbox"
+              checked={own}
+              onChange={(e) => setOwn(e.target.checked)}
+              className="ue:accent-accent"
+            />
             {t('只看自己的函数')}
           </label>
         </div>

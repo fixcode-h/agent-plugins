@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -39,12 +39,15 @@ export function ForgeDetail({
   configRoot,
   tab: tabProp,
   onTab,
+  fileRev = 0,
 }: {
   entry: ForgeEntry
   busy: boolean
   configRoot: string
   tab?: ForgeTab
   onTab: (t: ForgeTab) => void
+  /** 这份配置存盘的次数（Forge.tsx 收 forge.file 推送时加 1）：变了就重拉原文、差异，重新演练 */
+  fileRev?: number
 }) {
   const { project } = useUe()
   const { ui } = h()
@@ -52,11 +55,20 @@ export function ForgeDetail({
   const [against, setAgainst] = useState<Against>('asset')
   // 计划是演练导入，慢：打开过「导入计划」页签才取，之后切走也留着条数
   const [planWanted, setPlanWanted] = useState(tab === 'plan')
+  // 打开右栏之后又存过盘的时间：页签行上说一句「已按保存的配置刷新」，让人知道计划和差异是新的
+  const [savedAt, setSavedAt] = useState<Date>()
+  const firstRev = useRef(fileRev)
+  useEffect(() => {
+    if (fileRev === firstRev.current) return
+    // 存盘后自动演练（设计稿：配置保存后右栏直接刷新计划和差异），不用再点「演练」
+    setPlanWanted(true)
+    setSavedAt(new Date())
+  }, [fileRev])
   const actions = useForgeActions(entry, configRoot)
   const importable = canImport(entry)
   const desc = useLoad(
     () => op<Describe>(project.id, 'forge.describe', entry.config ? { config: entry.config } : { asset: entry.asset }),
-    [entry.key, entry.state],
+    [entry.key, entry.state, fileRev],
   )
   const plan = useLoad(
     () =>
@@ -65,7 +77,7 @@ export function ForgeDetail({
             (r) => r.report,
           )
         : Promise.resolve(undefined),
-    [entry.key, entry.state, planWanted || tab === 'plan'],
+    [entry.key, entry.state, planWanted || tab === 'plan', fileRev],
   )
   // 差异条数要标在页签上，进来就取；还没导入、资产不存在时没有可比的资产，不取
   const diffable = importable && !['never-imported', 'asset-missing'].includes(entry.state)
@@ -84,7 +96,7 @@ export function ForgeDetail({
       120000,
     )
     return r.diff
-  }, [entry.key, entry.state, against])
+  }, [entry.key, entry.state, against, fileRev])
 
   const pick = (next: ForgeTab) => {
     if (next === 'plan') setPlanWanted(true)
@@ -123,6 +135,13 @@ export function ForgeDetail({
             { id: 'config' as const, label: t('配置原文') },
           ]}
         />
+        {savedAt && (
+          <span className="ue:truncate ue:text-caption ue:text-subtle" title={savedAt.toLocaleString()}>
+            {plan.loading || diff.loading
+              ? t('配置已保存，正在重新演练…')
+              : t('已按 {time} 保存的配置刷新', { time: savedAt.toLocaleTimeString() })}
+          </span>
+        )}
         {tab === 'diff' && (
           <div className="ue:ml-auto">
             <AgainstSelect value={against} onChange={setAgainst} />

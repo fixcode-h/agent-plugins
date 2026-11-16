@@ -1,4 +1,4 @@
-import { copyFile, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { BridgeError } from '../instances.ts'
 import { revealInFolder } from '../reveal.ts'
@@ -204,4 +204,28 @@ export async function readReportFile(projectRoot: string, rel: string) {
   if (!/\.json$/i.test(abs) || !within(path.join(projectRoot, 'Saved'), abs))
     throw new BridgeError(t('只能读 Saved 里的 GameTest 报告：{p}', { p: rel }))
   return (await readDoc(abs, rel, t('报告文件不存在：{p}', { p: rel }))) as { steps?: unknown[] }
+}
+
+/** 失败证据里的文字文件最多读多少：日志 100 行、控件快照几千个节点都在这以内，超了截断并说明 */
+const EVIDENCE_MAX_BYTES = 256 * 1024
+
+/**
+ * GameTest 失败证据里的文字文件（log.txt、widgets.json，在 Saved/GameTest/…/failures/ 下）：步骤详情里展开日志用。
+ * 只认 Saved/ 下的 .txt / .log / .json，大文件只读开头一段
+ */
+export async function readEvidenceText(projectRoot: string, rel: string) {
+  const abs = insideProject(projectRoot, rel)
+  if (!/\.(txt|log|json)$/i.test(abs) || !within(path.join(projectRoot, 'Saved'), abs))
+    throw new BridgeError(t('只能读 Saved 里的 GameTest 证据文件：{p}', { p: rel }))
+  const fh = await open(abs, 'r').catch(() => {
+    throw new BridgeError(t('文件不存在：{p}', { p: rel }))
+  })
+  try {
+    const size = (await fh.stat()).size
+    const buf = Buffer.alloc(Math.min(size, EVIDENCE_MAX_BYTES))
+    await fh.read(buf, 0, buf.length, 0)
+    return { text: buf.toString('utf8'), size, truncated: size > EVIDENCE_MAX_BYTES }
+  } finally {
+    await fh.close()
+  }
 }

@@ -26,7 +26,9 @@ export function LuaModules() {
     return r && n.startsWith(`${r}/`) ? n.slice(r.length + 1) : n
   }
   // 报错位置是「相对脚本根目录的文件:行」或绝对路径：按文件名尾部对上模块
-  const errorFiles = new Set((errs.data?.items ?? []).map((e) => (e.where ?? '').replace(/:\d+$/, '').replace(/\\/g, '/')))
+  const errorFiles = new Set(
+    (errs.data?.items ?? []).map((e) => (e.where ?? '').replace(/:\d+$/, '').replace(/\\/g, '/')),
+  )
   const hasError = (m: LuaModule) => {
     const f = rel(m.file)
     return !!f && [...errorFiles].some((e) => e && (f.endsWith(e) || e.endsWith(f)))
@@ -65,7 +67,9 @@ export function LuaModules() {
           <thead className="ue:sticky ue:top-0 ue:bg-card">
             <tr className="ue:border-b ue:border-line ue:text-left ue:text-caption ue:text-subtle">
               <th className="ue:px-4 ue:py-1.5 ue:font-normal">{t('模块')}</th>
-              <th className="ue:px-2 ue:py-1.5 ue:font-normal">{root ? t('文件（{root}）', { root: rel(root) || root }) : t('文件')}</th>
+              <th className="ue:px-2 ue:py-1.5 ue:font-normal">
+                {root ? t('文件（{root}）', { root: rel(root) || root }) : t('文件')}
+              </th>
               <th className="ue:px-2 ue:py-1.5 ue:text-right ue:font-normal">{t('绑定对象')}</th>
               <th className="ue:px-2 ue:py-1.5 ue:font-normal">{t('状态')}</th>
               <th className="ue:w-20" />
@@ -84,7 +88,10 @@ export function LuaModules() {
                   {rel(m.file) || '—'}
                 </td>
                 <td className="ue:px-2 ue:py-1.5 ue:text-right ue:tabular-nums ue:text-fg">{m.objects}</td>
-                <td className="ue:px-2 ue:py-1.5" title={m.loadedAt ? t('加载于 {at}', { at: clock(m.loadedAt) }) : undefined}>
+                <td
+                  className="ue:px-2 ue:py-1.5"
+                  title={m.loadedAt ? t('加载于 {at}', { at: clock(m.loadedAt) }) : undefined}
+                >
                   {hasError(m) ? (
                     <Badge tone="danger">{t('有报错')}</Badge>
                   ) : m.stale ? (
@@ -96,7 +103,12 @@ export function LuaModules() {
                 <td className="ue:px-2 ue:py-1">
                   <span className={cn('ue:flex ue:justify-end ue:gap-0.5 ue:opacity-0 ue:group-hover:opacity-100')}>
                     {m.file && (
-                      <ui.IconButton icon={SquarePen} size="xs" label={t('用编辑器打开')} onClick={() => open(m.file!)} />
+                      <ui.IconButton
+                        icon={SquarePen}
+                        size="xs"
+                        label={t('用编辑器打开')}
+                        onClick={() => open(m.file!)}
+                      />
                     )}
                     <ui.IconButton
                       icon={RotateCcw}

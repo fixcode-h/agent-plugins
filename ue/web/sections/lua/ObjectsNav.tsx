@@ -63,7 +63,12 @@ export function LuaObjectsNav({
     () =>
       src === 'bound'
         ? op<{ items: Bound[] }>(project.id, 'lua.objects', { limit: 200 }, target).then((r) =>
-            r.items.map((b) => ({ key: b.path, label: b.name, sub: b.module, root: { path: b.path, keys: [], label: b.name } })),
+            r.items.map((b) => ({
+              key: b.path,
+              label: b.name,
+              sub: b.module,
+              root: { path: b.path, keys: [], label: b.name },
+            })),
           )
         : op<{ fields?: LuaField[] }>(
             project.id,
@@ -78,7 +83,11 @@ export function LuaObjectsNav({
                 key: f.k,
                 label: f.k,
                 sub: f.module,
-                root: { path: '', keys: src === 'modules' ? ['package', 'loaded', f.k] : [f.k], label: src === 'modules' ? f.k : undefined },
+                root: {
+                  path: '',
+                  keys: src === 'modules' ? ['package', 'loaded', f.k] : [f.k],
+                  label: src === 'modules' ? f.k : undefined,
+                },
               })),
           ),
     [project.id, src, target.instance, target.world],
@@ -137,7 +146,9 @@ export function LuaObjectsNav({
               )}
             >
               <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-              <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{x.label}</span>
+              <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
+                {x.label}
+              </span>
               {x.sub && <span className="ue:max-w-[45%] ue:truncate ue:text-caption ue:text-subtle">{x.sub}</span>}
             </button>
           )
@@ -195,7 +206,10 @@ function WatchList({
           >
             {rootText(r)}
           </button>
-          <span className="ue:max-w-[45%] ue:truncate ue:font-mono ue:text-caption ue:text-muted" title={vals.data?.[i]}>
+          <span
+            className="ue:max-w-[45%] ue:truncate ue:font-mono ue:text-caption ue:text-muted"
+            title={vals.data?.[i]}
+          >
             {vals.data?.[i] ?? '…'}
           </span>
           <span className="ue:opacity-0 ue:group-hover:opacity-100">
