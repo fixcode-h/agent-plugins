@@ -7,6 +7,7 @@ import path from 'node:path'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { ScanResult, type ScanResults } from '../../shared/table-enum-scan.ts'
 import type { TableSchema } from '../../shared/tables.ts'
+export { stripScanned } from '../../shared/table-schema-transfer.ts'
 
 const FILE = 'enum-scan-results.json'
 
@@ -54,17 +55,6 @@ export function mergeScanned(schema: TableSchema, results: ScanResults): TableSc
       taken.add(name)
       enums[name] = { ...(enums[name] ?? { values: [] }), scanned: { by: s.id, values } }
     }
-  }
-  return { ...schema, enums }
-}
-
-/** 写 enums.json 前去掉扫描结果；只靠扫描才有的枚举（没手写成员、没指向枚举表）整个不写 */
-export function stripScanned(schema: TableSchema): TableSchema {
-  const enums: TableSchema['enums'] = {}
-  for (const [k, e] of Object.entries(schema.enums)) {
-    const { scanned, ...rest } = e
-    if (scanned && !rest.values.length && !rest.source) continue
-    enums[k] = rest
   }
   return { ...schema, enums }
 }
