@@ -57,7 +57,9 @@ export async function patchConfig(
               .trim()
               .replaceAll('\\', '/'),
           )
-          .filter((x) => x && !path.isAbsolute(x) && !x.split('/').includes('..')),
+          // 项目外的全局路径（G:/Shared/GM/*.lua、/opt/shared/*.lua）也行：GM 文件可能放在几个项目共用的目录里（用户 2026-11-16）；
+          // .. 不认，要项目外的就直接写绝对路径，看得清读的是哪里
+          .filter((x) => x && !x.split('/').includes('..')),
       ),
     ].slice(0, 50)
   if (b.binding && typeof b.binding.key === 'string') {
@@ -92,9 +94,12 @@ const SKIP = new Set(['.git', 'node_modules', 'Binaries', 'Intermediate', 'Saved
 
 /** 模式的固定开头（没有通配符的那几段）和剩下部分的正则 */
 export function splitPattern(pattern: string) {
-  const segs = pattern.replaceAll('\\', '/').replace(/^\.\//, '').split('/').filter(Boolean)
+  const norm = pattern.replaceAll('\\', '/').replace(/^\.\//, '')
+  // 绝对路径的开头（/、// 网络路径）split 后会丢，单独留着；G:/ 这种盘符本身就是第一段
+  const lead = /^\/\//.test(norm) ? '//' : norm.startsWith('/') ? '/' : ''
+  const segs = norm.split('/').filter(Boolean)
   const i = segs.findIndex((s) => /[*?[{]/.test(s))
-  if (i < 0) return { base: segs.join('/'), re: undefined, deep: false }
+  if (i < 0) return { base: lead + segs.join('/'), re: undefined, deep: false }
   const rest = segs.slice(i).join('/')
   let re = ''
   for (let k = 0; k < rest.length; k++) {
@@ -113,39 +118,49 @@ export function splitPattern(pattern: string) {
     else re += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   }
   return {
-    base: segs.slice(0, i).join('/'),
+    base: lead + segs.slice(0, i).join('/'),
     re: new RegExp(`^${re}$`, 'i'),
     deep: rest.includes('**') || i < segs.length - 1,
   }
 }
 
+/** 扫描结果里的文件路径换回磁盘上的位置：项目里的是相对项目根，项目外的本来就是绝对路径 */
+export const fileAbs = (root: string, f: string) => path.resolve(root, f)
+
 /**
- * 按模式列出 GM 文件（相对项目根，/ 分隔）和走过的目录（盯文件变化用）。
- * 自己走目录不用 fs.glob：Node 22 上它还是实验接口，会打警告
+ * 按模式列出 GM 文件和走过的目录（盯文件变化用）。项目里的文件给相对项目根的路径，项目外的（全局路径）给绝对路径，
+ * 都用 / 分隔。自己走目录不用 fs.glob：Node 22 上它还是实验接口，会打警告
  */
 export async function matchFiles(root: string, patterns: string[]) {
   const files = new Set<string>()
   const dirs = new Set<string>()
+  // G: 这种只有盘符的开头要补 /，不然 Windows 上会解析成那个盘的当前目录
+  const absOf = (b: string) => path.resolve(root, /^[A-Za-z]:$/.test(b) ? `${b}/` : b)
+  const out = (a: string) => {
+    const r = path.relative(root, a)
+    return (r && !r.startsWith('..') && !path.isAbsolute(r) ? r : a).replaceAll('\\', '/')
+  }
   let walked = 0
   for (const pat of patterns) {
     const { base, re, deep } = splitPattern(pat)
+    const baseAbs = absOf(base)
     if (!re) {
-      if (existsSync(path.join(root, base))) {
-        files.add(base)
-        dirs.add(path.dirname(path.join(root, base)))
+      if (existsSync(baseAbs)) {
+        files.add(out(baseAbs))
+        dirs.add(path.dirname(baseAbs))
       }
       continue
     }
     const walk = async (rel: string, depth: number): Promise<void> => {
       if (walked++ > MAX_WALK || files.size >= MAX_FILES) return
-      const abs = path.join(root, base, rel)
+      const abs = path.join(baseAbs, rel)
       dirs.add(abs)
       const entries = await readdir(abs, { withFileTypes: true }).catch(() => [])
       for (const e of entries) {
         const r = rel ? `${rel}/${e.name}` : e.name
         if (e.isDirectory()) {
           if (deep && !SKIP.has(e.name) && depth < 12) await walk(r, depth + 1)
-        } else if (re.test(r)) files.add(base ? `${base}/${r}` : r)
+        } else if (re.test(r)) files.add(out(path.join(baseAbs, r)))
       }
     }
     await walk('', 0)

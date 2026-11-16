@@ -9,7 +9,7 @@ import { current } from './scan.ts'
  */
 const CONTRACT = `脚本约定（ESM，Node 22，只用 node: 内置模块，不要装依赖）：
 \`\`\`js
-// files: [{ path: 相对项目根的路径（/ 分隔）, text: 文件全文 }]，面板读好了传进来，脚本不要自己读文件、不要联网、不要改文件
+// files: [{ path: 项目里的是相对项目根的路径，项目外的（全局路径）是绝对路径，都用 / 分隔, text: 文件全文 }]，面板读好了传进来，脚本不要自己读文件、不要联网、不要改文件
 export default function scan(files) {
   return [
     {

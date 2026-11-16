@@ -26,7 +26,7 @@ const { script, root, files } = JSON.parse(input)
 const mod = await import(pathToFileURL(script).href)
 const scan = mod.default ?? mod.scan
 if (typeof scan !== 'function') throw new Error('扫描脚本要 export default 一个函数：scan(files) => GM 列表')
-const list = files.map((f) => ({ path: f, text: readFileSync(path.join(root, f), 'utf8').replace(/^\\uFEFF/, '') }))
+const list = files.map((f) => ({ path: f, text: readFileSync(path.resolve(root, f), 'utf8').replace(/^\\uFEFF/, '') }))
 const out = await scan(list, { root })
 process.stdout.write('\\n@@LUA_GM@@' + JSON.stringify(out ?? null))
 `
