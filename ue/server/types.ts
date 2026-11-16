@@ -1,3 +1,4 @@
+import type { LuaGmBinding } from './lua-gm/types.ts'
 /**
  * UE 插件服务端和网页共用的数据形状（网页只 import type）。
  * 项目登记存在插件数据目录 projects/<面板项目 id>.json，不改面板核心的项目结构（设计文档 4.5）。
@@ -211,6 +212,11 @@ export interface GmStore {
   favGm: string[]
   /** GM 参数绑定数据表：键是 <GM 名>.<参数名>，值是 DataTable 路径，下拉里列行名（设计文档 3.3） */
   bindings?: Record<string, string>
+  /**
+   * C++ GM 参数关联表格的列（和 Lua GM 同一种关联，经表格插件下拉搜）：键是 <GM 名>.<参数名>。
+   * 同一个参数两种都有时用这个，旧的 DataTable 绑定只是还认
+   */
+  tableBindings?: Record<string, LuaGmBinding>
 }
 
 export interface Job {

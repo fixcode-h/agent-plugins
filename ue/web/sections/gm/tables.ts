@@ -51,25 +51,30 @@ export function resolveHint(projectId: string, table: string, key: string): Prom
   return p
 }
 
-/** 按 Id 或名字搜：两列分别按「包含」查，合起来去重；不搜时列前 30 行 */
+/** 下拉里参与搜索、显示的列：主列、描述列、辅助描述列（去重） */
+export const bindCols = (b: LuaGmBinding) => [...new Set([b.key, ...(b.label ? [b.label] : []), ...(b.extra ?? [])])]
+
+/**
+ * 按主列、描述列、辅助描述列搜：每列分别按「包含」查（表格插件的 where ~），合起来去重；不搜时列前 30 行。
+ * 不用 text（任何一格包含）：表里别的列（备注、路径）命中会把真正要找的挤出前 30 行
+ */
 export function searchRows(projectId: string, b: LuaGmBinding, q: string) {
-  const k = `${projectId}|${b.table}|${b.key}|${b.label ?? ''}|${(b.extra ?? []).join(',')}|${q}`
+  const fields = bindCols(b)
+  const k = `${projectId}|${b.table}|${b.sheet ?? ''}|${fields.join(',')}|${q}`
   let p = rows.get(k)
   if (!p) {
     p = (async () => {
-      const fields = [b.key, ...(b.label ? [b.label] : []), ...(b.extra ?? [])]
       const one = (where?: Record<string, string>) =>
         act<{ total: number; fields: string[]; rows: { values: Record<string, string> }[] }>('table.query', {
           projectId,
           path: b.table,
+          ...(b.sheet ? { sheet: b.sheet } : {}),
           fields,
           limit: 30,
           ...(where ? { where } : {}),
         })
       const word = q.trim()
-      const parts = word
-        ? await Promise.all([one({ [b.key]: `~${word}` }), ...(b.label ? [one({ [b.label]: `~${word}` })] : [])])
-        : [await one()]
+      const parts = word ? await Promise.all(fields.map((f) => one({ [f]: `~${word}` }))) : [await one()]
       const seen = new Set<string>()
       const out: TableRow[] = []
       for (const part of parts)
@@ -83,14 +88,40 @@ export function searchRows(projectId: string, b: LuaGmBinding, q: string) {
             extra: (b.extra ?? []).map((c) => r.values[c] ?? ''),
           })
         }
-      // Id 完全相同的排最前：输入 1001 时 1001 在 10010 前面
-      out.sort((a, c) => Number(c.key === word) - Number(a.key === word))
-      return { rows: out.slice(0, 30), total: parts.reduce((n, x) => n + x.total, 0), fields: parts[0]?.fields ?? [] }
+      // 主列完全相同的排最前（输入 1001 时 1001 在 10010 前面），其次是主列、描述列里含这几个字的
+      const rank = (r: TableRow) => (r.key === word ? 0 : r.key.includes(word) ? 1 : r.label.includes(word) ? 2 : 3)
+      if (word) out.sort((a, c) => rank(a) - rank(c))
+      return {
+        rows: out.slice(0, 30),
+        total: word ? out.length : (parts[0]?.total ?? 0),
+        fields: parts[0]?.fields ?? [],
+      }
     })()
     rows.set(k, p)
     p.catch(() => rows.delete(k))
   }
   return p
+}
+
+/** 关联弹窗：按表名找表格（只看路径，表格插件不读内容，5000 张表也快） */
+export async function listTables(projectId: string, q: string) {
+  const r = await act<{ files: string[]; truncated?: string }>('table.list', {
+    projectId,
+    ...(q.trim() ? { name: q.trim() } : {}),
+  })
+  return { files: r.files.map((f) => f.replace(/（只读）$/, '')), truncated: !!r.truncated }
+}
+
+/** 关联弹窗：一张表的页签，和某个页签的列（表头按表格页里设的结构认） */
+export async function tableShape(projectId: string, table: string, sheet?: string) {
+  const s = await act<{ sheets: string[] }>('table.schema', { projectId, path: table, ...(sheet ? { sheet } : {}) })
+  const q = await act<{ sheet: string; fields: string[]; key: string }>('table.query', {
+    projectId,
+    path: table,
+    ...(sheet ? { sheet } : {}),
+    limit: 1,
+  })
+  return { sheets: s.sheets, sheet: q.sheet, fields: q.fields, key: q.key }
 }
 
 /** 选中的值对应的名字（输入框里显示「1001 · 新手长剑」） */
@@ -99,6 +130,7 @@ export async function labelOf(projectId: string, b: LuaGmBinding, value: string)
   const r = await act<{ rows: { values: Record<string, string> }[] }>('table.query', {
     projectId,
     path: b.table,
+    ...(b.sheet ? { sheet: b.sheet } : {}),
     fields: [b.key, b.label],
     where: { [b.key]: value },
     limit: 1,

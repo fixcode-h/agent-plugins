@@ -1,3 +1,4 @@
+import { TableBindDialogSpecimen } from './sections/gm/TableBindDialog.tsx'
 import { TablePickSpecimen } from './sections/gm/TablePick.tsx'
 import type { ActivateWeb, Task } from '../../sdk/web.ts'
 import type { UeProject } from '../server/types.ts'
@@ -86,6 +87,13 @@ const activate: ActivateWeb = (host) => {
       },
       // GM 页参数关联表格列的可搜索下拉（设计稿 designs/GM页重设计-效果图）：跟面板「输入框」「菜单」的调节项
       { id: 'gm-table-pick', label: t('GM · 参数关联表格下拉'), tune: ['input', 'menu'], Specimen: TablePickSpecimen },
+      // 参数关联表格的弹窗：搜表、页签、主列、描述列、辅助描述列
+      {
+        id: 'gm-table-bind',
+        label: t('GM · 参数关联表格'),
+        tune: ['input', 'menu'],
+        Specimen: TableBindDialogSpecimen,
+      },
       // GameTest 页的历史条、批量运行条、失败证据：跟面板「徽标」「行」「进度条」的调节项
       {
         id: 'gametest-parts',

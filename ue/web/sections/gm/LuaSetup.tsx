@@ -1,6 +1,6 @@
 import { FileCode, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { LuaGmBinding, LuaGmConfig, LuaGmScan } from '../../../server/lua-gm/types.ts'
+import type { LuaGmConfig, LuaGmScan } from '../../../server/lua-gm/types.ts'
 import { ppost } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -131,80 +131,6 @@ export function LuaSetup({
           </span>
           <code className="ue:truncate ue:font-mono ue:text-caption ue:text-fg">{rel(scan.script)}</code>
         </div>
-      </div>
-    </ui.Modal>
-  )
-}
-
-/** 改一个参数关联的表格列：表格路径、填进参数的列、名字列、多显示的列；也能去掉关联或恢复扫描脚本给的 */
-export function BindDialog({
-  param,
-  current,
-  hint,
-  onClose,
-  onSave,
-}: {
-  param: string
-  current?: LuaGmBinding
-  /** 扫描脚本给的提示（Item.Id），有的话能「恢复」 */
-  hint?: string
-  onClose: () => void
-  /** null 去掉关联；undefined 恢复扫描脚本给的 */
-  onSave: (b: LuaGmBinding | null | undefined) => void
-}) {
-  const { ui } = h()
-  const [table, setTable] = useState(current?.table ?? '')
-  const [key, setKey] = useState(current?.key ?? 'Id')
-  const [label, setLabel] = useState(current?.label ?? '')
-  const [extra, setExtra] = useState((current?.extra ?? []).join(', '))
-  const field = (l: string, v: string, set: (s: string) => void, ph: string, hintText?: string) => (
-    <ui.Field label={l} hint={hintText}>
-      <ui.Input value={v} placeholder={ph} onChange={(e: { target: { value: string } }) => set(e.target.value)} />
-    </ui.Field>
-  )
-  return (
-    <ui.Modal
-      open
-      size="sm"
-      onOpenChange={(o: boolean) => !o && onClose()}
-      title={t('参数 {p} 关联表格', { p: param })}
-      footer={
-        <>
-          {hint && (
-            <ui.Button variant="ghost" className="ue:mr-auto" onClick={() => onSave(undefined)}>
-              {t('恢复扫描脚本给的（{h}）', { h: hint })}
-            </ui.Button>
-          )}
-          <ui.Button variant="secondary" onClick={() => onSave(null)}>
-            {t('不关联')}
-          </ui.Button>
-          <ui.Button
-            disabled={!table.trim() || !key.trim()}
-            onClick={() =>
-              onSave({
-                table: table.trim(),
-                key: key.trim(),
-                ...(label.trim() ? { label: label.trim() } : {}),
-                extra: extra
-                  .split(/[,，\s]+/)
-                  .map((x) => x.trim())
-                  .filter(Boolean),
-              })
-            }
-          >
-            {t('保存')}
-          </ui.Button>
-        </>
-      }
-    >
-      <div className="ue:flex ue:flex-col ue:gap-3">
-        {field(t('表格'), table, setTable, 'Config/Item.xlsx', t('表格页里的路径（相对项目目录）'))}
-        {field(t('填进参数的列'), key, setKey, 'Id')}
-        {field(t('名字列'), label, setLabel, 'Name', t('和 Id 一起搜、一起显示，可以不填'))}
-        {field(t('下拉里多显示的列'), extra, setExtra, 'Quality', t('一两列关键信息，逗号隔开'))}
-        <p className="ue:text-caption ue:text-subtle">
-          {t('存在 GM 扫描设置里（项目里，团队共用），优先于扫描脚本给的关联')}
-        </p>
       </div>
     </ui.Modal>
   )
