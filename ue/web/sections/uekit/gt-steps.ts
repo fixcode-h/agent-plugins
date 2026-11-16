@@ -2,8 +2,9 @@ import { t } from '../../host.ts'
 
 /**
  * GameTest 步骤给人看的写法（GameTest 1.1）：录制会在 click / drag / wheel / type / key / assert 上附一份 hint
- * （资源路径、类、可见文字、视口里的位置），说明「这是哪个控件」。回放不读它，面板拿它把步骤显示成一句人话，
- * 选择器退到次要位置。hint.ambiguous 是录制时选择器核对没过的原因（可能点不到同一个控件），页面上标黄。
+ * （资源路径、类、可见文字、视口里的位置），说明「这是哪个控件」。面板拿它把步骤显示成一句人话，选择器退到次要位置。
+ * GameTest 1.2.0-beta.4 起，选择器命中同一个界面的几个实例时回放按 hint 的文字、位置挑回录的那一个：
+ * 录制时挑得回来写 hint.pick（说明，不标黄），挑不回来才写 hint.ambiguous（原因，页面上标黄）。
  */
 export interface GtHint {
   asset?: string
@@ -11,6 +12,8 @@ export interface GtHint {
   text?: string
   /** 视口里的归一化矩形 [x, y, w, h] */
   rect?: number[]
+  /** 选择器不唯一、但回放按位置和文字挑得回来时的说明 */
+  pick?: string
   ambiguous?: string | boolean
 }
 

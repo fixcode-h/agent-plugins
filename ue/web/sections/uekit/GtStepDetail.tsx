@@ -123,6 +123,7 @@ export function StepDetail({
       ].filter(([, v]) => v) as [string, unknown][])
   const human = humanStep(def)
   const ambiguous = ambiguousOf(def)
+  const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
   const shot = [res?.payload?.path, res?.payload?.screenshot, res?.payload?.annotated].find(
     (p): p is string => typeof p === 'string' && /\.(png|jpe?g)$/i.test(p),
   )
@@ -134,16 +135,17 @@ export function StepDetail({
         <StepIcon s={res?.status} live={live} />
         <span className="ue:ml-auto ue:text-caption ue:text-subtle">{ms(res?.durationMs)}</span>
       </header>
-      {(human || ambiguous) && (
+      {(human || ambiguous || picked) && (
         <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-3 ue:text-footnote">
           {human && <p className="ue:text-body ue:text-fg">{human}</p>}
           {ambiguous && (
             <Note>
-              {t('选择器可能不唯一：{r}。回放不会自动换目标，点错时改 target 或用「复制目标选择器」核对', {
+              {t('选择器可能不唯一：{r}。回放会先按录制时的位置和文字挑，挑不出时报错；这时改 target 或用「复制目标选择器」核对', {
                 r: ambiguous,
               })}
             </Note>
           )}
+          {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
         </div>
       )}
       <Block title={t('参数')}>
