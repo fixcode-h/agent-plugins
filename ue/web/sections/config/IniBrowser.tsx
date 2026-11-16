@@ -1,12 +1,15 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyRow as KeyData } from '../../../server/editor-tools/config-layers.ts'
 import { ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
+import { TreeList } from '../../TreeList.tsx'
+import { TreeSearch } from '../../tree-search.tsx'
 import { Badge, Card, ErrorText, Note, SearchBox } from '../../ui.tsx'
 import { KeyRow } from './parts.tsx'
+import { ancestorsOf, buildSecTree, lineKeyOf, secLines, type Sec } from './section-tree.tsx'
 
 interface Live {
   pid?: number
@@ -15,7 +18,7 @@ interface Live {
 }
 interface SectionsRes {
   layers: { label: string; file: string }[]
-  sections: { name: string; layers: string[]; liveOnly?: boolean }[]
+  sections: Sec[]
   live: Live
 }
 interface KeysRes {
@@ -30,13 +33,19 @@ interface SearchRes {
 /**
  * 项目配置：左栏选配置（Engine、Game…）和 section，右栏看这个 section 每个键的各层写法和最终值；
  * 顶上的搜索在全部配置里按键名、值找（「这个值在哪设的」）。section 列表本地筛，边打边筛；全局搜索回车才搜。
+ * section 按「/Script/模块.类」拆成文件夹树（用户 2026-11-16「也改成文件树结构」，和资源页文件夹树同一个 TreeList），展开状态按配置记住
  */
 export function IniBrowser() {
   const { project } = useUe()
-  const { ui, cn } = h()
+  const { ui } = h()
   const [file, setFile] = useKept(`cfg-file:${project.id}`, 'Engine')
   const [section, setSection] = useKept(`cfg-sec:${project.id}`, '')
   const [filter, setFilter] = useState('')
+  // 默认展开 /Script（绝大多数 section 在它下面），其余点开才看
+  const [open, setOpen] = useKept<string[]>(`cfg-open:${project.id}:${file}`, ['/Script'])
+  // 筛选时自动展开的文件夹，用户再点收起记在这里（换关键词清掉），和资源页文件夹树一样
+  const [fold, setFold] = useState<{ q: string; m: Record<string, boolean> }>({ q: '', m: {} })
+  const [reveal, setReveal] = useState<{ key: string; seq: number }>()
   const [query, setQuery] = useState('')
   const pane = usePane('config', '320px', 220)
   const left = useRef<HTMLElement>(null)
@@ -50,10 +59,34 @@ export function IniBrowser() {
     () => (query ? ppost<SearchRes>(project.id, 'tools/config', { query }) : Promise.resolve(undefined)),
     [project.id, query],
   )
-  const shown = useMemo(() => {
-    const f = filter.toLowerCase()
-    return (secs.data?.sections ?? []).filter((s) => !f || s.name.toLowerCase().includes(f))
-  }, [secs.data, filter])
+  const tree = useMemo(() => buildSecTree(secs.data?.sections ?? []), [secs.data])
+  const folded = fold.q === filter ? fold.m : {}
+  const { lines, hits } = useMemo(
+    () =>
+      secLines({
+        tree,
+        q: filter,
+        open,
+        folded,
+        section,
+        toggle: (k) => setOpen((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k])),
+        fold: (k, wasOpen) => setFold({ q: filter, m: { ...folded, [k]: wasOpen } }),
+        pick: setSection,
+      }),
+    // setOpen、setSection 每次渲染都是新的，按数据变化重算就够
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [tree, filter, open, fold, section],
+  )
+  const total = secs.data?.sections.length ?? 0
+  // 从全局搜索结果跳过来、或换配置后记住的 section：展开到它所在的文件夹并滚过去
+  useEffect(() => {
+    if (!section || !secs.data) return
+    const up = ancestorsOf(section)
+    if (up.some((k) => !open.includes(k))) setOpen((o) => [...new Set([...o, ...up])])
+    setReveal((r) => ({ key: lineKeyOf(section), seq: (r?.seq ?? 0) + 1 }))
+    // 只在换了 section 或列表刚读到时定位一次，用户之后收起文件夹不再强行展开
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, secs.data])
   const live = keys.data?.live ?? secs.data?.live
 
   return (
@@ -106,7 +139,9 @@ export function IniBrowser() {
                   className="ue:flex ue:w-full ue:cursor-pointer ue:items-baseline ue:gap-3 ue:px-4 ue:py-1.5 ue:text-left ue:hover:bg-hover"
                 >
                   <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{x.type}</span>
-                  <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-footnote ue:text-muted">[{x.section}]</span>
+                  <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-footnote ue:text-muted">
+                    [{x.section}]
+                  </span>
                   <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
                     {x.key}={x.value}
                   </span>
@@ -124,37 +159,16 @@ export function IniBrowser() {
           style={pane.style('60%')}
           bodyClass="ue:flex ue:min-h-0 ue:flex-col"
           title={file}
-          aside={t('{n} 个 section', { n: shown.length })}
+          aside={t('{n} 个 section', { n: total })}
         >
-          <div className="ue:border-b ue:border-line ue:p-3">
-            <SearchBox placeholder={t('section 名包含…')} onSearch={setFilter} live />
-          </div>
+          <TreeSearch value={filter} onChange={setFilter} placeholder={t('section 名包含…')} hits={hits} />
           <ErrorText>{secs.error}</ErrorText>
-          {!secs.loading && !shown.length && !secs.error && (
+          {!secs.loading && !total && !secs.error && (
             <p className="ue:p-4 ue:text-footnote ue:text-subtle">
-              {secs.data?.layers.length ? t('没有匹配的 section') : t('磁盘上没找到这个配置的 ini（引擎目录没找到时只看项目里的）')}
+              {t('磁盘上没找到这个配置的 ini（引擎目录没找到时只看项目里的）')}
             </p>
           )}
-          <ul className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:py-1">
-            {shown.map((s) => (
-              <li key={s.name}>
-                <button
-                  type="button"
-                  title={s.liveOnly ? t('只在进程里有（插件的 Config 或运行中加的）') : s.layers.join('\n')}
-                  onClick={() => setSection(s.name)}
-                  className={cn(
-                    'ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:px-3 ue:text-left ue:hover:bg-hover',
-                    s.name === section && 'ue:bg-sel',
-                  )}
-                >
-                  <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{s.name}</span>
-                  <span className="ue:shrink-0 ue:text-caption ue:text-subtle">
-                    {s.liveOnly ? t('进程') : s.layers.length}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <TreeList lines={lines} label={t('section 树')} reveal={reveal} />
         </Card>
         <SplitHandle pane={pane} paneRef={left} reserve={() => 360} />
         <Card
@@ -167,7 +181,9 @@ export function IniBrowser() {
           {!section && (
             <div className="ue:p-4">
               <Note tone="info">
-                {t('左边选 section 看每个键在 Base、Default、平台、Saved 各层怎么写的，最后哪层定了值；UE 开着时进程里的值不一样会标黄（插件的 Config、命令行或运行中改过）。')}
+                {t(
+                  '左边选 section 看每个键在 Base、Default、平台、Saved 各层怎么写的，最后哪层定了值；UE 开着时进程里的值不一样会标黄（插件的 Config、命令行或运行中改过）。',
+                )}
               </Note>
             </div>
           )}

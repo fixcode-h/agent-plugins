@@ -1698,7 +1698,7 @@
   "{n} 条": "{n} results",
   "{n} 个 section": "{n} sections",
   "section 名包含…": "Section name contains…",
-  "没有匹配的 section": "No matching section",
+  "section 树": "Section tree",
   "磁盘上没找到这个配置的 ini（引擎目录没找到时只看项目里的）": "No ini files for this config on disk (when the engine folder isn't found, only the project's are read)",
   "只在进程里有（插件的 Config 或运行中加的）": "Only in the process (from a plugin's Config or added at runtime)",
   "进程": "Process",
