@@ -54,7 +54,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     unlua: await hasUnLua(p.root),
     bridge,
     bundled,
-    background: backgroundState(p.id, cards),
+    background: backgroundState(p, cards),
     jobs: projectJobs(p.id),
     extensions,
     launch: launchProgress(p.id),

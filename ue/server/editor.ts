@@ -2,9 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { liveCards, type Card } from './instances.ts'
 import { backgroundExitWhy, editorStartingWhy } from './launch/bg-guard.ts'
+import { watchForeground } from './launch/fg-watch.ts'
 import { trackLaunch } from './launch/track.ts'
 import type { UeProject } from './types.ts'
-import { c, exists, t } from './util.ts'
+import { alive, c, exists, t } from './util.ts'
 
 /**
  * 编辑器进程：后台编辑器（设计文档 3.4，-run=AgentPanel，常驻、闲置自己退出）和普通编辑器的启动。
@@ -14,6 +15,8 @@ interface Bg {
   child?: ChildProcess
   starting?: Promise<Card>
   error?: string
+  /** 因为前台编辑器起来而关掉的：启动中的那次不记成后台编辑器的错误 */
+  closedFor?: string
 }
 const bgs = new Map<string, Bg>()
 
@@ -25,9 +28,11 @@ function exe(p: UeProject, cmd: boolean) {
   return path.join(bin, 'Linux', 'UnrealEditor')
 }
 
-export function backgroundState(id: string, cards: Card[]) {
+export function backgroundState(p: UeProject, cards: Card[]) {
   const card = cards.find((x) => x.kind === 'background')
-  const bg = bgs.get(id)
+  const bg = bgs.get(p.id)
+  // 后台编辑器在跑（也可能是面板上次运行时起的）：盯着前台，前台一起来就关掉它
+  if (card) watchForeground(p, (why) => closeBackground(p, why))
   // 编辑器连上以后读写都走它，上一次起后台编辑器的报错已经没意义，清掉（不然左栏一直挂着一条红字）
   if (bg?.error && cards.some((x) => x.kind === 'editor')) bg.error = undefined
   return { running: !!card, starting: !!bg?.starting, pid: card?.pid, error: bg?.error }
@@ -76,6 +81,7 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
   }
   const idle = Number(c().config().idleMinutes) || 10
   bg.error = undefined
+  bg.closedFor = undefined
   bg.starting = (async () => {
     const child = spawn(
       file,
@@ -87,10 +93,14 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
       if (bg.child === child) bg.child = undefined
     })
     try {
-      return await waitCard(p, 'background', 10 * 60 * 1000, child)
+      const card = await waitCard(p, 'background', 10 * 60 * 1000, child)
+      watchForeground(p, (why) => closeBackground(p, why))
+      return card
     } catch (e) {
-      bg.error = (e as Error).message
       child.kill()
+      // 是前台编辑器起来、面板主动关的：不算出错，告诉调用方读写改走前台编辑器
+      if (bg.closedFor) throw new Error(t('前台编辑器启动了，后台编辑器已关掉：等编辑器加载完，读写走编辑器'))
+      bg.error = (e as Error).message
       throw e
     } finally {
       bg.starting = undefined
@@ -103,6 +113,34 @@ export function stopBackground(id: string) {
   const bg = bgs.get(id)
   bg?.child?.kill()
   if (bg) bg.child = undefined
+}
+
+/**
+ * 前台编辑器要起来了：关掉后台编辑器（启动中的那次也取消），同时只开一个编辑器（用户 2026-11-16）。
+ * 面板上次运行时起的后台编辑器不是这次的子进程，按名片上的 PID 结束。等它真退出（最多 15 秒）再返回，
+ * 免得前台编辑器打开项目时后台还占着资源文件和模块 DLL
+ */
+export async function closeBackground(p: UeProject, why: string) {
+  const bg = bgs.get(p.id)
+  const pids = new Set<number>()
+  if (bg?.child?.pid) pids.add(bg.child.pid)
+  for (const x of await liveCards(p.root)) if (x.kind === 'background') pids.add(x.pid)
+  if (!pids.size && !bg?.starting) return
+  if (bg) {
+    bg.closedFor = why
+    bg.error = undefined
+    bg.child?.kill()
+    bg.child = undefined
+  }
+  for (const pid of pids) {
+    try {
+      process.kill(pid)
+    } catch {
+      // 已经退出了
+    }
+  }
+  const until = Date.now() + 15000
+  while ([...pids].some(alive) && Date.now() < until) await new Promise((r) => setTimeout(r, 300))
 }
 
 export function stopAllBackground() {
@@ -121,6 +159,8 @@ export async function launchEditor(p: UeProject) {
         pid: running.pid,
       }),
     )
+  // 同时只开一个编辑器：先关后台编辑器再起前台（用户 2026-11-16）
+  await closeBackground(p, 'launch')
   const child = spawn(file, [p.uproject], { cwd: p.root, detached: true, stdio: 'ignore' })
   child.unref()
   return trackLaunch(p, child)

@@ -1,6 +1,7 @@
 import type { OpCtx } from '../ops.ts'
 import { t } from '../util.ts'
 import { vsCall } from './connect.ts'
+import { beforeVsLaunch } from './fg-launch.ts'
 import { openVs } from './open-vs.ts'
 import { isKnownOp } from './protocol.ts'
 
@@ -18,6 +19,7 @@ export async function vsDebugRoute(ctx: OpCtx, route: string, b: Record<string, 
       if (!isKnownOp(op)) return { error: t('VS 调试没有这个操作：{op}', { op: op || '（空）' }) }
       const args =
         b.args && typeof b.args === 'object' && !Array.isArray(b.args) ? (b.args as Record<string, unknown>) : {}
+      await beforeVsLaunch(ctx.project, op)
       return vsCall(ctx.project, op, args).then(
         (result) => ({ result }),
         (e: Error) => ({ error: e.message }),

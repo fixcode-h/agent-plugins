@@ -3,7 +3,9 @@ import path from 'node:path'
 import { editorBlockers } from '../procs.ts'
 import type { UeProject } from '../types.ts'
 import { t } from '../util.ts'
+import { vsDebugState } from '../vs-debug/state.ts'
 import { launchProgress } from './track.ts'
+import { vsForegroundWhy } from './vs-foreground.ts'
 
 /**
  * 起后台编辑器前的把关（用户 2026-11-15：编辑器开着却报「后台编辑器启动后退出了（退出码 1）」）：
@@ -11,10 +13,17 @@ import { launchProgress } from './track.ts'
  * 两个进程同时打开同一个项目，后台那个常常直接退出。这里先看面板自己有没有在跟一次启动、系统里有没有这个项目的编辑器进程，
  * 有就不起，告诉用户等编辑器就绪
  */
-export async function editorStartingWhy(p: UeProject): Promise<string | undefined> {
+export async function editorStartingWhy(
+  p: UeProject,
+  opt: { procs?: boolean; bgPid?: number } = {},
+): Promise<string | undefined> {
   const lp = launchProgress(p.id)
   if (lp?.status === 'running')
     return t('编辑器正在启动（PID {pid}），等它加载完再读；资源读写会走编辑器，不另起后台编辑器', { pid: lp.pid })
+  // VS 里按了启动调试（经 UEToVS 或用户自己按 F5）：先编译再起 UE，这段时间面板跟不到进程，只能问 VS（用户 2026-11-16）
+  const vs = vsForegroundWhy((await vsDebugState(p).catch(() => undefined))?.status, opt.bgPid)
+  if (vs) return vs
+  if (opt.procs === false) return undefined
   // 用户自己从 UE 或 IDE 打开的编辑器面板跟不到启动，只能看进程（只在 Windows 上查得到）
   const r = await editorBlockers(p).catch(() => undefined)
   const same = r?.list.find((x) => x.same && !x.game)
