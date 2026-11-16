@@ -142,6 +142,11 @@ export interface Instance {
   startedAt: string
   /** /info 连得上 */
   online: boolean
+  /**
+   * 进程活着、名片在，但 /info 几秒没回应（游戏线程卡在同步加载、编译着色器、断点里）：不是断开，等它忙完会自己回来。
+   * since 是第一次没回应的时间（毫秒时间戳）；kind / detail / line 是从日志尾部认出的在忙什么，quietSec 是日志多久没动
+   */
+  busy?: { since: number; kind?: string; detail?: string; line?: string; quietSec?: number }
   error?: string
   log?: string
   worlds: World[]

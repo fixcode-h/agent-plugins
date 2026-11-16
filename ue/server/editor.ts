@@ -113,6 +113,14 @@ export function stopAllBackground() {
 export async function launchEditor(p: UeProject) {
   const file = exe(p, false)
   if (!exists(file)) throw new Error(t('没找到 {f}：确认引擎目录，或在「权限与设置」里指定', { f: file }))
+  // 编辑器还活着（哪怕正卡在加载里不回应）就不再起一个：两个编辑器开同一个项目会抢资源文件（用户 2026-11-16）
+  const running = (await liveCards(p.root)).find((x) => x.kind === 'editor')
+  if (running)
+    throw new Error(
+      t('这个项目的编辑器已经开着（PID {pid}）：它在忙时会暂时不回应，等它忙完自动连上，不用再启动一个', {
+        pid: running.pid,
+      }),
+    )
   const child = spawn(file, [p.uproject], { cwd: p.root, detached: true, stdio: 'ignore' })
   child.unref()
   return trackLaunch(p, child)
