@@ -5,6 +5,7 @@ import type { InstallMode } from '../types.ts'
 import { c, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
+import { tidyAction } from './gt-tidy.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { configBaseline } from './forge-baseline.ts'
 import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
@@ -81,6 +82,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)
+    case 'POST ext/gt/tidy':
+      // 「AI 整理」：整理稿的路径、差异、保存（原场景备份成 .json.bak）、放弃、恢复原录制（gt-tidy.ts）
+      return tidyAction(p.root, b)
     case 'POST ext/forge/file':
       // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
       return forgeFileAction(p.root, b)
