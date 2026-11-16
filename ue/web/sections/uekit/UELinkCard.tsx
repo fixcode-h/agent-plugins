@@ -12,9 +12,18 @@ import { LinkDiagnose } from './LinkDiagnose.tsx'
 /**
  * UE 插件页最上面的 UELink（UEKit 的基础插件，扩展都挂在它上面）：安装、升级、编译、卸载和输出。
  * 原来在「桥接与权限」页，用户要和 AssetForge、GameTest 放在一起装（2026-11-15）。
- * needPre：扩展要的 UELink 只有预发布版时，给一个「升级到预发布」按钮（只在这里用预发布，查更新仍只认正式版）
+ * needPre：扩展要的 UELink 只有预发布版时，给一个「升级到预发布」按钮（只在这里用预发布，查更新仍只认正式版）；
+ * preUpdate：装着的已经是预发布版，needPre 是更新的预发布版（修了编译错误的新版要能升上去）
  */
-export function UELinkCard({ needPre, onChanged }: { needPre?: string; onChanged?: () => void }) {
+export function UELinkCard({
+  needPre,
+  preUpdate,
+  onChanged,
+}: {
+  needPre?: string
+  preUpdate?: boolean
+  onChanged?: () => void
+}) {
   const { project, state, reload } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
@@ -50,7 +59,9 @@ export function UELinkCard({ needPre, onChanged }: { needPre?: string; onChanged
           )}
           {upgrade && ` ${t('UEKit 里有 {v}，可以升级。', { v: state?.bundled ?? '' })}`}
           {needPre &&
-            ` ${t('下面的扩展要 UELink {v}，它还是预发布版（C++ 没经本地编译验证），升级后要完整编译一次。', { v: needPre })}`}
+            (preUpdate
+              ? ` ${t('现在装的是预发布版，UEKit 里有更新的预发布 {v}，升级后要完整编译一次。', { v: needPre })}`
+              : ` ${t('下面的扩展要 UELink {v}，它还是预发布版（C++ 没经本地编译验证），升级后要完整编译一次。', { v: needPre })}`)}
           {legacy &&
             ` ${t('现在装的是旧版桥接 AgentPanelBridge，升级会换成 UELink 并删掉旧插件；项目代码依赖了 AgentPanelBridge 模块的，Build.cs 里改成 UELinkCore。')}`}
           {live && ` ${t('编辑器开着：装好、编译完要重启编辑器才加载新版本。')}`}

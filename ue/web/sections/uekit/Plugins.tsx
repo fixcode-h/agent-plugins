@@ -26,7 +26,7 @@ export function Plugins() {
   // 打开页面只看服务端缓存，不自动去 GitHub；点「检查更新」才重读，读完刷新概况（UELink 卡片的「可升级」跟着变）
   const list = useLoad(
     () =>
-      pget<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean }>(
+      pget<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean; uelinkPreUpdate?: string }>(
         project.id,
         `ext${refresh ? '?refresh=1' : ''}`,
       ).then((r) => {
@@ -46,6 +46,7 @@ export function Plugins() {
       ppost<{ job: string }>(project.id, 'ext/install', { name: x.name, version: x.offer?.version, mode }).then(done),
     )
   const needPre = list.data?.items.find((x) => x.offer?.uelink && !x.installed)?.offer?.uelink
+  const preUpdate = needPre ? undefined : list.data?.uelinkPreUpdate
   const build = () =>
     run('build', async () => {
       await ppost(project.id, 'build')
@@ -86,7 +87,7 @@ export function Plugins() {
             {t('还没检查 UEKit 插件目录，点右上角「检查更新」从 GitHub 读取最新版本。')}
           </p>
         )}
-        <UELinkCard needPre={needPre} onChanged={() => list.reload()} />
+        <UELinkCard needPre={needPre ?? preUpdate} preUpdate={!!preUpdate} onChanged={() => list.reload()} />
         {(list.data?.items ?? []).map((x) => {
           const Icon = ICONS[x.name] ?? Blocks
           const upgrade = !!x.installed && !!x.offer && canUpgrade(x.installed.version, x.offer.version)
