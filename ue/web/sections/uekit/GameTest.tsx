@@ -1,4 +1,14 @@
-import { CircleCheck, CircleDot, CircleX, FileJson, FlaskConical, Layers, Loader2, Play } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  FileJson,
+  FlaskConical,
+  Layers,
+  Loader2,
+  Play,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -12,6 +22,7 @@ import { GtOfflineBar } from './GtOffline.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
+import { GtSettings } from './GtSettings.tsx'
 import { GtRun, type GtJob, type GtRunSummary, type GtScenarioFile } from './GtRun.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
@@ -44,6 +55,8 @@ export function GameTest() {
   const [job, setJob] = useState<GtJob>()
   const [rec, setRec] = useState<RecordStatus>()
   const [asking, setAsking] = useState(false)
+  // 运行设置弹窗（阻挡界面规则、UI 等待上限）
+  const [settings, setSettings] = useState(false)
   const [recName, setRecName] = useState('')
   // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
   const [keepPace, setKeepPace] = useState(false)
@@ -274,6 +287,13 @@ export function GameTest() {
               onClick={tagMenu}
             />
             <ui.IconButton
+              icon={SlidersHorizontal}
+              size="sm"
+              label={tip(t('运行设置：UI 等待上限、自动关掉的阻挡界面'))}
+              disabled={!live}
+              onClick={() => setSettings(true)}
+            />
+            <ui.IconButton
               icon={CircleDot}
               size="sm"
               label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
@@ -424,6 +444,7 @@ export function GameTest() {
         )}
       </main>
       {menus.dialogs}
+      {settings && <GtSettings onClose={() => setSettings(false)} />}
       <MenuHost />
       <Confirm
         open={asking}

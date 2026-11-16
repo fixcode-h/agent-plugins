@@ -36,6 +36,16 @@ export interface StepRow {
   check?: GtResolveItem[]
 }
 
+/** 自动处理阻挡界面的一条记录（步骤结果的 payload.blockers） */
+interface GtBlockerEvent {
+  widget: string
+  rule?: string
+  action?: string
+  ok?: boolean
+  message?: string
+  note?: string
+}
+
 /** gt.resolve 的一条：选择器此刻找不找得到；找不到时 error 里是候选 */
 export interface GtResolveItem {
   target: string
@@ -126,6 +136,8 @@ export function StepDetail({
   const human = humanStep(def)
   const ambiguous = ambiguousOf(def)
   const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
+  // GameTest 1.2.0-beta.6 起：这一步期间按运行配置自动关掉的阻挡界面
+  const blockers = Array.isArray(res?.payload?.blockers) ? (res.payload.blockers as GtBlockerEvent[]) : []
   const shot = [res?.payload?.path, res?.payload?.screenshot, res?.payload?.annotated].find(
     (p): p is string => typeof p === 'string' && /\.(png|jpe?g)$/i.test(p),
   )
@@ -152,6 +164,26 @@ export function StepDetail({
           )}
           {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
         </div>
+      )}
+      {blockers.length > 0 && (
+        <Block title={t('自动处理的阻挡界面')}>
+          {blockers.map((b, k) => (
+            <p key={k} className="ue:flex ue:items-start ue:gap-1.5">
+              {b.ok ? (
+                <CircleCheck className="ue:mt-0.5 ue:h-3 ue:w-3 ue:shrink-0 ue:text-success" />
+              ) : (
+                <TriangleAlert className="ue:mt-0.5 ue:h-3 ue:w-3 ue:shrink-0 ue:text-warning" />
+              )}
+              <span className="ue:min-w-0">
+                <span className="ue:font-mono ue:text-fg">{b.widget}</span>{' '}
+                <span className="ue:text-subtle">
+                  {b.message}
+                  {b.note ? ` · ${b.note}` : ''}
+                </span>
+              </span>
+            </p>
+          ))}
+        </Block>
       )}
       <Block title={t('参数')}>
         {params.length ? (
