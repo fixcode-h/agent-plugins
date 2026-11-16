@@ -21,6 +21,8 @@ export function ForgeAssetTab({
   diff,
   configText,
   configTruncated,
+  configLoading,
+  configError,
   onShowDiff,
 }: {
   entry: ForgeEntry
@@ -28,6 +30,8 @@ export function ForgeAssetTab({
   diff?: ForgeDiffData
   configText?: string
   configTruncated?: boolean
+  configLoading?: boolean
+  configError?: string
   onShowDiff: () => void
 }) {
   const { go } = useUe()
@@ -49,6 +53,8 @@ export function ForgeAssetTab({
       <ForgeConfigPreview
         text={configText}
         truncated={configTruncated}
+        loading={configLoading}
+        error={configError}
         note={
           path
             ? t('资源还没生成，下面是按配置画出来的结构和属性（只读），导入后换成 UE 里的真实资源')
