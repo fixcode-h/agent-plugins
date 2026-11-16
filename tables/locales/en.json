@@ -1225,5 +1225,7 @@
   "枚举 {name}：{error}": "Enum {name}: {error}",
   "扫描规则 {n}：{error}": "Scan rule {n}: {error}",
   "类型 {name}": "Type {name}",
-  "正在后台检查表格目录的变化": "Checking the table folders for changes in the background"
+  "正在后台检查表格目录的变化": "Checking the table folders for changes in the background",
+  "正在读取表格目录…": "Reading the table folders…",
+  "正在扫描表格目录：已找到 {n} 个表格，看过 {d} 个目录": "Scanning table folders: {n} tables found in {d} folders so far"
 }

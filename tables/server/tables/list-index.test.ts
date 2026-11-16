@@ -5,7 +5,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { TablesConfig } from '../../shared/tables.ts'
-import { TABLES_LIST_EVENT, type TablesListDelta } from '../../shared/table-list.ts'
+import {
+  TABLES_LIST_EVENT,
+  TABLES_PROGRESS_EVENT,
+  type TablesListDelta,
+  type TablesListProgress,
+} from '../../shared/table-list.ts'
 import { forgetLists, listTables, setListStore } from './list-index.ts'
 
 function setup() {
@@ -64,9 +69,9 @@ test('有索引时先给存下的，后台扫完推增量；新建之后等新�
     cached.files.map((f) => f.path),
     ['T/a.csv', 'T/sub/b.csv'],
   )
-  await waitFor(() => pushed.length > 0)
-  const d = pushed[0]
-  assert.equal(d.event, TABLES_LIST_EVENT)
+  const done = () => pushed.find((x) => x.event === TABLES_LIST_EVENT)
+  await waitFor(() => !!done())
+  const d = done()!
   assert.ok(!('reload' in d.data))
   assert.equal(d.data.key, cached.key)
   assert.deepEqual(
@@ -81,5 +86,16 @@ test('有索引时先给存下的，后台扫完推增量；新建之后等新�
   const after = await listTables(dir, cfg, false, 60_000)
   assert.equal(after.scanning, undefined)
   assert.ok(after.files.some((f) => f.path === 'T/d.csv'))
+  setListStore(undefined)
+})
+
+test('第一次扫描推进度给等着的项目', async () => {
+  const { dir, put, pushed } = setup()
+  put('T/a.csv')
+  await listTables(dir, cfg, false, 0, 'p1')
+  const p = pushed.find((x) => x.event === TABLES_PROGRESS_EVENT)?.data as unknown as TablesListProgress
+  assert.ok(p, '没有推进度')
+  assert.deepEqual(p.projects, ['p1'])
+  assert.ok(p.dirs >= 1)
   setListStore(undefined)
 })

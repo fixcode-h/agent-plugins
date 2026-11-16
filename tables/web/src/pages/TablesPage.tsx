@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GitCompareArrows, Loader2, RefreshCw, Settings2, Table2 } from 'lucide-react'
+import { GitCompareArrows, RefreshCw, Settings2, Table2 } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { tablesOf, type TableDoc, type TableHit, type TableSchema } from '@shared/tables'
 import { useNav } from '@/lib/data'
@@ -29,6 +29,7 @@ import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/
 import { useExternalChange } from '@/components/tables/use-external-change'
 import { useEnumAutoScan } from '@/components/tables/use-enum-auto-scan'
 import { useTablesIndex } from '@/components/tables/use-tables-index'
+import { TablesScanProgress } from '@/components/tables/TablesScanProgress'
 import { useTableDrafts } from '@/components/tables/use-table-drafts'
 import { DraftBar } from '@/components/tables/DraftBar'
 import { firstShownSheet } from '@/components/files/SheetTable'
@@ -118,7 +119,7 @@ function Workbench({
   onProject: (id: string) => void
   onSettings: () => void
 }) {
-  const { index, error: indexError, reload } = useTablesIndex(projectId, shown)
+  const { index, error: indexError, reload, progress } = useTablesIndex(projectId, shown)
   // 结构文件和项目设置共用一份：在设置里改了表头、应用了 AI 分析，表格页马上按新的显示
   const { schema, error: schemaError } = useTableSchema(projectId)
   useEffect(() => {
@@ -462,21 +463,16 @@ function Workbench({
               {index.missing.length > 0 && t('找不到目录：{dirs}', { dirs: index.missing.join('、') })}
               {index.truncated && t('表格太多，只列出了前一部分')}
             </p>
-          ) : index?.scanning ? (
-            // 先显示的是上次存下的列表，后台正在重新扫描表格目录，扫完新增、删掉的表格会自己更新进来
-            <p className="tb:flex tb:items-center tb:gap-1.5 tb:text-caption tb:text-subtle">
-              <Loader2 aria-hidden className="tb:h-3 tb:w-3 tb:animate-spin" />
-              {t('正在后台检查表格目录的变化')}
-            </p>
+          ) : index?.scanning || (index && progress) ? (
+            // 先显示的是上次存下的列表，后台正在重新扫描表格目录（或刷新按钮在等新扫的），扫完新增、删掉的表格会自己更新进来
+            <TablesScanProgress progress={progress} background />
           ) : undefined
         }
       >
         {indexError ? (
           <p className="tb:px-3 tb:py-4 tb:text-footnote tb:text-danger">{indexError}</p>
         ) : !index ? (
-          <div className="tb:flex tb:justify-center tb:p-6 tb:text-subtle">
-            <Loader2 className="tb:h-4 tb:w-4 tb:animate-spin" />
-          </div>
+          <TablesScanProgress progress={progress} />
         ) : mode === 'name' ? (
           <>
             {!query.trim() && <TableQuick {...quick} active={active} onOpen={open} onUnfav={marks.toggleFav} />}

@@ -3,7 +3,7 @@
  * 标出相同 / 有差异 / 只在一边。比的是解析出来的格子（同样的内容另存一次字节会变，不能比文件字节）。只读。
  */
 import path from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { TableFile, TablesConfig } from '../../shared/tables.ts'
 import { absPath, parseTable, tableFull } from './files.ts'
 import { listTables } from './list-index.ts'
@@ -60,7 +60,12 @@ export async function compareProjects(
     }
     try {
       // 字节一样的直接算相同，不用解析（两个工作区大部分表是一样的）
-      if (f.size === other.size && f.size > 0) {
+      // 列表里不带大小（列表只读目录、不逐个 stat，几万张表在 Windows 上 stat 要好几秒）：对上的两张这里再看
+      const [sa, sb] = await Promise.all([
+        stat(tableFull(left.dir, f.path)).catch(() => null),
+        stat(tableFull(right.dir, other.path)).catch(() => null),
+      ])
+      if (sa && sb && sa.size === sb.size && sa.size > 0) {
         const [ba, bb] = await Promise.all([
           readFile(tableFull(left.dir, f.path)),
           readFile(tableFull(right.dir, other.path)),

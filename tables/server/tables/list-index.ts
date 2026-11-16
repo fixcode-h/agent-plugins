@@ -14,7 +14,13 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PluginPages } from '../../../sdk/server.ts'
 import type { TablesConfig, TablesIndex } from '../../shared/tables.ts'
-import { TABLES_LIST_EVENT, diffTablesIndex, listDelta } from '../../shared/table-list.ts'
+import {
+  TABLES_LIST_EVENT,
+  TABLES_PROGRESS_EVENT,
+  diffTablesIndex,
+  listDelta,
+  type TablesListProgress,
+} from '../../shared/table-list.ts'
 import { walkTables } from './files.ts'
 
 /** 表格页取列表：距上次扫完超过这么久就后台再扫一遍 */
@@ -22,7 +28,9 @@ export const PAGE_RESCAN_MS = 5000
 /** 搜索、检查、对比这些内部用的：一分钟内的列表直接用，不然每搜一次都要后台走一遍几万个文件 */
 const RESCAN_MS = 60_000
 /** 索引文件的格式版本：格式改了旧的直接不认，重新扫 */
-const VERSION = 1
+const VERSION = 2
+/** 扫描进度最多这么久推一次 */
+const PROGRESS_MS = 250
 /** 内存里最多留这么多组 */
 const MAX_ENTRIES = 50
 
@@ -36,6 +44,8 @@ interface Entry {
   stale?: boolean
   scan?: Promise<TablesIndex>
   load?: Promise<TablesIndex | undefined>
+  /** 哪些项目的表格页在等这一组的列表：扫描进度按项目推给它们（第一次扫时页面还不知道列表的键） */
+  projects: Set<string>
 }
 
 let store: { dir: string; pages?: PluginPages } | undefined // 模块状态：插件启动时设一次
@@ -95,7 +105,14 @@ function scan(key: string, e: Entry, fresh: boolean): Promise<TablesIndex> {
   if (e.scan && !after) return e.scan
   const run = (async () => {
     if (after) await after.catch(() => {})
-    const next = await walkTables(e.dir, e.cfg)
+    // 扫描进度推给等着的表格页：第一次扫几万张表要好一会儿，页面显示找到了多少、正在看哪个目录
+    let last = 0
+    const next = await walkTables(e.dir, e.cfg, (p) => {
+      const now = Date.now()
+      if (!store?.pages || now - last < PROGRESS_MS) return
+      last = now
+      store.pages.push(TABLES_PROGRESS_EVENT, { key, projects: [...e.projects], ...p } satisfies TablesListProgress)
+    })
     const old = e.index
     e.index = next
     e.at = Date.now()
@@ -122,20 +139,23 @@ const out = (key: string, index: TablesIndex, scanning: boolean): TablesIndex =>
 
 /**
  * 列出表格目录里的全部表格文件（按路径排序）。
- * fresh（表格页的刷新按钮）：等重新扫完；rescanAfter：手上的列表比这旧就后台补扫，先返回手上的（带 scanning）
+ * fresh（表格页的刷新按钮）：等重新扫完；rescanAfter：手上的列表比这旧就后台补扫，先返回手上的（带 scanning）；
+ * projectId：表格页取列表时给，扫描进度按它推给页面
  */
 export async function listTables(
   dir: string,
   cfg: TablesConfig,
   fresh = false,
   rescanAfter = RESCAN_MS,
+  projectId?: string,
 ): Promise<TablesIndex> {
   const key = keyOf(dir, cfg)
   let e = entries.get(key)
   if (!e) {
-    entries.set(key, (e = { dir, cfg, at: 0 }))
+    entries.set(key, (e = { dir, cfg, at: 0, projects: new Set() }))
     if (entries.size > MAX_ENTRIES) entries.delete(entries.keys().next().value!)
   }
+  if (projectId) e.projects.add(projectId)
   if (fresh || e.stale) return out(key, await scan(key, e, fresh), false)
   if (!e.index) {
     e.load ??= readIndex(key)

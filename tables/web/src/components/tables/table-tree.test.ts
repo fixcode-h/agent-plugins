@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import type { TableFile } from '@shared/tables'
 import { buildTableTree, nameHit } from './table-tree'
 
-const f = (p: string): TableFile => ({ path: p, kind: 'xlsx', size: 1, mtime: '' })
+const f = (p: string): TableFile => ({ path: p, kind: 'xlsx' })
 const FILES = ['Config/Item10.xlsx', 'Config/Item2.xlsx', 'Config/Enum/E.xlsx', 'Other/x.xlsx'].map(f)
 
 test('按目录分层，目录在前，文件名里的数字按大小排；目录记文件数', () => {
@@ -36,7 +36,7 @@ test('名字搜索：几个词都要出现，不分大小写', () => {
 })
 
 test('项目目录外的表格目录：开头一串单个子目录并成一个节点', () => {
-  const f = (path: string) => ({ path, kind: 'xlsx' as const, size: 1, mtime: '' })
+  const f = (path: string) => ({ path, kind: 'xlsx' as const })
   const tree = buildTableTree([
     f('F:/Game/Designer/Excel/a.xlsx'),
     f('F:/Game/Designer/Excel/sub/b.xlsx'),

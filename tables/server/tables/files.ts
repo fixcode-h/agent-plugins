@@ -18,7 +18,7 @@ import {
   type TablesIndex,
 } from '../../shared/tables.ts'
 import type { SheetData } from '../../shared/files.ts'
-import { byTablePath } from '../../shared/table-list.ts'
+import { byTablePath, type TablesListProgress } from '../../shared/table-list.ts'
 import { MAX_XLSX_BYTES, readXlsx, type XlsxLimits } from '../xlsx.ts'
 import { resolvePath } from '../fs.ts'
 
@@ -87,11 +87,18 @@ export function safeRel(dir: string, rel: string, cfg?: Pick<TablesConfig, 'dirs
   return { rel: n, full: path.join(dir, n) }
 }
 
-/** 同时 stat 几个文件 */
-const STAT_BATCH = 64
+/** 同时读几个目录：一个个等，几千个目录在 Windows（杀毒、网络盘）上要十几秒 */
+const DIR_JOBS = 16
 
-/** 走一遍表格目录列出全部表格文件（按路径排序）。平时经 list-index.ts 的 listTables 取（有索引和缓存），不直接调 */
-export async function walkTables(dir: string, cfg: TablesConfig): Promise<TablesIndex> {
+/** 扫描进行到哪了（推给页面时再带上列表的键和等着的项目） */
+export type WalkProgress = Omit<TablesListProgress, 'key' | 'projects'>
+
+/** 走一遍表格目录列出全部表格文件（按路径排序）。只读目录、不逐个 stat（几万张表在 Windows 上 stat 要好几秒，列表也用不上大小和修改时间）。平时经 list-index.ts 的 listTables 取（有索引和缓存），不直接调 */
+export async function walkTables(
+  dir: string,
+  cfg: TablesConfig,
+  onProgress?: (p: WalkProgress) => void,
+): Promise<TablesIndex> {
   const include = globList(cfg.include)
   const exclude = globList(cfg.exclude || TABLE_EXCLUDE)
   const files: TableFile[] = []
@@ -99,42 +106,52 @@ export async function walkTables(dir: string, cfg: TablesConfig): Promise<Tables
   const missing: string[] = []
   const roots: TableRoot[] = []
   let truncated = false
+  let seenDirs = 0
   const seen = new Set<string>()
-  async function walk(rel: string) {
-    if (files.length >= MAX_FILES) {
-      truncated = true
-      return
-    }
+  /** 一个目录：读出里面的表格，子目录交回去排队 */
+  async function readOne(rel: string): Promise<string[]> {
     const entries = await readdir(tableFull(dir, rel), { withFileTypes: true }).catch(() => [])
+    seenDirs++
+    onProgress?.({ found: files.length, dirs: seenDirs, at: rel })
+    const sub: string[] = []
     for (const e of entries) {
       const child = rel ? `${rel}/${e.name}` : e.name
       if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name) && !globHit(child, exclude)) await walk(child)
+        if (!SKIP_DIRS.has(e.name) && !globHit(child, exclude)) sub.push(child)
         continue
       }
       if (!e.isFile() || seen.has(child)) continue
       const kind = tableKind(e.name)
       if (!kind || !globHit(child, include) || globHit(child, exclude)) continue
-      seen.add(child)
-      files.push({ path: child, kind, size: 0, mtime: '' })
       if (files.length >= MAX_FILES) {
         truncated = true
-        return
+        return []
       }
+      seen.add(child)
+      files.push({ path: child, kind })
     }
+    return sub
   }
-  /** 大小和修改时间：一批批并发取（一个个等，几万个文件在 Windows 上要好几秒） */
-  async function stamp(from: number) {
-    for (let i = from; i < files.length; i += STAT_BATCH)
-      await Promise.all(
-        files.slice(i, i + STAT_BATCH).map(async (f) => {
-          const info = await stat(tableFull(dir, f.path)).catch(() => null)
-          if (info) {
-            f.size = info.size
-            f.mtime = info.mtime.toISOString()
-          }
-        }),
-      )
+  /** 整棵目录树：最多 DIR_JOBS 个目录同时读 */
+  async function walk(top: string) {
+    const queue = [top]
+    let running = 0
+    await new Promise<void>((done) => {
+      const next = () => {
+        if (!queue.length && !running) return done()
+        while (running < DIR_JOBS && queue.length && !truncated) {
+          const rel = queue.pop()!
+          running++
+          void readOne(rel).then((sub) => {
+            running--
+            queue.push(...sub)
+            next()
+          })
+        }
+        if (truncated && !running) done()
+      }
+      next()
+    })
   }
   for (const d of cfg.dirs) {
     let root: { key: string; full: string }
@@ -156,7 +173,6 @@ export async function walkTables(dir: string, cfg: TablesConfig): Promise<Tables
     const before = files.length
     dirs.push(root.key)
     await walk(root.key)
-    await stamp(before)
     roots.push({ dir: d, full: root.full, found: true, files: files.length - before })
   }
   files.sort(byTablePath)

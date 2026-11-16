@@ -105,7 +105,7 @@ export function tablesApi(deps: TablesDeps) {
         try {
           const { dir, cfg } = await projectOf(deps, c.req.param('id'))
           if (!tablesOn(cfg)) return c.json({ dirs: [], missing: [], files: [] })
-          return c.json(await listTables(dir, cfg, c.req.query('fresh') === '1', PAGE_RESCAN_MS))
+          return c.json(await listTables(dir, cfg, c.req.query('fresh') === '1', PAGE_RESCAN_MS, c.req.param('id')))
         } catch (e) {
           return fail(c, e)
         }
