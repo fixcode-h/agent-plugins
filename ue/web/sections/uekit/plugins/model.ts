@@ -52,8 +52,14 @@ const editorOf = (s?: ProjectState) => s?.instances.find((i) => i.kind === 'edit
 
 export function uelinkView(project: UeProject, s: ProjectState | undefined, ext: ExtList | undefined): PluginView {
   const installed = s?.bridge || ''
-  // 扩展要的 UELink 只有预发布版时，给「升级到预发布」；装着的已是预发布、目录里有更新的预发布时也给（见 catalog.ts）
-  const needPre = ext?.items.find((x) => x.offer?.uelink && !x.installed)?.offer?.uelink
+  // 扩展（没装的、或装着且能升级的）要的 UELink 只有预发布版时，给「升级到预发布」；
+  // 装着的已是预发布、目录里有更新的预发布时也给（见 catalog.ts）。
+  // 以前只看没装的扩展：装着的扩展要升到依赖新 UELink 预发布的版本时，UELink 卡显示「已是最新」、
+  // 扩展的升级按钮被依赖挡住永远点不了
+  const needPre = (ext?.items ?? [])
+    .filter((x) => x.offer?.uelink && (!x.installed || canUpgrade(x.installed.version, x.offer.version)))
+    .map((x) => x.offer!.uelink!)
+    .sort((a, b) => cmpVersion(b, a))[0]
   const pre = needPre ?? ext?.uelinkPreUpdate
   const bundledUp = !installed || canUpgrade(installed, s?.bundled)
   const offer = pre
