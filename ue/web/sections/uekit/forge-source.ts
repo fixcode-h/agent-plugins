@@ -70,9 +70,16 @@ function keepStates(disk: ForgeData, prev: ForgeData | undefined): ForgeData {
   const known = new Map(prev.entries.map((e) => [e.key, e]))
   const entries = disk.entries.map((e) => {
     const p = known.get(e.key)
-    return e.state || !p ? e : { ...e, state: p.state, needsImport: p.needsImport, message: p.message }
+    return e.state || !p || p.state === 'unknown'
+      ? e
+      : { ...e, state: p.state, needsImport: p.needsImport, message: p.message }
   })
   return { ...disk, entries, background: prev.background }
+}
+
+/** UE 读不到同步状态（编辑器没开、连不上）：还没状态的项标成「状态未知」，不再显示「正在读状态」 */
+function offline(d: ForgeData): ForgeData {
+  return { ...d, statesPending: false, entries: d.entries.map((e) => (e.state ? e : { ...e, state: 'unknown' })) }
 }
 
 /** 类型目录名统一成不带前后斜杠的样子，和树的第一层路径对得上 */
@@ -89,29 +96,33 @@ export function useForgeSource(project: string, installed: boolean | undefined) 
   const seq = useRef(0)
   const reload = (deep = false) => {
     const n = ++seq.current
-    let ueDone = false
+    // UE 读成功了才丢掉后到的磁盘清单。编辑器没开时 UE 那边立刻失败，比磁盘还早回来：
+    // 以前按「UE 回过了」就丢磁盘结果，左栏只剩一条报错、配置树一个都不显示（用户 2026-11-16）
+    let ueOk = false
+    let ueFailed = false
     setLoading(deep ? 'deep' : 'quick')
     if (!deep)
       loadAll(project, false, true)
         .then((d) => {
-          if (n !== seq.current || ueDone) return
-          setData((prev) => keepStates(d, prev))
-          setError('')
+          if (n !== seq.current || ueOk) return
+          setData((prev) => (ueFailed ? offline(keepStates(d, prev)) : keepStates(d, prev)))
+          // UE 已经报错时留着那条报错（「UE 没在运行…」），底栏照旧提示
+          if (!ueFailed) setError('')
         })
         // 磁盘读失败不算错：照旧等 UE 的
         .catch(() => undefined)
     loadAll(project, deep)
       .then((d) => {
         if (n !== seq.current) return
-        ueDone = true
+        ueOk = true
         setData(d)
         setError('')
       })
       .catch((e: Error) => {
         if (n !== seq.current) return
-        ueDone = true
-        // 列表已经从磁盘出来了：只是状态没读到，留着列表，错误显示在底栏（Forge.tsx）
-        setData((prev) => prev && { ...prev, statesPending: false })
+        ueFailed = true
+        // 列表已经（或稍后）从磁盘出来：只是状态没读到，留着列表，错误显示在底栏（Forge.tsx）
+        setData((prev) => prev && offline(prev))
         setError(e.message)
       })
       .finally(() => n === seq.current && setLoading(''))

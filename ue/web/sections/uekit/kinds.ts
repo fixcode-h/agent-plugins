@@ -26,6 +26,8 @@ export const STATES: Record<string, { label: () => string; tone: string; dot: st
   foreign: { label: () => t('不是 AssetForge 的配置'), tone: 'ue:text-subtle', dot: 'ue:bg-subtle' },
   unmanaged: { label: () => t('没有配置'), tone: 'ue:text-subtle', dot: 'ue:bg-line-strong' },
   'no-asset': { label: () => t('没写目标资产'), tone: 'ue:text-danger', dot: 'ue:bg-danger' },
+  // UE 读不到同步状态（编辑器没开、连不上）时，磁盘列出的配置标这个（forge-source.ts）
+  unknown: { label: () => t('编辑器没开，状态未知'), tone: 'ue:text-subtle', dot: 'ue:bg-line-strong' },
   // 列表先从磁盘出、UE 还没回同步状态时（forge-source.ts）
   '': { label: () => t('正在读状态'), tone: 'ue:text-subtle', dot: 'ue:bg-line-strong' },
 }
