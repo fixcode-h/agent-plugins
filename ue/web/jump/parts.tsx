@@ -18,7 +18,7 @@ export function JumpRow({
   on,
   onHover,
 }: {
-  opt: { icon: LucideIcon; label: string; detail?: string; hint?: string; run: () => void }
+  opt: { icon: LucideIcon; tone?: string; label: string; detail?: string; hint?: string; run: () => void }
   on: boolean
   onHover: () => void
 }) {
@@ -34,7 +34,7 @@ export function JumpRow({
           on && 'ue:bg-sel',
         )}
       >
-        <opt.icon className="ue:h-4 ue:w-4 ue:shrink-0 ue:text-subtle" />
+        <opt.icon className={cn('ue:h-4 ue:w-4 ue:shrink-0', opt.tone ?? 'ue:text-subtle')} />
         <span className="ue:min-w-0 ue:shrink-0 ue:truncate">{opt.label}</span>
         {opt.detail && (
           <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-footnote ue:text-subtle">{opt.detail}</span>

@@ -196,7 +196,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
       >
         <div
           data-name-cell
-          className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:border-r ue:border-line/50 ue:py-1 ue:pr-2"
+          className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:border-r ue:border-line/50 ue:py-1 ue:pr-2 ue:select-none"
           style={{ paddingLeft: 12 + depth * 14 }}
           title={[n.label !== n.path && n.path, n.type, n.tooltip, why].filter(Boolean).join('\n')}
         >

@@ -101,8 +101,6 @@ export function AssetFolders({
     picked.current = p
     setSelFolder(p)
     onFolder?.(p)
-    // 和 Content Browser 一样：点文件夹名展开它（不收起，收起点前面的箭头）
-    if (!open[p]) toggle(p)
   }
   useEffect(() => {
     if (reveal) void goTo(reveal, 'asset')
@@ -198,6 +196,8 @@ export function AssetFolders({
                   : undefined,
           onToggle,
           onSelect: n.kind === 'folder' && onFolder && !forced ? () => pickFolder(n.f.path) : undefined,
+          // 单击文件夹行：选中（右栏列内容）同时展开收起，像 VS Code 的资源管理器；原来只展开不收起，双击又会收回去（用户嫌不灵活，2026-11-16）
+          clickToggles: true,
           onMenu: n.kind === 'folder' ? (e) => folderMenu(e, n.f.path) : undefined,
           // 行尾星标：收藏了一直显示实心的，没收藏的悬停才露出来
           action:

@@ -2228,5 +2228,17 @@
   "插件库": "Plugin library",
   "还没检查": "not checked yet",
   "{names} 编辑器里还是旧版本": "The editor still has the old version of {names}",
-  "完整编译后重启编辑器才加载装好的版本（Live Coding 不够）": "Do a full build and restart the editor to load the installed version (Live Coding isn't enough)"
+  "完整编译后重启编辑器才加载装好的版本（Live Coding 不够）": "Do a full build and restart the editor to load the installed version (Live Coding isn't enough)",
+  "重建索引": "Rebuild index",
+  "还有 {n} 个，到资源页搜": "{n} more, search on the Assets page",
+  "资源（{n} 个，UEToVS 索引）": "Assets ({n}, UEToVS index)",
+  "资源（{n} 个）": "Assets ({n})",
+  "Lua 模块（{n} 个）": "Lua modules ({n})",
+  "Lua 模块 {m}（{f}）": "Lua module {m} ({f})",
+  "索引没建好：{msg}": "Index not ready: {msg}",
+  "正在建索引…": "Building index…",
+  "来自 UEToVS 的索引": "from the UEToVS index",
+  "面板扫磁盘建的索引": "scanned from disk by the panel",
+  "，Lua 模块 {n} 个": ", {n} Lua modules",
+  "已索引资源 {n} 个{lua}（{from}），打字直接筛": "{n} assets indexed{lua} ({from}); type to filter"
 }

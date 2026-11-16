@@ -34,6 +34,8 @@ export function useJumpKeys(open: () => void) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        // 面板自己的 Ctrl+K 命令面板也听这个键：在 UE 页里只开跳转，不然两个弹窗叠在一起、焦点被面板抢走
+        e.stopImmediatePropagation()
         open()
         return
       }
@@ -41,8 +43,9 @@ export function useJumpKeys(open: () => void) {
       if (e.isComposing) return
       if (shift(e, performance.now())) open()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // 捕获阶段先拿到，才挡得住面板挂在 window 上的 Ctrl+K
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
     // open 是 setState 包的，每次渲染新建也没关系：监听只装一次，调到的总是挂载时那个 setter
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [])

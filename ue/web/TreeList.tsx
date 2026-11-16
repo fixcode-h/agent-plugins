@@ -21,6 +21,8 @@ export interface TreeLine {
   aside?: ReactNode
   onToggle?: () => void
   onSelect?: () => void
+  /** 单击既选中又展开收起（文件夹这类「选中就是看里面」的行）；不给时有 onSelect 的行单击只选中、双击展开收起 */
+  clickToggles?: boolean
   /** 右键这一行（资源文件夹树的收藏、资源的「在 UE 编辑器打开」） */
   onMenu?: (e: MouseEvent) => void
   /** 行尾的小按钮（文件夹的收藏星标）：平时隐藏，悬停或键盘选中这一行才露出来；actionShown 时一直显示（已收藏） */
@@ -29,6 +31,12 @@ export interface TreeLine {
 }
 
 const ROW = 28
+
+/** 单击 / 回车：选中；没有选中动作或标了 clickToggles 的行同时展开收起 */
+function activate(l: TreeLine) {
+  l.onSelect?.()
+  if (!l.onSelect || l.clickToggles) l.onToggle?.()
+}
 
 /**
  * 只渲染可见范围的树列表（行高固定 28px，照组件树的样式）：上下各多画 20 行，滚动时换。
@@ -84,18 +92,18 @@ export function TreeList({
               aria-expanded={l.expandable ? l.open : undefined}
               tabIndex={0}
               title={l.title}
-              onClick={() => (l.onSelect ?? l.onToggle)?.()}
-              // 单击是选中的行，双击整行展开收起（和 UE 内容浏览器一样），不必瞄准箭头
-              onDoubleClick={l.onSelect && l.expandable ? () => l.onToggle?.() : undefined}
+              onClick={() => activate(l)}
+              // 单击只选中的行：双击整行展开收起，不必瞄准箭头（单击就展开的行不再接双击，免得点两下又收回去）
+              onDoubleClick={l.onSelect && l.expandable && !l.clickToggles ? () => l.onToggle?.() : undefined}
               onContextMenu={l.onMenu}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') (l.onSelect ?? l.onToggle)?.()
+                if (e.key === 'Enter') activate(l)
                 else if (e.key === 'ArrowLeft' && l.expandable && l.open) l.onToggle?.()
                 else if (e.key === 'ArrowRight' && l.expandable && !l.open) l.onToggle?.()
               }}
               style={{ top: (start + i) * ROW, height: ROW, paddingLeft: 6 + l.depth * 16 }}
               className={cn(
-                'ue:group ue:absolute ue:inset-x-0 ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:outline-none ue:transition-colors ue:focus-visible:bg-hover',
+                'ue:group ue:absolute ue:inset-x-0 ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:select-none ue:outline-none ue:transition-colors ue:focus-visible:bg-hover',
                 l.selected ? 'ue:bg-sel ue:text-fg' : 'ue:text-fg ue:hover:bg-hover',
                 l.from && 'ue:bg-hover ue:shadow-[inset_2px_0_0_var(--accent)]',
               )}
@@ -108,12 +116,13 @@ export function TreeList({
                     e.stopPropagation()
                     l.onToggle?.()
                   }}
-                  className="ue:flex ue:h-4 ue:w-4 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-muted ue:hover:text-fg"
+                  // 箭头的点击区占满行高、比箭头宽一圈，不用瞄准那个小三角
+                  className="ue:-ml-1 ue:flex ue:h-full ue:w-6 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-muted ue:hover:text-fg"
                 >
                   <Caret open={l.open} />
                 </button>
               ) : (
-                <span className="ue:w-4 ue:shrink-0" />
+                <span className="ue:-ml-1 ue:w-6 ue:shrink-0" />
               )}
               <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', l.iconTone ?? 'ue:text-muted')} />
               <span className="ue:min-w-0 ue:truncate">{l.label}</span>
