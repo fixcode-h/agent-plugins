@@ -114,6 +114,49 @@ export const isSheetFrom = (f: ScanFrom): f is SheetFrom =>
 export const fromWhere = (f: ScanFrom) =>
   isSheetFrom(f) ? (f.sheet ? `${f.file} › ${f.sheet}` : f.file) : f.kind === 'command' ? f.command : f.files
 
+/**
+ * 表格类规则的 file 可以是通配（Excel/**\/*.xlsx，逗号隔开几个）：一条规则批量扫所有对上的表格里的同名页签
+ * （用户 2026-11-16：枚举由 AI 总结出扫描规则，之后按规则批量扫全部表格，不让 AI 把枚举一个个列出来）
+ */
+export const isFileGlob = (file: string) => /[*?{,]/.test(file)
+
+/** 通配 → 正则（按 / 分段：** 跨目录，* ? 不跨，{a,b} 任选一个）；服务端找文件和页面判断「这个文件归不归这条规则」共用 */
+export function pathGlobRe(glob: string, ignoreCase = true) {
+  let re = ''
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]
+    if (c === '*' && glob[i + 1] === '*') {
+      i++
+      if (glob[i + 1] === '/') {
+        i++
+        re += '(?:.*/)?'
+      } else re += '.*'
+    } else if (c === '*') re += '[^/]*'
+    else if (c === '?') re += '[^/]'
+    else if (c === '{') {
+      const e = glob.indexOf('}', i)
+      if (e < 0) re += '\\{'
+      else {
+        re += `(?:${glob
+          .slice(i + 1, e)
+          .split(',')
+          .map((x) => x.replace(/[.+^$()|[\]\\]/g, '\\$&'))
+          .join('|')})`
+        i = e
+      }
+    } else re += c.replace(/[.+^$()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp(`^${re}$`, ignoreCase ? 'i' : '')
+}
+
+/** 表格类规则用不用到这个表格文件：写死的文件比路径，通配的按通配比（不分大小写，表格目录在 Windows 上也不分） */
+export function sheetRuleUses(from: SheetFrom, file: string) {
+  const f = file.replace(/\\/g, '/')
+  return splitGlobs(from.file).some((g) =>
+    isFileGlob(g) ? pathGlobRe(g).test(f) : g.toLowerCase() === f.toLowerCase(),
+  )
+}
+
 /** 一条规则自动扫时要看的文件通配：表格类是那一个文件，代码类、命令是 files */
 export const watchGlobs = (f: ScanFrom) => splitGlobs(isSheetFrom(f) ? f.file : f.files)
 export const splitGlobs = (s: string) =>

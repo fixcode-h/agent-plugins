@@ -99,6 +99,7 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 
 用户定：枚举定义在表格的某个页签（用户项目的 `EnumType`：A 列只在每组第一行写枚举名、B 成员名、C 值，没有表头）、C++ 或 Lua 里时，按规则一键扫描，打开时自动刷新。设计稿在项目共享目录 `designs/表格枚举扫描-设计稿.md`，一期（1.3.0）做了表格里的写法；二到四期（1.4.0）加了 C++ / Lua / 正则 / 自定义命令、AI 总结规则、盯着改动、改名提示。
 
+- 表格类写法的 `file` 可以写通配（`Excel/**/*.xlsx`，`server/tables/enum-scan-sheets.ts`）：在表格目录里找对上的表格，有规则写的页签的都扫（xlsx 先只看 workbook.xml 的页签名），同名枚举用排前面的并提醒，每个文件按修改时间和大小缓存。
 - 规则：结构文件 `enum-scans.json`（`TableSchema.scans`，`shared/table-enum-scan.ts` 的 `EnumScan`）。写法 `block` 分组块 / `rows` 每行写枚举名 / `sheets` 一页一个枚举；列写 Excel 列号或字段名，全写列号时不按项目表头跳行、从第 1 行扫；`rename` 去前缀、加前缀、手动对照；`auto` 是 `open`（打开时）、`watch`（盯着改动）或 `off`。一条写坏了只丢那一条。
 - 结果：`enum-scan-results.json`（按规则 id：时间、源文件的修改时间和大小、扫出的枚举、提醒、错误），只在扫描时写（`server/tables/enum-scan-store.ts`）。`readSchema` 并进对应枚举的 `scanned`（只读，规则顺序靠前的赢）；`writeSchema` 去掉 `scanned`，只靠扫描才有的枚举不进 `enums.json`。`enumOptions` 扫描的排前面，手写同名的不重复。
 - 执行（`server/tables/enum-scan.ts`）：`POST /enum-scan`（`ids` 手动；`auto` 只扫 `open` 的规则且源文件修改时间 / 大小变了的，`file` 时只看用到它的规则）、`POST /enum-scan/try`（试跑不写）、`GET /enum-scan`（每条上次的情况）。同一个结构文件目录排队跑；失败时旧结果留着、记下错误，照实报给页面。
@@ -118,6 +119,7 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 - 检查：拆不开算类型不对；拆开后每个叶子按字段的类型、范围、枚举、引用查，原因带位置（「第 2 项 · Count：不能小于 1」）。集合重复、映射键重复也算。
 - 表格里显示：`cell-display.ts` 给面板 SheetTable 的 `display`，按列缓存；双击 / 回车打开 `TypedValueDialog`（`TypedValueForm` 按类型树逐项填，颜色带拾色器，底下能直接改存储的原文）。一行的表单里有「逐项编辑」按钮。
 - AI 分析时按格子实际的写法总结 `types` 和 `formats`，逐项勾选后写进去。
+- AI 分析不再把配置表里的枚举一个个列出来（只看几张样本列不全、表一改就过时，2026-11-16 用户定）：它用 `table.enum_scan_peek` / `table.enum_scan_try` 调出枚举扫描规则（`scans`，`file` 写通配批量扫所有表格里同名的枚举页签），应用后写进 `enum-scans.json` 并马上扫一次。`enums` 只留表头行的固定取值（修饰、导出端）。AI 把枚举写成数组、值写成数字也认，单项写坏的丢掉并在结果顶上列出来（`skipped`），不让整份读不出来。
 
 ## 校验规则
 

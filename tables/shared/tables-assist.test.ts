@@ -134,3 +134,51 @@ test('结果取 tables-style 代码块的最后一个，没有时交给旧的 js
   assert.deepEqual(tablesJsonOf('```json\n{}\n```', fb), { json: 'old' })
   assert.match(tablesJsonOf('```tables-style\n{坏\n```', fb).error ?? '', /JSON 解析失败/)
 })
+
+test('枚举直接写成数组、值写成数字也认；写坏的一项丢掉记进 skipped，不让整份读不出来', () => {
+  const r = resolveTablesProposal({
+    enums: {
+      Modifier: [{ name: 'optional' }, 'repeated'],
+      AffinityIntelType: [{ name: 'Primary', value: 1, desc: '主要情报' }],
+      Bad: { values: [{ desc: '没有名字' }] },
+    },
+  })
+  assert.ok(r.proposal, r.error ?? '')
+  const d = r.proposal.draft
+  assert.deepEqual(
+    d.enums.Modifier.values.map((v) => v.name),
+    ['optional', 'repeated'],
+  )
+  assert.equal(d.enums.AffinityIntelType.values[0].value, '1')
+  assert.equal(d.enums.Bad, undefined)
+  assert.equal(d.skipped.length, 1)
+})
+
+test('扫描规则：补上 id、坏的丢掉；应用时和已有规则扫同一处的换掉并保留 id，其余加在后面', () => {
+  const from = { kind: 'block', file: 'Excel/**/*.xlsx', sheet: 'EnumType', enumCol: 'A', nameCol: 'B', valueCol: 'C' }
+  const r = resolveTablesProposal({
+    scans: [
+      { name: 'EnumType 页签', from },
+      { name: '坏的', from: { kind: 'nope' } },
+    ],
+  })
+  assert.ok(r.proposal, r.error ?? '')
+  const d = r.proposal.draft
+  assert.equal(d.scans.length, 1)
+  assert.equal(d.skipped.length, 1)
+  assert.deepEqual(draftItemIds(d), ['scan:0'])
+  const schema = TableSchema.parse({ scans: [{ id: 'old', from }] })
+  const out = applyTablesDraft(schema, d, new Set(['scan:0']), 'now')
+  assert.equal(out.scans.length, 1)
+  assert.equal(out.scans[0].id, 'old')
+  assert.equal(out.scans[0].name, 'EnumType 页签')
+  const other = applyTablesDraft(TableSchema.parse({}), d, new Set(['scan:0']), 'now')
+  assert.equal(other.scans.length, 1)
+  assert.match(other.scans[0].id, /^scan-/)
+})
+
+test('提示词让 AI 总结扫描规则，不把枚举成员一个个列出来', () => {
+  const p = buildTablesBody({ sample: '- a.xlsx' }, [])
+  assert.match(p, /scans：\*\*枚举扫描规则，不要把枚举成员一个个列出来\*\*/)
+  assert.match(p, /table\.enum_scan_try/)
+})

@@ -2,15 +2,19 @@
  * AI 分析表格风格：给 CLI 一份挑出来的几张表的清单，它一张一张用 table.sample 读表头和前几行，
  * 让它自己从读到的表头总结出项目的表头配置（一个「行」的数组）、主键、列表分隔符、基础类型、例外文件、枚举、列的引用 / 范围，
  * 以及结构体这类类型的字段和存储样式（照格子实际的写法，用户 2026-11-13 要求 AI 分析时自己调整存储样式），输出一个 JSON。
+ * 配置表里用的枚举不让 AI 一个个列出来（只看几张样本列不全，表一改就过时）：AI 总结出枚举扫描规则（scans），
+ * 应用后面板按规则批量扫全部表格得出枚举（用户 2026-11-16）。AI 直接给的 enums 只留表头行的固定取值（修饰、导出端）。
  * 页面上逐项勾选后才写进项目的表格结构文件；表格文件本身不动。
  */
 import { z } from 'zod'
+import { t } from './i18n.ts'
 import { promptLangWord } from './prompt-lang.ts'
 import type { AssistMessage } from './assist.ts'
 import { SHEET_ROLES } from './sheet-header.ts'
 import { HeaderRule } from './table-header.ts'
 import { upgradeRule } from './table-schema-upgrade.ts'
 import { TableColumn, TableEnum, type TableSchema } from './tables.ts'
+import { EnumScan, newScanId } from './table-enum-scan.ts'
 import { MapFormat, TableType, TypeFormats } from './table-types.ts'
 
 /**
@@ -60,7 +64,10 @@ export const TablesDraft = z.object({
         .optional(),
     })
     .default({}),
+  /** 表头行的固定取值（修饰、导出端）；配置表数据里用的枚举走 scans */
   enums: z.record(z.string().max(200), TableEnum).default({}),
+  /** 枚举扫描规则：应用后写进 enum-scans.json 并马上扫一次，按规则批量扫全部表格得出枚举 */
+  scans: z.array(EnumScan).max(20).default([]),
   columns: z.record(z.string().max(700), TableColumn).default({}),
   /** 类型表：结构体、映射这类格子的字段和存储样式（照表里实际的写法） */
   types: z.record(z.string().max(100), TableType).default({}),
@@ -72,6 +79,8 @@ export const TablesDraft = z.object({
       mapStore: MapFormat.partial().optional(),
     })
     .optional(),
+  /** 格式不对、没收下的几项（面板理出来的，不是 AI 写的）：照实显示给用户 */
+  skipped: z.array(z.string().max(300)).max(50).default([]),
 })
 export type TablesDraft = z.infer<typeof TablesDraft>
 
@@ -81,7 +90,7 @@ const PROMPT_MAX = 20000
 export function buildTablesPrompt(sample: string, convo: string, langWord: string) {
   return [
     '你是「Agent 面板」里的表格分析助手，正在帮用户总结**这个项目的游戏配置表的风格**，结果用来让网页上的表格能结构化显示和修改（固定表头、枚举下拉、引用检查）。',
-    '面板从项目里挑了下面几张表（不用看全部表）。**一张一张来**：每张表用面板动作 `table.sample`（app_do，参数 `{ "path": 表格路径 }`）读它的表头和前几行，先写一两行这张表的结论（表头从第几行开始、每行是什么、主键、类型名、看到的枚举值），再看下一张；全部看完再汇总。**不要自己写脚本解析 xlsx，不要读其它文件，不要改任何文件。**',
+    '面板从项目里挑了下面几张表（不用看全部表）。**一张一张来**：每张表用面板动作 `table.sample`（app_do，参数 `{ "path": 表格路径 }`）读它的表头和前几行，先写一两行这张表的结论（表头从第几行开始、每行是什么、主键、类型名、枚举定义在哪），再看下一张；全部看完再汇总。**不要自己写脚本解析 xlsx，不要读其它文件，不要改任何文件。**',
     `## 要看的表\n${sample}`,
     `## 要总结的
 - style.header：**这个项目的表头配置**。表头是一个数组 rows，数组里每一项对应表格表头的一行，从第 start 行（从 0 数）开始按顺序往下排。
@@ -97,8 +106,19 @@ export function buildTablesPrompt(sample: string, convo: string, langWord: strin
 - style.key：主键字段名（通常是 ID / Id）。
 - style.listSep：repeated 列一格里多个值的分隔符（例如 ; 或 |）。
 - style.primitives：类型行里出现的基础类型名（数字、字符串、布尔），其余大驼峰的类型名当枚举或结构。
-- enums：样本里看得出取值范围的枚举类型：键是类型名，values 是 [{ "name": 填进表格的字, "value": 数值（看不出就不写）, "desc": 说明（看不出就不写） }]。
-  只列样本里确实出现过的值，不要编；值太多（超过 200）或看起来是自由文本的不要当枚举。
+- scans：**枚举扫描规则，不要把枚举成员一个个列出来**。你只看了几张样本，列不全，表一改就过时；面板按你总结的规则在本机批量扫**全部表格**得出枚举，以后表格改了自动重扫。
+  样本里看到枚举定义（例如专门放枚举的页签 EnumType、枚举表：枚举名一列，成员名、值、说明在别的列）时，总结出一条能覆盖**所有同类文件**的规则：
+  file 写相对路径的通配（例如 "Config/**/*.xlsx"，** 跨目录），sheet 写枚举页签的名字，面板会扫所有对上的、有这个页签的表格。
+  先用面板动作 table.enum_scan_peek（app_do，参数 { "path": 表格路径, "sheet": 页签 }）看枚举页签的原样内容（带 Excel 列号），
+  再用 table.enum_scan_try（参数 { "rule": 规则, "example": 一个枚举名 }）试跑，对不上就改参数再试，直到扫出的枚举名、成员和值都对，并且没扫进不是枚举的东西。
+  每条规则写成 { "name": 规则名, "from": { … }, "auto": "open" }，from 的写法（列写 Excel 列号 A/B/C 或表头字段名，都写列号时从第 1 行扫）：
+  - block：枚举名只写在每组第一行，下面几行枚举名那列空着的都属于它。字段 kind、file、sheet、start（Excel 行号，可不写）、enumCol、nameCol、valueCol、descCol
+  - rows：每一行都写了枚举名和成员名。字段同 block
+  - sheets：一个页签是一个枚举。字段 kind、file、sheet（页签名的通配）、nameFrom（"sheet" 页签名 / "file" 文件名当枚举名）、start、nameCol、valueCol、descCol
+  扫出来的名字和类型行里写的枚举名不一样（例如多了前缀 E）时加 "rename": { "stripPrefix": "E" }。
+  类型行用到的枚举在样本表里找不到定义（多半定义在 C++ / Lua 里）就不写规则，在开头的说明里提一句，让用户到项目设置 → 表格 → 枚举用「AI 总结规则」指一个代码文件。
+- enums：**只写表头行里的固定取值**（例如修饰行的 optional / repeated、导出端行的 Client / Server），格式 { "类型名": { "values": [{ "name": 填的字, "value": "数值（字符串，看不出就不写）", "desc": 说明（看不出就不写） }] } }。
+  配置表数据里用到的枚举一律交给 scans，不要在这里列。
 - types：**类型表**。类型行里出现的结构体、坐标、颜色、奖励这类「一格里有好几个字段」的类型（例如 FVector、Reward、TArray<FReward> 里的 FReward），
   按表里格子**实际的写法**总结：键是类型名，值是 { "kind": "struct", "fields": [{ "name": 字段名, "type": 字段类型 }], "store": 存储样式模板 }。
   store 用 {字段名} 占位，其余照抄格子里的字，例如格子写 1#2#3 就是 "{X}#{Y}#{Z}"，写 (X=1,Y=2,Z=3) 就是 "(X={X},Y={Y},Z={Z})"；
@@ -112,7 +132,7 @@ export function buildTablesPrompt(sample: string, convo: string, langWord: strin
     `## 输出格式
 先用两三句${langWord}说明看到的风格。然后输出且只输出一个代码块，语言名写 ${TABLES_STYLE_LANG}，内容是 JSON（面板会把它画在对话右侧，让用户逐项勾选应用）：
 \`\`\`${TABLES_STYLE_LANG}
-{ "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": {}, "columns": {}, "types": { "FVector": { "kind": "struct", "fields": [{ "name": "X", "type": "float" }, { "name": "Y", "type": "float" }, { "name": "Z", "type": "float" }], "store": "{X}#{Y}#{Z}" } }, "formats": { "mapStore": { "sep": ";", "entry": "{K}:{V}" } } }
+{ "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": { "Modifier": { "values": [{ "name": "optional" }, { "name": "repeated" }] } }, "scans": [{ "name": "EnumType 页签", "from": { "kind": "block", "file": "Config/**/*.xlsx", "sheet": "EnumType", "enumCol": "A", "nameCol": "B", "valueCol": "C", "descCol": "D" }, "auto": "open" }], "columns": {}, "types": { "FVector": { "kind": "struct", "fields": [{ "name": "X", "type": "float" }, { "name": "Y", "type": "float" }, { "name": "Z", "type": "float" }], "store": "{X}#{Y}#{Z}" } }, "formats": { "mapStore": { "sep": ";", "entry": "{K}:{V}" } } }
 \`\`\``,
   ]
     .filter(Boolean)
@@ -149,17 +169,78 @@ function fixRule(h: unknown, roleEnums: Record<string, unknown>): unknown {
   return { ...up, rows }
 }
 
+/** 成员：只写名字的字符串也认，数值写成数字的转成字符串 */
+function fixValues(list: unknown[]) {
+  return list.flatMap((x): unknown[] => {
+    if (typeof x === 'string' || typeof x === 'number') return [{ name: String(x) }]
+    if (!x || typeof x !== 'object') return []
+    const v = x as Record<string, unknown>
+    return [{ ...v, ...(typeof v.value === 'number' ? { value: String(v.value) } : {}) }]
+  })
+}
+
+/**
+ * 枚举一个个查：AI 常把 { "values": [...] } 直接写成数组（2026-11-16 用户的分析就因为这个整份读不出来），两种都认；
+ * 还是不对的那个丢掉、记进 skipped，不让整份分析作废
+ */
+function fixEnums(raw: unknown, skipped: string[]) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    const list = Array.isArray(v) ? v : v && typeof v === 'object' ? (v as { values?: unknown }).values : undefined
+    const e = TableEnum.safeParse(Array.isArray(list) ? { ...(Array.isArray(v) ? {} : v), values: fixValues(list) } : v)
+    if (e.success) out[k] = e.data
+    else skipped.push(t('枚举 {name}：{error}', { name: k, error: e.error.issues[0]?.message ?? '' }))
+  }
+  return out
+}
+
+/** 扫描规则一条条查：没写 id 的补上，写坏的丢掉、记进 skipped */
+function fixScans(raw: unknown, skipped: string[]) {
+  if (!Array.isArray(raw)) return []
+  const out: EnumScan[] = []
+  for (const [i, x] of raw.slice(0, 20).entries()) {
+    const id =
+      x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string' ? (x as { id: string }).id : ''
+    const p = EnumScan.safeParse(x && typeof x === 'object' ? { ...x, id: id.trim() || newScanId(out) } : x)
+    if (p.success) out.push(p.data)
+    else
+      skipped.push(
+        t('扫描规则 {n}：{error}', {
+          n: i + 1,
+          error: p.error.issues
+            .slice(0, 2)
+            .map((e) => `${e.path.join('.')} ${e.message}`)
+            .join('；'),
+        }),
+      )
+  }
+  return out
+}
+
 function normalizeDraft(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw
+  const skipped: string[] = []
   // 类型一个个查：写坏的一个丢掉，不让整份分析作废
   const types = (raw as { types?: unknown }).types
-  const json =
-    types && typeof types === 'object'
+  const r = raw as Record<string, unknown>
+  const json = {
+    ...r,
+    ...(types && typeof types === 'object'
       ? {
-          ...raw,
-          types: Object.fromEntries(Object.entries(types).filter(([, v]) => TableType.safeParse(v).success)),
+          types: Object.fromEntries(
+            Object.entries(types).filter(([k, v]) => {
+              const ok = TableType.safeParse(v).success
+              if (!ok) skipped.push(t('类型 {name}', { name: k }))
+              return ok
+            }),
+          ),
         }
-      : raw
+      : {}),
+    ...('enums' in r ? { enums: fixEnums(r.enums, skipped) } : {}),
+    ...('scans' in r ? { scans: fixScans(r.scans, skipped) } : {}),
+    skipped,
+  }
   const style = (json as { style?: Record<string, unknown> }).style
   if (!style || typeof style !== 'object') return json
   const s: Record<string, unknown> = { ...style }
@@ -195,6 +276,7 @@ export function draftItemIds(d: TablesDraft): string[] {
     ...(s.arrayMarks?.length ? ['arrayMarks'] : []),
     ...(s.exceptions ?? []).map((_, i) => `ex:${i}`),
     ...Object.keys(d.enums).map((k) => `enum:${k}`),
+    ...d.scans.map((_, i) => `scan:${i}`),
     ...Object.keys(d.columns).map((k) => `col:${k}`),
     ...Object.keys(d.types).map((k) => `type:${k}`),
     ...(d.formats && Object.values(d.formats).some(Boolean) ? ['formats'] : []),
@@ -222,6 +304,14 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
   const enums = { ...schema.enums }
   for (const [k, e] of Object.entries(d.enums))
     if (picked.has(`enum:${k}`)) enums[k] = { ...e, ...(enums[k]?.source ? { source: enums[k].source } : {}) }
+  // 扫描规则：和已有规则扫同一处（写法和参数一样）的换掉、保留原来的 id（扫描结果按 id 记），其余加在后面
+  const scans = [...schema.scans]
+  for (const [i, sc] of d.scans.entries()) {
+    if (!picked.has(`scan:${i}`)) continue
+    const same = scans.findIndex((x) => JSON.stringify(x.from) === JSON.stringify(sc.from))
+    if (same >= 0) scans[same] = { ...sc, id: scans[same].id }
+    else scans.push({ ...sc, id: newScanId(scans) })
+  }
   const columns = { ...schema.columns }
   for (const [k, c] of Object.entries(d.columns)) if (picked.has(`col:${k}`)) columns[k] = c
   const types = { ...schema.types }
@@ -235,5 +325,5 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
       mapStore: { ...f.mapStore, ...d.formats.mapStore },
     })
   }
-  return { ...schema, style, enums, columns, types, analyzedAt: at }
+  return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, analyzedAt: at }
 }

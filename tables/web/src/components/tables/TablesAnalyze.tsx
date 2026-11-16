@@ -1,9 +1,11 @@
 import { useState, useSyncExternalStore } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
 import { t } from '@shared/i18n'
+import type { TableSchema } from '@shared/tables'
 import { extractJson } from '@shared/assist'
 import { applyTablesDraft, resolveTablesProposal, tablesJsonOf, type TablesDraft } from '@shared/tables-assist'
 import { DraftReview } from './TablesDraftReview'
+import { afterScan } from './use-enum-auto-scan'
 import { runPromptInProject } from '@/lib/assist-conv'
 import { tablesApi } from '@/lib/tables-api'
 import { saveTableSchema, useTableSchema } from '@/lib/table-schema'
@@ -61,16 +63,37 @@ function deliverTables(projectId: string, reply: string): { error?: string } {
   return {}
 }
 
+/** 刚应用的扫描规则扫一次：扫失败不影响「已应用」，错误照实报 */
+async function scanNow(projectId: string, saved: TableSchema, ids: string[]) {
+  try {
+    const { runs } = await tablesApi.enumScan(projectId, { ids })
+    await afterScan(projectId, saved, runs, false, true)
+    for (const r of runs)
+      if (!r.error)
+        toast.success(t('枚举扫描扫出 {n} 个枚举', { n: Object.keys(r.enums).length }), {
+          description: Object.keys(r.enums).slice(0, 8).join('、'),
+        })
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
 /**
  * 把勾上的几项写进结构文件：在最新的结构文件上并，设置页别的地方刚存的不会被盖掉；
  * 存好后项目设置的「表头」「通用枚举」、表格页跟着更新。项目设置和分析窗口右侧都走这里，应用了就清掉暂存的结果
  */
 export async function applyAnalysis(projectId: string, draft: TablesDraft, picked: Set<string>) {
   try {
-    await saveTableSchema(projectId, (cur) => applyTablesDraft(cur, draft, picked, new Date().toISOString()))
+    const saved = await saveTableSchema(projectId, (cur) =>
+      applyTablesDraft(cur, draft, picked, new Date().toISOString()),
+    )
     pending.delete(projectId)
     emit()
     toast.success(t('已应用到表格设置：表头、通用枚举已经更新，表格页按新的结构显示'))
+    // 勾上的扫描规则马上按规则批量扫一次，枚举下拉和检查跟着有值
+    const froms = new Set(draft.scans.filter((_, i) => picked.has(`scan:${i}`)).map((s) => JSON.stringify(s.from)))
+    const ids = saved.scans.filter((s) => froms.has(JSON.stringify(s.from))).map((s) => s.id)
+    if (ids.length) await scanNow(projectId, saved, ids)
     return true
   } catch (e) {
     toast.error((e as Error).message)

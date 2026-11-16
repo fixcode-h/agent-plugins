@@ -54,6 +54,7 @@ export function buildEnumScanPrompt(ex: ScanExample) {
     '## 规则格式',
     '写法（from.kind）：',
     '- block：表格里，枚举名只写在每组第一行，下面几行枚举名那列空着都属于它。字段 file、sheet、start（Excel 行号，可不写）、enumCol、nameCol、valueCol、descCol（列写 Excel 列号 A/B/C 或表头字段名）',
+    '  表格类写法的 file 可以写通配（例如 Config/**/*.xlsx）：同样的页签分散在好几个表格里时，一条规则批量扫所有对上的、有这个页签的表格',
     '- rows：表格里，每一行都有枚举名和成员名。字段同 block',
     '- sheets：表格里，每个页签是一个枚举。字段 file、sheet（页签通配）、nameFrom（sheet/file）、start、nameCol、valueCol、descCol',
     '- cpp：C++ 源码。字段 files（相对项目目录的通配，逗号分隔，** 跨目录，尽量只指到放枚举的目录）、exclude、onlyUenum、skipHidden、skip（跳过成员的正则，默认跳过 _MAX / Count 这类哨兵）、desc（meta=UMETA 的 DisplayName/ToolTip，comment=注释，none）',
