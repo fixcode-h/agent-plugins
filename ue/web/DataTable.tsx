@@ -82,21 +82,24 @@ export function DataTableView({
             <ui.IconButton
               icon={Plus}
               label={t('加一行')}
-            size="sm"
-            disabled={!!busy}
-            onClick={() =>
-              void ask({ title: t('加一行'), label: t('新行名') }).then((n) => {
+              size="sm"
+              disabled={!!busy}
+              onClick={() =>
+                void ask({ title: t('加一行'), label: t('新行名') }).then((n) => {
                   if (n) void rows('add', n)
                 })
               }
             />
           )}
-          <ui.IconButton
-            icon={ExternalLink}
-            label={t('在编辑器里打开')}
-            size="sm"
-            onClick={() => void run('open', () => op(project.id, 'asset.open', { path }, { instance: 'editor' }))}
-          />
+          {/* 资源页的检视导航条上已经有「在 UE 编辑器打开」，这里只在弹窗（只读查看）里给 */}
+          {viewOnly && (
+            <ui.IconButton
+              icon={ExternalLink}
+              label={t('在编辑器里打开')}
+              size="sm"
+              onClick={() => void run('open', () => op(project.id, 'asset.open', { path }, { instance: 'editor' }))}
+            />
+          )}
         </div>
       </header>
       <div className="ue:px-4 ue:pt-3">

@@ -1,6 +1,6 @@
 import { Copy, Folder as FolderIcon, FolderOpen, RefreshCw, Star, StarOff } from 'lucide-react'
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
-import { pget, ppost, op, useLoad } from '../../api.ts'
+import { op } from '../../api.ts'
 import { assetIcon } from '../../asset-icons.ts'
 import { ClassPicker, type ClassOpt } from '../../ClassPicker.tsx'
 import { useUe } from '../../ctx.tsx'
@@ -10,6 +10,9 @@ import { copyText, MenuHost, openMenu } from '../../menu.tsx'
 import { TreeList, type TreeLine } from '../../TreeList.tsx'
 import { Hit, hitText, keepSet, TreeSearch } from '../../tree-search.tsx'
 import { ErrorText } from '../../ui.tsx'
+import { useAssetMenu } from './asset-menu.ts'
+import { useFavFolders } from './fav-data.ts'
+import { FavFolders, FavStar } from './FavFolders.tsx'
 import { pkgOf, useFolderData, type Folder, type Item } from './folder-data.ts'
 
 /** 类型下拉不打字时列的常用类型（和资源页搜索页签差不多，少几个不常按文件夹找的） */
@@ -36,7 +39,6 @@ type N =
   | { kind: 'item'; key: string; name: string; it: Item }
 
 const NONE: Record<string, boolean> = {}
-const NO_FAVS: string[] = []
 
 /**
  * 资源页「文件夹」页签：照 Content Browser 的文件夹树，点开文件夹才读下一层（设计稿 designs/对象页合并与资源导航-设计稿.md 第 8 节）。
@@ -56,7 +58,6 @@ export function AssetFolders({
   reveal?: string
 }) {
   const { project, target, state } = useUe()
-  const { cn } = h()
   const data = useFolderData(project.id, target)
   const { levels, open, toggle, load, setCls, revealPath } = data
   const kk = `${project.id}/assets/folders`
@@ -69,14 +70,11 @@ export function AssetFolders({
   const [selFolder, setSelFolder] = useState('')
   const [scrollTo, setScrollTo] = useState<{ key: string; seq: number }>()
 
-  // 收藏的文件夹存在面板服务端的项目本机状态里（server/store.ts 的 folders），换浏览器、重启都还在
-  const local = useLoad(() => pget<{ folders?: string[] }>(project.id, 'local'), [project.id])
-  const favs = local.data?.folders ?? NO_FAVS
-  const toggleFav = (path: string) => {
-    const next = favs.includes(path) ? favs.filter((x) => x !== path) : [...favs, path]
-    local.setData({ ...(local.data ?? {}), folders: next })
-    void ppost(project.id, 'local', { folders: next }).catch((e: Error) => h().toast.error(e.message))
-  }
+  // 收藏的文件夹存在项目里（文档根或 .agent-panel，权限与设置里选，server/favorites.ts），团队共用
+  const fav = useFavFolders(project.id)
+  const favs = fav.folders
+  const [favOpen, setFavOpen] = useKept(`${kk}/favOpen`, true)
+  const assetMenu = useAssetMenu()
 
   const goTo = async (path: string, kind: 'asset' | 'folder') => {
     const key = await revealPath(path, kind)
@@ -145,6 +143,7 @@ export function AssetFolders({
             title: n.it.path,
             aside: n.it.class ? label(n.it.class, filter) : undefined,
             onSelect: () => onSelect(n.it.path),
+            onMenu: (e) => assetMenu(e, n.it.path),
           })
           continue
         }
@@ -174,6 +173,12 @@ export function AssetFolders({
                 : undefined,
           onToggle,
           onMenu: n.kind === 'folder' ? (e) => folderMenu(e, n.f.path) : undefined,
+          // 行尾星标：收藏了一直显示实心的，没收藏的悬停才露出来
+          action:
+            n.kind === 'folder' ? (
+              <FavStar on={favs.includes(n.f.path)} onClick={() => fav.toggle(n.f.path)} />
+            ) : undefined,
+          actionShown: n.kind === 'folder' && favs.includes(n.f.path),
         })
         if (!isOpen) continue
         if (forced) {
@@ -220,17 +225,14 @@ export function AssetFolders({
   }, [levels, open, selected, selFolder, q, folded, favs])
 
   function folderMenu(e: MouseEvent, path: string) {
-    const fav = favs.includes(path)
+    const on = favs.includes(path)
     openMenu(e, [
       { title: path },
-      { label: fav ? t('取消收藏') : t('收藏'), icon: fav ? StarOff : Star, onClick: () => toggleFav(path) },
+      { label: on ? t('取消收藏') : t('收藏'), icon: on ? StarOff : Star, onClick: () => fav.toggle(path) },
       { label: t('重新读取'), icon: RefreshCw, onClick: () => void load(path) },
       { label: t('复制路径'), icon: Copy, onClick: () => copyText(path) },
     ])
   }
-
-  const chip =
-    'ue:flex ue:h-7 ue:max-w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:rounded-md ue:border ue:border-line ue:px-2 ue:font-mono ue:text-footnote ue:text-fg ue:hover:bg-hover'
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -278,29 +280,17 @@ export function AssetFolders({
           <ErrorText>{root.error}</ErrorText>
         </div>
       )}
+      <FavFolders
+        folders={favs}
+        selected={selFolder}
+        open={favOpen}
+        onOpenChange={setFavOpen}
+        onGo={(p) => void goTo(p, 'folder')}
+        onRemove={fav.toggle}
+        onMove={fav.move}
+        where={fav.file}
+      />
       <TreeList lines={lines} label={t('资源文件夹')} reveal={scrollTo} />
-      {!!favs.length && (
-        <div className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:p-3">
-          <span className="ue:text-footnote ue:text-subtle">{t('收藏的文件夹')}</span>
-          <div className="ue:flex ue:flex-wrap ue:gap-1.5">
-            {favs.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={cn(chip, selFolder === p && 'ue:bg-sel')}
-                title={p}
-                onClick={() => void goTo(p, 'folder')}
-                onContextMenu={(e) =>
-                  openMenu(e, [{ label: t('取消收藏'), icon: StarOff, onClick: () => toggleFav(p) }])
-                }
-              >
-                <FolderIcon className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-subtle" />
-                <span className="ue:truncate">{p}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       <MenuHost />
     </div>
   )

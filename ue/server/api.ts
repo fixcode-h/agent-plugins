@@ -3,6 +3,7 @@ import { detect } from './detect.ts'
 import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { badges } from './badges.ts'
 import { clearHistory } from './history.ts'
+import { editFavs, moveFavs, readFavs } from './favorites.ts'
 import { build, install, uninstall } from './install.ts'
 import { cancelJob, getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
@@ -52,6 +53,7 @@ async function register(b: Body) {
     vcs: det.vcs,
     perms: { ...DEFAULT_PERMS, ...((b.perms as UeProject['perms']) ?? {}) },
     gmStore: b.gmStore === 'local' ? 'local' : 'project',
+    favStore: b.favStore === 'project' ? 'project' : 'docs',
     engineDir: String(b.engineDir ?? ''),
     buildCmd: '',
     target: { kind: '', world: '' },
@@ -101,12 +103,15 @@ export async function handle(req: Request): Promise<Response> {
         return json(await projectState(project))
       case 'POST settings': {
         const patch: Partial<UeProject> = {}
-        for (const k of ['perms', 'gmStore', 'buildCmd', 'engineDir', 'target', 'name'] as const)
+        for (const k of ['perms', 'gmStore', 'favStore', 'buildCmd', 'engineDir', 'target', 'name'] as const)
           if (k in b) (patch as Record<string, unknown>)[k] = b[k]
         if ('engineDir' in b) {
           const det = await detect(project.root, String(b.engineDir ?? ''))
           patch.engine = det.engine
         }
+        // 换了收藏的存放位置：把现有的收藏带过去，免得一换就空了
+        if (patch.favStore && patch.favStore !== project.favStore)
+          await moveFavs(project, { ...project, favStore: patch.favStore })
         return json(await patchProject(project.id, patch))
       }
       case 'POST remove':
@@ -158,6 +163,10 @@ export async function handle(req: Request): Promise<Response> {
         return json(await runMacro(ctx, String(b.id)))
       case 'GET local':
         return json(await readLocal(project.id))
+      case 'GET favorites':
+        return json(await readFavs(project))
+      case 'POST favorites':
+        return json(await editFavs(project, b))
       case 'POST local':
         return json(await patchLocal(project.id, b as Partial<LocalState>))
       case 'POST logs':

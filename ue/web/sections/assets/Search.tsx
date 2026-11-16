@@ -5,6 +5,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { keep, useGoneFromList, useKept } from '../../keep.ts'
 import { takePending } from '../../pending.ts'
+import { useAssetMenu } from './asset-menu.ts'
 import { ErrorText, Note, SearchBox, kindLabel } from '../../ui.tsx'
 
 interface AssetRow {
@@ -40,9 +41,19 @@ const TABLE: ClassOpt = { name: 'DataTable' }
  * 资源页浏览栏的「搜索」（原来资源页的左栏原样搬过来）：按类型和名字前缀找资源（点搜索才搜），
  * 编辑器没开时起后台编辑器读，结果下面写来源（编辑器 / 后台编辑器读的磁盘版本）
  */
-export function AssetSearch({ selected, onOpen }: { selected: string; onOpen: (path: string) => void }) {
+export function AssetSearch({
+  selected,
+  onOpen,
+  onReveal,
+}: {
+  selected: string
+  onOpen: (path: string) => void
+  /** 右键「在文件夹里定位」：切到文件夹页签展开到它 */
+  onReveal?: (path: string) => void
+}) {
   const { project, go, state } = useUe()
   const { cn } = h()
+  const assetMenu = useAssetMenu()
   const all: ClassOpt = { name: '', label: t('所有类型') }
   const kk = `${project.id}/assets`
   // Ctrl+K 带过来的路径或名字：按所有类型搜一次，盖掉留着的条件（lazy 初始值只取一次，切回来不会再搜）
@@ -146,6 +157,7 @@ export function AssetSearch({ selected, onOpen }: { selected: string; onOpen: (p
             <button
               type="button"
               onClick={() => onOpen(a.path)}
+              onContextMenu={(e) => assetMenu(e, a.path, { onReveal: onReveal && (() => onReveal(a.path)) })}
               className={cn(
                 'ue:flex ue:w-full ue:cursor-pointer ue:flex-col ue:rounded-lg ue:px-2.5 ue:py-1.5 ue:text-left ue:hover:bg-hover',
                 selected === a.path && 'ue:bg-sel',

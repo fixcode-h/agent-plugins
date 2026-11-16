@@ -37,7 +37,7 @@ jobs:
       - name: UE 性能抓取解析器测试（CSV、memreport）
         run: node ue/scripts/perf-test.mjs
       - name: UE 对象页 / 资源页导航历史、文件夹树单测
-        run: node --test ue/web/inspect/nav-state.test.ts ue/server/asset-folders.test.ts
+        run: node --test ue/web/inspect/nav-state.test.ts ue/server/asset-folders.test.ts ue/server/favorites.test.ts
       - name: UI 设计单测（面板模块取自 .panel）
         run: npm test
       - uses: actions/upload-artifact@v4

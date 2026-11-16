@@ -15,6 +15,7 @@ function norm(p: UeProject): UeProject {
     ...p,
     perms: { ...DEFAULT_PERMS, ...p.perms },
     gmStore: p.gmStore ?? 'project',
+    favStore: p.favStore === 'project' ? 'project' : 'docs',
     buildCmd: p.buildCmd ?? '',
     engineDir: p.engineDir ?? '',
     target: p.target ?? { kind: '', world: '' },
