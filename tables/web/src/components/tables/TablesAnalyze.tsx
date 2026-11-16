@@ -1,9 +1,15 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { TableSchema } from '@shared/tables'
 import { extractJson } from '@shared/assist'
-import { applyTablesDraft, resolveTablesProposal, tablesJsonOf, type TablesDraft } from '@shared/tables-assist'
+import {
+  applyTablesDraft,
+  resolveTablesProposal,
+  tablesJsonOf,
+  type SavedAnalysis,
+  type TablesDraft,
+} from '@shared/tables-assist'
 import { DraftReview } from './TablesDraftReview'
 import { afterScan } from './use-enum-auto-scan'
 import { runPromptInProject } from '@/lib/assist-conv'
@@ -109,6 +115,19 @@ export function TablesAnalyze({ projectId, projectName }: { projectId: string; p
   const draft = useSyncExternalStore(subscribe, () => pending.get(projectId))
   const { schema } = useTableSchema(projectId)
   const [busy, setBusy] = useState(false)
+  // 项目里存着的分析结果（别的分支、别的同事分析的）：没有待应用的新结果时摆出来直接勾选应用
+  const [saved, setSaved] = useState<SavedAnalysis | null>(null)
+  useEffect(() => {
+    let live = true
+    setSaved(null)
+    tablesApi
+      .analysis(projectId)
+      .then((r) => live && setSaved(r.saved))
+      .catch((e) => live && toast.error((e as Error).message))
+    return () => {
+      live = false
+    }
+  }, [projectId, draft])
 
   const start = async () => {
     setBusy(true)
@@ -153,6 +172,22 @@ export function TablesAnalyze({ projectId, projectName }: { projectId: string; p
           {t('AI 分析')}
         </Button>
       </div>
+      {!draft && saved && schema && (
+        <div className="tb:space-y-2">
+          <p className="tb:text-footnote tb:text-subtle">
+            {t('项目里存着 {time} 的分析结果（结构文件目录的 analysis.json，提交后别的分支也能直接应用）：', {
+              time: new Date(saved.at).toLocaleString(),
+            })}
+          </p>
+          <DraftReview
+            key={saved.messageId || saved.at}
+            draft={saved.draft}
+            onApply={async (picked) => {
+              await applyAnalysis(projectId, saved.draft, picked)
+            }}
+          />
+        </div>
+      )}
       {draft && schema && (
         <DraftReview
           draft={draft}

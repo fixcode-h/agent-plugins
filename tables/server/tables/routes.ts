@@ -25,7 +25,7 @@ import { shiftReasons } from './xlsx-write.ts'
 import { SheetEdit, TableSave } from '../../shared/table-edit.ts'
 import { detectVcs } from '../projects-analyze.ts'
 import { p4Runner } from '../p4-split.ts'
-import { sampleOne, tableSample } from './sample.ts'
+import { headerValues, sampleOne, tableSample } from './sample.ts'
 import { checkTables } from './check.ts'
 import { tableAt, tableHistory } from './history.ts'
 import { compareProjects } from './compare.ts'
@@ -40,7 +40,8 @@ import type { EnumRename } from '../../shared/table-enum-rename.ts'
 import { stream } from 'hono/streaming'
 import type { TableWatcher } from './watch.ts'
 import { withPromptLangRules } from '../../shared/prompt-lang.ts'
-import { buildTablesBody } from '../../shared/tables-assist.ts'
+import { SavedAnalysis, buildTablesBody } from '../../shared/tables-assist.ts'
+import { readAnalysis, writeAnalysis } from './analysis-store.ts'
 import { TableCreate } from '../../shared/table-create.ts'
 import { createTable } from './create.ts'
 import { runScans, scanOnce } from './enum-scan.ts'
@@ -224,11 +225,18 @@ export function tablesApi(deps: TablesDeps) {
       // AI 分析表格风格的第一句话（原来走面板配置助手的 tables 类型，搬成插件后自己出）：样本 + 提示词 + 回复语言的规则
       .get('/:id/analyze-prompt', async (c) => {
         try {
-          const { dir, cfg } = await projectOf(deps, c.req.param('id'))
+          const { dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
           if (!tablesOn(cfg)) throw new HttpError(t('先在项目设置里设好表格目录'))
-          const sample = await tableSample(dir, (await listTables(dir, cfg)).files)
+          const files = (await listTables(dir, cfg)).files
+          const sample = await tableSample(dir, files)
           if (!sample.text.trim()) throw new HttpError(t('表格目录里还没有能读的表格'))
-          return c.json({ prompt: withPromptLangRules(buildTablesBody({ sample: sample.text }, [])) })
+          // 多看一些表的表头固定取值；项目里存着上次的结果时带上，AI 在它的基础上补全
+          const headerStats = await headerValues(dir, files)
+          const saved = await readAnalysis(schemaAt)
+          const previous = saved ? JSON.stringify(saved.draft) : ''
+          return c.json({
+            prompt: withPromptLangRules(buildTablesBody({ sample: sample.text, headerStats, previous }, [])),
+          })
         } catch (e) {
           return fail(c, e)
         }
@@ -545,6 +553,25 @@ export function tablesApi(deps: TablesDeps) {
           const body = TableCreate.safeParse(await c.req.json().catch(() => null))
           if (!body.success) throw new HttpError(t('新建表格的内容格式不对'))
           return c.json(await createTable(dir, cfg, body.data))
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 存进项目的 AI 分析结果（analysis.json）：别的分支、别的同事直接应用，不用重新分析
+      .get('/:id/analysis', async (c) => {
+        try {
+          const { schemaAt } = await projectOf(deps, c.req.param('id'))
+          return c.json({ saved: await readAnalysis(schemaAt) })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      .put('/:id/analysis', async (c) => {
+        try {
+          const { schemaAt } = await projectOf(deps, c.req.param('id'))
+          const body = SavedAnalysis.safeParse(await c.req.json().catch(() => null))
+          if (!body.success) throw new HttpError(t('分析结果格式不对'))
+          return c.json({ saved: await writeAnalysis(schemaAt, body.data) })
         } catch (e) {
           return fail(c, e)
         }

@@ -182,3 +182,18 @@ test('提示词让 AI 总结扫描规则，不把枚举成员一个个列出来'
   assert.match(p, /scans：\*\*枚举扫描规则，不要把枚举成员一个个列出来\*\*/)
   assert.match(p, /table\.enum_scan_try/)
 })
+
+test('提示词带上全项目表头取值统计和项目里存着的上次结果', () => {
+  const p = buildTablesBody(
+    {
+      sample: '- a.xlsx',
+      headerStats: '- 表头第 2 行（导出端行）：Client（9）、Public（2）',
+      previous: '{"summary":"上次"}',
+    },
+    [],
+  )
+  assert.match(p, /Public（2）/)
+  assert.match(p, /项目里保存的上次分析结果/)
+  assert.match(p, /"summary":"上次"/)
+  assert.match(p, /每次回复末尾都要重新输出完整的 tables-style 代码块/)
+})
