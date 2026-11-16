@@ -8,7 +8,6 @@ import {
   MousePointerClick,
   Play,
   ScanSearch,
-  TriangleAlert,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -22,8 +21,8 @@ import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 import { useToWidget } from './gt-convert.ts'
 import { TidyButtons, useGtTidy } from './GtTidy.tsx'
 import type { GtBatch } from './GtBatch.tsx'
+import { GtStepRow } from './GtStepRow.tsx'
 import {
-  CheckMark,
   StepDetail,
   StepIcon,
   ms,
@@ -298,71 +297,20 @@ export function GtRun({
               <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
             </div>
           )}
-          {rows.map((r) => {
-            const sum = rowSummary(r)
-            const status = r.res?.status
-            return (
-              <button
-                key={r.i}
-                type="button"
-                onClick={() => setPick(r.i)}
-                onContextMenu={(e) => {
-                  setPick(r.i)
-                  stepMenu(e, r)
-                }}
-                aria-selected={r.i === pick}
-                className={cn(
-                  'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[28px_18px_104px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
-                  status === 'failed' && 'ue:bg-danger/6',
-                  !r.res && (running || last) && 'ue:opacity-60',
-                )}
-              >
-                <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{r.i + 1}</span>
-                <StepIcon s={status} live={r.i === liveRow} />
-                <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
-                  <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
-                    {r.def?.action || r.res?.action}
-                  </span>
-                  <CheckMark check={r.check} />
-                </span>
-                {sum.note ? (
-                  // AI 整理（或手写）过的步骤有说明：说明当主文字，人话 / 选择器退到后面
-                  <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
-                    {sum.ambiguous && (
-                      <span title={t('选择器可能不唯一：{r}', { r: sum.ambiguous })} className="ue:shrink-0">
-                        <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
-                      </span>
-                    )}
-                    <span className="ue:min-w-0 ue:shrink-0 ue:truncate ue:text-fg">{sum.note}</span>
-                    <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-subtle">
-                      {sum.human || (sum.target && <span className="ue:font-mono">{sum.target}</span>)}
-                    </span>
-                    {r.res?.message && <span className="ue:truncate ue:text-muted">· {r.res.message}</span>}
-                  </span>
-                ) : sum.human ? (
-                  <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
-                    {sum.ambiguous && (
-                      <span title={t('选择器可能不唯一：{r}', { r: sum.ambiguous })} className="ue:shrink-0">
-                        <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
-                      </span>
-                    )}
-                    <span className="ue:min-w-0 ue:truncate ue:text-fg">{sum.human}</span>
-                    {sum.target && (
-                      <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-subtle">{sum.target}</span>
-                    )}
-                    {r.res?.message && <span className="ue:truncate ue:text-muted">· {r.res.message}</span>}
-                  </span>
-                ) : (
-                  <span className="ue:truncate ue:text-footnote ue:text-muted">
-                    {sum.target && <span className="ue:font-mono">{sum.target}</span>}
-                    {sum.target && sum.text ? ' · ' : ''}
-                    {sum.text}
-                  </span>
-                )}
-                <span className="ue:text-caption ue:text-subtle ue:tabular-nums">{ms(r.res?.durationMs)}</span>
-              </button>
-            )
-          })}
+          {rows.map((r) => (
+            <GtStepRow
+              key={r.i}
+              row={r}
+              selected={r.i === pick}
+              live={r.i === liveRow}
+              dim={!r.res && (running || !!last)}
+              onClick={() => setPick(r.i)}
+              onContextMenu={(e) => {
+                setPick(r.i)
+                stepMenu(e, r)
+              }}
+            />
+          ))}
         </div>
       </section>
       <section className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:lg:flex-1">

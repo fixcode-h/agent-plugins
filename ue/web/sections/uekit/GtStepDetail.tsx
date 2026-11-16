@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, TriangleAlert } from 'lucide-react'
 import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
@@ -5,7 +6,8 @@ import { h, t } from '../../host.ts'
 import { ppost, show } from '../../api.ts'
 import { Note, Term } from '../../ui.tsx'
 import { evidenceOf, GtEvidence, type GtEvidenceData } from './GtEvidence.tsx'
-import { ambiguousOf, humanStep } from './gt-steps.ts'
+import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
+import { stepTitle } from './gt-step-title.ts'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -127,13 +129,16 @@ export function StepDetail({
   const evidence = evidenceOf(res?.payload)
   const fileUrl = (p: string) => api.url(`/p/${encodeURIComponent(project.id)}/ext/file?path=${encodeURIComponent(p)}`)
   const action = def?.action || res?.action || '?'
+  // note 已经是标题、hint 在「控件」里分项列，参数里不再重复
   const params = def
-    ? paramsOf(def)
+    ? paramsOf(def).filter(([k]) => k !== 'note' && k !== 'hint')
     : ([
         ['target', res?.target],
         ['note', res?.note],
       ].filter(([, v]) => v) as [string, unknown][])
+  const title = stepTitle(def, res?.action, res?.target)
   const human = humanStep(def)
+  const hint = hintOf(def)
   const ambiguous = ambiguousOf(def)
   const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
   // GameTest 1.2.0-beta.6 起：这一步期间按运行配置自动关掉的阻挡界面
@@ -143,15 +148,32 @@ export function StepDetail({
   )
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto">
-      <header className="ue:flex ue:min-h-12 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
-        <span className="ue:text-caption ue:text-subtle">{t('第 {n} 步', { n: row.i + 1 })}</span>
-        <span className="ue:font-mono ue:text-body ue:font-medium ue:text-fg">{action}</span>
-        <StepIcon s={res?.status} live={live} />
-        <span className="ue:ml-auto ue:text-caption ue:text-subtle">{ms(res?.durationMs)}</span>
+      <header className="ue:flex ue:flex-col ue:gap-1 ue:border-b ue:border-line ue:px-4 ue:py-3">
+        <div className="ue:flex ue:items-center ue:gap-2 ue:text-caption ue:text-subtle">
+          <StepIcon s={res?.status} live={live} />
+          <span>{t('第 {n} 步', { n: row.i + 1 })}</span>
+          <span className="ue:font-mono">{action}</span>
+          <span className="ue:ml-auto ue:tabular-nums">{ms(res?.durationMs)}</span>
+        </div>
+        <p className="ue:text-body ue:font-medium ue:text-fg">{title}</p>
+        {/* 标题用的是场景里写的说明时，按动作和控件生成的那句放下面对照 */}
+        {human && typeof def?.note === 'string' && def.note.trim() && (
+          <p className="ue:text-footnote ue:text-muted">{human}</p>
+        )}
       </header>
-      {(human || ambiguous || picked) && (
-        <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-3 ue:text-footnote">
-          {human && <p className="ue:text-body ue:text-fg">{human}</p>}
+      <Block title={t('结果')}>
+        {res ? (
+          <p className={res.status === 'failed' ? 'ue:text-danger' : 'ue:text-fg'}>
+            {res.message || statusText(res.status)}
+          </p>
+        ) : (
+          <p className="ue:text-subtle">{live ? t('等前面的步骤跑完') : t('这一步还没跑过')}</p>
+        )}
+        {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
+      </Block>
+      {(hint || ambiguous) && (
+        <Block title={t('控件')}>
+          {hint && <HintFields hint={hint} />}
           {ambiguous && (
             <Note>
               {t(
@@ -162,8 +184,7 @@ export function StepDetail({
               )}
             </Note>
           )}
-          {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
-        </div>
+        </Block>
       )}
       {blockers.length > 0 && (
         <Block title={t('自动处理的阻挡界面')}>
@@ -220,15 +241,6 @@ export function StepDetail({
           ))}
         </Block>
       ) : null}
-      <Block title={t('结果')}>
-        {res ? (
-          <p className={res.status === 'failed' ? 'ue:text-danger' : 'ue:text-fg'}>
-            {res.message || statusText(res.status)}
-          </p>
-        ) : (
-          <p className="ue:text-subtle">{live ? t('等前面的步骤跑完') : t('这一步还没跑过')}</p>
-        )}
-      </Block>
       {evidence && (
         <GtEvidence
           e={evidence}
@@ -246,7 +258,8 @@ export function StepDetail({
       )}
       {chat.dialog}
       {res?.payload && Object.keys(res.payload).length > 0 && (
-        <div className="ue:p-4">
+        <div className="ue:flex ue:flex-col ue:gap-1.5 ue:p-4">
+          <h3 className="ue:text-caption ue:font-medium ue:text-subtle">{t('原始返回')}</h3>
           <Term>
             <pre className="ue:whitespace-pre-wrap">{JSON.stringify(res.payload, null, 2)}</pre>
           </Term>
@@ -291,3 +304,38 @@ function Pair({ k, v }: { k: string; v: unknown }) {
     </>
   )
 }
+
+/** hint 分项列：录制时这个控件在哪个界面资源、什么类、显示什么字、在画面的哪块 */
+function HintFields({ hint }: { hint: GtHint }) {
+  const rect = hint.rect?.length === 4 ? hint.rect : undefined
+  const items: [string, string | undefined][] = [
+    [t('文字'), hint.text],
+    [t('类'), hint.class],
+    [t('界面资源'), hint.asset],
+    [
+      t('位置'),
+      rect &&
+        t('左上 ({x}%, {y}%)，宽 {w}%，高 {h}%', {
+          x: pc(rect[0]),
+          y: pc(rect[1]),
+          w: pc(rect[2]),
+          h: pc(rect[3]),
+        }),
+    ],
+    [t('回放怎么挑'), hint.pick],
+  ]
+  return (
+    <dl className="ue:grid ue:grid-cols-[minmax(64px,auto)_1fr] ue:gap-x-3 ue:gap-y-1.5">
+      {items
+        .filter(([, v]) => v)
+        .map(([k, v]) => (
+          <Fragment key={k}>
+            <dt className="ue:text-subtle">{k}</dt>
+            <dd className="ue:min-w-0 ue:break-all ue:text-fg">{v}</dd>
+          </Fragment>
+        ))}
+    </dl>
+  )
+}
+
+const pc = (v: number) => (Math.round(v * 1000) / 10).toString()
