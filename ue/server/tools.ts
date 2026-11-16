@@ -15,6 +15,7 @@ import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
+import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -49,19 +50,28 @@ const DEFS = [
   ),
   tool(
     'ue_console',
-    '执行 UE 控制台命令，返回这条命令执行期间的输出；也能查和改控制台变量。action=run 执行 command；action=cvars 按 query 查变量（changed=true 只看改过的）；action=set 把变量 name 设成 value（可撤回）。危险命令（quit、open 等）会请用户确认。',
+    '执行 UE 控制台命令，返回这条命令执行期间的输出；也能查和改控制台变量、看项目配置和 GameplayTag。action=run 执行 command；action=cvars 按 query 查变量（changed=true 只看改过的）；action=set 把变量 name 设成 value（可撤回）。危险命令（quit、open 等）会请用户确认。' +
+      'action=config 看项目 ini 配置（UE 没开也能看磁盘上的各层）：不给 file 列有哪些配置；file=Engine 列 section（filter 筛名字）；再给 section（key 可选）看每个键在 Base / Default / 平台 / Saved 各层怎么写的、叠出来的值、最后定它的那层（last），UE 在运行时带上进程里的最终值（live），不一致标 differs；query 在全部配置里按键名、值搜。' +
+      'action=tags 列 GameplayTag（query 按名字筛）；给 tag 列引用它的资源。',
     {
-      action: { type: 'string', enum: ['run', 'cvars', 'set'] },
+      action: { type: 'string', enum: ['run', 'cvars', 'set', 'config', 'tags'] },
       command: { type: 'string' },
       query: { type: 'string' },
       changed: { type: 'boolean' },
       name: { type: 'string' },
       value: { type: 'string' },
+      file: { type: 'string' },
+      section: { type: 'string' },
+      key: { type: 'string' },
+      filter: { type: 'string' },
+      tag: { type: 'string' },
       target: TARGET,
     },
     [],
     async (a, ctx) => {
       const action = str(a.action) || (a.command ? 'run' : a.name ? 'set' : 'cvars')
+      if (action === 'config') return mcpText(await consoleConfig(ctx, a))
+      if (action === 'tags') return mcpText(await consoleTags(ctx, a))
       if (action === 'run') return out(await runOp(ctx, 'console', { command: a.command }))
       if (action === 'set') return out(await runOp(ctx, 'cvar.set', { name: a.name, value: str(a.value) }))
       return out(await runOp(ctx, 'cvars', { query: a.query ?? '', changed: !!a.changed, limit: 80 }))
@@ -363,7 +373,8 @@ const DEFS = [
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）。',
+    '编辑器控制：start_editor 启动编辑器；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
+      'spawn 在编辑器打开的关卡里放 Actor（class 写类名或蓝图路径，location [x,y,z]、rotation [pitch,yaw,roll]、label、level、folder 可选），destroy 删掉 actors（Actor 路径数组，ue_find kind=actor 找）。spawn / destroy 进撤销栈（ue_undo 能撤）、按结构性操作权限确认，PIE 运行中不能用，改完关卡要 ue_save 才落盘。',
     {
       action: {
         type: 'string',
@@ -375,10 +386,19 @@ const DEFS = [
           'livecoding',
           'background_start',
           'background_stop',
+          'spawn',
+          'destroy',
         ],
       },
       players: { type: 'number' },
       netMode: { type: 'string' },
+      class: { type: 'string' },
+      location: { type: 'array', items: { type: 'number' } },
+      rotation: { type: 'array', items: { type: 'number' } },
+      label: { type: 'string' },
+      level: { type: 'string' },
+      folder: { type: 'string' },
+      actors: { type: 'array', items: { type: 'string' } },
       target: TARGET,
     },
     ['action'],
@@ -417,6 +437,10 @@ const DEFS = [
         case 'background_stop':
           stopBackground(ctx.project.id)
           return out('已停止')
+        case 'spawn':
+          return out(await editorSpawn(ctx, a))
+        case 'destroy':
+          return out(await editorDestroy(ctx, a))
         default:
           return mcpText(`不认识的 action：${a.action}`, true)
       }

@@ -10,6 +10,7 @@ import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
 import { luaBuildRoute } from './lua-build/api.ts'
+import { toolsRoute } from './editor-tools/api-tools.ts'
 import { extRoute } from './uekit/api-ext.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
@@ -194,6 +195,9 @@ export async function handle(req: Request): Promise<Response> {
         // Lua 页「编译」页签的接口在 lua-build/api.ts
         const lb = await luaBuildRoute(ctx, `${req.method} ${route}`, b)
         if (lb !== undefined) return json(lb)
+        // 编辑器小工具（连接诊断、配置和 GameplayTag、修复重定向器）的接口在 editor-tools/api-tools.ts
+        const tools = await toolsRoute(ctx, `${req.method} ${route}`, b)
+        if (tools !== undefined) return json(tools)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)

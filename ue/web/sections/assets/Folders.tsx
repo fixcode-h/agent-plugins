@@ -13,6 +13,7 @@ import { ErrorText } from '../../ui.tsx'
 import { useAssetMenu } from './asset-menu.ts'
 import { useFavFolders } from './fav-data.ts'
 import { FavFolders, FavStar } from './FavFolders.tsx'
+import { RedirectorDialog, redirectorMenuItem } from './Redirectors.tsx'
 import { pkgOf, useFolderData, type Folder, type Item } from './folder-data.ts'
 
 /** 类型下拉不打字时列的常用类型（和资源页搜索页签差不多，少几个不常按文件夹找的） */
@@ -256,6 +257,8 @@ export function AssetFolders({
       { label: on ? t('取消收藏') : t('收藏'), icon: on ? StarOff : Star, onClick: () => fav.toggle(path) },
       { label: t('重新读取'), icon: RefreshCw, onClick: () => void load(path) },
       { label: t('复制路径'), icon: Copy, onClick: () => copyText(path) },
+      'sep',
+      redirectorMenuItem(path),
     ])
   }
 
@@ -317,6 +320,7 @@ export function AssetFolders({
       />
       <TreeList lines={lines} label={t('资源文件夹')} reveal={scrollTo} />
       <MenuHost />
+      <RedirectorDialog onFixed={(p) => void load(p)} />
     </div>
   )
 }

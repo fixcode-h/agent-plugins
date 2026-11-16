@@ -21,8 +21,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_console: {
     title: '控制台命令',
-    summary: '执行控制台命令、查和改控制台变量',
-    useWhen: '要跑 stat、show 这类控制台命令，或者查 / 临时改 CVar 时',
+    summary: '执行控制台命令、查和改控制台变量，看项目配置的各层和 GameplayTag',
+    useWhen:
+      '要跑 stat、show 这类控制台命令，或者查 / 临时改 CVar 时；排查「这个配置值从哪来、哪层 ini 改的」用 action=config（先 query 搜键名）；要知道有哪些 GameplayTag、谁引用了某个 Tag 用 action=tags',
     avoidWhen: '改对象属性用 ue_set，调函数用 ue_call；quit、open 这类会请用户确认',
     confirms: true,
     group: RUN,
@@ -122,9 +123,12 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_editor: {
     title: '编辑器控制',
-    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器',
-    useWhen: '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时',
-    avoidWhen: '完整编译 C++ 用面板的 request_build，结果会推回来',
+    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器，在关卡里放和删 Actor',
+    useWhen:
+      '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时；用户让你在关卡里摆测试场景、放或删某个 Actor 时用 spawn / destroy',
+    avoidWhen:
+      '完整编译 C++ 用面板的 request_build，结果会推回来；新建资源（蓝图、DataTable）用 ue_asset create，不是 spawn；运行中的游戏里生成对象用 ue_call / ue_gm',
+    confirms: true,
     group: EDITOR,
   },
   ue_undo: {

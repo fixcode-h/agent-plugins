@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
 import { makeDetails } from './fake-details.mjs'
+import { editorToolOps } from './fake-editor-tools.mjs'
 
 export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const token = 'fake-token'
@@ -64,6 +65,8 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     Shield: { Name: '木盾', Price: 80, Icon: '/Game/UI/T_Shield.T_Shield', Tags: ['Armor'] },
   }
   const ops = {
+    // 编辑器小工具（配置、Tag、重定向器、放删 Actor）在 fake-editor-tools.mjs
+    ...editorToolOps(state),
     // 资源转文本：真桥接在编辑器里加载那一版；这里只读临时文件（冒烟测试写的是文本），查参数和临时文件的位置
     'asset.textify': (a) => {
       state.textify = (state.textify ?? 0) + 1
