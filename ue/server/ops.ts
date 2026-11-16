@@ -8,6 +8,7 @@ import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
 import { followJob } from './uekit/follow.ts'
+import { FORGE_DISK_OPS, forgeFromDisk } from './uekit/forge-disk.ts'
 import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
@@ -427,6 +428,8 @@ export async function runOp(
     (args.disk === true || !(await liveCards(ctx.project.root)).some((x) => x.kind === 'editor'))
   )
     return gtFromDisk(ctx.project.root, op, args)
+  // AssetForge 页先从磁盘列配置根下的 JSON（uekit/forge-disk.ts），同步状态再由 UE 补：不为了列文件等编辑器、拉后台编辑器
+  if (FORGE_DISK_OPS.has(op) && args.disk === true) return forgeFromDisk(ctx.project.root, op, args)
   delete args.disk
   const card = await chooseCard(ctx, op, args)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')

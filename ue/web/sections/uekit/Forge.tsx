@@ -138,6 +138,9 @@ export function Forge() {
     }),
     [entries],
   )
+  // 列表先从磁盘出、UE 还没回同步状态：各状态的数先显示「…」，不显示成 0 让人以为都同步了
+  const statesUnknown = entries.some((e) => !e.state)
+  const num = (n: number) => (statesUnknown ? '…' : n)
   const q = query.trim().toLowerCase()
   const items: TreeLeaf<ForgeEntry>[] = useMemo(
     () =>
@@ -287,9 +290,9 @@ export function Forge() {
             onChange={setFilter}
             options={[
               { id: 'all', label: t('全部') },
-              { id: 'pending', label: `${t('待导入')} ${counts.pending}` },
-              { id: 'changed', label: `${t('被改过')} ${counts.changed}` },
-              { id: 'error', label: `${t('出错')} ${counts.error}` },
+              { id: 'pending', label: `${t('待导入')} ${num(counts.pending)}` },
+              { id: 'changed', label: `${t('被改过')} ${num(counts.changed)}` },
+              { id: 'error', label: `${t('出错')} ${num(counts.error)}` },
             ]}
           />
         }
@@ -301,6 +304,13 @@ export function Forge() {
               job && <JobResult job={job} viewing={!!report} onView={() => void viewReport()} />
             )}
             {loading === 'deep' && <span>{t('正在深度检查：演练一遍全部导入，比较慢')}</span>}
+            {data?.statesPending && loading === 'quick' && (
+              <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+                <Loader2 className="ue:h-3 ue:w-3 ue:shrink-0 ue:animate-spin" />
+                {t('正在向 UE 读同步状态（编辑器没开时要先启动后台编辑器）')}
+              </span>
+            )}
+            {error && data && <ErrorText>{t('同步状态没读到：{e}', { e: error })}</ErrorText>}
             {awaiting && (
               <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-fg">
                 <Loader2 className="ue:h-3 ue:w-3 ue:shrink-0 ue:animate-spin ue:text-subtle" />
@@ -337,7 +347,7 @@ export function Forge() {
           </>
         }
       >
-        {error ? (
+        {error && !data ? (
           <ErrorText>{error}</ErrorText>
         ) : !data ? (
           <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
@@ -358,7 +368,8 @@ export function Forge() {
             onFolderMenu={menus.folderMenu}
             leafIcon={(e) => ({ icon: FileJson, tone: kindMeta(e.kind).tone })}
             leafRight={(e) => {
-              if (e.state === 'synced') return null
+              // 已同步不标；还没读到状态的也先不标，免得一排「正在读状态」
+              if (!e.state || e.state === 'synced') return null
               const s = stateMeta(e.state)
               return (
                 <span className={cn('ue:flex ue:items-center ue:gap-1', s.tone)}>
