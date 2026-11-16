@@ -13,6 +13,8 @@ import { Card, PageHead } from '../../ui.tsx'
 import { MenuHost } from '../../menu.tsx'
 import { AssetFolders } from './Folders.tsx'
 import { FolderView } from './FolderView.tsx'
+import { PrecheckButton } from '../../precheck/PrecheckButton.tsx'
+import { SelectionBar } from '../../selection/SelectionBar.tsx'
 import { AssetSearch } from './Search.tsx'
 
 /**
@@ -76,6 +78,7 @@ export function Assets() {
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('资源')} desc={t('编辑器没开时自动起后台编辑器读取；改动点「保存」才写回文件')}>
         {save.head}
+        <PrecheckButton onOpen={(p) => openAsset(p, 'assetSearch')} />
         <ui.Button
           size="sm"
           variant="secondary"
@@ -94,6 +97,7 @@ export function Assets() {
           style={pane.style('calc(100% - 600px)')}
           bodyClass="ue:flex ue:min-h-0 ue:flex-col"
         >
+          <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} />
           <div className="ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2">
             <ui.Segmented
               size="sm"

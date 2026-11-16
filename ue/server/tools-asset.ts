@@ -40,7 +40,7 @@ const HELP: Record<string, unknown> = {
       describe: 'path',
       export: 'path, depth?, offset?, limit?, file?',
       refs: 'path, direction?(dependencies|referencers|both), hard?, depth?, limit?',
-      validate: 'path',
+      validate: 'path，或 paths（多个资源一次查，提交前检查用；只回条数和前几条，完整结果写 report 文件）',
       create: 'path, class?(默认 Blueprint), parent?(蓝图父类), rowStruct?(DataTable 行结构), dryRun?',
       duplicate: 'path, to, dryRun?',
       rename: 'path, to, dryRun?（也用来移动目录）',
@@ -119,6 +119,9 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
         )
       )
     case 'validate':
+      // UELink 2.4 起 paths 一次查多个（提交前检查）：只回条数和前几条，完整结果在 report 文件里
+      if (Array.isArray(a.paths) && a.paths.length)
+        return out(await runOp(ctx, 'asset.validate', { paths: a.paths.map(String) }, 600000))
       return need('path') ?? out(await runOp(ctx, 'asset.validate', { path: a.path }, 120000))
     case 'create':
       return (

@@ -14,6 +14,8 @@ import { mcpText } from './util.ts'
 import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
+import { LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
+import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
 import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
 import { DEBUG_ACTIONS, DEBUG_PROPS, debugAction } from './lua-debug/tool-actions.ts'
@@ -28,7 +30,7 @@ const luaKeys = (v: unknown) => (v === undefined || v === null ? undefined : par
 const DEFS = [
   tool(
     'ue_status',
-    '看 UE 项目的状态：引擎、桥接插件、正在运行的进程和各自的世界（编辑器、PIE 客户端 / 服务器、游戏）、当前目标和 Agent 权限。先调它再操作。',
+    '看 UE 项目的状态：引擎、桥接插件、正在运行的进程和各自的世界（编辑器、PIE 客户端 / 服务器、游戏）、当前目标和 Agent 权限；编辑器开着时 selection 是编辑器里现在选中的 Actor、资源和蓝图节点（用户说「我选中的这个」就看它）。先调它再操作。',
     {},
     [],
     async (_a, ctx) => {
@@ -46,6 +48,7 @@ const DEFS = [
           worlds: i.worlds,
         })),
         background: s.background,
+        selection: await selectionBrief(ctx),
       })
     },
   ),
@@ -136,7 +139,7 @@ const DEFS = [
   ),
   tool(
     'ue_get',
-    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。props 给属性路径数组时一次读几个（最多 30 个）。file=true 把整个对象不截断写成 JSON 文件、只回路径和条数（Actor 带上各组件的属性，components=false 不带；写了 prop 时只导这个属性的完整值），要看全部数据、或值太大被截断时用它。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。',
+    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。props 给属性路径数组时一次读几个（最多 30 个）。file=true 把整个对象不截断写成 JSON 文件、只回路径和条数（Actor 带上各组件的属性，components=false 不带；写了 prop 时只导这个属性的完整值），要看全部数据、或值太大被截断时用它。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。functions=true 时再列函数签名（参数名、定义的文件和行、继承自元表链第几层）、元表链和模块顶部的 local。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -148,11 +151,22 @@ const DEFS = [
       offset: { type: 'number' },
       limit: { type: 'number' },
       tree: { type: 'boolean' },
+      functions: { type: 'boolean' },
       target: TARGET,
     },
     [],
     async (a, ctx) => {
       const keys = luaKeys(a.lua)
+      // functions=true：字段之外列出函数签名（参数名、定义行、继承自哪层）、元表链和模块顶部的 local（UELink 2.4 的 lua.inspect）
+      if (keys && a.functions)
+        return out(
+          await runOp(ctx, 'lua.inspect', {
+            path: a.path ?? '',
+            keys,
+            offset: Number(a.offset) || 0,
+            limit: Math.min(Number(a.limit) || 100, 500),
+          }),
+        )
       if (keys)
         return out(
           await runOp(ctx, 'lua.get', {
@@ -213,14 +227,25 @@ const DEFS = [
   ),
   tool(
     'ue_lua',
-    'UnLua 的 Lua：action=exec（默认）在 UE 的 Lua 环境里执行代码（每次都会请用户确认）。code 是代码：单个表达式直接返回它的值（如 GameSystemManager:GetCount()），多条语句用 return 返回结果；print 的内容和执行期间的日志在 output 里。path 给了对象时代码里的 self 是它的 Lua 实例表。timeoutMs 超时中止（默认 5000，最多 60000）。只读字段优先用 ue_get，改简单字段用 ue_set（能撤回）。\n' +
-      'action=exec 带 snippet（片段名，不带 code）时执行用户在 Lua 页批准过的片段，不再请用户确认；名字不对时返回现有片段列表。\n' +
-      'action=snap 快照点（不暂停游戏）：给 file（文件或模块名）+ line 加一个，执行到那行时记下局部变量和调用栈，hits 次后自动撤；只给 id 看它的记录；remove=true 撤掉（不给 id 全撤）；都不给列出全部。action=profile 采 seconds 秒（默认 5）Lua 性能，按函数回自身 / 总用时和文件行号。action=leaks 列出 Lua 还拿着、UObject 已销毁或世界已关的对象和引用路径（查界面关了释放不掉）。这三个要 UELink 2.4。\n' +
-      'action=compile 在本机跑项目设置里配好的 Lua 编译（不经过 UE，不能自己传命令）：mode=incremental 只编上次编译成功以来改过的文件（默认），full 全编译。最多等 20 秒，没编完返回 job，之后带 job 再调一次接着等。结果是错误条数和前几条（文件:行），完整输出在 logFile。',
+    'UnLua 项目的 Lua：action=exec（默认）执行 code（每次都会请用户确认）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
+      '改完 .lua 的验证：check 只编译不执行（files 是 .lua 路径，相对项目目录；不开游戏也能查）→ reload 重载 modules（模块名）或 changed=true 重载改过还没重载的 → 触发后 errors 看有没有新报错（按消息和位置归并，带次数、调用栈；since 写上次结果的 seq 只看新的，clear=true 清空）。modules 列改过还没重载的模块（all=true 或 filter 列全部）。' +
+      'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。\n' +
+      'snippet（不带 code）执行用户在 Lua 页批准过的片段，不用确认；名字不对时回现有片段。snap 快照点（不暂停游戏）：file（文件或模块名）+ line 加，执行到时记局部变量和调用栈，hits 次后自动撤；id 看记录；remove=true 撤（不给 id 全撤）；都不给列全部。profile 采 seconds 秒（默认 5）按函数回用时和文件行。leaks 列 Lua 还拿着、UObject 已销毁或世界已关的对象和引用路径。\n' +
+      'compile 在本机跑项目设置里配好的 Lua 编译（不经过 UE）：mode=incremental（默认）只编上次成功以来改过的，full 全编译；最多等 20 秒，没编完返回 job，再带 job 调一次接着等；完整输出在 logFile。',
     {
-      action: { type: 'string', enum: ['exec', 'compile', ...DEBUG_ACTIONS] },
+      action: { type: 'string', enum: ['exec', 'compile', ...LUA_DEV_ACTIONS, ...DEBUG_ACTIONS] },
       code: { type: 'string' },
       path: { type: 'string' },
+      lua: { type: 'string' },
+      self: { type: 'boolean' },
+      args: { type: 'array' },
+      files: { type: 'array', items: { type: 'string' } },
+      modules: { type: 'array', items: { type: 'string' } },
+      changed: { type: 'boolean' },
+      all: { type: 'boolean' },
+      filter: { type: 'string' },
+      since: { type: 'number' },
+      clear: { type: 'boolean' },
       timeoutMs: { type: 'number' },
       mode: { type: 'string', enum: ['incremental', 'full'] },
       job: { type: 'string' },
@@ -230,10 +255,12 @@ const DEFS = [
     [],
     async (a, ctx) => {
       if (a.action === 'compile') return luaCompileTool(a, ctx)
+      const dev = await luaDevAction(a, ctx)
+      if (dev) return dev
       // 快照点、采样、持有的已销毁对象、按名字执行片段（lua-debug/tool-actions.ts）
       const dbg = await debugAction(str(a.action) || 'exec', a, ctx)
       if (dbg) return dbg
-      if (!str(a.code).trim()) return mcpText('action=exec 要给 code（或 snippet 片段名）', true)
+      if (!str(a.code).trim()) return mcpText('要给 code（执行 Lua）或 snippet（片段名），或写 action', true)
       const timeoutMs = Math.min(Math.max(Number(a.timeoutMs) || 5000, 100), 60000)
       return out(await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs }, timeoutMs + 10000))
     },
@@ -257,7 +284,7 @@ const DEFS = [
   tool(
     'ue_asset',
     '资源：通用读写和 DataTable。' +
-      '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验）。' +
+      '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验，paths 一次查多个）。' +
       '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
@@ -282,6 +309,7 @@ const DEFS = [
       offset: { type: 'number' },
       limit: { type: 'number' },
       packages: { type: 'array', items: { type: 'string' } },
+      paths: { type: 'array', items: { type: 'string' } },
       target: TARGET,
     },
     ['action'],

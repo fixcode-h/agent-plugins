@@ -92,6 +92,9 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'livecoding':
     case 'lua.set':
     case 'lua.exec':
+    // 2.4：调 Lua 函数、重载模块都在改正在运行的游戏，按运行时权限走（不像 lua.exec 每次确认，设计稿四.1）
+    case 'lua.call':
+    case 'lua.reload':
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
@@ -209,6 +212,10 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
     case 'lua.exec':
       return `${args.snippet ? `-- ${t('片段')} ${args.snippet}\n` : ''}${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+    case 'lua.call':
+      return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])}${args.self ? ' (self)' : ''}(${((args.args as unknown[]) ?? []).map(v).join(', ')})`
+    case 'lua.reload':
+      return `${t('重载 Lua 模块')} ${args.changed ? t('改过的') : ((args.modules as string[]) ?? []).join(', ')}`
     case 'forge.import':
       return `AssetForge ${t('导入')}${args.dryRun ? ` · ${t('演练')}` : ''}\n${args.pending ? t('全部待导入') : ((args.configs as string[]) ?? []).join('\n')}`
     case 'forge.export':
@@ -364,8 +371,12 @@ async function p4After(p: UeProject, verb: 'add' | 'delete', files: string[], ke
 function undoOf(op: string, args: Record<string, unknown>, res: Record<string, unknown>, world: string) {
   if (op === 'set' && isRuntimePath(String(args.path)))
     return { undo: { op: 'set', args: { path: args.path, prop: args.prop, value: res.prev, world } } }
+  // 2.4：原值是表、整个换掉的没有 prev，撤不回
+  if (op === 'lua.set' && res.undoable === false) return { noUndo: t('原值是表，整个换掉后不能自动撤回') }
   if (op === 'lua.set')
     return { undo: { op: 'lua.set', args: { path: args.path, keys: args.keys, value: res.prev ?? null, world } } }
+  if (op === 'lua.call') return { noUndo: t('调用 Lua 函数不能自动撤回') }
+  if (op === 'lua.reload') return { noUndo: t('重载的模块不能自动撤回：改回文件再重载一次') }
   if (op === 'lua.exec') return { noUndo: t('执行的 Lua 代码不能自动撤回') }
   if (op === 'cvar.set') return { undo: { op: 'cvar.set', args: { name: args.name, value: res.prev } } }
   if (op === 'log.clear') return { noUndo: t('清空日志不能撤回') }

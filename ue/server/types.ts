@@ -149,6 +149,8 @@ export interface Instance {
   lua?: { available: boolean; error?: string; version?: string }
   /** 进程里加载了的 UELink 扩展（UEKit 的 AssetForge、GameTest），旧 UELink 没有这个字段 */
   extensions?: { name: string; version: string }[]
+  /** 这个进程的桥接认得的操作（/info 的 ops）：网页按它决定显示不显示新功能（选中跟随、Lua 检视……），旧 UELink 没有 */
+  ops?: string[]
 }
 
 export interface Target {

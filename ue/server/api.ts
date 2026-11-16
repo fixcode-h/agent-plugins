@@ -12,6 +12,8 @@ import { perfRoute } from './perf-api.ts'
 import { luaBuildRoute } from './lua-build/api.ts'
 import { toolsRoute } from './editor-tools/api-tools.ts'
 import { extRoute } from './uekit/api-ext.ts'
+import { luaRoute } from './lua/api.ts'
+import { precheck } from './precheck.ts'
 import { luaDebugRoute } from './lua-debug/api.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
@@ -186,6 +188,9 @@ export async function handle(req: Request): Promise<Response> {
           return json({ ok: true })
         }
         return json(await ensureBackground(project).then((c) => ({ pid: c.pid })))
+      // 资源页「提交前检查」（precheck.ts）
+      case 'POST precheck':
+        return json(await precheck(ctx))
       case 'POST editor':
         return json(await launchEditor(project))
       default: {
@@ -199,9 +204,12 @@ export async function handle(req: Request): Promise<Response> {
         // 编辑器小工具（连接诊断、配置和 GameplayTag、修复重定向器）的接口在 editor-tools/api-tools.ts
         const tools = await toolsRoute(ctx, `${req.method} ${route}`, b)
         if (tools !== undefined) return json(tools)
-        // Lua 片段（已批准的片段）在 lua-debug/api.ts
-        const lua = await luaDebugRoute(ctx, `${req.method} ${route}`, b)
+        // Lua 页的本机动作（打开 .lua）在 lua/api.ts
+        const lua = await luaRoute(ctx, `${req.method} ${route}`, b)
         if (lua !== undefined) return json(lua)
+        // Lua 片段（已批准的片段）在 lua-debug/api.ts
+        const snippets = await luaDebugRoute(ctx, `${req.method} ${route}`, b)
+        if (snippets !== undefined) return json(snippets)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)
