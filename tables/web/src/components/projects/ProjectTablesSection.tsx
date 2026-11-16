@@ -17,6 +17,7 @@ import { ProjectTablesEnums, ProjectTablesHeader } from './ProjectTablesHeader'
 import { ProjectTablesExports } from './ProjectTablesExports'
 import { ProjectTablesRules } from './ProjectTablesRules'
 import { ProjectTablesTypes } from './ProjectTablesTypes'
+import { useSchemaTransfer } from './TablesSchemaTransfer'
 
 /** 「表格」设置的子页：一页太长，按要做的事分开 */
 type Sub = 'dirs' | 'header' | 'types' | 'enums' | 'rules' | 'exports' | 'ai'
@@ -89,9 +90,15 @@ export function ProjectTablesSection({
   ]
   /** 目录、导表在项目设置里，跟着「确认」；表头、类型、枚举、校验、AI 分析写结构文件，改了就存 */
   const viaConfirm = sub === 'dirs' || sub === 'exports'
+  const transfer = useSchemaTransfer(project?.id ?? '', project?.name ?? '')
   return (
     <>
-      <TabBar label={t('表格设置')} variant="underline" className="tb:-mt-1">
+      <TabBar
+        label={t('表格设置')}
+        variant="underline"
+        className="tb:-mt-1"
+        trailing={saved && project ? transfer.buttons : undefined}
+      >
         {subs.map((s) => (
           <TabItem
             key={s.id}
@@ -107,6 +114,7 @@ export function ProjectTablesSection({
           </TabItem>
         ))}
       </TabBar>
+      {saved && project && transfer.bar}
       {sub === 'dirs' && (
         <FormSection title={t('表格目录')}>
           <Field
