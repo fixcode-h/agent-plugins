@@ -32,12 +32,14 @@ export function Overview() {
   const ext = useExtStatus(project.id)
   const live = (state?.instances ?? []).filter((i) => i.kind !== 'background')
   const gtLoaded = live.some((i) => i.online && i.extensions?.some((x) => x.name === 'GameTest'))
+  const gtInstalled = !!state?.extensions?.some((x) => x.name === 'GameTest')
+  // 最近一次测试：编辑器没加载 GameTest（没开、正忙）时由面板读产物目录里的报告，UE 没运行也看得到
   const runs = useLoad(
     () =>
-      gtLoaded
-        ? op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs').then((r) => r.runs ?? [])
+      gtInstalled || gtLoaded
+        ? op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs', gtLoaded ? {} : { disk: true }).then((r) => r.runs ?? [])
         : Promise.resolve([] as GtRunSummary[]),
-    [project.id, gtLoaded],
+    [project.id, gtLoaded, gtInstalled],
   )
   const [confirmAll, setConfirmAll] = useState(false)
   const reloadAll = () => {
@@ -59,8 +61,7 @@ export function Overview() {
       else toast.success(t('撤回了 {n} 处修改', { n: r.done }))
       reloadAll()
     })
-  const undoOne = (it: HistoryItem) =>
-    void run(it.id, () => ppost(project.id, 'undo', { id: it.id }).then(reloadAll))
+  const undoOne = (it: HistoryItem) => void run(it.id, () => ppost(project.id, 'undo', { id: it.id }).then(reloadAll))
 
   const upgrades = upgradesOf(state, ext.data?.items)
   // 最近一次测试：gt.runs 新的在前还是在后不确定，按开始时间挑

@@ -6,7 +6,7 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Badge, Card, Confirm, PageHead, SearchBox, Term } from '../ui.tsx'
+import { Badge, Card, Confirm, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
 
 interface CVar {
   name: string
@@ -33,6 +33,8 @@ export function Console() {
   const { project, target } = useUe()
   const { cn, toast } = h()
   const { busy, run } = useAction()
+  // UE 没运行时页面照常显示（历史、收藏），控制台变量不去要（要了只会报错）
+  const { inst } = useTargetInfo()
   const [entries, setEntries] = useState<Entry[]>([])
   // 右边控制台变量栏的宽度可拖；左边终端至少留 360px
   const pane = usePane('console', '384px', 260)
@@ -47,13 +49,15 @@ export function Console() {
   const gm = useLoad(() => pget<GmStore>(project.id, 'gm'), [project.id])
   const cvars = useLoad(
     () =>
-      op<{ items: CVar[]; total: number }>(
-        project.id,
-        'cvars',
-        query ? { query, prefix: false, limit: 100 } : { changed: true, limit: 200 },
-        target,
-      ),
-    [project.id, query, target.instance],
+      inst
+        ? op<{ items: CVar[]; total: number }>(
+            project.id,
+            'cvars',
+            query ? { query, prefix: false, limit: 100 } : { changed: true, limit: 200 },
+            target,
+          )
+        : Promise.resolve({ items: [] as CVar[], total: 0 }),
+    [project.id, query, target.instance, inst?.pid],
   )
   const hist = useLoad(() => pget<{ items: HistoryItem[] }>(project.id, 'history'), [project.id])
   const end = useRef<HTMLDivElement>(null)
@@ -118,7 +122,13 @@ export function Console() {
       <div className={SPLIT_ROW}>
         <div className="ue:flex ue:min-h-80 ue:min-w-0 ue:flex-1 ue:flex-col">
           <Term className="ue:min-h-0 ue:flex-1">
-            {!entries.length && <div className="ue:text-term-subtle">{t('输入命令回车执行；↑↓ 翻历史，Tab 补全')}</div>}
+            {!entries.length && (
+              <div className="ue:text-term-subtle">
+                {inst
+                  ? t('输入命令回车执行；↑↓ 翻历史，Tab 补全')
+                  : t('UE 没在运行：命令要在运行中的编辑器或游戏里执行，↑↓ 照样能翻以前的命令')}
+              </div>
+            )}
             {entries.map((e, i) => (
               <div key={i} className="ue:group ue:mb-2">
                 <div className="ue:flex ue:items-center ue:gap-2">
@@ -216,7 +226,13 @@ export function Console() {
           <div className="ue:border-b ue:border-line ue:p-3">
             <SearchBox placeholder={t('变量名包含…')} onSearch={setQuery} allowEmpty busy={cvars.loading} />
           </div>
-          {cvars.error && <p className="ue:p-3 ue:text-footnote ue:text-danger">{cvars.error}</p>}
+          {!inst ? (
+            <p className="ue:p-3 ue:text-footnote ue:text-subtle">
+              {t('UE 没在运行：控制台变量要连着运行中的编辑器或游戏才读得到')}
+            </p>
+          ) : (
+            cvars.error && <p className="ue:p-3 ue:text-footnote ue:text-danger">{cvars.error}</p>
+          )}
           <ul className="ue:min-h-0 ue:flex-1 ue:divide-y ue:divide-line ue:overflow-auto">
             {(cvars.data?.items ?? [])
               .filter((c) => c.kind === 'var')

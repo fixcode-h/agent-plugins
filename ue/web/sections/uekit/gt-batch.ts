@@ -28,11 +28,16 @@ export function batchTags(scenarios: Scenario[]): [string, number][] {
 
 /**
  * 每个场景最近 10 次的通过 / 失败串（gt.history 不带 scenario）。几百个场景超过返回上限时 UE 写成文件只回 file，
- * 这时由面板读文件；旧 GameTest 没有这个操作，返回空的，列表退回只看最近一次
+ * 这时由面板读文件；旧 GameTest 没有这个操作，返回空的，列表退回只看最近一次。
+ * disk：编辑器没连上（没开或正忙），由面板直接读 history.json
  */
-export async function loadHistory(project: string): Promise<Record<string, string>> {
+export async function loadHistory(project: string, disk = false): Promise<Record<string, string>> {
   try {
-    const r = await op<{ scenarios?: Record<string, string>; file?: string }>(project, 'gt.history')
+    const r = await op<{ scenarios?: Record<string, string>; file?: string }>(
+      project,
+      'gt.history',
+      disk ? { disk: true } : {},
+    )
     if (r.scenarios) return r.scenarios
     if (r.file) {
       const full =

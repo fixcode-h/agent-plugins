@@ -22,7 +22,7 @@ export interface LuaTab {
   View: ComponentType
   /** 页签上的数字（报错数、GM 条数），没有返回 undefined；tone=danger 时页签上加提示点，hint 是悬停文字 */
   useBadge?: () => { text: string; tone?: 'danger'; hint?: string } | undefined
-  /** 不需要 UE 在运行（GM 扫描、编译只读本机文件） */
+  /** 不需要 UE 在运行（GM 扫描、编译只读本机文件；执行页的片段存在本机，执行按钮自己判断） */
   offline?: boolean
 }
 
@@ -34,7 +34,8 @@ export const LUA_TABS: LuaTab[] = [
   { id: 'build', order: 50, label: () => t('编译'), View: LuaBuild, useBadge: useBuildBadge, offline: true },
   // 快照点、性能采样、持有的已销毁对象（设计稿四.4，要 UELink 2.4）
   { id: 'debug', order: 55, label: () => t('调试'), View: LuaDebug },
-  { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec },
+  // 片段存在本机：UE 没运行时也能看、能改，只是不能执行
+  { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec, offline: true },
 ].sort((a, b) => a.order - b.order)
 
 /**
