@@ -21,6 +21,8 @@ export interface GtBlockerRule {
 
 interface GtRunConfig {
   uiWaitTimeoutMs?: number
+  /** click 没写 via 时的点击方式（GameTest 1.2.0-beta.7）：code 不动鼠标（默认），pointer 真实鼠标 */
+  clickVia?: 'code' | 'pointer'
   blockers: GtBlockerRule[]
 }
 
@@ -43,6 +45,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
   const { ui, cn } = h()
   const [reply, setReply] = useState<ConfigReply>()
   const [wait, setWait] = useState('')
+  const [clickVia, setClickVia] = useState<'code' | 'pointer'>('code')
   const [rules, setRules] = useState<GtBlockerRule[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,6 +56,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
         setReply(r)
         setWait(r.config.uiWaitTimeoutMs === undefined ? '' : String(r.config.uiWaitTimeoutMs / 1000))
         setRules(r.config.blockers ?? [])
+        setClickVia(r.config.clickVia ?? 'code')
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -70,6 +74,8 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
     try {
       const config: GtRunConfig = {
         ...(seconds === undefined ? {} : { uiWaitTimeoutMs: Math.round(seconds * 1000) }),
+        // 默认就是 code：只在改成真实鼠标时写进文件，文件里不留没意义的默认值
+        ...(clickVia === 'pointer' ? { clickVia } : {}),
         // 空行不存：点了「添加」没填的不该让整份配置保存失败
         blockers: rules.filter((r) => r.widget.trim()).map((r) => ({ ...r, widget: r.widget.trim() })),
       }
@@ -114,6 +120,24 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
             placeholder={t('默认')}
             value={wait}
             onChange={(e: { target: { value: string } }) => setWait(e.target.value)}
+          />
+        </ui.Field>
+
+        <ui.Field
+          label={t('点击方式')}
+          hint={t(
+            '不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。',
+          )}
+        >
+          <ui.Select
+            size="sm"
+            className="ue:w-48"
+            value={clickVia}
+            onChange={(e: { target: { value: string } }) => setClickVia(e.target.value as 'code' | 'pointer')}
+            options={[
+              { value: 'code', label: t('不动鼠标（默认）') },
+              { value: 'pointer', label: t('真实鼠标') },
+            ]}
           />
         </ui.Field>
 
