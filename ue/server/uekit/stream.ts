@@ -8,8 +8,18 @@ import { c } from '../util.ts'
  * forge.* / gt.* 主题，收到就用面板的推送（ctx.pages.push）转给打开着 AssetForge / GameTest 页的网页，网页不轮询。
  * 一个项目一条连接，有页面在看才连；页面都关了就断开。编辑器重启了（名片换了）页面再登记一次时重连。
  */
-// uelink.outliner：UELink 自己的大纲变化事件（Actor 页的世界大纲据此重读）
-export const EXT_TOPICS = ['forge.job', 'forge.changed', 'forge.reveal', 'gt.job', 'gt.record', 'uelink.outliner']
+// uelink.outliner：UELink 自己的大纲变化事件（Actor 页的世界大纲据此重读）；
+// uelink.selection：编辑器选中变了（2.4，概览和对象 / 资源页的「跟随」）；uelink.luaErrors：有新 Lua 报错（2.4，报错页签重读）
+export const EXT_TOPICS = [
+  'forge.job',
+  'forge.changed',
+  'forge.reveal',
+  'gt.job',
+  'gt.record',
+  'uelink.outliner',
+  'uelink.selection',
+  'uelink.luaErrors',
+]
 
 /** 推给网页的事件名：网页按 project 字段分项目 */
 export const EXT_EVENT = 'uekit'

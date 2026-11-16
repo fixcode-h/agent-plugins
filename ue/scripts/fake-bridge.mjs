@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
 import { makeDetails } from './fake-details.mjs'
+import { luaDevOps } from './fake-lua-dev.mjs'
 
 export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const token = 'fake-token'
@@ -665,6 +666,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
     }),
   }
+  Object.assign(ops, luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }))
   const server = createServer((req, res) => {
     const send = (code, body) => {
       res.writeHead(code, { 'Content-Type': 'application/json' })
@@ -678,6 +680,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         pid: process.pid,
         log: path.join(root, 'Saved', 'Logs', 'Fake.log'),
         lua: { available: true, version: 'Lua 5.4.6' },
+        ops: Object.keys(ops),
         worlds: [
           { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
           { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },

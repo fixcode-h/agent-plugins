@@ -15,6 +15,7 @@ const hasEntries = (d) => readdirSync(d).length > 0
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fakeLuaError } from './fake-lua-dev.mjs'
 import { startFakeBridge } from './fake-bridge.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -335,6 +336,33 @@ try {
   assert.match(text(ran), /hello/)
   const bad = await call('ue_lua', { code: 'error("x")' }, { confirm: async () => ({ allow: true, message: '' }) })
   assert.ok(bad.isError && /boom/.test(text(bad)), text(bad))
+
+  // UELink 2.4：Lua 改完能验（check → reload → errors）、调 Lua 函数、函数签名，ue_status 带编辑器选中
+  const chk = await call('ue_lua', { action: 'check', files: ['Content/Script/UI/BadPanel.lua'] })
+  assert.match(text(chk), /'end' expected/)
+  const mods = await call('ue_lua', { action: 'modules' })
+  assert.match(text(mods), /UI\.BagPanel/)
+  assert.doesNotMatch(text(mods), /GameInstance/, '默认只列改过还没重载的')
+  const rl = await call('ue_lua', { action: 'reload', changed: true })
+  assert.ok(!rl.isError, text(rl))
+  assert.equal(bridge.state.lua.modules[1].stale, false)
+  fakeLuaError(bridge.state, 'UI/BagPanel.lua:42: attempt to index a nil value', 'UI/BagPanel.lua:42')
+  fakeLuaError(bridge.state, 'UI/BagPanel.lua:42: attempt to index a nil value', 'UI/BagPanel.lua:42')
+  const errs = JSON.parse(text(await call('ue_lua', { action: 'errors' })))
+  assert.equal(errs.items[0].count, 2)
+  const gold = bridge.state.lua.inst.Gold
+  const called = await call('ue_lua', { action: 'call', path: bridge.gi, lua: 'AddGold', self: true, args: [5] })
+  assert.ok(!called.isError, text(called))
+  assert.equal(bridge.state.lua.inst.Gold, gold + 5)
+  assert.match(text(called), /"after": 105/)
+  const sig = await call('ue_get', { path: bridge.gi, lua: '', functions: true })
+  assert.match(text(sig), /MAX_GOLD/)
+  const callHist = JSON.parse(text(await call('ue_undo', {}))).find((i) => i.op === 'lua.call')
+  assert.ok(callHist && !callHist.undo, JSON.stringify(callHist))
+  const stSel = JSON.parse(text(await call('ue_status', {})))
+  assert.match(JSON.stringify(stSel.selection), /Hero/)
+  assert.match(JSON.stringify(stSel.selection), /Event BeginPlay/)
+  bridge.state.lua.inst.Gold = gold
 
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })

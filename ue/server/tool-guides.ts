@@ -55,10 +55,11 @@ export const UE_GUIDES: Record<string, Guide> = {
     group: RUN,
   },
   ue_lua: {
-    title: '执行 Lua',
-    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出',
-    useWhen: 'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时',
-    avoidWhen: '只读字段用 ue_get、改简单字段用 ue_set（能撤回），不用每次请用户确认',
+    title: 'Lua',
+    summary: '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数',
+    useWhen:
+      'UnLua 项目里改完 .lua 要验证时按 check → reload → 触发 → errors 走一遍；要调一个 Lua 函数用 action=call；ue_get / ue_set 做不到的复杂读写才用 exec',
+    avoidWhen: '只读字段用 ue_get（functions=true 看函数），改简单字段用 ue_set（能撤回）；exec 每次都要用户确认，能用 call 就别用 exec',
     confirms: true,
     group: RUN,
   },

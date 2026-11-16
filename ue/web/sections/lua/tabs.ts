@@ -1,6 +1,9 @@
 import type { ComponentType } from 'react'
 import { t } from '../../host.ts'
+import { LuaErrors, useErrorsBadge } from './Errors.tsx'
 import { LuaExec } from './Exec.tsx'
+import { CheckSyntax, ReloadChanged } from './HeadActions.tsx'
+import { LuaModules } from './Modules.tsx'
 import { LuaObjects } from './Objects.tsx'
 
 /**
@@ -21,7 +24,9 @@ export interface LuaTab {
 
 export const LUA_TABS: LuaTab[] = [
   { id: 'objects', order: 10, label: () => t('对象'), View: LuaObjects },
-  // order 20 GM、30 模块、40 报错、50 编译
+  // order 20 GM、50 编译
+  { id: 'modules', order: 30, label: () => t('模块'), View: LuaModules },
+  { id: 'errors', order: 40, label: () => t('报错'), View: LuaErrors, useBadge: useErrorsBadge },
   { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec },
 ].sort((a, b) => a.order - b.order)
 
@@ -29,4 +34,7 @@ export const LUA_TABS: LuaTab[] = [
  * 页头右边的按钮（检查语法、增量编译、全编译、重载改过的模块）：各工作包做好了在这里加一个组件。
  * 组件自己判断能不能用（例如桥接没有 lua.reload 时不显示），不能用时返回 null
  */
-export const LUA_HEAD_ACTIONS: { id: string; order: number; View: ComponentType }[] = []
+export const LUA_HEAD_ACTIONS: { id: string; order: number; View: ComponentType }[] = [
+  { id: 'check', order: 10, View: CheckSyntax },
+  { id: 'reload', order: 40, View: ReloadChanged },
+].sort((a, b) => a.order - b.order)
