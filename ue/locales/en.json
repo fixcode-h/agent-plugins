@@ -1383,7 +1383,6 @@
   "这里改的是资源本身：配置是真源，改完记得「导出到配置」，否则下次导入会被配置盖回去": "Edits here change the asset itself. The config is the source of truth: export to config afterwards, or the next import will overwrite your changes",
   "配置太长，只拿到了前一部分，画不出结构：看「配置原文」或用编辑器打开": "The config is too long and was cut off, so the structure can't be drawn: see Config source or open it in an editor",
   "配置里没有 root 节点，画不出结构：看「配置原文」": "The config has no root node, so the structure can't be drawn: see Config source",
-  "插槽": "Slot",
   "结构": "Structure",
   "来自配置": "From config",
   "（没有名字）": "(unnamed)",
@@ -2457,5 +2456,7 @@
   "点击方式": "Click method",
   "不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。": "Without the mouse: call the button's click directly (press, click, release); if there's no button, send virtual mouse events, so you can keep using your mouse during playback. Real mouse: move the cursor and press/release, which catches occlusion and hover issues, but don't touch the mouse during playback. A step's own via takes precedence.",
   "不动鼠标（默认）": "Without the mouse (default)",
-  "真实鼠标": "Real mouse"
+  "真实鼠标": "Real mouse",
+  "AssetForge · 按配置预览": "AssetForge · Config preview",
+  "按配置预览，只读：要改就改配置，导入后在真实资源上改": "Preview from the config, read-only: edit the config, or edit the real asset after importing"
 }

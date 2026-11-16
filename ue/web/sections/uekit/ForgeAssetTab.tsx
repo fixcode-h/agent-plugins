@@ -55,6 +55,7 @@ export function ForgeAssetTab({
         truncated={configTruncated}
         loading={configLoading}
         error={configError}
+        onOpen={(p) => go('assets', p)}
         note={
           path
             ? t('资源还没生成，下面是按配置画出来的结构和属性（只读），导入后换成 UE 里的真实资源')
