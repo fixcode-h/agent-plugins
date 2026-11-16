@@ -13,6 +13,7 @@ import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
+import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
 import { UePage } from './UePage.tsx'
@@ -64,6 +65,13 @@ const activate: ActivateWeb = (host) => {
       { id: 'folder-table', label: t('资源 · 文件夹内容表'), tune: ['badge', 'row'], Specimen: FolderTableSpecimen },
       // 启动编辑器按钮上的启动进度：跟面板「按钮」「进度条」的调节项
       { id: 'launch-button', label: 'UE · LaunchButton', tune: ['button', 'progress'], Specimen: LaunchButtonSpecimen },
+      // 概览的读数、「需要你处理」、时间线，跳转弹窗的行和左栏入口：跟面板「行」「徽标」「按钮」的调节项
+      {
+        id: 'overview-parts',
+        label: t('概览 · 需要你处理 · 跳转'),
+        tune: ['row', 'badge', 'button'],
+        Specimen: OverviewSpecimen,
+      },
       // AssetForge 页的同步状态徽标、配置 → 资源关系条、作业报告：跟面板「徽标」「行」的调节项
       {
         id: 'forge-parts',

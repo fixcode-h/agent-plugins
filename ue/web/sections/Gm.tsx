@@ -6,16 +6,17 @@ import { useAsk } from '../ask.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
+import { gmCache } from '../jump/local.ts'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, ErrorText, NotRunning, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
 
-interface Param {
+export interface Param {
   name: string
   type: string
   out?: boolean
   enum?: string[]
 }
-interface GmItem {
+export interface GmItem {
   name: string
   owner: string
   category: string
@@ -25,8 +26,11 @@ interface GmItem {
   params: Param[]
 }
 
-/** gm.list 要遍历所有类，按进程缓存（同一个进程的 GM 不会变；Live Coding 后点「刷新」重取） */
-const cache = new Map<number, GmItem[]>()
+/**
+ * gm.list 要遍历所有类，按进程缓存（同一个进程的 GM 不会变；Live Coding 后点「刷新」重取）。
+ * 缓存放在 jump/local.ts：双击 Shift 的跳转直接在这份列表里匹配，不为搜索再去 UE 取
+ */
+const cache = gmCache
 const EMPTY: GmStore = { presets: [], macros: [], favConsole: [], favGm: [] }
 
 /** GM（图 3）：左边分组，右边命令；选中的命令展开参数表单和输出；宏是多步 GM 顺序执行 */

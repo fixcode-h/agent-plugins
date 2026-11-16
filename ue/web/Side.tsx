@@ -1,15 +1,16 @@
 import { Camera, ChevronDown, Plus, Search, type LucideIcon } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
 import { ppost } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
+import { Kbd } from './jump/parts.tsx'
 import { Dot, kindLabel, useTargetInfo, WorldBadge, worldLabel } from './ui.tsx'
 
 /**
  * UE 页左栏的几块（设计稿「界面优化」图 1）：项目卡、全局目标（只放这一处，各页页头不再各放一个下拉）、
- * 分区导航（旁边带计数）、底部常驻的截视口和跳转。
+ * 跳转入口（双击 Shift）、分区导航（旁边带「数字 + 一个词」的徽标）、底部常驻的截视口。
  */
 
 const VCS_NAME: Record<string, string> = { git: 'Git', p4: 'Perforce', svn: 'SVN' }
@@ -282,9 +283,28 @@ export function NavItem({
   )
 }
 
-/** 左栏底部：截视口（随时能点，结果在浮层里看）、跳转（Ctrl+K）、添加项目 */
-export function SideFoot({ onShot, onJump, onAdd }: { onShot: () => void; onJump: () => void; onAdd: () => void }) {
-  const row = (icon: LucideIcon, label: string, onClick: () => void, aside?: ReactNode) => {
+/**
+ * 跳转入口（设计稿三.2）：放在目标卡下面，写明双击 Shift 也能打开；弹窗和 Ctrl+K 是同一个。
+ * 窄屏上左栏底部收起时也在，手机上同样能点开
+ */
+export function JumpEntry({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={t('跳转：双击 Shift 或 Ctrl+K')}
+      className="ue:flex ue:h-8 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-dashed ue:border-line-strong ue:px-2.5 ue:text-footnote ue:text-subtle ue:hover:bg-hover ue:hover:text-fg"
+    >
+      <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
+      <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-left">{t('搜对象、资源、GM…')}</span>
+      <Kbd>{t('双击 Shift')}</Kbd>
+    </button>
+  )
+}
+
+/** 左栏底部：截视口（随时能点，结果在浮层里看）、添加项目；跳转的入口在目标卡下面（JumpEntry） */
+export function SideFoot({ onShot, onAdd }: { onShot: () => void; onAdd: () => void }) {
+  const row = (icon: LucideIcon, label: string, onClick: () => void) => {
     const Icon = icon
     return (
       <button
@@ -293,21 +313,12 @@ export function SideFoot({ onShot, onJump, onAdd }: { onShot: () => void; onJump
         className="ue:flex ue:h-8 ue:cursor-pointer ue:items-center ue:gap-2.5 ue:rounded-lg ue:px-2.5 ue:text-body ue:text-muted ue:hover:bg-hover ue:hover:text-fg"
       >
         <Icon className="ue:h-4 ue:w-4" strokeWidth={1.75} /> {label}
-        {aside}
       </button>
     )
   }
   return (
     <div className="ue:mt-auto ue:hidden ue:flex-col ue:gap-0.5 ue:pt-2 ue:md:flex">
       {row(Camera, t('截视口'), onShot)}
-      {row(
-        Search,
-        t('跳转'),
-        onJump,
-        <kbd className="ue:ml-auto ue:rounded ue:border ue:border-line ue:px-1 ue:font-mono ue:text-caption ue:text-subtle">
-          Ctrl K
-        </kbd>,
-      )}
       {row(Plus, t('添加 UE 项目'), onAdd)}
     </div>
   )

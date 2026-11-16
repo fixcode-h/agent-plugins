@@ -150,7 +150,7 @@ export async function handle(req: Request): Promise<Response> {
       case 'POST undo/all':
         return json(await undoAll(ctx))
       case 'GET badges':
-        return json(await badges(ctx))
+        return json(await badges(ctx, url.searchParams.get('overview') === '1'))
       case 'POST history/clear':
         await clearHistory(project.id)
         return json({ ok: true })
