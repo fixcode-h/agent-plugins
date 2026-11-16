@@ -10,6 +10,7 @@ import { keep, useKept } from '../../keep.ts'
 import { setPending, takePending } from '../../pending.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, PageHead } from '../../ui.tsx'
+import { MenuHost } from '../../menu.tsx'
 import { AssetFolders } from './Folders.tsx'
 import { AssetSearch } from './Search.tsx'
 
@@ -90,7 +91,15 @@ export function Assets() {
               reveal={reveal}
             />
           ) : (
-            <AssetSearch key={tick} selected={path} onOpen={(p) => nav.open('assets', p, { from: 'assetSearch' })} />
+            <AssetSearch
+              key={tick}
+              selected={path}
+              onOpen={(p) => nav.open('assets', p, { from: 'assetSearch' })}
+              onReveal={(p) => {
+                setTab('folders')
+                setReveal(p)
+              }}
+            />
           )}
         </Card>
         <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
@@ -106,6 +115,7 @@ export function Assets() {
         />
       </div>
       {save.dialog}
+      <MenuHost />
     </div>
   )
 }

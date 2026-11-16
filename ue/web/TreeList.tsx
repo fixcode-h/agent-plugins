@@ -21,8 +21,11 @@ export interface TreeLine {
   aside?: ReactNode
   onToggle?: () => void
   onSelect?: () => void
-  /** 右键这一行（资源文件夹树的收藏） */
+  /** 右键这一行（资源文件夹树的收藏、资源的「在 UE 编辑器打开」） */
   onMenu?: (e: MouseEvent) => void
+  /** 行尾的小按钮（文件夹的收藏星标）：平时隐藏，悬停或键盘选中这一行才露出来；actionShown 时一直显示（已收藏） */
+  action?: ReactNode
+  actionShown?: boolean
 }
 
 const ROW = 28
@@ -90,7 +93,7 @@ export function TreeList({
               }}
               style={{ top: (start + i) * ROW, height: ROW, paddingLeft: 6 + l.depth * 16 }}
               className={cn(
-                'ue:absolute ue:inset-x-0 ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:outline-none ue:transition-colors ue:focus-visible:bg-hover',
+                'ue:group ue:absolute ue:inset-x-0 ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:outline-none ue:transition-colors ue:focus-visible:bg-hover',
                 l.selected ? 'ue:bg-sel ue:text-fg' : 'ue:text-fg ue:hover:bg-hover',
                 l.from && 'ue:bg-hover ue:shadow-[inset_2px_0_0_var(--accent)]',
               )}
@@ -114,6 +117,17 @@ export function TreeList({
               <span className="ue:min-w-0 ue:truncate">{l.label}</span>
               {l.aside && (
                 <span className="ue:ml-auto ue:shrink-0 ue:pl-2 ue:text-caption ue:text-subtle">{l.aside}</span>
+              )}
+              {l.action && (
+                <span
+                  className={cn(
+                    'ue:flex ue:shrink-0 ue:items-center',
+                    !l.aside && 'ue:ml-auto',
+                    !l.actionShown && 'ue:opacity-0 ue:group-hover:opacity-100 ue:group-focus-visible:opacity-100',
+                  )}
+                >
+                  {l.action}
+                </span>
               )}
             </div>
           )

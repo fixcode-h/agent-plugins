@@ -42,6 +42,8 @@ export interface UeProject {
   perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: boolean }
   /** GM 预设和宏存哪：项目里 .agent-panel/ue/gm.json（团队共用）/ 插件数据目录（只自己用） */
   gmStore: 'project' | 'local'
+  /** 资源页收藏的文件夹存哪：项目文档根 docs/AgentPanel/UE（默认）/ 项目里 .agent-panel/ue，都在项目里、团队共用 */
+  favStore: 'docs' | 'project'
   /** 手动指定的引擎目录（自动找不到时填） */
   engineDir: string
   /** 自定义编译命令（空用 Build.bat 默认的） */

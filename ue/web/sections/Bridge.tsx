@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { UeProject } from '../../server/types.ts'
-import { ppost, useAction } from '../api.ts'
+import { pget, ppost, useAction, useLoad } from '../api.ts'
 import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, Confirm, PageHead } from '../ui.tsx'
 
 /**
- * 权限与设置：Agent 权限；GM 预设存哪；引擎目录和编译命令；从 UE 页移除项目。
+ * 权限与设置：Agent 权限；GM 预设、资源页收藏存哪；引擎目录和编译命令；从 UE 页移除项目。
  * UELink 的安装、升级、编译挪到了「UE 插件」页（uekit/UELinkCard.tsx），和 UEKit 的扩展放在一起
  */
 export function Bridge() {
@@ -17,6 +17,8 @@ export function Bridge() {
   const { busy, run } = useAction()
   const [form, setForm] = useState(project)
   const [removing, setRemoving] = useState(false)
+  // 收藏文件的实际位置（文档根可能在项目外层的 ProjectDoc/docs），写在设置项下面
+  const favFile = useLoad(() => pget<{ file: string }>(project.id, 'favorites'), [project.id])
   useEffect(() => {
     setForm(project)
   }, [project])
@@ -115,8 +117,24 @@ export function Bridge() {
               />
             </ui.Field>
             <ui.Field
+              label={t('资源页收藏的文件夹存在')}
+              hint={favFile.data?.file || t('都在项目里，可以提交给团队共用；换位置时现有的收藏会一起带过去')}
+            >
+              <ui.Select
+                value={form.favStore}
+                onChange={(e: { target: { value: string } }) =>
+                  void saveSettings({ favStore: e.target.value as UeProject['favStore'] }).then(() => favFile.reload())
+                }
+                options={[
+                  { value: 'docs', label: t('项目文档目录 docs/AgentPanel/UE') },
+                  { value: 'project', label: t('项目里 .agent-panel/ue') },
+                ]}
+              />
+            </ui.Field>
+            <ui.Field
               label={t('引擎目录')}
               hint={`UE ${project.engine.version} · ${project.engine.dir || t('没找到')}`}
+              className="ue:sm:col-span-2"
             >
               <ui.Input
                 value={form.engineDir}
