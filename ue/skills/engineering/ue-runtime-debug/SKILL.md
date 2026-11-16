@@ -66,8 +66,34 @@ user-invocable: true
 - `ue_screenshot` 截视口，确认 UI、角色位置、特效对不对。
 - 用户要你清空日志时用 `ue_log action=clear`（不能撤回）。
 
+## 用 VS 断点调试（C++）
+
+属性值、日志看不出 C++ 在哪一步走错、某个函数有没有被调到、当时的参数和成员是什么时，用 `ue_vs_*` 让 VS 自带的调试器停下来看。要求：Windows、VS 里装了 UEToVS 0.8.0 以上，UEToVS 设置「MCP > 允许 Agent 通过 VS 调试 UE」开着（默认开）。VS 没开时 `ue_vs_debug` 的 start / attach / build 会自己打开 VS 和解决方案（最多等 3 分钟）。断点、单步、求值只对 C++ 有效，蓝图和 Lua 不行（Lua 用 `ue_lua action=snap`）。
+
+1. **挂上调试器**：`ue_vs_debug action=status` 看 `mode`。没在调试时：
+   - 编辑器已经开着 → `action=attach`（默认附加 UnrealEditor，多个时按返回的 PID 再给 `pid`）。
+   - 编辑器没开 → `action=start`（等于 F5，VS 先编译再启动）；要直接进某张图用 `map=/Game/Maps/Test`，独立游戏进程加 `game=true`，额外参数 `args="-log"`，只对这一次生效。
+2. **下断点**：`ue_vs_breakpoints action=add file=Source/Game/Hero.cpp line=120` 或 `function=AHero::Jump`；只在某种情况停用 `condition="Health < 0"`，第 N 次才停用 `hitCount`；只想知道走没走到、值是多少又不想停下，用 `message="Health={Health}"`（日志断点，结果在 `ue_vs_inspect action=output`）。结果带 `hint` 说明没绑定（符号没加载、这行没代码）时，换一行或等模块加载后再看 `list`。
+3. **触发**：`ue_gametest run` 跑测试场景、`ue_console` / `ue_gm` / `ue_call` 触发逻辑，或 `ue_editor action=pie_start` 开 PIE。
+4. **等停下**：`ue_vs_debug action=wait timeoutMs=60000`，`event=break` 时结果里有 `location`（文件:行、函数）和前 8 帧栈；`timeout` 说明没走到，回去检查断点和触发步骤。
+5. **看现场**：`ue_vs_inspect action=stack` → `action=locals`（`frame` 换帧，`depth` 展开成员）→ 需要时 `action=eval expr="this->Inventory.Num()"`（`exprs` 一次几个）。`eval` 能调用函数、有副作用：只读成员和无副作用的 getter，别调 `Destroy()`、`SetXxx()` 这类会改状态的。
+6. **往下走**：`ue_vs_debug action=step kind=over`（`into` 进函数、`out` 跳出、`toLine` 跑到 `file`+`line`），默认等到停下返回新位置；`action=continue` 继续，`waitMs` 大于 0 时等下一次停下。
+7. **结束**：`ue_vs_breakpoints action=clear` 清掉自己下的断点（默认只删 Agent 下的，用户的不动），再 `continue`；不再需要调试器时 `ue_vs_debug action=stop detach=true` 只断开、UE 继续跑。
+
+**UE 停在断点时整个进程冻住**：所有走 UELink 的 `ue_*` 工具（ue_get、ue_log、ue_gametest…）都调不通，报错会说「UE 停在 VS 断点 …，先 ue_vs_debug continue 继续」。要用它们先 `continue`，别以为 UE 卡死了去重启编辑器。
+
+**崩溃、check、ensure**：挂着调试器时这些会停在 VS 里，`wait` 返回 `break`，`lastReason` 是 `exception` / `unhandledException` / `breakpoint`（`__debugbreak`，ensure 和 check 走这里）。先 `stack` 看调用栈、`locals` 看出错那帧的变量，再 `ue_vs_inspect action=dump` 存小转储留证据（`full=true` 带堆，编辑器会有几 GB，用户要时才存）。ensure 停下后可以 `continue` 接着跑。
+
+**谁改了这个值**：先停在能访问它的地方（比如它所在类的某个函数断点），`ue_vs_breakpoints action=add data=this->Health size=4`，然后 `continue` → `wait`，停下时就在改它的代码后面，`stack` 看是谁。数据断点只能在停下时设，x64 一次最多 4 个，调试结束就失效。
+
+**改代码到复测**：
+- 改了函数体、模块已经加载：不用停调试器，`ue_editor action=livecoding` 热重载，再触发复测。
+- 改了头文件、加了 UPROPERTY / UFUNCTION、Live Coding 不行时：`ue_vs_debug action=stop`（会结束 UE，请用户确认，编辑器里没保存的先 ue_save）→ `action=build` → `action=wait` 看 `buildDone` / `buildFailed`，失败时按 `buildErrors` 的 文件:行 修了再 build → `action=start` → `ue_gametest run` 或原来的触发步骤复测。
+- Development 构建里很多局部变量被优化掉（显示「已优化」）：`ue_vs_debug action=start configuration="DebugGame Editor"` 换成 DebugGame 再看（要先 stop，会重新编译）。
+
 ## 收尾
 
 - `ue_undo` 不带 id 列出本对话做过的修改；运行时改过、用户没要求保留的，问用户要不要撤回。
+- 用过 VS 断点的，结束前 `ue_vs_breakpoints action=clear` 清掉自己下的，别让用户的 UE 下次莫名其妙停住。
 - 工具报错原样告诉用户，说明卡在哪；不要绕过权限、不要换别的办法偷偷重试。
 - 结论要有证据：属性值、日志行、截图，而不是只凭代码推断。

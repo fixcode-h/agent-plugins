@@ -267,6 +267,64 @@ export interface ProjectState {
   extensions?: { name: string; version: string }[]
   /** 面板刚启动的编辑器的启动进度（server/launch/），没在启动时为空 */
   launch?: LaunchProgress
+  /** VS 调试（UEToVS 0.8.0 的调试控制管道，server/vs-debug/）：UE 页「VS 调试」卡片和 Agent 的 ue_vs_* 工具用同一份 */
+  vsDebug?: VsDebugState
+}
+
+/**
+ * VS 调试状态。协议见 UEToVS 仓库 docs/design/VS-调试控制.md；status 是管道 status 操作的原样结果。
+ * available=false 时 reason 说明为什么（没开 VS / UEToVS 太旧 / 设置里关了调试控制…），message 是给人看的一句话
+ */
+export interface VsDebugState {
+  available: boolean
+  reason?: 'no-vs' | 'connect-failed' | 'protocol' | 'error'
+  message?: string
+  /** 找到的 .sln（VS 没开时「打开 VS」按钮用） */
+  solution?: string
+  /** 本机装的 VS（vswhere 找到 devenv 时有） */
+  devenv?: string
+  status?: VsDebugStatus
+  /** 断点（bp.list 前 50 个） */
+  breakpoints?: VsBreakpoint[]
+}
+
+export interface VsDebugFrame {
+  i?: number
+  function: string
+  file?: string
+  line?: number
+  module?: string
+}
+
+export interface VsDebugStatus {
+  mode: 'design' | 'run' | 'break'
+  building: boolean
+  launchPending?: boolean
+  lastBuildFailed?: boolean
+  lastReason?: string
+  startupProject?: string
+  configuration?: string
+  processes?: { pid: number; name: string }[]
+  breakpoints?: number
+  breakCount?: number
+  thread?: { id: number; name: string }
+  location?: VsDebugFrame
+  breakpoint?: string
+  stack?: VsDebugFrame[]
+}
+
+export interface VsBreakpoint {
+  i: number
+  file?: string
+  line?: number
+  function?: string
+  enabled: boolean
+  condition?: string
+  hitCount?: number
+  hits?: number
+  message?: string
+  byAgent?: boolean
+  bound?: number
 }
 
 /**

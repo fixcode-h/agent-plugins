@@ -16,6 +16,7 @@ import { Favorites } from './Favorites.tsx'
 import { Instances } from './Instances.tsx'
 import { AttentionRow, Readout } from './parts.tsx'
 import { Timeline } from './Timeline.tsx'
+import { VsDebugCard } from '../../vs-debug/VsDebugCard.tsx'
 
 /**
  * 概览（设计稿 designs/UE插件优化与扩展-设计稿.md 三.1，效果图 1）：四个读数、「需要你处理」（按紧急程度，每条一个主动作）、
@@ -149,6 +150,8 @@ export function Overview() {
             )}
           </Card>
           <div className="ue:flex ue:flex-col ue:gap-px ue:bg-line">
+            {/* VS 调试放在页头「启动编辑器 / PIE」旁边这一页：都是「怎么把 UE 跑起来」的控制，右栏最上面 */}
+            <VsDebugCard />
             <SelectionSlot />
             <Extensions exts={ext.data?.items} upgrades={upgrades} />
             <div className="ue:flex-1 ue:bg-card" />

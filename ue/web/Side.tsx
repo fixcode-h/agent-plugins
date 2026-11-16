@@ -8,6 +8,7 @@ import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
 import { Kbd } from './jump/parts.tsx'
 import { Dot, kindLabel, useTargetInfo, WorldBadge, worldLabel } from './ui.tsx'
+import { VsLine } from './vs-debug/VsLine.tsx'
 
 /**
  * UE 页左栏的几块（设计稿「界面优化」图 1）：项目卡、全局目标（只放这一处，各页页头不再各放一个下拉）、
@@ -200,6 +201,7 @@ export function TargetCard() {
         </div>
       )}
       <BackgroundLine />
+      <VsLine />
     </section>
   )
 }

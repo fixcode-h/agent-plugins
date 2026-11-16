@@ -15,12 +15,14 @@ import { runLuaGm } from './lua-gm/run.ts'
 import { readGm } from './store.ts'
 import type { ProjectState, UeProject } from './types.ts'
 import { t } from './util.ts'
+import { breakMessage } from './vs-debug/break-note.ts'
+import { vsDebugState } from './vs-debug/state.ts'
 
 /** 比单个桥接操作大一点的动作（网页和 Agent 工具共用）：概况、撤回、日志、宏 */
 
 export async function projectState(p: UeProject): Promise<ProjectState> {
   const cards = await liveCards(p.root)
-  const [instances, bridge, bundled] = await Promise.all([
+  const [instances, bridge, bundled, vsDebug] = await Promise.all([
     // 忙着的进程补上「在忙什么」：日志路径用它上次回应时报的，没有就是项目的默认日志
     Promise.all(
       cards.map(async (card) => {
@@ -31,7 +33,12 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     ),
     bridgeVersionIn(p.root),
     availableVersion(),
+    // VS 调试卡片（vs-debug/state.ts）：自己限 1.5 秒，不拖慢状态刷新
+    vsDebugState(p),
   ])
+  // 停在 VS 断点时进程冻住、/info 不回应：「忙」的说明换成停在哪、先 continue（不是在加载，别等也别重启）
+  const paused = breakMessage(vsDebug?.status)
+  if (paused) for (const i of instances) if (i.busy) i.error = paused
   // UEKit 扩展装没装（看磁盘上的插件目录）：左栏按它列出 AssetForge、GameTest
   const extensions = (
     await Promise.all(
@@ -51,6 +58,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     jobs: projectJobs(p.id),
     extensions,
     launch: launchProgress(p.id),
+    ...(vsDebug && { vsDebug }),
   }
 }
 

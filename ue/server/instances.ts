@@ -4,6 +4,7 @@ import { markBusy, markDown, markOnline } from './busy/state.ts'
 import type { Instance, Target } from './types.ts'
 import { bundledVersion, cmpVersion, pluginVersion } from './uelink.ts'
 import { alive, readJson, t } from './util.ts'
+import { rootOfCard, vsBreakNote } from './vs-debug/break-note.ts'
 
 /**
  * 实例发现（设计文档 2.1）：UELink 起服务后在 <项目>/Saved/UELink/instances/<PID>.json 写名片
@@ -79,6 +80,9 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
     })
   } catch (e) {
     const err = e as Error
+    // UE 停在 VS 断点时整个进程冻住：直接说停在哪、先 continue，别让 Agent 以为卡死了去重启（vs-debug/break-note.ts）
+    const paused = card.project ? await vsBreakNote(rootOfCard(card.project), card.project) : undefined
+    if (paused) throw new BridgeError(paused)
     throw new BridgeError(
       err.name === 'TimeoutError'
         ? t('UE 进程 {pid} 在 {s} 秒内没有回应（可能卡在断点、加载或长帧里）', { pid: card.pid, s: timeoutMs / 1000 })

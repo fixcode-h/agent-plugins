@@ -1,5 +1,5 @@
 // 冒烟测试：用假的面板上下文激活构建好的包（dist/ue），连一个假的桥接（scripts/fake-bridge.mjs），不需要装 UE。
-// 检查：哪些对话挂工具；21 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
+// 检查：哪些对话挂工具；24 个工具都在；保存和编译工具的作用声明（改了哪些文件、编译通过没有）；状态、找 Actor、改属性进操作记录并能撤回；危险命令要确认、拒绝就不执行；
 // 运行时只读权限挡住写操作；日志增量取和清空；UE 没在运行时按关键字搜日志文件；
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
@@ -110,7 +110,7 @@ try {
     ['ue'],
   )
   const catTools = await cat.servers[0].tools()
-  assert.equal(catTools.length, 21)
+  assert.equal(catTools.length, 24)
   assert.deepEqual(
     catTools.filter((x) => !x.guide?.useWhen).map((x) => x.name),
     [],
@@ -136,7 +136,7 @@ try {
   assert.match(runTools.hint, /ue_status/)
   assert.ok(runTools.servers[0].summary)
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
-  assert.equal(Object.keys(tools).length, 19)
+  assert.equal(Object.keys(tools).length, 22)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
   // 面板 ADR 0067：一个工具的定义（说明 + 参数）不超过 3000 字
   for (const x of Object.values(tools)) {
@@ -722,7 +722,7 @@ try {
   )
   assert.equal(JSON.parse(readFileSync(path.join(plugins, 'UELink', 'UELink.uplugin'), 'utf8')).VersionName, '9.0.0')
 
-  console.log(`ue 冒烟测试通过：19 个工具，操作记录 ${hist.items.length} 条`)
+  console.log(`ue 冒烟测试通过：22 个工具，操作记录 ${hist.items.length} 条`)
 } finally {
   await plugin.stop?.()
   await bridge.stop()

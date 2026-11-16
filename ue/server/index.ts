@@ -32,6 +32,7 @@ const HINT = `## UE 工具
 - 先 ue_status 看有哪些进程和世界（编辑器、PIE 客户端 / 服务器），操作时用 target 选；同步属性要在服务器世界改。
 - 找对象：ue_find（Actor 按名字前缀）→ ue_get 读属性（属性路径 Stats.MaxHP、Items[2].Count）→ ue_set 改；ue_call 调函数，ue_gm 跑 GM，ue_console 执行命令。
 - 看现象：ue_log 取日志（记下 cursor 下次只取新的），ue_screenshot 截视口。
+- C++ 逻辑要断点调试：ue_vs_debug（start / attach、wait、step、continue）、ue_vs_breakpoints、ue_vs_inspect（stack、locals、eval），要 VS 装 UEToVS 0.8.0；UE 停在断点时其他 ue_* 都不通，先 continue。
 - 卡顿、掉帧、内存高：ue_perf 抓帧数据（CSV Profiler）或内存报告，ue_capture 看摘要、下钻、对比；抓取文件不要直接读。
 - 改资源（DataTable、DataAsset）先在运行时验证；资源改动只是暂存，要 ue_save 才写回（会请用户确认）。
 - 看资源：ue_asset describe / export / refs；新建、复制、改名、删除也在 ue_asset（先 dryRun，删除每次请用户确认），不认识的类型用 ue_asset help。
