@@ -1,7 +1,9 @@
 import type { McpResult } from '../../../sdk/server.ts'
-import { runOp } from '../ops.ts'
+import { runOp, type OpCtx } from '../ops.ts'
 import { out, str, tool } from '../toolkit.ts'
 import { gtVerdict } from './gt-verdict.ts'
+import { configBaseline } from './forge-baseline.ts'
+import { forgeVerdict } from './forge-verdict.ts'
 
 /**
  * UEKit 扩展的 Agent 工具（面板 ADR 0067）：AssetForge 一个工具、GameTest 一个工具，同一对象的操作用 action 区分。
@@ -25,7 +27,7 @@ const withVerdict = (r: McpResult, verified: McpResult['verified']) => (verified
 export const EXT_TOOLS = [
   tool(
     'ue_forge',
-    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；schema 写配置前先取：给 kind 回这种配置的 JSON Schema（根节点 class、能不能有 children、文档级字段），给 class（类或结构体）回它在 props 里能写的属性和类型（filter 按名字筛，offset 翻页）；list 列配置和资产的同步状态（state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；plan 演练导入看会做哪些改动；diff 看属性差异（导入后哪些属性会变）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果；stop 取消作业。',
+    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；schema 写配置前先取：给 kind 回这种配置的 JSON Schema（根节点 class、能不能有 children、文档级字段），给 class（类或结构体）回它在 props 里能写的属性和类型（filter 按名字筛，offset 翻页）；list 列配置和资产的同步状态（默认只列有配置的，unmanaged=true 连还没配置的资产一起列；state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；plan 演练导入看会做哪些改动；diff 看属性差异（默认比资产：导入后哪些属性会变；against=commit 和 git / P4 里上次提交的配置比，看这次改了配置的哪些属性）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果（正式导入跑完全部成功算进完成依据）；stop 取消作业。用 ue_set / ue_asset / ue_blueprint 改了纳管的资产时结果里会提醒：要保留就改配置再导入，或 export 写回配置。',
     {
       action: {
         type: 'string',
@@ -36,6 +38,8 @@ export const EXT_TOOLS = [
       configs: { type: 'array', items: { type: 'string' } },
       assets: { type: 'array', items: { type: 'string' } },
       pending: { type: 'boolean' },
+      unmanaged: { type: 'boolean', description: 'list：连还没配置的资产一起列（默认 false）' },
+      against: { type: 'string', enum: ['asset', 'commit'], description: 'diff：和谁比（默认 asset）' },
       dryRun: { type: 'boolean' },
       state: { type: 'string' },
       kind: { type: 'string' },
@@ -68,6 +72,7 @@ export const EXT_TOOLS = [
                 state: a.state,
                 kind: a.kind,
                 query: a.query,
+                unmanaged: a.unmanaged === true,
                 deep: !!a.deep,
                 offset: num(a.offset, 0),
                 limit: Math.min(num(a.limit, 100), 300),
@@ -80,7 +85,7 @@ export const EXT_TOOLS = [
         case 'plan':
           return out(await op('forge.plan', { config: a.config }))
         case 'diff':
-          return out(await op('forge.diff', { config: a.config }))
+          return out(await forgeDiff(op, a, ctx))
         case 'import':
           return out(
             await op(
@@ -92,18 +97,22 @@ export const EXT_TOOLS = [
           )
         case 'export':
           return out(await op('forge.export', { assets: a.assets ?? (a.asset ? [a.asset] : []) }))
-        case 'job':
-          return out(await op('forge.job', { id: a.id, reports: 20 }))
+        case 'job': {
+          const job = await op('forge.job', { id: a.id, reports: 20 })
+          return withVerdict(out(job), forgeVerdict(job))
+        }
         case 'stop':
           return out(await op('forge.stop', { id: str(a.id) }))
         default:
           return out({ error: `不认识的 action：${str(a.action)}` })
       }
     },
+    // 正式导入跑完算进完成依据（forge-verdict.ts）；只读的 action 不会被守卫挡，verified 只在有结论时给
+    { effect: 'verify' },
   ),
   tool(
     'ue_gametest',
-    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，schemaVersion 2，status 返回实际位置）。每步一个动作，参数以 actions 为准：click（默认真实指针：自动等控件可见、可用、不动、没被挡再点，点完核对接住的是不是目标；at=[x,y] 控件内位置；via="code" 是旧的代码点击）、drag、wheel、type（真实按键，append 接着打）、key、wait、assert、snapshot、screenshot……不用在 UI 操作前插 wait。选择器：`屏:路径`（屏写 WBP 名或资源路径）、`List[3]` / `List[Id=5]`、`A>B` 进嵌套 WBP、`A>>SButton[text=确定]` 找纯 Slate 控件。action=status 看 PIE、场景根和有没有 run 在跑；actions 列动作和参数；scenarios 列场景（query 筛，带 tags）；run 跑场景（scenario）、临时步骤（steps + name）或批量（tag 跑带这个标签的全部场景，scenarios 给几份），马上返回编号；step 立即执行一步探路；resolve 只核对选择器不执行（scenario 核对它每一步，或 targets），要开着 PIE；inspect 看视口某点是哪个控件、选择器怎么写；job 看进度（批量在 batch 里）；report 取完整报告，失败的步骤 payload.evidence 有截图、控件快照、前后 50 行日志的路径，按路径读文件；history 看某个场景最近 10 次的结果；stop 取消（批量整批取消）。编辑器没开时 scenarios / report / history 直接读磁盘上的文件（返回带 offline: true），其余要先开编辑器。跑场景文件通过的 report / job 算进完成依据，offline 读到的旧报告不算。',
+    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，schemaVersion 2，status 返回实际位置）。每步一个动作，参数以 actions 为准：click（默认真实指针：自动等控件可见、可用、不动、没被挡再点，点完核对接住的是不是目标；at=[x,y] 控件内位置；via="code" 是旧的代码点击）、drag、wheel、type（真实按键，append 接着打）、key、wait、assert、snapshot、screenshot……不用在 UI 操作前插 wait。选择器：`屏:路径`（屏写 WBP 名或资源路径）、`List[3]` / `List[Id=5]`、`A>B` 进嵌套 WBP、`A>>SButton[text=确定]` 找纯 Slate 控件。action=status 看 PIE、场景根和有没有 run 在跑；actions 列动作和参数；scenarios 列场景（query 筛，带 tags）；run 跑场景（scenario）、临时步骤（steps + name）或批量（tag 跑带这个标签的全部场景，scenarios 给几份），马上返回编号；step 立即执行一步探路；resolve 只核对选择器不执行（scenario 核对它每一步，或 targets），要开着 PIE；inspect 看视口某点是哪个控件、选择器怎么写；job 看进度（批量在 batch 里）；report 取完整报告，失败的步骤 payload.evidence 有截图、控件快照、前后 50 行日志的路径，按路径读文件；history 给 scenario 看这个场景最近 10 次的结果，不给时看各场景的通过情况和这次编辑器会话里最近的 run（含临时步骤的 runId，拿去 report）；stop 取消（批量整批取消）。编辑器没开时 scenarios / report / history 直接读磁盘上的文件（返回带 offline: true），其余要先开编辑器。跑场景文件通过的 report / job 算进完成依据，offline 读到的旧报告不算。',
     {
       action: {
         type: 'string',
@@ -172,7 +181,7 @@ export const EXT_TOOLS = [
           return withVerdict(out(report), gtVerdict(report))
         }
         case 'history':
-          return out(await op('gt.history', a.scenario ? { scenario: a.scenario } : {}))
+          return out(await gtHistory(op, a))
         case 'stop':
           return out(await op('gt.stop'))
         default:
@@ -209,3 +218,27 @@ async function forgeSchema(
 
 /** 工具名 → 要装了哪个扩展才挂 */
 export const EXT_TOOL_PLUGIN: Record<string, string> = { ue_forge: 'AssetForge', ue_gametest: 'GameTest' }
+
+type Op = (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>
+
+/** ue_forge action=diff：against=commit 时先取 git / P4 里上次提交的配置当基线（和页面「对比：上次提交的配置」同一份） */
+async function forgeDiff(op: Op, a: Record<string, unknown>, ctx: OpCtx) {
+  if (!a.config) return { error: '给 config（相对配置根的配置路径）' }
+  if (a.against !== 'commit') return op('forge.diff', { config: a.config })
+  const d = await op('forge.describe', { config: a.config })
+  const file = (d.entry as { configPath?: string } | undefined)?.configPath
+  if (!file) return { error: `找不到配置 ${str(a.config)}` }
+  const base = await configBaseline(ctx.project, file)
+  if ('error' in base) return base
+  return op('forge.diff', { config: a.config, baselineText: base.text })
+}
+
+/**
+ * ue_gametest action=history：给 scenario 是这个场景的历史；不给时再带上这次会话最近的 run（gt.runs），
+ * 临时步骤不进按场景的历史，Agent 只能从这里找回 runId。编辑器没开时 gt.runs 拿不到，只回历史
+ */
+async function gtHistory(op: Op, a: Record<string, unknown>) {
+  if (a.scenario) return op('gt.history', { scenario: a.scenario })
+  const [history, runs] = await Promise.all([op('gt.history', {}), op('gt.runs', {}).catch(() => undefined)])
+  return runs ? { ...history, recentRuns: runs.runs ?? runs } : history
+}

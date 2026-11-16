@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
 import { BridgeError, liveCards } from '../instances.ts'
 import type { InstallMode } from '../types.ts'
-import { c, run, t } from '../util.ts'
+import { c, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { configBaseline } from './forge-baseline.ts'
 import { forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
@@ -49,23 +49,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     }
     case 'POST ext/watch':
       return watch(p, String(b.conn ?? ''))
-    case 'POST ext/baseline': {
-      // 属性差异「对比：上次提交的配置」：git 里 HEAD 的版本，P4 里工作区同步到的版本（#have）；没提交过时说清楚
-      const file = insideProject(p.root, String(b.file ?? ''))
-      if (p.vcs === 'p4') {
-        const r = await run('p4', ['-d', path.dirname(file), 'print', '-q', `${file}#have`], {
-          cwd: path.dirname(file),
-          timeout: 30000,
-        })
-        if (r.code !== 0 || !r.out) return { error: t('P4 里还没有这份配置（新文件，或还没提交）') }
-        return { text: r.out }
-      }
-      if (p.vcs !== 'git') return { error: t('只有 git 和 P4 项目能和上次提交的配置比') }
-      const rel = path.relative(p.root, file).replace(/\\/g, '/')
-      const r = await run('git', ['-C', p.root, 'show', `HEAD:./${rel}`])
-      if (r.code !== 0) return { error: t('git 里还没有这份配置（新文件，或还没提交）') }
-      return { text: r.out }
-    }
+    case 'POST ext/baseline':
+      // 属性差异「对比：上次提交的配置」（forge-baseline.ts）
+      return configBaseline(p, String(b.file ?? ''))
     case 'POST ext/gt/scenario':
       // GameTest 页的步骤列表：场景文件里的每一步（没跑过的场景也要能看到）
       return { ...(await readScenario(p.root, String(b.root ?? ''), String(b.path ?? ''))) }
