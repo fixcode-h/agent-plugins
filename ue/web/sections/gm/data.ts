@@ -95,6 +95,13 @@ const isEngine = (owner: string) =>
 /** 分组名统一：「Cheat Manager」「CheatManager」「cheat_manager」算一组（截图里同一个类出现两次） */
 export const groupKey = (g: string) => g.replace(/[\s_\-|]/g, '').toLowerCase()
 
+/** 分组名拆层级：「角色 / 宝石」「角色/宝石」「角色\宝石」都算两层（左边的树按它分文件夹） */
+export const groupPath = (label: string) =>
+  label
+    .split(/\s*[/\\]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+
 /** 注释里的 @param 说明拆到参数上，说明本身只留前面那段 */
 function splitDoc(tooltip: string) {
   const params: Record<string, string> = {}

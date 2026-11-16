@@ -12,3 +12,8 @@ declare module '@panel/server/download' {
 declare module '@panel/web/src/lib/api' {
   export function request<T>(url: string, init?: RequestInit): Promise<T>
 }
+
+/** 面板的拼音首字母（GM 页左栏分组按 jszl 这类首字母搜） */
+declare module '@panel/shared/pinyin' {
+  export function pinyinInitials(s: string): string
+}
