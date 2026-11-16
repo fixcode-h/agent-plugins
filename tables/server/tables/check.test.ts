@@ -20,9 +20,9 @@ test('按结构文件查每个表格，引用的表从磁盘读', async () => {
   const r = await checkTables(
     dir,
     [
-      { path: 'Config/Bad.xlsx', kind: 'xlsx', size: 9, mtime: '' },
-      { path: 'Config/Item.csv', kind: 'csv', size: 1, mtime: '' },
-      { path: 'Config/Role.csv', kind: 'csv', size: 1, mtime: '' },
+      { path: 'Config/Bad.xlsx', kind: 'xlsx' },
+      { path: 'Config/Item.csv', kind: 'csv' },
+      { path: 'Config/Role.csv', kind: 'csv' },
     ],
     schema,
   )

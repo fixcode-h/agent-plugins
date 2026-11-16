@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import type { TableFile, TablesIndex } from './tables.ts'
 import { MAX_LIST_DELTA, applyTablesDelta, diffTablesIndex } from './table-list.ts'
 
-const f = (path: string, size = 1): TableFile => ({ path, kind: 'xlsx', size, mtime: 'm' })
+const f = (path: string, kind: TableFile['kind'] = 'xlsx'): TableFile => ({ path, kind })
 const idx = (files: TableFile[], extra: Partial<TablesIndex> = {}): TablesIndex => ({
   dirs: ['T'],
   missing: [],
@@ -15,7 +15,7 @@ const idx = (files: TableFile[], extra: Partial<TablesIndex> = {}): TablesIndex 
 test('没变化返回 null；增删改都算出来，合进旧列表后和新列表一样（按路径排好）', () => {
   const old = idx([f('T/a.xlsx'), f('T/b.xlsx'), f('T/c.xlsx')])
   assert.equal(diffTablesIndex('k', old, idx([...old.files])), null)
-  const next = idx([f('T/a.xlsx'), f('T/a2.xlsx'), f('T/c.xlsx', 9)])
+  const next = idx([f('T/a.xlsx'), f('T/a2.xlsx'), f('T/c.xlsx', 'xls')])
   const d = diffTablesIndex('k', old, next)
   assert.ok(d && !('reload' in d))
   assert.deepEqual(

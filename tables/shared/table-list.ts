@@ -9,6 +9,20 @@ export const MAX_LIST_DELTA = 3000
 
 /** 后台扫描完推给表格页的事件名 */
 export const TABLES_LIST_EVENT = 'tables-list'
+/** 扫描进度推给表格页的事件名 */
+export const TABLES_PROGRESS_EVENT = 'tables-list-progress'
+
+/** 扫描进度：页面第一次打开还没有列表时按 projects 认，后台重扫时按 key 认 */
+export interface TablesListProgress {
+  key: string
+  projects: string[]
+  /** 已找到的表格数 */
+  found: number
+  /** 已看过的目录数 */
+  dirs: number
+  /** 正在看的目录或文件（相对项目目录） */
+  at: string
+}
 
 export type TablesListDelta = { key: string } & (
   | { reload: true }
@@ -16,7 +30,7 @@ export type TablesListDelta = { key: string } & (
       add: TableFile[]
       /** 没了的文件路径 */
       remove: string[]
-      /** 大小、修改时间变了的 */
+      /** 格式变了的（同名换了种表格；列表不带大小和修改时间，内容改了不算） */
       change: TableFile[]
       dirs: string[]
       missing: string[]
@@ -29,7 +43,7 @@ export type TablesListDelta = { key: string } & (
 export const byTablePath = (a: TableFile, b: TableFile) =>
   a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' })
 
-const sameFile = (a: TableFile, b: TableFile) => a.kind === b.kind && a.size === b.size && a.mtime === b.mtime
+const sameFile = (a: TableFile, b: TableFile) => a.kind === b.kind
 
 /** 新旧两份列表的差别；完全一样返回 null */
 export function diffTablesIndex(key: string, old: TablesIndex, next: TablesIndex): TablesListDelta | null {

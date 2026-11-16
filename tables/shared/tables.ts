@@ -88,8 +88,6 @@ export interface TableFile {
   /** 相对项目目录，用 / */
   path: string
   kind: TableKind
-  size: number
-  mtime: string
 }
 
 /** 设置里的一个表格目录：实际找的位置、找到几个表格 */

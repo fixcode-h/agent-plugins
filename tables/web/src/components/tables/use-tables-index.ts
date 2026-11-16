@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TablesIndex } from '@shared/tables'
-import { TABLES_LIST_EVENT, applyTablesDelta, type TablesListDelta } from '@shared/table-list'
+import {
+  TABLES_LIST_EVENT,
+  TABLES_PROGRESS_EVENT,
+  applyTablesDelta,
+  type TablesListDelta,
+  type TablesListProgress,
+} from '@shared/table-list'
 import { tablesApi } from '@/lib/tables-api'
 import { tablesHost } from '@/lib/tables-host'
 
@@ -15,6 +21,8 @@ const STALE_MS = 60_000
 export function useTablesIndex(projectId: string, shown: boolean) {
   const [index, setIndex] = useState<TablesIndex | null>(null)
   const [error, setError] = useState('')
+  /** 服务端正在扫描表格目录的进度（第一次打开、后台重扫时推来）；扫完清掉 */
+  const [progress, setProgress] = useState<TablesListProgress | null>(null)
   /** 上次读表格目录的时间：切回来时太久没读才再读一次（懒刷新） */
   const loadedAt = useRef(0)
   const reload = useCallback(
@@ -23,8 +31,14 @@ export function useTablesIndex(projectId: string, shown: boolean) {
       loadedAt.current = Date.now()
       tablesApi
         .list(projectId, fresh)
-        .then(setIndex)
-        .catch((e) => setError((e as Error).message))
+        .then((i) => {
+          setIndex(i)
+          if (!i.scanning) setProgress(null)
+        })
+        .catch((e) => {
+          setProgress(null)
+          setError((e as Error).message)
+        })
     },
     [projectId],
   )
@@ -50,8 +64,14 @@ export function useTablesIndex(projectId: string, shown: boolean) {
       if (!cur?.key || d.key !== cur.key) return
       const next = applyTablesDelta(cur, d)
       // 变化太多的服务端只说一声：这时它内存里已经是新的，再取一次很快
+      setProgress(null)
       if (next) setIndex(next)
       else reload()
+    })
+    // 扫描进度：按列表的键认，第一次扫（手上还没有这个项目的列表、不知道键）时按项目认
+    const offProgress = events.on(TABLES_PROGRESS_EVENT, (data) => {
+      const p = data as TablesListProgress
+      if (p.key === indexRef.current?.key || p.projects.includes(projectId)) setProgress(p)
     })
     // 断线重连：等着的推送可能丢了，还在「后台更新中」就重新取一次
     let first = true
@@ -61,9 +81,10 @@ export function useTablesIndex(projectId: string, shown: boolean) {
     })
     return () => {
       offPush()
+      offProgress()
       offConn()
     }
-  }, [reload])
+  }, [reload, projectId])
 
-  return { index, error, reload }
+  return { index, error, reload, progress }
 }
