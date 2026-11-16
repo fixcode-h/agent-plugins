@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
 import { BridgeError, liveCards } from '../instances.ts'
 import type { InstallMode } from '../types.ts'
-import { c, run, t } from '../util.ts'
+import { c, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
-import { forgeFileAction } from './forge-files.ts'
+import { configBaseline } from './forge-baseline.ts'
+import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { EXT_EVENT, watch } from './stream.ts'
@@ -49,23 +49,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     }
     case 'POST ext/watch':
       return watch(p, String(b.conn ?? ''))
-    case 'POST ext/baseline': {
-      // 属性差异「对比：上次提交的配置」：git 里 HEAD 的版本，P4 里工作区同步到的版本（#have）；没提交过时说清楚
-      const file = insideProject(p.root, String(b.file ?? ''))
-      if (p.vcs === 'p4') {
-        const r = await run('p4', ['-d', path.dirname(file), 'print', '-q', `${file}#have`], {
-          cwd: path.dirname(file),
-          timeout: 30000,
-        })
-        if (r.code !== 0 || !r.out) return { error: t('P4 里还没有这份配置（新文件，或还没提交）') }
-        return { text: r.out }
-      }
-      if (p.vcs !== 'git') return { error: t('只有 git 和 P4 项目能和上次提交的配置比') }
-      const rel = path.relative(p.root, file).replace(/\\/g, '/')
-      const r = await run('git', ['-C', p.root, 'show', `HEAD:./${rel}`])
-      if (r.code !== 0) return { error: t('git 里还没有这份配置（新文件，或还没提交）') }
-      return { text: r.out }
-    }
+    case 'POST ext/baseline':
+      // 属性差异「对比：上次提交的配置」（forge-baseline.ts）
+      return configBaseline(p, String(b.file ?? ''))
     case 'POST ext/gt/scenario':
       // GameTest 页的步骤列表：场景文件里的每一步（没跑过的场景也要能看到）
       return { ...(await readScenario(p.root, String(b.root ?? ''), String(b.path ?? ''))) }
@@ -81,6 +67,12 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/forge/file':
       // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
       return forgeFileAction(p.root, b)
+    case 'POST ext/forge/root':
+      // 打开 AssetForge 页时配置根还不存在：直接建出来
+      return forgeEnsureRoot(p.root, b)
+    case 'POST ext/forge/create':
+      // 「新建配置」：模板生成的 JSON 写进配置根；让 AI 写时先建好目录
+      return forgeCreateConfig(p.root, b)
     case 'POST ext/forge/watch':
       // AssetForge 页右栏选中的配置：存盘了推 forge.file，页面重拉差异、重新演练（不轮询）
       if (!b.root) throw new BridgeError(t('不知道配置根在哪：先刷新 AssetForge 页'))

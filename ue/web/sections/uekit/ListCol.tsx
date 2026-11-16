@@ -21,6 +21,7 @@ export function ListCol({
   children,
   footer,
   onBodyMenu,
+  searchExtra,
 }: {
   id: string
   title: string
@@ -34,6 +35,8 @@ export function ListCol({
   footer?: ReactNode
   /** 右键列表空白处（行自己的右键菜单会拦下冒泡，到这里的只有空白处） */
   onBodyMenu?: (e: MouseEvent) => void
+  /** 搜索框右边的按钮（AssetForge 的「新建配置」）：放这里不挤标题行 */
+  searchExtra?: ReactNode
 }) {
   const pane = usePane(`list-${id}`, '316px', 240)
   const ref = useRef<HTMLElement>(null)
@@ -53,26 +56,29 @@ export function ListCol({
           </span>
           <div className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-1.5">{extra}</div>
         </div>
-        <label className="ue:relative ue:block">
-          <Search className="ue:pointer-events-none ue:absolute ue:top-1/2 ue:left-3 ue:h-4 ue:w-4 ue:-translate-y-1/2 ue:text-subtle" />
-          <input
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder={placeholder}
-            aria-label={placeholder}
-            className="ue:h-8 ue:w-full ue:rounded-(--c-input-radius) ue:border ue:border-line-strong ue:bg-field ue:pr-3 ue:pl-9 ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle ue:focus:border-focus"
-          />
-        </label>
+        <div className="ue:flex ue:items-center ue:gap-1.5">
+          <label className="ue:relative ue:block ue:min-w-0 ue:flex-1">
+            <Search className="ue:pointer-events-none ue:absolute ue:top-1/2 ue:left-3 ue:h-4 ue:w-4 ue:-translate-y-1/2 ue:text-subtle" />
+            <input
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+              placeholder={placeholder}
+              aria-label={placeholder}
+              className="ue:h-8 ue:w-full ue:rounded-(--c-input-radius) ue:border ue:border-line-strong ue:bg-field ue:pr-3 ue:pl-9 ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle ue:focus:border-focus"
+            />
+          </label>
+          {searchExtra}
+        </div>
         {tabs}
       </div>
       <div
         onContextMenu={onBodyMenu}
-        className="ue:flex ue:max-h-[50vh] ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:px-2 ue:pb-2 ue:md:max-h-none"
+        className="ue:flex ue:max-h-[50vh] ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-x-hidden ue:overflow-y-auto ue:px-2 ue:pb-2 ue:md:max-h-none"
       >
         {children}
       </div>
       {footer && (
-        <div className="ue:flex ue:flex-col ue:gap-1.5 ue:border-t ue:border-line ue:px-4 ue:pt-2.5 ue:pb-3 ue:text-caption ue:leading-relaxed ue:text-subtle">
+        <div className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1.5 ue:border-t ue:border-line ue:px-4 ue:pt-2.5 ue:pb-3 ue:text-caption ue:leading-relaxed ue:text-subtle">
           {footer}
         </div>
       )}

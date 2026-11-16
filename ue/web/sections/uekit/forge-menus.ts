@@ -4,6 +4,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FilePlus2,
   FileText,
   FlaskConical,
   FolderOpen,
@@ -19,6 +20,8 @@ import { h, t } from '../../host.ts'
 import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
 import type { ForgeTab } from './ForgeDetail.tsx'
 import type { ForgeEntry } from './Forge.tsx'
+import type { ForgeNewInit } from './ForgeNew.tsx'
+import { assetDirFor } from './forge-templates.ts'
 import { FILTERS } from './kinds.ts'
 
 /**
@@ -41,6 +44,10 @@ export interface ForgeMenuCtx {
   reload: (deep: boolean) => void
   expand: (open: boolean, under?: string) => void
   go: (section: string, sub?: string) => void
+  /** 打开「新建配置」弹窗（右键文件夹时预填类型和资产目录） */
+  newConfig: (init?: ForgeNewInit) => void
+  /** 配置根第一层目录 → kind（forge.kinds 的 dir） */
+  dirKinds?: Map<string, string>
 }
 
 /** 能导入：有配置文件、配置读得懂、写了目标资产 */
@@ -141,6 +148,13 @@ export function forgeMenus(c: ForgeMenuCtx) {
     openMenu(ev, [
       { title: t('{p}/ · {n} 份', { p: path, n: leaves.length }) },
       {
+        label: t('在这里新建配置…'),
+        icon: FilePlus2,
+        disabled: !c.configRoot,
+        onClick: () => c.newConfig({ kind: c.dirKinds?.get(path.split('/')[0]), assetDir: assetDirFor(path) }),
+      },
+      'sep',
+      {
         label: t('导入这个目录待导入的 {n} 份', { n: pending.length }),
         icon: Download,
         disabled: c.locked || !pending.length,
@@ -173,6 +187,7 @@ export function forgeMenus(c: ForgeMenuCtx) {
     ...(withRefresh ? [{ label: t('刷新'), icon: RefreshCw, onClick: () => c.reload(false) }] : []),
     { label: t('深度检查'), icon: ScanSearch, hint: t('慢'), onClick: () => c.reload(true) },
     'sep',
+    { label: t('新建配置…'), icon: FilePlus2, disabled: !c.configRoot, onClick: () => c.newConfig() },
     { label: t('打开配置根'), icon: FolderOpen, disabled: !c.configRoot, onClick: () => fileAction('', 'reveal') },
     ...expandItems(),
   ]

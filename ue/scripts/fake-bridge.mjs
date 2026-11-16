@@ -8,7 +8,10 @@ import { makeDetails } from './fake-details.mjs'
 import { luaDevOps } from './fake-lua-dev.mjs'
 import { editorToolOps } from './fake-editor-tools.mjs'
 
-export async function startFakeBridge(root, { kind = 'editor' } = {}) {
+/**
+ * extraOps：再挂几个操作（截图脚本给 AssetForge 之类的扩展用）；extensions：名片和 /info 里报的扩展（UEKit 的 AssetForge、GameTest）
+ */
+export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, extensions } = {}) {
   const token = 'fake-token'
   const state = {
     seq: 0,
@@ -734,7 +737,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
     }),
   }
-  Object.assign(ops, luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }))
+  Object.assign(ops, luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }), extraOps)
   const server = createServer((req, res) => {
     const send = (code, body) => {
       res.writeHead(code, { 'Content-Type': 'application/json' })
@@ -749,6 +752,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         log: path.join(root, 'Saved', 'Logs', 'Fake.log'),
         lua: { available: true, version: 'Lua 5.4.6' },
         ops: Object.keys(ops),
+        ...(extensions ? { extensions } : {}),
         worlds: [
           { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
           { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },
@@ -782,6 +786,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       engine: '5.4.4',
       bridge: '1.0.0',
       project: root,
+      ...(extensions ? { extensions } : {}),
       startedAt: new Date().toISOString(),
     }),
   )

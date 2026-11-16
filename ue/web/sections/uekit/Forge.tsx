@@ -1,15 +1,18 @@
-import { Download, Ellipsis, FileJson, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Ellipsis, FileJson, FilePlus2, Loader2, RefreshCw, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { op, useAction } from '../../api.ts'
+import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { MenuHost } from '../../menu.tsx'
+import { PathText } from '../../path-text.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { ForgeDetail, type ForgeTab } from './ForgeDetail.tsx'
 import { ForgeEmpty, forgeEmptyKind } from './ForgeEmpty.tsx'
 import { JobBar, JobResult } from './ForgeJobBar.tsx'
 import { ForgeJobReport } from './ForgeJobReport.tsx'
 import { ForgeMulti } from './ForgeMulti.tsx'
+import { ForgeNew, makeDirOf, type ForgeNewInit } from './ForgeNew.tsx'
 import { canImport, forgeMenus } from './forge-menus.ts'
 import { useForgePick } from './forge-pick.ts'
 import { useForgeSource } from './forge-source.ts'
@@ -25,6 +28,7 @@ import { FileTree, type ExpandSignal, type FolderLabel, type TreeLeaf } from './
  * 多选时是多选摘要，作业跑完点「查看」是作业报告。
  * 用户 2026-11-15：左边只列 JSON 配置，没有配置的资源不显示（导出成配置在资源页的「导出到 JSON」）。导入导出是后台作业，进度靠推送事件（forge.job），不轮询。
  * 编辑器没开时这些操作由后台编辑器做（服务端 ops.ts 把 forge.* 当资源操作）。
+ * 用户 2026-11-16：配置根打开页面就自动建好；能从内置模板新建配置，也能把需求交给 Agent 写，写好自动打开预览（ForgeNew.tsx）。
  */
 export interface ForgeEntry {
   key: string
@@ -77,6 +81,12 @@ export function Forge() {
   // 选中的配置存盘了几次（forge.file 推送）：右栏据此重拉差异、重新演练
   const [fileRev, setFileRev] = useState(0)
   const configRoot = health?.configRoot ?? ''
+  // 「新建配置」弹窗：打开时带的预填（类型、资产目录、模式）
+  const [newInit, setNewInit] = useState<ForgeNewInit>()
+  // 交给 Agent 写的那份配置（相对配置根）：存盘后自动选中打开
+  const [awaiting, setAwaiting] = useState<string>()
+  const chat = useToChat()
+  const dirOf = useMemo(() => makeDirOf(dirKinds), [dirKinds])
 
   useEffect(() => {
     if (!installed) return
@@ -86,8 +96,11 @@ export function Forge() {
       .catch(() => undefined)
   }, [project.id, installed])
 
-  const selected = data?.entries.find((e) => e.key === sub || e.asset === sub || e.config === sub)
-  useForgeFileWatch(project.id, configRoot, selected?.config)
+  const selected = data?.entries.find(
+    (e) => e.key === sub || e.asset === sub || (!!e.config && !!sub && samePath(e.config, sub)),
+  )
+  // 等 Agent 写配置时盯那一份（还不存在，服务端盯它所在的目录）；没在等就盯右栏选中的
+  useForgeFileWatch(project.id, configRoot, awaiting ?? selected?.config)
 
   useExtEvents(project.id, (e) => {
     if (e.event === 'forge.job') {
@@ -98,7 +111,14 @@ export function Forge() {
       if (j.phase === 'finished') reload()
     } else if (e.event === 'forge.changed') reload()
     else if (e.event === 'forge.reveal' && typeof e.asset === 'string') go('assetforge', e.asset)
-    else if (e.event === 'forge.file' && selected?.config && samePath(String(e.path ?? ''), selected.config)) {
+    else if (e.event === 'forge.file' && awaiting && samePath(String(e.path ?? ''), awaiting)) {
+      if (e.missing) return
+      // Agent 把配置写出来了：刷新清单、选中它，右栏按配置预览（资源还没生成）
+      setAwaiting(undefined)
+      reload()
+      go('assetforge', awaiting)
+      toast.success(t('Agent 写好了 {p}', { p: awaiting }))
+    } else if (e.event === 'forge.file' && selected?.config && samePath(String(e.path ?? ''), selected.config)) {
       // 编辑器或 Agent 存了右栏这份配置：同步状态会变（被改过），清单和右栏一起刷新
       reload()
       setFileRev((n) => n + 1)
@@ -167,6 +187,8 @@ export function Forge() {
     reload,
     expand: expandAll,
     go,
+    newConfig: (init) => setNewInit(init ?? {}),
+    dirKinds,
   })
 
   if (state && !installed) return <NotInstalled name="AssetForge" />
@@ -195,6 +217,9 @@ export function Forge() {
       compact={compact}
       onReveal={menus.revealRoot}
       onAssets={() => go('assets')}
+      onNew={(mode) => setNewInit({ mode })}
+      canAi={chat.available}
+      createError={health?.createError}
     />
   )
 
@@ -208,6 +233,15 @@ export function Forge() {
         onQuery={setQuery}
         placeholder={t('按配置文件或资产路径找')}
         onBodyMenu={menus.bodyMenu}
+        searchExtra={
+          <ui.IconButton
+            icon={FilePlus2}
+            size="sm"
+            label={t('新建配置：从模板或让 AI 写')}
+            disabled={!configRoot}
+            onClick={() => setNewInit({})}
+          />
+        }
         extra={
           <>
             <ui.IconButton
@@ -251,22 +285,39 @@ export function Forge() {
               job && <JobResult job={job} viewing={!!report} onView={() => void viewReport()} />
             )}
             {loading === 'deep' && <span>{t('正在深度检查：演练一遍全部导入，比较慢')}</span>}
-            <span>
-              {t('配置根')} <code className="ue:font-mono ue:text-muted">{configRoot || '…'}</code>
-              {health?.configRootExists && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    onClick={menus.revealRoot}
-                    className="ue:cursor-pointer ue:text-accent-text ue:hover:underline"
-                  >
-                    {t('打开')}
-                  </button>
-                </>
+            {awaiting && (
+              <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-fg">
+                <Loader2 className="ue:h-3 ue:w-3 ue:shrink-0 ue:animate-spin ue:text-subtle" />
+                <span className="ue:shrink-0">{t('等 Agent 写')}</span>
+                <PathText path={awaiting} tail={2} copy={false} className="ue:text-muted" />
+                <ui.IconButton
+                  icon={X}
+                  size="sm"
+                  className="ue:ml-auto ue:shrink-0"
+                  label={t('不等了')}
+                  onClick={() => setAwaiting(undefined)}
+                />
+              </span>
+            )}
+            {/* 配置根一行：路径太长时省略前面的目录，鼠标移上去看全、点一下复制（用户 2026-11-16：原来溢出被截） */}
+            <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+              <span className="ue:shrink-0">{t('配置根')}</span>
+              {configRoot ? (
+                <PathText path={configRoot} tail={2} className="ue:text-muted" />
+              ) : (
+                <span className="ue:text-muted">…</span>
               )}
-              {data?.background && ` · ${t('编辑器没开，在后台编辑器里读')}`}
+              {health?.configRootExists && (
+                <button
+                  type="button"
+                  onClick={menus.revealRoot}
+                  className="ue:ml-auto ue:shrink-0 ue:cursor-pointer ue:text-accent-text ue:hover:underline"
+                >
+                  {t('打开')}
+                </button>
+              )}
             </span>
+            {data?.background && <span>{t('编辑器没开，在后台编辑器里读')}</span>}
           </>
         }
       >
@@ -340,6 +391,28 @@ export function Forge() {
           data && empty(false)
         )}
       </main>
+      {newInit && (
+        <ForgeNew
+          project={project.id}
+          configRoot={configRoot}
+          dirOf={dirOf}
+          init={newInit}
+          canAi={chat.available}
+          onClose={() => setNewInit(undefined)}
+          onCreated={(config) => {
+            setNewInit(undefined)
+            toast.success(t('已新建 {p}', { p: config }))
+            reload()
+            go('assetforge', config)
+          }}
+          onAi={(prompt, config) => {
+            setNewInit(undefined)
+            setAwaiting(config)
+            chat.send(prompt)
+          }}
+        />
+      )}
+      {chat.dialog}
       <MenuHost />
     </div>
   )
