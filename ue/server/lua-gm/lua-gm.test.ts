@@ -80,6 +80,27 @@ test('文件模式：固定开头 + 通配符；** 跨目录，* 不跨', async 
   assert.deepEqual(m.files, ['Content/Script/GM/A.lua', 'Content/Script/GM/sub/B.lua', 'Content/Script/Other.lua'])
 })
 
+test('全局路径：项目外的绝对路径也能扫，结果给绝对路径；设置里能存', async () => {
+  assert.equal(splitPattern('/opt/shared/GM/*.lua').base, '/opt/shared/GM')
+  assert.equal(splitPattern('G:\\Shared\\GM\\*.lua').base, 'G:/Shared/GM')
+  const shared = path.join(base, 'shared-gm')
+  await mkdir(path.join(shared, 'sub'), { recursive: true })
+  await writeFile(path.join(shared, 'Common.lua'), '')
+  await writeFile(path.join(shared, 'sub', 'Deep.lua'), '')
+  const root = path.join(base, 'files2')
+  await mkdir(root, { recursive: true })
+  const slash = (f: string) => f.replaceAll('\\', '/')
+  const m = await matchFiles(root, [`${slash(shared)}/**/*.lua`])
+  assert.deepEqual(m.files, [`${slash(shared)}/Common.lua`, `${slash(shared)}/sub/Deep.lua`])
+  // 项目里的文件写成绝对路径，结果还是相对项目根
+  await mkdir(path.join(root, 'GM'), { recursive: true })
+  await writeFile(path.join(root, 'GM', 'In.lua'), '')
+  assert.deepEqual((await matchFiles(root, [`${slash(root)}/GM/*.lua`])).files, ['GM/In.lua'])
+  const p = proj('abs')
+  const c = await patchConfig(p, { files: [`${shared}/*.lua`, '../up/*.lua'] })
+  assert.deepEqual(c.files, [`${slash(shared)}/*.lua`])
+})
+
 test('脚本输出：不是数组直接报错，个别条目不对丢掉并记警告', () => {
   assert.throws(() => normalize('oops', []), /数组/)
   const r = normalize(
@@ -177,6 +198,6 @@ test('参数关联按键合并，null 表示去掉脚本给的关联，undefined
   await patchConfig(p, { binding: { key: 'AddItem.count' } })
   c = await readConfig(p)
   assert.ok(!('AddItem.count' in c.bindings))
-  // 绝对路径和 .. 不收
-  assert.deepEqual((await patchConfig(p, { files: ['/etc/x.lua', '../a.lua', 'GM/*.lua'] })).files, ['GM/*.lua'])
+  // .. 不收；全局路径（项目外的绝对路径）收，见上面「全局路径」那条
+  assert.deepEqual((await patchConfig(p, { files: ['../a.lua', 'GM/*.lua'] })).files, ['GM/*.lua'])
 })

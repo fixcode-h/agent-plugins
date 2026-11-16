@@ -1982,7 +1982,6 @@
   "保存并让 AI 改扫描脚本": "Save and ask AI to fix the scan script",
   "保存并让 AI 写扫描脚本": "Save and ask AI to write the scan script",
   "GM 文件": "GM files",
-  "相对项目目录，一行一个，可以用 * 和 **": "Relative to the project folder, one per line, * and ** allowed",
   "找到 {n} 个文件": "{n} files found",
   "正在找…": "Searching…",
   "扫描脚本": "Scan script",
@@ -2066,5 +2065,6 @@
   "关联表格…": "Link a table…",
   "没关联": "Not linked",
   "搜 {cols}": "Search {cols}",
-  "{file} · 含「{q}」· {n} 行": "{file} · contains \"{q}\" · {n} rows"
+  "{file} · 含「{q}」· {n} 行": "{file} · contains \"{q}\" · {n} rows",
+  "一行一个，可以用 * 和 **；写相对项目目录的路径，或项目外的全局路径（G:\\Shared\\GM\\*.lua）": "One per line, * and ** allowed. Use a path relative to the project folder, or a global path outside the project (G:\\Shared\\GM\\*.lua)"
 }

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
-import { matchFiles, patchConfig, readConfig } from './config.ts'
+import { fileAbs, matchFiles, patchConfig, readConfig } from './config.ts'
 import { scriptPrompt } from './prompt.ts'
 import { runLuaGm } from './run.ts'
 import { current, scan } from './scan.ts'
@@ -34,7 +34,7 @@ export async function luaGmRoute(ctx: OpCtx, route: string, b: Body): Promise<un
       const { files } = await matchFiles(p.root, patterns)
       const items = await Promise.all(
         files.slice(0, 200).map(async (f) => {
-          const text = await readFile(path.join(p.root, f), 'utf8').catch(() => '')
+          const text = await readFile(fileAbs(p.root, f), 'utf8').catch(() => '')
           return { path: f, lines: text ? text.split('\n').length : 0 }
         }),
       )

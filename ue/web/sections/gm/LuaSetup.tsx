@@ -94,12 +94,15 @@ export function LuaSetup({
       }
     >
       <div className="ue:flex ue:flex-col ue:gap-4">
-        <ui.Field label={t('GM 文件')} hint={t('相对项目目录，一行一个，可以用 * 和 **')}>
+        <ui.Field
+          label={t('GM 文件')}
+          hint={t('一行一个，可以用 * 和 **；写相对项目目录的路径，或项目外的全局路径（G:\\Shared\\GM\\*.lua）')}
+        >
           <ui.Textarea
             rows={3}
             className="ue:font-mono"
             value={text}
-            placeholder={'Content/Script/GM/**/*.lua'}
+            placeholder={'Content/Script/GM/**/*.lua\nG:/Shared/GM/*.lua'}
             onChange={(e: { target: { value: string } }) => setText(e.target.value)}
           />
         </ui.Field>
