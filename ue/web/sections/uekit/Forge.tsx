@@ -139,7 +139,8 @@ export function Forge() {
     [entries],
   )
   // 列表先从磁盘出、UE 还没回同步状态：各状态的数先显示「…」，不显示成 0 让人以为都同步了
-  const statesUnknown = entries.some((e) => !e.state)
+  // 编辑器没开、状态读不到（unknown）时同样不算数
+  const statesUnknown = entries.some((e) => !e.state || e.state === 'unknown')
   const num = (n: number) => (statesUnknown ? '…' : n)
   const q = query.trim().toLowerCase()
   const items: TreeLeaf<ForgeEntry>[] = useMemo(
@@ -368,8 +369,8 @@ export function Forge() {
             onFolderMenu={menus.folderMenu}
             leafIcon={(e) => ({ icon: FileJson, tone: kindMeta(e.kind).tone })}
             leafRight={(e) => {
-              // 已同步不标；还没读到状态的也先不标，免得一排「正在读状态」
-              if (!e.state || e.state === 'synced') return null
+              // 已同步不标；还没读到状态、编辑器没开读不到状态的也不标，免得一排一样的字（底栏已经说了原因）
+              if (!e.state || e.state === 'synced' || e.state === 'unknown') return null
               const s = stateMeta(e.state)
               return (
                 <span className={cn('ue:flex ue:items-center ue:gap-1', s.tone)}>
