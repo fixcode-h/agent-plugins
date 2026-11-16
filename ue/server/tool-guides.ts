@@ -52,12 +52,14 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '改属性',
     summary: '改对象或资源的属性、数组元素、UnLua 的简单字段，可以 ue_undo 撤回',
     useWhen: '验证改一个数值能不能修好问题、调整资源默认值时；资源的修改之后要 ue_save 才写盘',
-    avoidWhen: 'Lua 里的表和函数用 ue_lua；改蓝图逻辑用 ue_blueprint',
+    avoidWhen:
+      'Lua 里的表和函数用 ue_lua；改蓝图逻辑用 ue_blueprint；结果提醒资源由 AssetForge 配置管着时，要保留的改动改配置再 ue_forge import',
     group: RUN,
   },
   ue_lua: {
     title: 'Lua',
-    summary: '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数，在本机跑项目配好的 Lua 增量 / 全编译；快照点、性能采样、查 Lua 持有的已销毁对象',
+    summary:
+      '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数，在本机跑项目配好的 Lua 增量 / 全编译；快照点、性能采样、查 Lua 持有的已销毁对象',
     useWhen:
       'UnLua 项目里改完 .lua 要验证时按 check（或 compile 跑项目配好的编译）→ reload → 触发 → errors 走一遍，按返回的 文件:行 修；要调一个 Lua 函数用 action=call；ue_get / ue_set 做不到的复杂读写才用 exec；' +
       '要看某行执行时的局部变量用 snap（不暂停游戏），Lua 卡顿找热点用 profile，界面关了对象释放不掉用 leaks；用户批准过的常用代码用 exec 带 snippet，不用确认',
@@ -76,14 +78,16 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '资源读写',
     summary: '资源的通用读写、改名移动、引用关系和 DataTable 的行',
     useWhen: '查资源信息和引用、改 DataTable、新建 / 改名 / 移动资源时；修改只在编辑器里，ue_save 才写盘',
-    avoidWhen: '蓝图的图和变量用 ue_blueprint；单个属性用 ue_get / ue_set',
+    avoidWhen:
+      '蓝图的图和变量用 ue_blueprint；单个属性用 ue_get / ue_set；结果提醒资源由 AssetForge 配置管着时，改 DataTable 等要保留的修改改配置再 ue_forge import，改名删除要同步改配置',
     group: ASSET,
   },
   ue_blueprint: {
     title: '蓝图',
     summary: '由粗到细读蓝图（大纲、伪代码、节点），按操作列表改图和变量',
     useWhen: '要看懂或修改蓝图逻辑时：先 outline，再 graph 读伪代码，改完 ue_compile',
-    avoidWhen: '跨蓝图搜调用点用 ue_find kind=node；只改类默认值用 ue_set',
+    avoidWhen:
+      '跨蓝图搜调用点用 ue_find kind=node；只改类默认值用 ue_set；结果提醒蓝图由 AssetForge 配置管着时，改完用 ue_forge export 写回配置，否则下次导入会被覆盖',
     group: ASSET,
   },
   ue_save: {
@@ -129,7 +133,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     useWhen:
       '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时；用户让你在关卡里摆测试场景、放或删某个 Actor 时用 spawn / destroy',
     avoidWhen:
-      '完整编译 C++ 用面板的 request_build，结果会推回来；新建资源（蓝图、DataTable）用 ue_asset create，不是 spawn；运行中的游戏里生成对象用 ue_call / ue_gm',
+      '完整编译 C++ 用面板的 request_build，结果会推回来；新建资源（蓝图、DataTable）用 ue_asset create，不是 spawn；运行中的游戏里生成对象用 ue_call / ue_gm；要写进测试场景、能回放的开停 PIE 用 ue_gametest 的 pie.start / pie.stop 步骤',
     confirms: true,
     group: EDITOR,
   },
@@ -160,7 +164,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     useWhen:
       '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：写配置前先 schema kind=<kind> 看结构、schema class=<类> 看 props 能写哪些属性，改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
     avoidWhen:
-      '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；导入导出是后台作业，返回编号后用 action=job 查结果',
+      '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；只是看资产的属性用 ue_get / ue_asset export，不用 export 写配置；导入导出是后台作业，返回编号后用 action=job 查结果',
     confirms: true,
     group: ASSET,
   },
@@ -170,7 +174,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     useWhen:
       '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下），写完用 resolve 核对选择器，再用 run 跑，job / report 看结果；失败时读 report 里 payload.evidence 的截图、控件快照和日志找原因；改完代码要回归时 run tag=… 批量跑；不知道某个控件的选择器怎么写时用 inspect 指着它看',
     avoidWhen:
-      '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
+      '只读运行时数值用 ue_get（控件属性用 ue_get tree=true），找 Actor 用 ue_find；只截一张图看用 ue_screenshot（图直接返回），只临时开停 PIE 用 ue_editor，只敲一条控制台命令用 ue_console——要写进报告、能回放时才用对应的场景步骤；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
     group: RUN,
   },
 }

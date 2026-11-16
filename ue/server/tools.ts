@@ -14,6 +14,7 @@ import { mcpText } from './util.ts'
 import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
+import { FORGE_GUARDED, forgeNotice } from './uekit/forge-guard.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { listGm } from './lua-gm/tool.ts'
 import { LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
@@ -536,7 +537,9 @@ export function ueTools(projectId: string, root: string, agent: string): McpTool
         target: target && (target.instance !== undefined || target.world) ? target : undefined,
       }
       try {
-        return await fn(args, ctx)
+        const r = await fn(args, ctx)
+        // 改到 AssetForge 纳管的资产时提醒先改配置（uekit/forge-guard.ts）
+        return FORGE_GUARDED.has(def.name) ? await forgeNotice(def.name, args, ctx, r) : r
       } catch (e) {
         return mcpText((e as Error).message, true)
       }
