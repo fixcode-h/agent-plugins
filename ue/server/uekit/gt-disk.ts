@@ -105,38 +105,42 @@ async function scenarios(root: string, args: Record<string, unknown>) {
   const rootAbs = await scenarioRoot(root)
   const files: string[] = []
   await walkJson(rootAbs, files)
+  // 场景根下的 _settings.json 是运行配置（阻挡界面规则等，GameTest 1.2.0-beta.6），不是场景，和 UE 那边一样跳过
+  const settingsFile = path.join(rootAbs, '_settings.json')
   const all = await Promise.all(
-    files.map(async (abs) => {
-      const relativePath = slash(path.relative(rootAbs, abs))
-      const fallback = path.basename(abs, path.extname(abs))
-      const doc = await readJson(abs)
-      if (!doc)
+    files
+      .filter((f) => f !== settingsFile)
+      .map(async (abs) => {
+        const relativePath = slash(path.relative(rootAbs, abs))
+        const fallback = path.basename(abs, path.extname(abs))
+        const doc = await readJson(abs)
+        if (!doc)
+          return {
+            name: fallback,
+            relativePath,
+            _note: '',
+            steps: 0,
+            revision: 0,
+            tags: [],
+            parseError: '不是合法的 JSON',
+          }
+        const errors = validate(doc)
+        const tags = Array.isArray(doc.tags)
+          ? doc.tags
+              .filter((x): x is string => typeof x === 'string')
+              .map((x) => x.trim())
+              .filter(Boolean)
+          : []
         return {
-          name: fallback,
+          name: typeof doc.name === 'string' && doc.name ? doc.name : fallback,
           relativePath,
-          _note: '',
-          steps: 0,
-          revision: 0,
-          tags: [],
-          parseError: '不是合法的 JSON',
+          _note: typeof doc._note === 'string' ? doc._note : '',
+          steps: errors.length ? 0 : (doc.steps as unknown[]).length,
+          revision: typeof doc.revision === 'number' ? Math.max(0, Math.trunc(doc.revision)) : 0,
+          tags,
+          ...(errors.length ? { parseError: errors.join('；') } : {}),
         }
-      const errors = validate(doc)
-      const tags = Array.isArray(doc.tags)
-        ? doc.tags
-            .filter((x): x is string => typeof x === 'string')
-            .map((x) => x.trim())
-            .filter(Boolean)
-        : []
-      return {
-        name: typeof doc.name === 'string' && doc.name ? doc.name : fallback,
-        relativePath,
-        _note: typeof doc._note === 'string' ? doc._note : '',
-        steps: errors.length ? 0 : (doc.steps as unknown[]).length,
-        revision: typeof doc.revision === 'number' ? Math.max(0, Math.trunc(doc.revision)) : 0,
-        tags,
-        ...(errors.length ? { parseError: errors.join('；') } : {}),
-      }
-    }),
+      }),
   )
   all.sort((a, b) => (a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0))
   const query = String(args.query ?? '')

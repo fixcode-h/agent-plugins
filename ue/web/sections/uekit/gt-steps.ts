@@ -75,9 +75,15 @@ export function humanStep(def?: Record<string, unknown>): string | undefined {
     case 'type':
       line = t('在 {w} 里输入「{s}」', { w: what, s: str('text') })
       break
-    case 'key':
-      line = t('在 {w} 上按 {k}', { w: what, k: str('key') })
+    case 'key': {
+      // GameTest 1.2.0-beta.5 起录制把长按录成 tap + holdMs
+      const hold = Number(def.holdMs)
+      line =
+        hold > 0
+          ? t('在 {w} 上长按 {k} {s} 秒', { w: what, k: str('key'), s: (hold / 1000).toFixed(1) })
+          : t('在 {w} 上按 {k}', { w: what, k: str('key') })
       break
+    }
     case 'assert':
       line = t('检查 {w}', { w: what })
       break
