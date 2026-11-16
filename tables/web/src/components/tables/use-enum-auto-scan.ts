@@ -1,14 +1,12 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { t } from '@shared/i18n'
 import type { TableDoc, TableSchema } from '@shared/tables'
-import { diffEmpty, diffLine, isSheetFrom, scanName, type ScanRun } from '@shared/table-enum-scan'
+import { diffEmpty, diffLine, isSheetFrom, scanName, sheetRuleUses, type ScanRun } from '@shared/table-enum-scan'
 import type { EnumRename } from '@shared/table-enum-rename'
 import type { WebHost } from '../../../../../sdk/web.ts'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, tableSchemaOf } from '@/lib/table-schema'
 import { toast } from '@/lib/toast'
-
-const sameFile = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase()
 
 /** 同一条规则同一个错误只提醒一次（每次打开表格页都弹会很烦；错误还在规则那行显示着）。手动扫的照常报 */
 const told = new Set<string>()
@@ -123,7 +121,7 @@ export function useEnumAutoScan(
 
   // 规则用到的表格文件：修改时间变了（打开、保存、重新载入）就请求一次
   const watched = Object.values(docs).flatMap((d) =>
-    'sheets' in d && auto.some((s) => isSheetFrom(s.from) && sameFile(s.from.file, d.path))
+    'sheets' in d && auto.some((s) => isSheetFrom(s.from) && sheetRuleUses(s.from, d.path))
       ? [`${d.path}\u0000${d.mtime}`]
       : [],
   )

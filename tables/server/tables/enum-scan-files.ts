@@ -6,7 +6,7 @@
 import path from 'node:path'
 import { readdir, stat } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
-import { splitGlobs } from '../../shared/table-enum-scan.ts'
+import { pathGlobRe, splitGlobs } from '../../shared/table-enum-scan.ts'
 
 /** 一条规则最多读这么多个文件、这么大 */
 export const MAX_FILES = 5000
@@ -32,34 +32,8 @@ export interface SrcFile {
   size: number
 }
 
-/** 通配 → 正则（按 / 分段：** 跨目录，* ? 不跨，{a,b} 任选一个） */
-export function globRe(glob: string) {
-  let re = ''
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]
-    if (c === '*' && glob[i + 1] === '*') {
-      i++
-      if (glob[i + 1] === '/') {
-        i++
-        re += '(?:.*/)?'
-      } else re += '.*'
-    } else if (c === '*') re += '[^/]*'
-    else if (c === '?') re += '[^/]'
-    else if (c === '{') {
-      const e = glob.indexOf('}', i)
-      if (e < 0) re += '\\{'
-      else {
-        re += `(?:${glob
-          .slice(i + 1, e)
-          .split(',')
-          .map((x) => x.replace(/[.+^$()|[\]\\]/g, '\\$&'))
-          .join('|')})`
-        i = e
-      }
-    } else re += c.replace(/[.+^$()|[\]\\]/g, '\\$&')
-  }
-  return new RegExp(`^${re}$`, process.platform === 'win32' ? 'i' : '')
-}
+/** 通配 → 正则（写法在 shared 的 pathGlobRe）：Windows 上不分大小写 */
+export const globRe = (glob: string) => pathGlobRe(glob, process.platform === 'win32')
 
 /** 通配里不带通配符的开头那段目录：只从这里往下走 */
 export function globBase(glob: string) {

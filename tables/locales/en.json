@@ -1213,5 +1213,16 @@
   "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}",
   "找到 {n} 个表格文件": "Found {n} table files",
   "在 {dir} 等目录找到 {n} 个表格文件": "Found {n} table files in {dir} and other folders",
-  "还要选表格目录": "Choose the table folders first"
+  "还要选表格目录": "Choose the table folders first",
+  "「{glob}」在表格目录里没对上任何表格": "\"{glob}\" matched no tables in the table folders",
+  "{file} 读不出来：{error}": "Couldn't read {file}: {error}",
+  "「{glob}」对上的 {n} 个表格里都没有页签「{sheet}」": "None of the {n} tables matching \"{glob}\" has a sheet \"{sheet}\"",
+  "可以写通配批量扫，例如 Excel/**/*.xlsx：对上的表格里有这个页签的都按同样的写法扫。": "Use a wildcard to scan in bulk, e.g. Excel/**/*.xlsx: every matching table that has this sheet is scanned the same way.",
+  "枚举扫描扫出 {n} 个枚举": "Enum scan found {n} enums",
+  "枚举扫描规则：{name}": "Enum scan rule: {name}",
+  "按规则批量扫 {where}，应用后马上扫一次": "Scans {where} in bulk; runs once right after applying",
+  "有 {n} 项格式不对没收下：{items}": "{n} items were malformed and left out: {items}",
+  "枚举 {name}：{error}": "Enum {name}: {error}",
+  "扫描规则 {n}：{error}": "Scan rule {n}: {error}",
+  "类型 {name}": "Type {name}"
 }

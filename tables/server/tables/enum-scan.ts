@@ -14,8 +14,10 @@ import { t } from '../../shared/i18n.ts'
 import {
   applyRename,
   diffScan,
+  isFileGlob,
   isSheetFrom,
   scanSheets,
+  sheetRuleUses,
   type CodeFrom,
   type EnumScan,
   type ScanFrom,
@@ -31,6 +33,7 @@ import type { TableSchema, TablesConfig } from '../../shared/tables.ts'
 import { openTable, safeRel, tableFull } from './files.ts'
 import { readScanResults, writeScanResults } from './enum-scan-store.ts'
 import { findSources, type SrcFile } from './enum-scan-files.ts'
+import { scanSheetGlob, sheetRuleFiles } from './enum-scan-sheets.ts'
 import { runShell } from '../merge-build.ts'
 import { currentShell } from '../shells.ts'
 
@@ -53,6 +56,10 @@ async function fileStamp(ctx: ScanCtx, file: string) {
 
 /** 表格里的写法：读那一个表格文件 */
 async function scanSheetRule(ctx: ScanCtx, from: SheetFrom): Promise<Got> {
+  if (isFileGlob(from.file)) {
+    const got = await scanSheetGlob(ctx, from)
+    return { ...got, files: stampsOf(got.files) }
+  }
   const stamp = await fileStamp(ctx, from.file)
   if (!stamp) throw new Error(t('找不到文件：{file}', { file: from.file }))
   const doc = await openTable(ctx.dir, from.file, ctx.cfg)
@@ -136,7 +143,8 @@ async function scanCommand(ctx: ScanCtx, from: Extract<ScanFrom, { kind: 'comman
     raw = undefined
   }
   const obj = (raw && typeof raw === 'object' && 'enums' in raw ? (raw as { enums: unknown }).enums : raw) as
-    Record<string, unknown> | undefined
+    | Record<string, unknown>
+    | undefined
   if (!obj || typeof obj !== 'object') throw new Error(t('命令的输出里没有找到 {"enums": {...}} 这样的 JSON'))
   const enums: Got['enums'] = {}
   const warnings: string[] = []
@@ -203,7 +211,7 @@ export async function scanOnce(
 async function stale(ctx: ScanCtx, rule: EnumScan, prev: ScanResult | undefined) {
   if (!prev || prev.error) return true
   const from = rule.from
-  if (isSheetFrom(from)) {
+  if (isSheetFrom(from) && !isFileGlob(from.file)) {
     const stamp = await fileStamp(ctx, from.file).catch(() => null)
     if (!stamp) return true
     const old = prev.files[stamp.rel]
@@ -211,8 +219,10 @@ async function stale(ctx: ScanCtx, rule: EnumScan, prev: ScanResult | undefined)
   }
   // 命令没写 files：没法知道源头变没变，自动时不跑（只能手动）
   if (from.kind === 'command' && !from.files.trim()) return false
-  // 代码类只 stat：文件多了、少了、改了都算变了
-  const now = await findSources(ctx.dir, from.files, from.exclude).catch(() => null)
+  // 代码类、通配的表格类只 stat：文件多了、少了、改了都算变了
+  const now = await (
+    isSheetFrom(from) ? sheetRuleFiles(ctx, from) : findSources(ctx.dir, from.files, from.exclude)
+  ).catch(() => null)
   if (!now) return true
   const keys = Object.keys(prev.files)
   if (keys.length !== now.length) return true
@@ -232,7 +242,7 @@ const sameFile = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() =
 
 /** 自动扫时这条规则用不用到这个文件（表格类比文件名；代码类看是不是上次扫过的文件之一） */
 function uses(rule: EnumScan, file: string, prev: ScanResult | undefined) {
-  if (isSheetFrom(rule.from)) return sameFile(rule.from.file, file)
+  if (isSheetFrom(rule.from)) return sheetRuleUses(rule.from, file)
   return Object.keys(prev?.files ?? {}).some((f) => sameFile(f, file) || sameFile(path.basename(f), file))
 }
 
