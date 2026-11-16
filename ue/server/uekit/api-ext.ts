@@ -7,6 +7,7 @@ import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { configBaseline } from './forge-baseline.ts'
+import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
 import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
@@ -73,6 +74,18 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/forge/create':
       // 「新建配置」：模板生成的 JSON 写进配置根；让 AI 写时先建好目录
       return forgeCreateConfig(p.root, b)
+    case 'POST ext/forge/read':
+      // 「配置原文」页签编辑、复制一份、存为模板：读整份原文（describe 回的原文超长会截断）
+      return forgeReadConfig(p.root, b)
+    case 'POST ext/forge/save':
+      // 「配置原文」页签保存：带读出时的修改时间，中间被改过就拒绝
+      return forgeSaveConfig(p.root, b)
+    case 'POST ext/forge/templates':
+      // 新建配置弹窗里的「项目模板」：配置根下 _templates/ 里的 JSON
+      return forgeTemplates(p.root, b)
+    case 'POST ext/forge/asset':
+      // 新建配置前看目标资产在不在磁盘上
+      return forgeAssetExists(p.root, b)
     case 'POST ext/forge/watch':
       // AssetForge 页右栏选中的配置：存盘了推 forge.file，页面重拉差异、重新演练（不轮询）
       if (!b.root) throw new BridgeError(t('不知道配置根在哪：先刷新 AssetForge 页'))

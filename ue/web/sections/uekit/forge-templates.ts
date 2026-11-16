@@ -27,6 +27,9 @@ export interface ForgeTemplate {
   /** 资产名前缀建议（UE 常见命名：WBP_、BP_、M_……），新建时资产路径框的占位 */
   prefix: string
   fields?: TplField[]
+  /** 项目模板（配置根 _templates/ 下）：相对 _templates 的路径；读不懂时 bad 是原因，不能选 */
+  source?: string
+  bad?: string
   /** 生成配置文档：asset 是目标资产包路径（/Game/UI/WBP_X），name 是资产名，v 是表单里其余字段 */
   build: (asset: string, name: string, v: Record<string, string>) => Record<string, unknown>
 }

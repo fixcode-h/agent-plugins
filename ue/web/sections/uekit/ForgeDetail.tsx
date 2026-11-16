@@ -3,6 +3,7 @@ import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import type { ForgeEntry } from './Forge.tsx'
+import type { ForgeFileOps } from './forge-file-ops.ts'
 import { canImport, useForgeActions } from './forge-actions.ts'
 import { ForgeAssetTab } from './ForgeAssetTab.tsx'
 import { ForgeConfig, lineFromMessage } from './ForgeConfig.tsx'
@@ -40,6 +41,7 @@ export function ForgeDetail({
   tab: tabProp,
   onTab,
   fileRev = 0,
+  fileOps,
 }: {
   entry: ForgeEntry
   busy: boolean
@@ -48,6 +50,8 @@ export function ForgeDetail({
   onTab: (t: ForgeTab) => void
   /** 这份配置存盘的次数（Forge.tsx 收 forge.file 推送时加 1）：变了就重拉原文、差异，重新演练 */
   fileRev?: number
+  /** 复制一份、让 AI 改、存为模板（弹窗由页面挂） */
+  fileOps?: ForgeFileOps
 }) {
   const { project } = useUe()
   const { ui } = h()
@@ -108,7 +112,7 @@ export function ForgeDetail({
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <ForgeHeader entry={entry} busy={busy} actions={actions} onDryRun={() => pick('plan')} />
+      <ForgeHeader entry={entry} busy={busy} actions={actions} onDryRun={() => pick('plan')} fileOps={fileOps} />
       <div className="ue:border-b ue:border-line ue:px-5 ue:pb-2.5">
         <ForgeLink
           config={(entry.config ?? '').replace(/\\/g, '/')}
@@ -178,6 +182,11 @@ export function ForgeDetail({
             truncated={desc.data?.configTextTruncated}
             badLine={entry.state === 'parse-error' ? lineFromMessage(entry.message) : undefined}
             onOpen={() => void actions.openFile()}
+            edit={
+              entry.config && configRoot
+                ? { project: project.id, configRoot, path: entry.config.replace(/\\/g, '/') }
+                : undefined
+            }
           />
         )}
       </div>

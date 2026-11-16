@@ -13,6 +13,7 @@ import type { MouseEvent } from 'react'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import type { ForgeEntry } from './Forge.tsx'
+import { fileOpItems, type ForgeFileOps } from './forge-file-ops.ts'
 import { canExport, canImport, fileName, type useForgeActions } from './forge-actions.ts'
 import { kindMeta } from './kinds.ts'
 import { StatePill } from './StatePill.tsx'
@@ -29,12 +30,14 @@ export function ForgeHeader({
   busy,
   actions,
   onDryRun,
+  fileOps,
 }: {
   entry: ForgeEntry
   busy: boolean
   actions: Actions
   /** 演练导入：切到「导入计划」页签（那里调 forge.plan） */
   onDryRun: () => void
+  fileOps?: ForgeFileOps
 }) {
   const { ui, cn } = h()
   const k = kindMeta(entry.kind)
@@ -66,6 +69,7 @@ export function ForgeHeader({
       },
       { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => void actions.reveal() },
       { label: t('用编辑器打开'), icon: SquarePen, onClick: () => void actions.openFile() },
+      ...fileOpItems(fileOps, entry),
       'sep',
       { label: t('复制配置路径'), icon: Copy, onClick: () => copyText(entry.configPath ?? rel) },
       {
