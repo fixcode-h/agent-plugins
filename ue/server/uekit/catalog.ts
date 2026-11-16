@@ -141,7 +141,7 @@ export async function extensionStatus(
   project: UeProject,
   loaded: Map<string, string>,
   refresh = false,
-): Promise<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean }> {
+): Promise<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean; uelinkPreUpdate?: string }> {
   // 打开页面只看缓存，点「检查更新」才去 GitHub（同时重读 UELink 的发布清单，见 api-ext.ts）
   const cat = await readCatalog(refresh, true)
   const entries = cat.plugins.filter((e) => e.kind !== 'base' && e.name !== UELINK)
@@ -181,7 +181,10 @@ export async function extensionStatus(
       }
     }),
   )
-  return { items, error: cat.error, unchecked: cat.unchecked }
+  // 项目里装的已经是 UELink 预发布版（为装扩展升上去的）时，继续给更新的预发布版：
+  // 查更新只认正式版，否则修了编译错误的新预发布永远到不了用户手上（5.4 上实际碰到过）
+  const uelinkPreUpdate = pre && /-/.test(have) && cmpVersion(pre, have) > 0 ? pre : undefined
+  return { items, error: cat.error, unchecked: cat.unchecked, uelinkPreUpdate }
 }
 
 /** 按名字和版本取清单（安装用） */

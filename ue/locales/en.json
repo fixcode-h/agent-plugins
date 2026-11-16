@@ -2029,5 +2029,6 @@
   "GM · 参数关联表格下拉": "GM · table-linked parameter dropdown",
   "没装或没启用表格插件，先直接填；装好后这里会变成能搜的下拉": "The tables plugin isn't installed or enabled. Type the value for now; once it's installed this becomes a searchable dropdown",
   "表格目录里没有名字含「{table}」的表": "No table whose name contains \"{table}\" in the table folders",
-  "{file} 没有「{key}」列": "{file} has no \"{key}\" column"
+  "{file} 没有「{key}」列": "{file} has no \"{key}\" column",
+  "现在装的是预发布版，UEKit 里有更新的预发布 {v}，升级后要完整编译一次。": "You have a pre-release installed and UEKit has a newer pre-release {v}; do a full build after upgrading."
 }
