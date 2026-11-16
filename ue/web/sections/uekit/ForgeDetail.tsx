@@ -74,6 +74,21 @@ export function ForgeDetail({
     () => op<Describe>(project.id, 'forge.describe', entry.config ? { config: entry.config } : { asset: entry.asset }),
     [entry.key, entry.state, fileRev],
   )
+  // 配置原文直接读本机文件（用户 2026-11-16「看个 json 原文为什么要等编辑器」）：编辑器没开、卡住或崩了也能看；
+  // 读不到（配置根还不知道、文件太大）才退回 forge.describe 回的那份
+  const cfgPath = entry.config?.replace(/\\/g, '/')
+  const local = useLoad(
+    () =>
+      cfgPath && configRoot
+        ? ppost<{ text: string }>(project.id, 'ext/forge/read', { root: configRoot, path: cfgPath }).then((r) => r.text)
+        : Promise.resolve(undefined),
+    [entry.key, configRoot, fileRev],
+  )
+  const configText = local.data ?? desc.data?.configText
+  const configTruncated = local.data === undefined && desc.data?.configTextTruncated
+  // 本机读失败时才等编辑器；两边都失败报本机那条（更直接）
+  const configLoading = configText === undefined && (local.loading || (!!local.error && desc.loading))
+  const configError = configText === undefined && !configLoading ? local.error || desc.error : ''
   const plan = useLoad(
     () =>
       (planWanted || tab === 'plan') && importable
@@ -157,8 +172,10 @@ export function ForgeDetail({
           <ForgeAssetTab
             entry={entry}
             diff={against === 'asset' ? diff.data : undefined}
-            configText={desc.data?.configText}
-            configTruncated={desc.data?.configTextTruncated}
+            configText={configText}
+            configTruncated={configTruncated}
+            configLoading={configLoading}
+            configError={configError}
             onShowDiff={() => pick('diff')}
           />
         )}
@@ -176,10 +193,10 @@ export function ForgeDetail({
           ))}
         {tab === 'config' && (
           <ForgeConfig
-            loading={desc.loading}
-            error={desc.error}
-            text={desc.data?.configText}
-            truncated={desc.data?.configTextTruncated}
+            loading={configLoading}
+            error={configError}
+            text={configText}
+            truncated={configTruncated}
             badLine={entry.state === 'parse-error' ? lineFromMessage(entry.message) : undefined}
             onOpen={() => void actions.openFile()}
             edit={

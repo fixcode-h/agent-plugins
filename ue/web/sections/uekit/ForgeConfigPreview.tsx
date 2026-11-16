@@ -55,14 +55,27 @@ function flatten(n: CfgNode, depth: number, key: string, out: Line[]) {
   return out
 }
 
-export function ForgeConfigPreview({ text, truncated, note }: { text?: string; truncated?: boolean; note: string }) {
+export function ForgeConfigPreview({
+  text,
+  truncated,
+  loading,
+  error,
+  note,
+}: {
+  text?: string
+  truncated?: boolean
+  loading?: boolean
+  error?: string
+  note: string
+}) {
   const { cn } = h()
   const doc = useMemo(() => (text ? parseConfig(text) : undefined), [text])
   const lines = useMemo(() => (doc?.root ? flatten(doc.root, 0, doc.root.name ?? 'root', []) : []), [doc])
   const [sel, setSel] = useState('')
   const cur = lines.find((l) => l.key === sel) ?? lines[0]
 
-  if (text === undefined) return <Hint>{t('读取中…')}</Hint>
+  // 读不到就直说，不一直挂「读取中」
+  if (text === undefined) return <Hint>{error || (loading ? t('读取中…') : t('没有配置原文'))}</Hint>
   if (!doc?.root)
     return (
       <Hint>
