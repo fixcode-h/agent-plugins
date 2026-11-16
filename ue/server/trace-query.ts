@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { getCapture, type Capture } from './captures.ts'
-import { ensureBackground } from './editor.ts'
+import { autoBackground, ensureBackground, noBackgroundMsg } from './editor.ts'
 import { BridgeError, liveCards, rpc, type Card } from './instances.ts'
 import type { OpCtx } from './ops.ts'
 import type { UeProject } from './types.ts'
@@ -26,11 +26,8 @@ async function analysisCard(p: UeProject): Promise<Card> {
   const card =
     cards.find((x) => x.kind === 'editor') ??
     cards.find((x) => x.kind === 'background') ??
-    (c().config().offline === 'off' ? undefined : await ensureBackground(p))
-  if (!card)
-    throw new BridgeError(
-      t('分析 trace 要用编辑器或后台编辑器，但插件参数里关掉了离线读取（后台编辑器）：先打开编辑器'),
-    )
+    (autoBackground() ? await ensureBackground(p) : undefined)
+  if (!card) throw new BridgeError(noBackgroundMsg())
   if (!newer(card.bridge || '0', TRACE_BRIDGE))
     throw new BridgeError(
       t('{kind} 里的桥接是 {v}，分析 trace 要 {min} 以上：在「UE 插件」里更新桥接插件，重新编译后再打开', {

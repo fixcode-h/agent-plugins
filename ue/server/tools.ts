@@ -295,7 +295,7 @@ const DEFS = [
       '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
-      'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器。',
+      'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。',
     {
       action: { type: 'string', enum: ASSET_ACTIONS },
       path: { type: 'string' },

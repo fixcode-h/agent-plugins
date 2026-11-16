@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { assetChildren } from './asset-folders.ts'
 import { assetQuery } from './asset-query.ts'
-import { ensureBackground } from './editor.ts'
+import { autoBackground, ensureBackground, noBackgroundMsg } from './editor.ts'
 import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
@@ -336,8 +336,10 @@ async function chooseCard(ctx: OpCtx, op: string, args: Record<string, unknown>)
   // 运行时操作只发给有游戏世界的进程；资源操作谁都行，编辑器没开时起后台编辑器
   const live = cards.filter((x) => x.kind !== 'background')
   if (assets && !live.length && !(ctx.target?.instance && ctx.target.instance !== 'background')) {
-    if (c().config().offline === 'off') throw new BridgeError(t('UE 没在运行，插件参数里关掉了离线读取（后台编辑器）'))
-    return cards.find((x) => x.kind === 'background') ?? (await ensureBackground(ctx.project))
+    const bg = cards.find((x) => x.kind === 'background')
+    if (bg) return bg
+    if (!autoBackground()) throw new BridgeError(noBackgroundMsg())
+    return ensureBackground(ctx.project)
   }
   const card = pickCard(cards, target.instance ? target : undefined, 'editor', !assets)
   if (!card)

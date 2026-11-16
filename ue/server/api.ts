@@ -1,6 +1,6 @@
 import { clearLogs, logTail, logTargets, projectState, runMacro, undo } from './actions.ts'
 import { detect } from './detect.ts'
-import { ensureBackground, launchEditor, stopBackground } from './editor.ts'
+import { closeBackground, ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { badges } from './badges.ts'
 import { clearHistory } from './history.ts'
 import { editFavs, moveFavs, readFavs } from './favorites.ts'
@@ -187,10 +187,21 @@ export async function handle(req: Request): Promise<Response> {
         return json({ items: await crashes(project) })
       case 'POST background':
         if (b.action === 'stop') {
-          stopBackground(project.id)
+          // 按名片 PID 也关：面板上次运行时起的后台编辑器不是这次的子进程
+          await closeBackground(project, 'user')
           return json({ ok: true })
         }
-        return json(await ensureBackground(project).then((c) => ({ pid: c.pid })))
+        {
+          // 网页点「启动后台编辑器」：要 30–60 秒，不等它就绪，进度看目标卡；马上能看出的错（编辑器开着、正在编译）等一下直接报
+          const starting = ensureBackground(project)
+          starting.catch(() => undefined)
+          return json(
+            await Promise.race([
+              starting.then((c) => ({ pid: c.pid })),
+              new Promise((r) => setTimeout(() => r({ starting: true }), 3000)),
+            ]),
+          )
+        }
       // 资源页「提交前检查」（precheck.ts）
       case 'POST precheck':
         return json(await precheck(ctx))

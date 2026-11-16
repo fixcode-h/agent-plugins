@@ -4,6 +4,7 @@ import { liveCards, type Card } from './instances.ts'
 import { backgroundExitWhy, editorStartingWhy } from './launch/bg-guard.ts'
 import { watchForeground } from './launch/fg-watch.ts'
 import { trackLaunch } from './launch/track.ts'
+import { runningJob } from './jobs.ts'
 import type { UeProject } from './types.ts'
 import { alive, c, exists, t } from './util.ts'
 
@@ -28,6 +29,18 @@ function exe(p: UeProject, cmd: boolean) {
   return path.join(bin, 'Linux', 'UnrealEditor')
 }
 
+/**
+ * 编辑器没开时读资源要不要自动起后台编辑器：默认不自动起（用户 2026-11-16「后台编辑器默认不启动」），
+ * 只在用户在 UE 页点启动、或 Agent 调 ue_editor background_start 时起；插件参数里改成自动才自动起
+ */
+export const autoBackground = () => c().config().offline === 'background'
+
+/** 没有后台编辑器又不自动起时的报错：说清楚怎么读 */
+export const noBackgroundMsg = () =>
+  t(
+    'UE 没在运行，后台编辑器默认不自动启动：先打开编辑器；或在 UE 页目标卡点「启动后台编辑器」、Agent 调 ue_editor action=background_start（插件参数里也能改成自动启动）',
+  )
+
 export function backgroundState(p: UeProject, cards: Card[]) {
   const card = cards.find((x) => x.kind === 'background')
   const bg = bgs.get(p.id)
@@ -35,7 +48,13 @@ export function backgroundState(p: UeProject, cards: Card[]) {
   if (card) watchForeground(p, (why) => closeBackground(p, why))
   // 编辑器连上以后读写都走它，上一次起后台编辑器的报错已经没意义，清掉（不然左栏一直挂着一条红字）
   if (bg?.error && cards.some((x) => x.kind === 'editor')) bg.error = undefined
-  return { running: !!card, starting: !!bg?.starting, pid: card?.pid, error: bg?.error }
+  return {
+    running: !!card,
+    starting: !!bg?.starting,
+    pid: card?.pid,
+    error: bg?.error,
+    auto: autoBackground(),
+  }
 }
 
 /** 等名片出现：首次启动要加载引擎和扫资源，30–60 秒常见，大项目更久 */
@@ -73,6 +92,8 @@ export async function ensureBackground(p: UeProject): Promise<Card> {
   // 编辑器正在启动、或开着还没连上：不起第二个进程抢同一个项目，报一句等它就绪（不记成后台编辑器的错误）
   const busy = await editorStartingWhy(p)
   if (busy) throw new Error(busy)
+  // 正在编译：后台编辑器会加载项目模块的 DLL，链接写不进去（用户 2026-11-16「编译的时候后台编辑器关掉」）
+  if (runningJob(p.id, 'build')) throw new Error(t('正在编译项目：编完再起后台编辑器'))
   if (bg.starting) return bg.starting
   const file = exe(p, true)
   if (!exists(file)) {

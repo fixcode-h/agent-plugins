@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { endJob, jobLog, newJob, runningJob, spawnJob } from './jobs.ts'
 import { guardBuild } from './build-guard.ts'
+import { closeBackground } from './editor.ts'
 import { blockerLines, LIVE_CODING_BLOCK } from './procs.ts'
 import type { InstallMode, Job, UeProject } from './types.ts'
 import { unzipTo } from './unzip.ts'
@@ -259,6 +260,8 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
   const busy = runningJob(p.id, 'build')
   if (busy) return busy
   const job = newJob(p.id, 'build', t('编译项目（含桥接插件）'))
+  // 后台编辑器占着项目模块的 DLL，链接会写不进去：编译前先关掉（用户 2026-11-16）
+  await closeBackground(p, 'build')
   const finish = (ok: Promise<boolean>) =>
     void ok.then(() => {
       if (!job.hint && !job.canceled && job.status === 'failed' && job.log.some((l) => LIVE_CODING_BLOCK.test(l))) {

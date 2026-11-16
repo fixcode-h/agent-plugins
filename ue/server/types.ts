@@ -259,7 +259,14 @@ export interface ProjectState {
   bridge: string
   /** 包里带的桥接版本（有新版本时提示升级） */
   bundled: string
-  background: { running: boolean; starting: boolean; pid?: number; error?: string }
+  background: {
+    running: boolean
+    starting: boolean
+    pid?: number
+    error?: string
+    /** 插件参数「编辑器没开时读资源」选了自动起后台编辑器（默认不自动起，用户 2026-11-16） */
+    auto: boolean
+  }
   jobs: Job[]
   /** 项目 Plugins/ 里有 UnLua（UE 没开时也列 Lua 页） */
   unlua?: boolean

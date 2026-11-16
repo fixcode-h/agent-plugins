@@ -208,42 +208,67 @@ export function TargetCard() {
 
 /**
  * 后台编辑器（编辑器没开时读资源、AssetForge 导入导出用的不开窗口的编辑器）常驻显示在目标卡底部：
- * 在跑就让人看得见、能手动关（用户 2026-11-15）；没在跑不占地方
+ * 在跑就让人看得见、能手动关（用户 2026-11-15）。默认不自动起（用户 2026-11-16）：
+ * UE 没在运行、又没开自动启动时给一个「启动后台编辑器」，要读资源时自己点
  */
 function BackgroundLine() {
   const { project, state, reload } = useUe()
   const [busy, setBusy] = useState(false)
   const bg = state?.background
-  if (!bg || (!bg.running && !bg.starting && !bg.error)) return null
-  const stop = () => {
+  if (!bg || !state) return null
+  const live = state.instances.some((i) => i.kind !== 'background')
+  const idle = !bg.running && !bg.starting && !bg.error
+  // 编辑器开着时读写都走它，不提示起后台；没装桥接时起了也连不上
+  if (idle && (bg.auto || live || !state.bridge)) return null
+  const act = (action: 'start' | 'stop') => {
     setBusy(true)
-    void ppost(project.id, 'background', { action: 'stop' })
+    void ppost(project.id, 'background', { action })
       .catch((e: Error) => h().toast.error(e.message))
       .finally(() => {
         setBusy(false)
         reload()
       })
   }
+  const btn =
+    'ue:shrink-0 ue:cursor-pointer ue:rounded-md ue:px-1.5 ue:py-0.5 ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50'
   return (
     <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:border-t ue:border-line ue:pt-1.5 ue:text-caption ue:text-subtle">
-      <Dot tone={bg.running ? 'ok' : bg.starting ? 'run' : 'danger'} />
+      <Dot tone={bg.running ? 'ok' : bg.starting ? 'run' : bg.error ? 'danger' : 'muted'} />
       <span className="ue:min-w-0 ue:flex-1 ue:truncate" title={bg.error}>
         {bg.running
           ? t('后台编辑器运行中{pid}', { pid: bg.pid ? ` · PID ${bg.pid}` : '' })
           : bg.starting
             ? t('后台编辑器启动中…')
-            : t('后台编辑器出错：{e}', { e: bg.error ?? '' })}
+            : bg.error
+              ? t('后台编辑器出错：{e}', { e: bg.error })
+              : t('后台编辑器没开')}
       </span>
-      {(bg.running || bg.starting) && (
+      {bg.running || bg.starting ? (
         <button
           type="button"
           disabled={busy}
-          onClick={stop}
-          title={t('关掉后台编辑器：正在做的导入导出会中断，下次读资源时再自动启动')}
-          className="ue:shrink-0 ue:cursor-pointer ue:rounded-md ue:px-1.5 ue:py-0.5 ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50"
+          onClick={() => act('stop')}
+          title={
+            bg.auto
+              ? t('关掉后台编辑器：正在做的导入导出会中断，下次读资源时再自动启动')
+              : t('关掉后台编辑器：正在做的导入导出会中断')
+          }
+          className={btn}
         >
           {t('关闭')}
         </button>
+      ) : (
+        !live && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act('start')}
+            title={t('起一个不开窗口的编辑器，编辑器没开时读资源、导入导出用；首次 30–60 秒，占 2–6 GB 内存')}
+            className={btn}
+          >
+            {t('启动后台编辑器')}
+          </button>
+        )
       )}
     </div>
   )
