@@ -119,7 +119,7 @@ export function CompTree({
           title={`${c.name} (${c.class})`}
           style={{ paddingLeft: 6 + depth * 16 }}
           className={cn(
-            'ue:flex ue:h-7 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:outline-none ue:transition-colors ue:focus-visible:bg-hover',
+            'ue:flex ue:h-7 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-footnote ue:outline-none ue:select-none ue:transition-colors ue:focus-visible:bg-hover',
             selected === c.path ? 'ue:bg-sel ue:text-fg' : 'ue:text-fg ue:hover:bg-hover',
           )}
         >
@@ -131,12 +131,13 @@ export function CompTree({
                 e.stopPropagation()
                 setClosed((x) => ({ ...x, [c.path]: open }))
               }}
-              className="ue:flex ue:h-4 ue:w-4 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-muted ue:hover:text-fg"
+              // 点击区占满行高、比箭头宽一圈，不用瞄准那个小三角
+              className="ue:-ml-1 ue:flex ue:h-full ue:w-6 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-muted ue:hover:text-fg"
             >
               <Caret open={open} />
             </button>
           ) : (
-            <span className="ue:w-4 ue:shrink-0" />
+            <span className="ue:-ml-1 ue:w-6 ue:shrink-0" />
           )}
           <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-muted" />
           <span className="ue:min-w-0 ue:truncate">

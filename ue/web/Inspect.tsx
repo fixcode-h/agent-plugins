@@ -144,7 +144,7 @@ function TreeRow({
     <li>
       <div
         className={cn(
-          'ue:flex ue:h-7 ue:items-center ue:gap-1 ue:pr-2 ue:hover:bg-hover',
+          'ue:flex ue:h-7 ue:items-center ue:gap-1 ue:pr-2 ue:select-none ue:hover:bg-hover',
           sel === node.path && 'ue:bg-sel ue:hover:bg-sel',
         )}
         style={{ paddingLeft: 8 + depth * 14 }}
@@ -154,12 +154,12 @@ function TreeRow({
             type="button"
             aria-label={open ? t('收起') : t('展开')}
             onClick={() => setOpen((v) => !v)}
-            className="ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
+            className="ue:-ml-1 ue:flex ue:h-full ue:w-5.5 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-subtle ue:hover:text-fg"
           >
             {open ? <ChevronDown className="ue:h-3.5 ue:w-3.5" /> : <ChevronRight className="ue:h-3.5 ue:w-3.5" />}
           </button>
         ) : (
-          <span className="ue:w-3.5 ue:shrink-0" />
+          <span className="ue:-ml-1 ue:w-5.5 ue:shrink-0" />
         )}
         <button
           type="button"
