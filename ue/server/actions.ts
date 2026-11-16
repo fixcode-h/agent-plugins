@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises'
+import path from 'node:path'
 import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
 import { backgroundState } from './editor.ts'
 import { launchProgress } from './launch/track.ts'
@@ -32,6 +34,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
   return {
     project: p,
     instances,
+    unlua: await hasUnLua(p.root),
     bridge,
     bundled,
     background: backgroundState(p.id, cards),
@@ -39,6 +42,17 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     extensions,
     launch: launchProgress(p.id),
   }
+}
+
+/**
+ * 项目里有没有 UnLua（Plugins/ 下任一层有 UnLua.uplugin）：UE 没开时 Lua 页也要列出来，
+ * GM 扫描、编译这些只读本机文件的页签不需要 UE 在运行（设计稿四.2、四.3）。.uproject 里关掉的不细判，进页后各页签自己报
+ */
+async function hasUnLua(root: string) {
+  for (const f of ['Plugins/UnLua/UnLua.uplugin', 'Plugins/UnLua/Plugins/UnLua/UnLua.uplugin']) {
+    if (await stat(path.join(root, f)).catch(() => undefined)) return true
+  }
+  return false
 }
 
 export async function undo(ctx: OpCtx, id: string) {

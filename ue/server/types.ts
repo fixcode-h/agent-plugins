@@ -192,6 +192,8 @@ export interface ProjectState {
   bundled: string
   background: { running: boolean; starting: boolean; pid?: number; error?: string }
   jobs: Job[]
+  /** 项目 Plugins/ 里有 UnLua（UE 没开时也列 Lua 页） */
+  unlua?: boolean
   /** 项目里装了的 UEKit 扩展（磁盘上的版本） */
   extensions?: { name: string; version: string }[]
   /** 面板刚启动的编辑器的启动进度（server/launch/），没在启动时为空 */

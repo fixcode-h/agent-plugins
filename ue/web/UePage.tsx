@@ -31,7 +31,7 @@ import { Console } from './sections/Console.tsx'
 import { Gm } from './sections/Gm.tsx'
 import { History } from './sections/History.tsx'
 import { Logs } from './sections/Logs.tsx'
-import { Lua } from './sections/Lua.tsx'
+import { Lua } from './sections/lua/LuaPage.tsx'
 import { Objects } from './sections/objects/Objects.tsx'
 import { showOutline } from './sections/objects/Browse.tsx'
 import { scopeOf, syncNav } from './inspect/history.ts'
@@ -58,7 +58,7 @@ interface Section {
   icon: LucideIcon
   group: () => string
   View: ComponentType
-  /** 只在条件满足时列出（Lua：有进程的桥接编进了 UnLua 支持） */
+  /** 只在条件满足时列出（Lua：项目里有 UnLua，或有进程的桥接编进了 UnLua 支持） */
   when?: (s: ProjectState | undefined) => boolean
 }
 
@@ -72,7 +72,7 @@ const SECTIONS: Section[] = [
     icon: Braces,
     group: () => t('运行时'),
     View: Lua,
-    when: (s) => !!s?.instances.some((i) => i.lua),
+    when: (s) => !!s?.unlua || !!s?.instances.some((i) => i.lua),
   },
   // 对象页（用户 2026-11-15 定）：原来的 Actor 页（世界大纲）和 Object 页（UObject 树、按类搜）合成一页，
   // 浏览栏三个页签；和资源页同一套检视区、共用一份导航历史（设计稿 designs/对象页合并与资源导航-设计稿.md）
