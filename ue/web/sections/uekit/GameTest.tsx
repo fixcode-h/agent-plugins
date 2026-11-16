@@ -4,10 +4,11 @@ import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { MenuHost, openMenu } from '../../menu.tsx'
-import { Confirm, ErrorText, NotRunning } from '../../ui.tsx'
+import { Confirm, ErrorText } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
 import { GtBatchBar } from './GtBatch.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
+import { GtOfflineBar } from './GtOffline.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
@@ -19,7 +20,8 @@ import { FileTree, type TreeLeaf } from './tree.tsx'
 /**
  * GameTest 页（UEKit 扩展，效果图 designs/UEKit-扩展页面-效果图/3–5）：左边场景树（和表格页一样的文件树），
  * 右边是选中场景最近一次 run 的步骤和每步详情；运行中、录制中的状态靠推送事件（gt.job、gt.record）更新，不轮询。
- * 跑测试要 UE 编辑器开着（PIE 由场景自己的 pie.start 步骤起）。
+ * 跑测试要 UE 编辑器开着（PIE 由场景自己的 pie.start 步骤起）。编辑器没连上（没开或正忙）时页面照常显示：
+ * 场景列表、最近运行、历史和报告由面板从磁盘读（服务端 uekit/gt-disk.ts），只有录制、运行、核对选择器不能用。
  */
 interface ScenarioList {
   scenarios: Scenario[]
@@ -58,21 +60,29 @@ export function GameTest() {
   // 推送里批量已经跑完了几个（跑完一个就重拉历史）
   const batchSeen = useRef(0)
 
+  // 编辑器没连上时只读操作带 disk，由面板读磁盘（编辑器正忙时也不去等它回应）
+  const disk = live ? {} : { disk: true }
   const reload = () => {
-    op<ScenarioList>(project.id, 'gt.scenarios', { limit: 1000 })
+    op<ScenarioList>(project.id, 'gt.scenarios', { limit: 1000, ...disk })
       .then((r) => {
         setList(r)
         setError('')
       })
       .catch((e: Error) => setError(e.message))
-    void op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs')
+    void op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs', disk)
       .then((r) => setRuns(r.runs ?? []))
       .catch(() => undefined)
-    void loadHistory(project.id).then(setHistory)
+    void loadHistory(project.id, !live).then(setHistory)
   }
   useEffect(() => {
-    if (!installed || !live) return
+    if (!installed) return
     reload()
+    if (!live) {
+      // 编辑器关了：作业、录制状态跟着清掉（推送断了，留着会一直显示运行中）
+      setJob(undefined)
+      setRec(undefined)
+      return
+    }
     void op<GtJob>(project.id, 'gt.job', { steps: 200 })
       .then((j) => (j.busy || j.batch) && setJob(j))
       .catch(() => undefined)
@@ -82,7 +92,7 @@ export function GameTest() {
         if (r.recording) setRec(r)
       })
       .catch(() => undefined)
-    // 换项目、编辑器起来时重拉；reload 每次渲染都是新函数
+    // 换项目、编辑器起来或关掉时重拉（数据换成 UE 的或磁盘的）；reload 每次渲染都是新函数
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, installed, live])
 
@@ -223,7 +233,7 @@ export function GameTest() {
     project: project.id,
     root: list?.absoluteRootDir ?? '',
     rootLabel: list?.rootDir ?? '',
-    locked: running || recording || !!busy,
+    locked: !live || running || recording || !!busy,
     reload,
     open: (s) => go('gametest', s.relativePath),
     runScenario,
@@ -241,8 +251,9 @@ export function GameTest() {
     })
 
   if (state && !installed) return <NotInstalled name="GameTest" />
-  if (state && !live)
-    return <NotRunning icon={FlaskConical} what={t('GameTest 在编辑器里跑测试场景：先启动编辑器，场景会自己开 PIE')} />
+  // 录制、运行、批量要编辑器：没连上时按钮置灰，悬停说明为什么
+  const needEditor = live ? '' : t('要先启动编辑器')
+  const tip = (s: string) => (needEditor ? `${s}（${needEditor}）` : s)
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:md:flex-row ue:md:overflow-hidden">
@@ -258,20 +269,21 @@ export function GameTest() {
             <ui.IconButton
               icon={Layers}
               size="sm"
-              label={t('批量运行：按标签或全部场景，一个接一个跑')}
-              disabled={running || recording || !!busy || !list?.scenarios.length}
+              label={tip(t('批量运行：按标签或全部场景，一个接一个跑'))}
+              disabled={!live || running || recording || !!busy || !list?.scenarios.length}
               onClick={tagMenu}
             />
             <ui.IconButton
               icon={CircleDot}
               size="sm"
-              label={t('录制：在游戏窗口里操作一遍，录成场景')}
-              disabled={recording || running || !!busy}
+              label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
+              disabled={!live || recording || running || !!busy}
               onClick={() => setAsking(true)}
             />
             <ui.Button
               size="sm"
-              disabled={!selected || running || recording || !!busy}
+              title={needEditor || undefined}
+              disabled={!live || !selected || running || recording || !!busy}
               onClick={() => selected && runScenario(selected)}
             >
               <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
@@ -306,6 +318,7 @@ export function GameTest() {
         ) : tab === 'runs' ? (
           <RunList
             runs={runs}
+            offline={!live}
             onMenu={menus.runMenu}
             onOpen={(r) => {
               const s = list.scenarios.find((x) => (r.scenario ? x.relativePath === r.scenario : x.name === r.name))
@@ -375,6 +388,7 @@ export function GameTest() {
         )}
       </ListCol>
       <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
+        {state && !live && <GtOfflineBar />}
         {batch && !recording && (
           <GtBatchBar
             batch={batch}
@@ -398,8 +412,9 @@ export function GameTest() {
             last={lastOf(selected)}
             offset={offsets[(running ? job?.runId : lastOf(selected)?.runId) ?? ''] ?? 0}
             onStop={() => void stop()}
-            onRunFrom={running || recording ? undefined : (file, i) => void runFrom(selected, file, i)}
+            onRunFrom={!live || running || recording ? undefined : (file, i) => void runFrom(selected, file, i)}
             onChanged={reload}
+            offline={!live}
           />
         ) : (
           <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
@@ -452,17 +467,20 @@ export function GameTest() {
 
 function RunList({
   runs,
+  offline,
   onOpen,
   onMenu,
 }: {
   runs: GtRunSummary[]
+  /** 编辑器没连上：列的是产物目录里最近的报告，不是「这次启动后」的 */
+  offline: boolean
   onOpen: (r: GtRunSummary) => void
   onMenu: (e: React.MouseEvent, r: GtRunSummary) => void
 }) {
   if (!runs.length)
     return (
       <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
-        {t('编辑器这次启动后还没跑过测试')}
+        {offline ? t('产物目录里还没有运行报告') : t('编辑器这次启动后还没跑过测试')}
       </p>
     )
   return (
@@ -482,10 +500,17 @@ function RunList({
           )}
           <span className="ue:min-w-0 ue:flex-1 ue:truncate">{r.name}</span>
           <span className="ue:shrink-0 ue:text-caption ue:text-subtle ue:tabular-nums">
-            {r.startedAtUtc ? new Date(r.startedAtUtc).toLocaleTimeString() : ''}
+            {r.startedAtUtc ? runTime(r.startedAtUtc) : ''}
           </span>
         </button>
       ))}
     </div>
   )
+}
+
+/** 今天跑的只写时间；磁盘上读的可能是几天前的，带上日期 */
+function runTime(iso: string) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString() : d.toLocaleString()
 }

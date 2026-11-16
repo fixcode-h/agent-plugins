@@ -145,7 +145,8 @@ async function replaceSteps(abs: string, rel: string, doc: Record<string, unknow
 }
 
 /**
- * 场景的右键菜单：改名（文件名和场景里的 name 一起改）、复制一份、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）。
+ * 场景的右键菜单：改名（文件名和场景里的 name 一起改）、复制一份、删除、在文件夹中显示、读原文（raw，复制 / 导出 JSON）；
+ * 步骤的「转成控件步骤」（replace）。
  * 删除前网页已经弹窗确认过；同一个目录里重名时报错，不覆盖
  */
 export async function scenarioAction(
@@ -158,6 +159,13 @@ export async function scenarioAction(
     if (!(await exists(f.abs))) throw new BridgeError(t('文件不存在：{p}', { p: f.rel || '.' }))
     revealInFolder(f.abs)
     return { path: f.rel }
+  }
+  if (action === 'raw') {
+    // 「复制为 JSON」「导出 JSON」：原文照给（readScenario 会整理步骤、丢掉 kind / tags 这些顶层字段）
+    const text = await readFile(f.abs, 'utf8').catch(() => {
+      throw new BridgeError(t('场景文件不存在：{p}（可能刚被改名或删掉，刷新一下列表）', { p: f.rel }))
+    })
+    return { path: f.rel, text: text.replace(/^\uFEFF/, '') }
   }
   if (action === 'delete') {
     await rm(f.abs).catch(() => {

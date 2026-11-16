@@ -8,6 +8,7 @@ import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
 import { followJob } from './uekit/follow.ts'
+import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
 
@@ -420,6 +421,13 @@ export async function runOp(
   await checkPerms(ctx, op, kind, args)
   // 文件夹树：自己挑进程，没有编辑器或桥接旧时扫磁盘；不进 ASSET_OPS，免得为列目录启动后台编辑器（asset-folders.ts）
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
+  // GameTest 的只读操作：编辑器没开（或网页说它正忙、要磁盘上的）时直接读场景、报告和历史文件（uekit/gt-disk.ts）
+  if (
+    GT_DISK_OPS.has(op) &&
+    (args.disk === true || !(await liveCards(ctx.project.root)).some((x) => x.kind === 'editor'))
+  )
+    return gtFromDisk(ctx.project.root, op, args)
+  delete args.disk
   const card = await chooseCard(ctx, op, args)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world
