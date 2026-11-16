@@ -15,6 +15,7 @@ import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
+import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { DiagSpecimen } from './sections/uekit/LinkDiagnose.tsx'
 import { PluginCardSpecimen } from './sections/uekit/plugins/Specimen.tsx'
@@ -89,6 +90,13 @@ const activate: ActivateWeb = (host) => {
         label: 'AssetForge · StatePill · ForgeLink · JobReport',
         tune: ['badge', 'row'],
         Specimen: ForgeSpecimen,
+      },
+      // AssetForge 资源还没生成时按配置画的预览：左边结构树（能拖宽），右边和真实资源同一个细节面板；跟面板「行」「输入框」的调节项
+      {
+        id: 'forge-config-preview',
+        label: t('AssetForge · 按配置预览'),
+        tune: ['row', 'input'],
+        Specimen: ForgeConfigPreviewSpecimen,
       },
       // GM 页参数关联表格列的可搜索下拉（设计稿 designs/GM页重设计-效果图）：跟面板「输入框」「菜单」的调节项
       { id: 'gm-table-pick', label: t('GM · 参数关联表格下拉'), tune: ['input', 'menu'], Specimen: TablePickSpecimen },
