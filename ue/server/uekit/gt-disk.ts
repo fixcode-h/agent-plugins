@@ -48,7 +48,7 @@ export async function scenarioRoot(root: string) {
 }
 
 /** 产物根：Saved/<OutputDir>（默认 Saved/GameTest），报告、截图、history.json 都在这 */
-async function outputRoot(root: string) {
+export async function outputRoot(root: string) {
   const { outputDir } = await settings(root)
   return path.resolve(root, 'Saved', outputDir || 'GameTest')
 }

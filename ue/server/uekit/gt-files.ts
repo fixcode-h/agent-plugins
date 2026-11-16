@@ -3,41 +3,15 @@ import path from 'node:path'
 import { BridgeError } from '../instances.ts'
 import { revealInFolder } from '../reveal.ts'
 import { t } from '../util.ts'
+import { insideProject, scenarioFile, within } from './gt-paths.ts'
+
+export { insideProject }
 
 /**
  * GameTest 场景文件的面板侧操作（GameTest 页的步骤列表和右键菜单）。场景是项目文档根里给人看和改的 JSON，
  * 面板和 UE 在同一台机器上，直接读写文件就行，不用经 UE：UE 没提供「读一个场景」的操作，
  * 而且云端编不了 C++，读文件这种事放面板这边，GameTest 不用为了它发版。
  */
-
-/**
- * 只认项目目录和项目外层同级的 ProjectDoc 里的文件（P4 / SVN 项目的文档根在那，AssetForge 配置、GameTest 场景跟着它）。
- * 相对路径按项目根算（gt 报告里的 path 就是这样）
- */
-export function insideProject(root: string, rel: string) {
-  const abs = path.resolve(root, rel)
-  if (!within(root, abs) && !within(path.join(path.dirname(root), 'ProjectDoc'), abs))
-    throw new BridgeError(t('只能读项目目录和 ProjectDoc 里的文件：{p}', { p: rel }))
-  return abs
-}
-
-const within = (dir: string, abs: string) => {
-  const r = path.relative(dir, abs)
-  return !!r && !r.startsWith('..') && !path.isAbsolute(r)
-}
-
-/**
- * 场景根（gt.scenarios 的 absoluteRootDir）下的一个 .json 场景：出了场景根、不是 .json 都拒绝。
- * dir：在文件夹中显示时也认场景根本身和里面的子目录
- */
-function scenarioFile(projectRoot: string, scenarioRoot: string, rel: string, dir = false) {
-  if (!scenarioRoot) throw new BridgeError(t('不知道场景根在哪：先刷新 GameTest 页'))
-  const rootAbs = insideProject(projectRoot, scenarioRoot)
-  const abs = path.resolve(rootAbs, rel)
-  const ok = dir ? abs === rootAbs || within(rootAbs, abs) : within(rootAbs, abs) && /\.json$/i.test(abs)
-  if (!ok) throw new BridgeError(t('只能操作场景根里的 .json 场景：{p}', { p: rel }))
-  return { rootAbs, abs, rel: path.relative(rootAbs, abs).replace(/\\/g, '/') }
-}
 
 /** 一步：action 必有，其余字段按动作不同（target、note、map、key……） */
 export interface ScenarioStep {

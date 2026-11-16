@@ -90,6 +90,8 @@ export function rowSummary(r: StepRow) {
   return {
     target,
     text: r.res?.message || note || brief,
+    /** 场景里写的这一步的说明（AI 整理会给每步写一句中文） */
+    note: typeof r.def?.note === 'string' && r.def.note.trim() ? r.def.note : undefined,
     human: humanStep(r.def),
     ambiguous: ambiguousOf(r.def),
   }
@@ -140,9 +142,12 @@ export function StepDetail({
           {human && <p className="ue:text-body ue:text-fg">{human}</p>}
           {ambiguous && (
             <Note>
-              {t('选择器可能不唯一：{r}。回放会先按录制时的位置和文字挑，挑不出时报错；这时改 target 或用「复制目标选择器」核对', {
-                r: ambiguous,
-              })}
+              {t(
+                '选择器可能不唯一：{r}。回放会先按录制时的位置和文字挑，挑不出时报错；这时改 target 或用「复制目标选择器」核对',
+                {
+                  r: ambiguous,
+                },
+              )}
             </Note>
           )}
           {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
