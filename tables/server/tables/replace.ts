@@ -6,7 +6,8 @@
 import path from 'node:path'
 import { access, constants, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
-import { forgetLists, forgetTable, lockedByOffice } from './files.ts'
+import { forgetTable, lockedByOffice } from './files.ts'
+import { forgetLists } from './list-index.ts'
 import { backup, type SaveDeps } from './write.ts'
 import { HttpError } from './http-error.ts'
 
@@ -45,6 +46,6 @@ export async function replaceTableBytes(
     throw new HttpError(t('写入失败：{err}', { err: (e as Error).message }), 409)
   }
   forgetTable(full)
-  forgetLists()
+  forgetLists(false)
   return true
 }

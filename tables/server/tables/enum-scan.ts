@@ -136,7 +136,8 @@ async function scanCommand(ctx: ScanCtx, from: Extract<ScanFrom, { kind: 'comman
     raw = undefined
   }
   const obj = (raw && typeof raw === 'object' && 'enums' in raw ? (raw as { enums: unknown }).enums : raw) as
-    Record<string, unknown> | undefined
+    | Record<string, unknown>
+    | undefined
   if (!obj || typeof obj !== 'object') throw new Error(t('命令的输出里没有找到 {"enums": {...}} 这样的 JSON'))
   const enums: Got['enums'] = {}
   const warnings: string[] = []

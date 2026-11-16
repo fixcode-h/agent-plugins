@@ -9,6 +9,7 @@ import { tableActions } from './actions.ts'
 import { reviewTextifier } from './review.ts'
 import { tableWatcher } from './tables/watch.ts'
 import { detectTables, tablesReady } from './capability.ts'
+import { setListStore } from './tables/list-index.ts'
 
 /**
  * 表格插件的服务端入口（面板插件接口 7，ADR 0059；原来是面板自带的表格页，重构文档第 15 条拆出来）：
@@ -29,6 +30,8 @@ const projects = {
 const activate: ActivateServer = (ctx) => {
   // 外部改动检测：盯着页面上打开着的文件，改了经面板的推送通道（插件接口 7）通知页面
   const watcher = tableWatcher(ctx.pages)
+  // 表格文件列表的索引存在插件数据目录：打开表格页先给存下的，后台重扫完推增量（list-index.ts）
+  setListStore({ dir: ctx.dataDir, pages: ctx.pages })
   // 枚举扫描「盯着改动」的规则：后台盯源文件，改了就扫、推给页面；规则改了（保存结构文件）重新同步
   const scanWatch = enumScanWatcher({
     pages: ctx.pages,
@@ -49,6 +52,7 @@ const activate: ActivateServer = (ctx) => {
     stop: () => {
       watcher.close()
       scanWatch.close()
+      setListStore(undefined)
     },
   }
 }

@@ -5,7 +5,8 @@
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { TableFile, TablesConfig } from '../../shared/tables.ts'
-import { absPath, listTables, parseTable, tableFull } from './files.ts'
+import { absPath, parseTable, tableFull } from './files.ts'
+import { listTables } from './list-index.ts'
 
 export type PairStatus = 'same' | 'diff' | 'left' | 'right' | 'error'
 

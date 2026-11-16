@@ -1213,5 +1213,6 @@
   "这一版还改了其他工作表：{s}": "This revision also changed other sheets: {s}",
   "找到 {n} 个表格文件": "Found {n} table files",
   "在 {dir} 等目录找到 {n} 个表格文件": "Found {n} table files in {dir} and other folders",
-  "还要选表格目录": "Choose the table folders first"
+  "还要选表格目录": "Choose the table folders first",
+  "正在后台检查表格目录的变化": "Checking the table folders for changes in the background"
 }

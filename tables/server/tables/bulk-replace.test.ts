@@ -10,7 +10,7 @@ import path from 'node:path'
 
 process.env.AGENT_PANEL_DATA = mkdtempSync(path.join(tmpdir(), 'agent-panel-tables-replace-data-'))
 const { TableSchema, TablesConfig } = await import('../../shared/tables.ts')
-const { listTables } = await import('./files.ts')
+const { listTables } = await import('./list-index.ts')
 const { replaceTables } = await import('./bulk-replace.ts')
 const { TableReplaceBody } = await import('../../shared/table-search.ts')
 const { gameBook } = await import('./xlsx-fixture.ts')

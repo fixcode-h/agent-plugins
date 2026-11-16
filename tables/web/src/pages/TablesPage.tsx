@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GitCompareArrows, Loader2, RefreshCw, Settings2, Table2 } from 'lucide-react'
 import { t } from '@shared/i18n'
-import { tablesOf, type TableDoc, type TableHit, type TableSchema, type TablesIndex } from '@shared/tables'
+import { tablesOf, type TableDoc, type TableHit, type TableSchema } from '@shared/tables'
 import { useNav } from '@/lib/data'
 import { tablesApi } from '@/lib/tables-api'
 import { putTableSchema, useTableSchema } from '@/lib/table-schema'
@@ -28,6 +28,7 @@ import { TableView, type TableJump } from '@/components/tables/TableView'
 import { noEdits, pendingOf, setCellsIn, type Edits } from '@/components/tables/table-edits'
 import { useExternalChange } from '@/components/tables/use-external-change'
 import { useEnumAutoScan } from '@/components/tables/use-enum-auto-scan'
+import { useTablesIndex } from '@/components/tables/use-tables-index'
 import { useTableDrafts } from '@/components/tables/use-table-drafts'
 import { DraftBar } from '@/components/tables/DraftBar'
 import { firstShownSheet } from '@/components/files/SheetTable'
@@ -42,9 +43,6 @@ import type { TableExport } from '@shared/table-export'
 type Mode = 'name' | 'content' | 'check'
 /** 还没查过时文件树上不标数 */
 const NO_COUNTS = new Map<string, number>()
-
-/** 切回表格页时，文件列表超过这么久没读就在后台再读一次 */
-const STALE_MS = 60_000
 
 /**
  * 表格页（项目设置 → 表格设了目录才有入口）：左边文件树和搜索（名字 / 内容），右边打开的表格。
@@ -120,8 +118,7 @@ function Workbench({
   onProject: (id: string) => void
   onSettings: () => void
 }) {
-  const [index, setIndex] = useState<TablesIndex | null>(null)
-  const [indexError, setIndexError] = useState('')
+  const { index, error: indexError, reload } = useTablesIndex(projectId, shown)
   // 结构文件和项目设置共用一份：在设置里改了表头、应用了 AI 分析，表格页马上按新的显示
   const { schema, error: schemaError } = useTableSchema(projectId)
   useEffect(() => {
@@ -144,29 +141,6 @@ function Workbench({
   const [closing, setClosing] = useState('')
   // 搜索跳转时文件还没读到：记下要切的表，读到后再切
   const pendingSheet = useRef<{ path: string; sheet: string } | null>(null)
-
-  /** 上次读表格目录的时间：切回来时太久没读才在后台悄悄再读一次（懒刷新） */
-  const loadedAt = useRef(0)
-  const reload = useCallback(
-    (fresh = false) => {
-      setIndexError('')
-      loadedAt.current = Date.now()
-      tablesApi
-        .list(projectId, fresh)
-        .then(setIndex)
-        .catch((e) => setIndexError((e as Error).message))
-    },
-    [projectId],
-  )
-  // 从别的页面切回来：页面状态都还在，不重新加载；离上次读目录超过 STALE_MS 才在后台悄悄更新文件列表（不清空、不转圈）
-  const wasShown = useRef(shown)
-  useEffect(() => {
-    if (shown && !wasShown.current && Date.now() - loadedAt.current > STALE_MS) reload(true)
-    wasShown.current = shown
-  }, [shown, reload])
-  useEffect(() => {
-    reload()
-  }, [projectId, reload])
 
   const load = useCallback(
     (path: string, force = false) => {
@@ -487,6 +461,12 @@ function Workbench({
             <p className="tb:text-caption tb:leading-relaxed tb:text-warning">
               {index.missing.length > 0 && t('找不到目录：{dirs}', { dirs: index.missing.join('、') })}
               {index.truncated && t('表格太多，只列出了前一部分')}
+            </p>
+          ) : index?.scanning ? (
+            // 先显示的是上次存下的列表，后台正在重新扫描表格目录，扫完新增、删掉的表格会自己更新进来
+            <p className="tb:flex tb:items-center tb:gap-1.5 tb:text-caption tb:text-subtle">
+              <Loader2 aria-hidden className="tb:h-3 tb:w-3 tb:animate-spin" />
+              {t('正在后台检查表格目录的变化')}
             </p>
           ) : undefined
         }

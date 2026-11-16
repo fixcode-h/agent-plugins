@@ -18,6 +18,7 @@ import {
   type TablesIndex,
 } from '../../shared/tables.ts'
 import type { SheetData } from '../../shared/files.ts'
+import { byTablePath } from '../../shared/table-list.ts'
 import { MAX_XLSX_BYTES, readXlsx, type XlsxLimits } from '../xlsx.ts'
 import { resolvePath } from '../fs.ts'
 
@@ -30,8 +31,11 @@ export const TABLE_XLSX: XlsxLimits = { sheetCells: 2_000_000, bookCells: 4_000_
 /** 读一份 xlsx 给表格页（解析、保存前后的比对都用同一个上限，不然大表保存时读回来对不上） */
 export const readTableXlsx = (buf: Buffer) => readXlsx(buf, TABLE_XLSX)
 
-/** 一个项目最多列这么多个表格文件 */
-const MAX_FILES = 20000
+/**
+ * 一个项目最多列这么多个表格文件：只防把表格目录设成整个盘之类的误设，正常项目（几万张表）都能完整列出来；
+ * 列表有索引（list-index.ts），打开时不用重走目录
+ */
+const MAX_FILES = 200_000
 /** 解析缓存最多留这么多个单元格（所有文件合计）；超了丢掉最久没用的 */
 const CACHE_CELLS = 6_000_000
 /** 不往里走的目录 */
@@ -85,29 +89,9 @@ export function safeRel(dir: string, rel: string, cfg?: Pick<TablesConfig, 'dirs
 
 /** 同时 stat 几个文件 */
 const STAT_BATCH = 64
-/** 列表缓存多久：表格页切来切去、搜索、检查都要列表，几秒内不重走目录 */
-const LIST_TTL = 5000
-const listCache = new Map<string, { at: number; index: Promise<TablesIndex> }>() // 模块状态：缓存，丢了重算
 
-/** 保存、刷新后让列表缓存失效 */
-export const forgetLists = () => listCache.clear()
-
-/**
- * 列出表格目录里的全部表格文件（按路径排序）。几秒内同样的目录和设置直接用上次的结果；
- * fresh 时（表格页的刷新按钮）重走目录
- */
-export function listTables(dir: string, cfg: TablesConfig, fresh = false): Promise<TablesIndex> {
-  const key = JSON.stringify([dir, cfg.dirs, cfg.include, cfg.exclude])
-  const hit = listCache.get(key)
-  if (!fresh && hit && Date.now() - hit.at < LIST_TTL) return hit.index
-  const index = walkTables(dir, cfg)
-  listCache.set(key, { at: Date.now(), index })
-  index.catch(() => listCache.delete(key))
-  if (listCache.size > 50) listCache.delete(listCache.keys().next().value!)
-  return index
-}
-
-async function walkTables(dir: string, cfg: TablesConfig): Promise<TablesIndex> {
+/** 走一遍表格目录列出全部表格文件（按路径排序）。平时经 list-index.ts 的 listTables 取（有索引和缓存），不直接调 */
+export async function walkTables(dir: string, cfg: TablesConfig): Promise<TablesIndex> {
   const include = globList(cfg.include)
   const exclude = globList(cfg.exclude || TABLE_EXCLUDE)
   const files: TableFile[] = []
@@ -175,7 +159,7 @@ async function walkTables(dir: string, cfg: TablesConfig): Promise<TablesIndex> 
     await stamp(before)
     roots.push({ dir: d, full: root.full, found: true, files: files.length - before })
   }
-  files.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }))
+  files.sort(byTablePath)
   return { dirs, missing, roots, files, ...(truncated ? { truncated } : {}) }
 }
 
