@@ -12,7 +12,9 @@ import { ForgeEmpty, forgeEmptyKind } from './ForgeEmpty.tsx'
 import { JobBar, JobResult } from './ForgeJobBar.tsx'
 import { ForgeJobReport } from './ForgeJobReport.tsx'
 import { ForgeMulti } from './ForgeMulti.tsx'
+import { ForgeAiEdit } from './ForgeAiEdit.tsx'
 import { ForgeNew, makeDirOf, type ForgeNewInit } from './ForgeNew.tsx'
+import { saveAsTemplate, type ForgeFileOps } from './forge-file-ops.ts'
 import { canImport, forgeMenus } from './forge-menus.ts'
 import { useForgePick } from './forge-pick.ts'
 import { useForgeSource } from './forge-source.ts'
@@ -86,6 +88,8 @@ export function Forge() {
   // 交给 Agent 写的那份配置（相对配置根）：存盘后自动选中打开
   const [awaiting, setAwaiting] = useState<string>()
   const chat = useToChat()
+  // 「让 AI 改…」弹窗：对哪份配置
+  const [aiEdit, setAiEdit] = useState<ForgeEntry>()
   const dirOf = useMemo(() => makeDirOf(dirKinds), [dirKinds])
 
   useEffect(() => {
@@ -175,6 +179,17 @@ export function Forge() {
   const expandAll = (openAll: boolean, under?: string) =>
     setExpand((x) => ({ open: openAll, under, n: (x?.n ?? 0) + 1 }))
 
+  const fileOps: ForgeFileOps = {
+    copy: (e) => setNewInit({ from: { config: (e.config ?? '').replace(/\\/g, '/'), kind: e.kind, asset: e.asset } }),
+    aiEdit: chat.available ? setAiEdit : undefined,
+    saveTemplate: (e) => void saveAsTemplate(project.id, configRoot, e),
+  }
+  /** 资产路径 → 已经管着它的配置：新建时不让两份配置写同一个资产 */
+  const managedBy = (asset: string) => {
+    const a = asset.toLowerCase()
+    return entries.find((e) => e.config && e.asset && e.asset.replace(/\.[^/]*$/, '').toLowerCase() === a)?.config
+  }
+
   const menus = forgeMenus({
     project: project.id,
     configRoot,
@@ -189,6 +204,7 @@ export function Forge() {
     go,
     newConfig: (init) => setNewInit(init ?? {}),
     dirKinds,
+    fileOps,
   })
 
   if (state && !installed) return <NotInstalled name="AssetForge" />
@@ -386,6 +402,7 @@ export function Forge() {
             tab={tabOf?.key === selected.key ? tabOf.tab : undefined}
             fileRev={fileRev}
             onTab={(tab) => setTabOf({ key: selected.key, tab })}
+            fileOps={fileOps}
           />
         ) : (
           data && empty(false)
@@ -398,7 +415,17 @@ export function Forge() {
           dirOf={dirOf}
           init={newInit}
           canAi={chat.available}
+          managedBy={managedBy}
           onClose={() => setNewInit(undefined)}
+          onOpenConfig={(config) => {
+            setNewInit(undefined)
+            go('assetforge', config)
+          }}
+          onExport={(asset) => {
+            // 已经存在的资产：先导出成配置纳管（导出是后台作业，跑完左栏会出现这份配置）
+            setNewInit(undefined)
+            void exportAssets([asset])
+          }}
           onCreated={(config) => {
             setNewInit(undefined)
             toast.success(t('已新建 {p}', { p: config }))
@@ -408,6 +435,19 @@ export function Forge() {
           onAi={(prompt, config) => {
             setNewInit(undefined)
             setAwaiting(config)
+            chat.send(prompt)
+          }}
+        />
+      )}
+      {aiEdit && (
+        <ForgeAiEdit
+          entry={aiEdit}
+          configRoot={configRoot}
+          onClose={() => setAiEdit(undefined)}
+          onSend={(prompt) => {
+            setAiEdit(undefined)
+            // 右栏盯着选中的配置：先选中它，Agent 存盘后差异和计划自动刷新
+            open(aiEdit)
             chat.send(prompt)
           }}
         />

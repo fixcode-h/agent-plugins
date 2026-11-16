@@ -22,6 +22,7 @@ import type { ForgeTab } from './ForgeDetail.tsx'
 import type { ForgeEntry } from './Forge.tsx'
 import type { ForgeNewInit } from './ForgeNew.tsx'
 import { assetDirFor } from './forge-templates.ts'
+import { fileOpItems, type ForgeFileOps } from './forge-file-ops.ts'
 import { FILTERS } from './kinds.ts'
 
 /**
@@ -48,6 +49,8 @@ export interface ForgeMenuCtx {
   newConfig: (init?: ForgeNewInit) => void
   /** 配置根第一层目录 → kind（forge.kinds 的 dir） */
   dirKinds?: Map<string, string>
+  /** 复制一份、让 AI 改、存为模板 */
+  fileOps?: ForgeFileOps
 }
 
 /** 能导入：有配置文件、配置读得懂、写了目标资产 */
@@ -105,6 +108,7 @@ export function forgeMenus(c: ForgeMenuCtx) {
       onClick: () => fileAction(e.config!, 'reveal'),
     },
     { label: t('用编辑器打开'), icon: SquarePen, disabled: !e.config, onClick: () => fileAction(e.config!, 'open') },
+    ...fileOpItems(c.fileOps, e),
     'sep',
     { label: t('复制配置路径'), icon: Copy, disabled: !e.config, onClick: () => copyText(e.config!) },
     { label: t('复制资产路径'), icon: Copy, disabled: !e.asset, onClick: () => copyText(e.asset!) },
