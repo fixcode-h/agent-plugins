@@ -85,6 +85,8 @@ export function TreeList({
               tabIndex={0}
               title={l.title}
               onClick={() => (l.onSelect ?? l.onToggle)?.()}
+              // 单击是选中的行，双击整行展开收起（和 UE 内容浏览器一样），不必瞄准箭头
+              onDoubleClick={l.onSelect && l.expandable ? () => l.onToggle?.() : undefined}
               onContextMenu={l.onMenu}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') (l.onSelect ?? l.onToggle)?.()
