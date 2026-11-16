@@ -20,7 +20,8 @@ export const STATES: Record<string, { label: () => string; tone: string; dot: st
   'config-changed': { label: () => t('配置已改'), tone: 'ue:text-warning', dot: 'ue:bg-warning' },
   pending: { label: () => t('导入会改资产'), tone: 'ue:text-warning', dot: 'ue:bg-warning' },
   'asset-changed': { label: () => t('资产被改过'), tone: 'ue:text-accent-text', dot: 'ue:bg-accent' },
-  'asset-missing': { label: () => t('资产不存在'), tone: 'ue:text-danger', dot: 'ue:bg-danger' },
+  // 导入一次就会建出来，不算出错：旧版 AssetForge（1.3.0 及以前）还会把从没导入过的配置也报成这个状态
+  'asset-missing': { label: () => t('资产不存在，待导入'), tone: 'ue:text-warning', dot: 'ue:bg-warning' },
   'parse-error': { label: () => t('解析失败'), tone: 'ue:text-danger', dot: 'ue:bg-danger' },
   foreign: { label: () => t('不是 AssetForge 的配置'), tone: 'ue:text-subtle', dot: 'ue:bg-subtle' },
   unmanaged: { label: () => t('没有配置'), tone: 'ue:text-subtle', dot: 'ue:bg-line-strong' },
@@ -36,6 +37,6 @@ export const FILTERS = {
   all: () => true,
   pending: (e: { needsImport?: boolean }) => !!e.needsImport,
   changed: (e: { state: string }) => e.state === 'asset-changed',
-  error: (e: { state: string }) => ['parse-error', 'asset-missing', 'no-asset'].includes(e.state),
+  error: (e: { state: string }) => ['parse-error', 'no-asset'].includes(e.state),
 } as const
 export type FilterId = keyof typeof FILTERS

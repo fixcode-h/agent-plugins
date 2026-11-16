@@ -1103,7 +1103,7 @@
   "配置已改": "Config changed",
   "导入会改资产": "Import would change asset",
   "资产被改过": "Asset changed",
-  "资产不存在": "Asset missing",
+  "资产不存在，待导入": "Asset missing, needs import",
   "不是 AssetForge 的配置": "Not an AssetForge config",
   "没有配置": "No config",
   "没写目标资产": "No target asset",
