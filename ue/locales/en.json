@@ -2183,6 +2183,7 @@
   "已装 {n}": "Installed {n}",
   "可装 {n}": "Available {n}",
   "正在升级，输出在页面最下面": "Upgrading; output is at the bottom of the page",
+  "要 UELink {need}：会先把 UELink 升到 {v} 再装": "Needs UELink {need}: UELink will be upgraded to {v} first",
   "用时 {m} 分 {s} 秒": "took {m}m {s}s",
   "要完整编译一次：编译": "Needs a full build: Build",
   "看输出": "Show output",

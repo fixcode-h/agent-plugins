@@ -152,7 +152,9 @@ export function CardsSection({
         <div className="ue:grid ue:gap-px ue:bg-line ue:@2xl:grid-cols-2 ue:@5xl:grid-cols-3">
           {shown.map((v) => {
             const st = cardState(v, job)
-            const blockers = !v.installed ? (v.offer?.blockers ?? []) : []
+            // 升级被拦住时也列原因（以前只在没装时列，升级按钮灰着不说为什么）
+            const blockers = !v.installed || v.upgrade ? (v.offer?.blockers ?? []) : []
+            const offering = !!v.offer && (!v.installed || v.upgrade)
             return (
               <PluginCard
                 key={v.name}
@@ -179,6 +181,13 @@ export function CardsSection({
                     </ul>
                   ) : st.key === 'running' ? (
                     <p className="ue:px-4 ue:pb-2.5 ue:text-footnote ue:text-run">{t('正在升级，输出在页面最下面')}</p>
+                  ) : offering && v.withUELink ? (
+                    <p className="ue:px-4 ue:pb-2.5 ue:text-footnote ue:text-warning">
+                      {t('要 UELink {need}：会先把 UELink 升到 {v} 再装', {
+                        need: (v.info?.requires?.UELink ?? '').replace(/^>=\s*/, '≥ '),
+                        v: link.offer?.version ?? '',
+                      })}
+                    </p>
                   ) : undefined
                 }
               />
