@@ -9,7 +9,8 @@ import { c } from '../util.ts'
  * 一个项目一条连接，有页面在看才连；页面都关了就断开。编辑器重启了（名片换了）页面再登记一次时重连。
  */
 // uelink.outliner：UELink 自己的大纲变化事件（Actor 页的世界大纲据此重读）
-export const EXT_TOPICS = ['forge.job', 'forge.changed', 'forge.reveal', 'gt.job', 'gt.record', 'uelink.outliner']
+// lua.snap：Lua 快照点命中（Lua 页「调试」页签实时显示）
+export const EXT_TOPICS = ['forge.job', 'forge.changed', 'forge.reveal', 'gt.job', 'gt.record', 'uelink.outliner', 'lua.snap']
 
 /** 推给网页的事件名：网页按 project 字段分项目 */
 export const EXT_EVENT = 'uekit'

@@ -57,9 +57,11 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_lua: {
     title: '执行 Lua',
-    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出；在本机跑项目配好的 Lua 增量 / 全编译',
+    summary:
+      '在 UnLua 环境里执行一段 Lua，返回值和输出；在本机跑项目配好的 Lua 增量 / 全编译；快照点、性能采样、查 Lua 持有的已销毁对象',
     useWhen:
-      'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时；改完 Lua 要确认能编过时用 action=compile（默认增量），按返回的 文件:行 修',
+      'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时；改完 Lua 要确认能编过时用 action=compile（默认增量），按返回的 文件:行 修；' +
+      '要看某行执行时的局部变量用 action=snap（不暂停游戏），Lua 卡顿找热点用 action=profile，界面关了对象释放不掉用 action=leaks；用户批准过的常用代码用 exec 带 snippet，不用请用户确认',
     avoidWhen: '只读字段用 ue_get、改简单字段用 ue_set（能撤回），不用每次请用户确认',
     confirms: true,
     group: RUN,

@@ -5,6 +5,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { luaText, type LuaDesc, type LuaField } from '../../Lua.tsx'
 import { Card, Term } from '../../ui.tsx'
+import { LuaSnippets } from './Snippets.tsx'
 
 interface Result extends LuaDesc {
   fields?: LuaField[]
@@ -39,19 +40,11 @@ export function LuaExec() {
     end.current?.scrollIntoView({ block: 'end' })
   }, [entries])
 
-  const exec = () =>
+  // 执行一段代码（编辑框或片段）并把结果追加到输出；片段走服务端按名字执行，记进操作记录时带上片段名
+  const record = (e: Entry, p: Promise<Record<string, unknown>>) =>
     run('exec', async () => {
-      const c = code.trim()
-      if (!c) return
-      const e: Entry = { code: c, self: self.trim() || undefined, output: [], results: [] }
       try {
-        const r = await op<{ results: Result[]; output: string[]; ms: number }>(
-          project.id,
-          'lua.exec',
-          { code: c, path: self.trim(), timeoutMs: 10000 },
-          target,
-          20000,
-        )
+        const r = (await p) as { results?: Result[]; output?: string[]; ms?: number }
         Object.assign(e, { results: r.results ?? [], output: r.output ?? [], ms: r.ms })
       } catch (err) {
         e.error = (err as Error).message
@@ -59,79 +52,101 @@ export function LuaExec() {
       setEntries((x) => [...x, e].slice(-MAX_ENTRIES))
     })
 
+  const exec = () => {
+    const c = code.trim()
+    if (!c) return
+    return record(
+      { code: c, self: self.trim() || undefined, output: [], results: [] },
+      op(project.id, 'lua.exec', { code: c, path: self.trim(), timeoutMs: 10000 }, target, 20000),
+    )
+  }
+
   return (
-    <Card
-      className="ue:m-4 ue:flex ue:min-h-0 ue:flex-1 ue:flex-col"
-      title={t('执行 Lua')}
-      bodyClass="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-3"
-    >
-      <Term className="ue:min-h-40 ue:flex-1">
-        {!entries.length && (
-          <div className="ue:text-term-subtle">
-            {t('单个表达式直接显示它的值，多条语句用 return 返回；print 的内容显示在下面。Ctrl+Enter 执行')}
-          </div>
-        )}
-        {entries.map((e, i) => (
-          <div key={i} className="ue:mb-3">
-            <pre className="ue:whitespace-pre-wrap ue:text-term-cmd">
-              {e.self ? `-- self = ${e.self}\n` : ''}
-              {e.code}
-            </pre>
-            {e.output.map((l, j) => (
-              <div key={j} className="ue:whitespace-pre-wrap">
-                {l}
-              </div>
-            ))}
-            {e.error ? (
-              <pre className="ue:whitespace-pre-wrap ue:text-danger">{e.error}</pre>
-            ) : (
-              e.results.map((r, j) => (
-                <div key={j}>
-                  <div className="ue:text-term-fg">{`→ ${luaText(r)}`}</div>
-                  {(r.fields ?? []).map((f, k) => (
-                    <div key={k} className="ue:pl-4 ue:text-term-subtle">
-                      {`${f.kt === 'number' ? `[${f.k}]` : f.k} = ${luaText(f)}`}
-                    </div>
-                  ))}
-                  {(r.total ?? 0) > (r.fields?.length ?? 0) && (
-                    <div className="ue:pl-4 ue:text-term-subtle">{t('… 共 {n} 项', { n: r.total ?? 0 })}</div>
-                  )}
+    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:divide-x ue:divide-line">
+      <Card
+        className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col"
+        title={t('执行 Lua')}
+        bodyClass="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-3 ue:p-3"
+      >
+        <Term className="ue:min-h-40 ue:flex-1">
+          {!entries.length && (
+            <div className="ue:text-term-subtle">
+              {t('单个表达式直接显示它的值，多条语句用 return 返回；print 的内容显示在下面。Ctrl+Enter 执行')}
+            </div>
+          )}
+          {entries.map((e, i) => (
+            <div key={i} className="ue:mb-3">
+              <pre className="ue:whitespace-pre-wrap ue:text-term-cmd">
+                {e.self ? `-- self = ${e.self}\n` : ''}
+                {e.code}
+              </pre>
+              {e.output.map((l, j) => (
+                <div key={j} className="ue:whitespace-pre-wrap">
+                  {l}
                 </div>
-              ))
-            )}
-            {e.ms !== undefined && !e.error && (
-              <div className="ue:text-caption ue:text-term-subtle">{`${e.ms.toFixed(1)} ms`}</div>
-            )}
-          </div>
-        ))}
-        <div ref={end} />
-      </Term>
-      <ui.Input
-        size="sm"
-        className="ue:font-mono"
-        value={self}
-        placeholder={t('self 对象路径（可选，从对象页里复制）')}
-        onChange={(e: { target: { value: string } }) => setSelf(e.target.value)}
-      />
-      <ui.Textarea
-        rows={5}
-        className="ue:font-mono ue:text-footnote"
-        value={code}
-        placeholder={'GameSystemManager:GetCount()'}
-        onChange={(e: { target: { value: string } }) => setCode(e.target.value)}
-        onKeyDown={(e: { key: string; ctrlKey: boolean; metaKey: boolean; preventDefault: () => void }) => {
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault()
-            void exec()
-          }
+              ))}
+              {e.error ? (
+                <pre className="ue:whitespace-pre-wrap ue:text-danger">{e.error}</pre>
+              ) : (
+                e.results.map((r, j) => (
+                  <div key={j}>
+                    <div className="ue:text-term-fg">{`→ ${luaText(r)}`}</div>
+                    {(r.fields ?? []).map((f, k) => (
+                      <div key={k} className="ue:pl-4 ue:text-term-subtle">
+                        {`${f.kt === 'number' ? `[${f.k}]` : f.k} = ${luaText(f)}`}
+                      </div>
+                    ))}
+                    {(r.total ?? 0) > (r.fields?.length ?? 0) && (
+                      <div className="ue:pl-4 ue:text-term-subtle">{t('… 共 {n} 项', { n: r.total ?? 0 })}</div>
+                    )}
+                  </div>
+                ))
+              )}
+              {e.ms !== undefined && !e.error && (
+                <div className="ue:text-caption ue:text-term-subtle">{`${e.ms.toFixed(1)} ms`}</div>
+              )}
+            </div>
+          ))}
+          <div ref={end} />
+        </Term>
+        <ui.Input
+          size="sm"
+          className="ue:font-mono"
+          value={self}
+          placeholder={t('self 对象路径（可选，从对象页里复制）')}
+          onChange={(e: { target: { value: string } }) => setSelf(e.target.value)}
+        />
+        <ui.Textarea
+          rows={5}
+          className="ue:font-mono ue:text-footnote"
+          value={code}
+          placeholder={'GameSystemManager:GetCount()'}
+          onChange={(e: { target: { value: string } }) => setCode(e.target.value)}
+          onKeyDown={(e: { key: string; ctrlKey: boolean; metaKey: boolean; preventDefault: () => void }) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault()
+              void exec()
+            }
+          }}
+        />
+        <div className="ue:flex ue:items-center ue:gap-2">
+          <ui.Button size="sm" disabled={busy === 'exec' || !code.trim()} onClick={() => void exec()}>
+            <Play className="ue:h-3.5 ue:w-3.5" /> {t('执行')}
+          </ui.Button>
+          <span className="ue:text-caption ue:text-subtle">{t('超过 10 秒自动中止；执行的代码会记进操作记录')}</span>
+        </div>
+      </Card>
+      <LuaSnippets
+        code={code}
+        self={self}
+        onPick={(sn) => {
+          setCode(sn.code)
+          setSelf(sn.self ?? '')
         }}
+        onRun={(sn, p) =>
+          void record({ code: `-- ${t('片段')} ${sn.name}\n${sn.code}`, self: sn.self, output: [], results: [] }, p)
+        }
       />
-      <div className="ue:flex ue:items-center ue:gap-2">
-        <ui.Button size="sm" disabled={busy === 'exec' || !code.trim()} onClick={() => void exec()}>
-          <Play className="ue:h-3.5 ue:w-3.5" /> {t('执行')}
-        </ui.Button>
-        <span className="ue:text-caption ue:text-subtle">{t('超过 10 秒自动中止；执行的代码会记进操作记录')}</span>
-      </div>
-    </Card>
+    </div>
   )
 }

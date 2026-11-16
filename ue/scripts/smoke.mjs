@@ -132,6 +132,11 @@ try {
   const tools = Object.fromEntries((await runTools.servers[0].tools()).map((x) => [x.name, x]))
   assert.equal(Object.keys(tools).length, 19)
   const call = (name, args, extra = {}) => tools[name].call(args, { taskId: 't1', callId: '1', ...extra })
+  // 面板 ADR 0067：一个工具的定义（说明 + 参数）不超过 3000 字
+  for (const x of Object.values(tools)) {
+    const size = (x.description ?? '').length + JSON.stringify(x.inputSchema ?? x.parameters ?? {}).length
+    assert.ok(size <= 3000, `${x.name} 的定义 ${size} 字，超过 3000`)
+  }
 
   const st = await call('ue_status', {})
   assert.match(text(st), /"online": true/)
@@ -367,6 +372,34 @@ try {
   assert.match(text(ran), /hello/)
   const bad = await call('ue_lua', { code: 'error("x")' }, { confirm: async () => ({ allow: true, message: '' }) })
   assert.ok(bad.isError && /boom/.test(text(bad)), text(bad))
+
+  // Lua 片段：没批准的 Agent 按名字执行被拒；批准后不弹确认；代码改了批准失效
+  await api('POST', '/p/p1/lua/snippets', { action: 'save', name: '刷新', code: 'return 7' })
+  const unapproved = await call('ue_lua', { action: 'exec', snippet: '刷新' })
+  assert.ok(unapproved.isError && /批准/.test(text(unapproved)), text(unapproved))
+  await api('POST', '/p/p1/lua/snippets', { action: 'approve', name: '刷新' })
+  let snipAsked = false
+  const snipRan = await call(
+    'ue_lua',
+    { action: 'exec', snippet: '刷新' },
+    { confirm: async () => ((snipAsked = true), { allow: true, message: '' }) },
+  )
+  assert.ok(!snipRan.isError && !snipAsked, `${text(snipRan)} 批准过的片段不再确认`)
+  assert.equal(bridge.state.lua.exec.at(-1), 'return 7')
+  await api('POST', '/p/p1/lua/snippets', { action: 'save', name: '刷新', code: 'return 8' })
+  assert.ok((await call('ue_lua', { action: 'exec', snippet: '刷新' })).isError, '代码改了批准失效')
+  const missing = await call('ue_lua', { action: 'exec', snippet: '没有' })
+  assert.match(text(missing), /刷新/, '名字不对时列出现有片段')
+
+  // Lua 深度调试：快照点、采样、持有的已销毁对象（UELink 2.4）
+  const snap = await call('ue_lua', { action: 'snap', file: 'UI/BagPanel.lua', line: 152, hits: 3 })
+  assert.ok(!snap.isError, text(snap))
+  const snapId = JSON.parse(text(snap)).snap.id
+  assert.match(text(await call('ue_lua', { action: 'snap', id: snapId })), /slotIndex/)
+  assert.ok(!(await call('ue_lua', { action: 'snap', remove: true })).isError)
+  const prof = await call('ue_lua', { action: 'profile', seconds: 1 })
+  assert.match(text(prof), /BagPanel/, text(prof))
+  assert.match(text(await call('ue_lua', { action: 'leaks' })), /OpenedPanels/)
 
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })

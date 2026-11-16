@@ -3,6 +3,7 @@ import { t } from '../../host.ts'
 import { LuaBuild } from './Build.tsx'
 import { LuaBuildHead } from './BuildParts.tsx'
 import { useBuildBadge } from './build-store.ts'
+import { LuaDebug } from './Debug.tsx'
 import { LuaExec } from './Exec.tsx'
 import { LuaObjects } from './Objects.tsx'
 
@@ -26,6 +27,8 @@ export const LUA_TABS: LuaTab[] = [
   { id: 'objects', order: 10, label: () => t('对象'), View: LuaObjects },
   // order 20 GM、30 模块、40 报错
   { id: 'build', order: 50, label: () => t('编译'), View: LuaBuild, useBadge: useBuildBadge, offline: true },
+  // 快照点、性能采样、持有的已销毁对象（设计稿四.4，要 UELink 2.4）
+  { id: 'debug', order: 55, label: () => t('调试'), View: LuaDebug },
   { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec },
 ].sort((a, b) => a.order - b.order)
 

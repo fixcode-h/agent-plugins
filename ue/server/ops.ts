@@ -23,6 +23,8 @@ export interface OpCtx {
   target?: Target
   /** 网页上你已经在弹窗里确认过危险命令 */
   confirmed?: boolean
+  /** 你批准过的 Lua 片段的代码（lua-debug/snippets.ts）：Agent 执行它时不再逐次确认 */
+  approvedLua?: string
 }
 
 /**
@@ -206,7 +208,7 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'lua.set':
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
     case 'lua.exec':
-      return `${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+      return `${args.snippet ? `-- ${t('片段')} ${args.snippet}\n` : ''}${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
     case 'forge.import':
       return `AssetForge ${t('导入')}${args.dryRun ? ` · ${t('演练')}` : ''}\n${args.pending ? t('全部待导入') : ((args.configs as string[]) ?? []).join('\n')}`
     case 'forge.export':
@@ -278,7 +280,9 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
     if (runtime === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what }))
     // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
-    if (op === 'lua.exec') await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
+    // 例外：你在 Lua 页批准过的片段（代码没改过）按「运行时」权限走，不再逐次确认（设计稿四.4）
+    const approved = op === 'lua.exec' && !!ctx.approvedLua && ctx.approvedLua === args.code
+    if (op === 'lua.exec' && !approved) await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
     else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
   } else if (kind === 'asset') {
     if (asset === 'read')
