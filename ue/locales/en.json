@@ -1378,7 +1378,6 @@
   "这里改的是资源本身：配置是真源，改完记得「导出到配置」，否则下次导入会被配置盖回去": "Edits here change the asset itself. The config is the source of truth: export to config afterwards, or the next import will overwrite your changes",
   "配置太长，只拿到了前一部分，画不出结构：看「配置原文」或用编辑器打开": "The config is too long and was cut off, so the structure can't be drawn: see Config source or open it in an editor",
   "配置里没有 root 节点，画不出结构：看「配置原文」": "The config has no root node, so the structure can't be drawn: see Config source",
-  "插槽": "Slot",
   "结构": "Structure",
   "来自配置": "From config",
   "（没有名字）": "(unnamed)",
@@ -2461,5 +2460,7 @@
   "启动后台编辑器": "Start background editor",
   "后台编辑器首次启动 30–60 秒，之后常驻；占 2–6 GB 内存。默认不自动起，要用时在 UE 页目标卡点「启动后台编辑器」；编译和启动编辑器时会自动关掉": "The background editor takes 30–60 seconds to start the first time, then stays running and uses 2–6 GB of memory. It doesn't start automatically by default; click \"Start background editor\" on the UE page's target card when needed. It closes automatically when building or launching the editor",
   "不自动起，提示先开编辑器或手动起后台编辑器": "Don't start automatically; ask to open the editor or start the background editor manually",
-  "自动起后台编辑器（不开窗口）": "Start the background editor automatically (no window)"
+  "自动起后台编辑器（不开窗口）": "Start the background editor automatically (no window)",
+  "AssetForge · 按配置预览": "AssetForge · Config preview",
+  "按配置预览，只读：要改就改配置，导入后在真实资源上改": "Preview from the config, read-only: edit the config, or edit the real asset after importing"
 }
