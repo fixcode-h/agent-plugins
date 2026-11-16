@@ -1,5 +1,5 @@
 import { Copy, Folder as FolderIcon, FolderOpen, RefreshCw, Star, StarOff } from 'lucide-react'
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { op } from '../../api.ts'
 import { assetIcon } from '../../asset-icons.ts'
 import { ClassPicker, type ClassOpt } from '../../ClassPicker.tsx'
@@ -49,6 +49,8 @@ export function AssetFolders({
   selected,
   onSelect,
   reveal,
+  folder,
+  onFolder,
 }: {
   /** 当前选中的资源路径（/Game/A/B.B 或 /Game/A/B） */
   selected: string
@@ -56,6 +58,10 @@ export function AssetFolders({
   onSelect: (path: string) => void
   /** 要定位的资源（「在文件夹里定位」、从别处跳过来）：展开到它所在的文件夹并滚到它；变了才定位一次 */
   reveal?: string
+  /** 右栏正在列内容的文件夹（没有时右栏是检视区）：高亮它；不是在树里点的（面包屑、后退）就展开定位过去 */
+  folder?: string
+  /** 点了一个文件夹（或收藏）：右栏列它的内容 */
+  onFolder?: (path: string) => void
 }) {
   const { project, target, state } = useUe()
   const data = useFolderData(project.id, target)
@@ -81,6 +87,21 @@ export function AssetFolders({
     if (!key) return
     if (kind === 'folder') setSelFolder(pkgOf(path))
     setScrollTo((s) => ({ key, seq: (s?.seq ?? 0) + 1 }))
+  }
+  // 树里点的文件夹不用再定位（就在眼前），记下来和 folder 比
+  const picked = useRef('')
+  useEffect(() => {
+    if (folder && folder !== picked.current) void goTo(folder, 'folder')
+    picked.current = folder ?? ''
+    // 只在右栏换了文件夹时看
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder])
+  const pickFolder = (p: string) => {
+    picked.current = p
+    setSelFolder(p)
+    onFolder?.(p)
+    // 和 Content Browser 一样：点文件夹名展开它（不收起，收起点前面的箭头）
+    if (!open[p]) toggle(p)
   }
   useEffect(() => {
     if (reveal) void goTo(reveal, 'asset')
@@ -162,7 +183,7 @@ export function AssetFolders({
           iconTone: 'ue:text-subtle',
           expandable: true,
           open: isOpen,
-          selected: n.kind === 'folder' && selFolder === n.f.path,
+          selected: n.kind === 'folder' && (folder ? folder === n.f.path : selFolder === n.f.path),
           title: n.kind === 'folder' ? n.f.path : undefined,
           aside: lv?.busy
             ? t('读取中…')
@@ -170,8 +191,12 @@ export function AssetFolders({
               ? n.kids.length
               : n.f.count !== undefined
                 ? n.f.count
-                : undefined,
+                : // 桥接不给子项数：展开读过的就数读到的，没读过的不显示，不为计数多发请求
+                  lv && !lv.error
+                  ? (lv.total ?? lv.folders.length + lv.items.length)
+                  : undefined,
           onToggle,
+          onSelect: n.kind === 'folder' && onFolder && !forced ? () => pickFolder(n.f.path) : undefined,
           onMenu: n.kind === 'folder' ? (e) => folderMenu(e, n.f.path) : undefined,
           // 行尾星标：收藏了一直显示实心的，没收藏的悬停才露出来
           action:
@@ -222,7 +247,7 @@ export function AssetFolders({
     return { lines: out, hits }
     // toggle、onSelect、folderMenu 每次渲染都是新的，按数据变化重算就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [levels, open, selected, selFolder, q, folded, favs])
+  }, [levels, open, selected, selFolder, folder, q, folded, favs])
 
   function folderMenu(e: MouseEvent, path: string) {
     const on = favs.includes(path)
@@ -285,7 +310,7 @@ export function AssetFolders({
         selected={selFolder}
         open={favOpen}
         onOpenChange={setFavOpen}
-        onGo={(p) => void goTo(p, 'folder')}
+        onGo={(p) => (onFolder ? onFolder(p) : void goTo(p, 'folder'))}
         onRemove={fav.toggle}
         onMove={fav.move}
         where={fav.file}

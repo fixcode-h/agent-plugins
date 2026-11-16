@@ -123,6 +123,35 @@ const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
 
 /**
+ * 资源文件夹（包路径 /Game/A、/<插件>/A、/Engine/A）在磁盘上的目录。引擎内容目录找不到时返回空串；
+ * 认不出挂载点、路径里有 .. 时抛错
+ */
+function mapDir(p: string, root: string, plugins: Mount[], engineContent: string) {
+  const [, mount = '', ...rest] = p.split('/')
+  let base = ''
+  if (mount.toLowerCase() === 'game') base = path.join(root, 'Content')
+  else if (mount.toLowerCase() === 'engine') {
+    if (!engineContent) return ''
+    base = engineContent
+  } else {
+    const m = plugins.find((x) => x.name.toLowerCase() === mount.toLowerCase())
+    if (!m) throw new Error(t('找不到挂载点 /{m}：项目插件里没有能放内容的这个插件', { m: mount }))
+    base = m.dir
+  }
+  // 不许用 .. 走出 Content
+  if (rest.some((s) => s === '..' || s === '.')) throw new Error(t('路径不对：{p}', { p }))
+  return path.join(base, ...rest)
+}
+
+/** 给文件夹内容表 stat 文件用（asset-folders-stat.ts）：资源文件夹 → 磁盘目录，找不到返回空串 */
+export async function contentDir(root: string, engineDir: string, p: string) {
+  p = normPath(p)
+  if (p === '/') return ''
+  const engineContent = engineDir ? path.join(engineDir, 'Engine', 'Content') : ''
+  return mapDir(p, root, await projectPlugins(root), engineContent && exists(engineContent) ? engineContent : '')
+}
+
+/**
  * 扫磁盘列一层：/Game → <项目>/Content，/<插件> → 插件的 Content，/Engine → <引擎>/Engine/Content。
  * 磁盘上认不出类型：.umap 写 World，其他留空串；按类型筛选时只认得出 World，别的类型只列文件夹并带提示
  */
@@ -153,20 +182,8 @@ export async function diskChildren(
     return { path: '/', folders, items: [], source: 'disk' }
   }
 
-  const [, mount, ...rest] = p.split('/')
-  let base = ''
-  if (mount.toLowerCase() === 'game') base = path.join(root, 'Content')
-  else if (mount.toLowerCase() === 'engine') {
-    if (!engineOk) return { path: p, folders: [], items: [], source: 'disk', note: t('引擎内容要编辑器开着才能列') }
-    base = engineContent
-  } else {
-    const m = plugins.find((x) => x.name.toLowerCase() === mount.toLowerCase())
-    if (!m) throw new Error(t('找不到挂载点 /{m}：项目插件里没有能放内容的这个插件', { m: mount }))
-    base = m.dir
-  }
-  // 不许用 .. 走出 Content
-  if (rest.some((s) => s === '..' || s === '.')) throw new Error(t('路径不对：{p}', { p }))
-  const dir = path.join(base, ...rest)
+  const dir = mapDir(p, root, plugins, engineOk ? engineContent : '')
+  if (!dir) return { path: p, folders: [], items: [], source: 'disk', note: t('引擎内容要编辑器开着才能列') }
   const ents = await readdir(dir, { withFileTypes: true }).catch((e: NodeJS.ErrnoException) => {
     if (e.code === 'ENOENT') throw new Error(t('磁盘上没有这个文件夹：{p}', { p }))
     throw new Error(t('读不了文件夹 {p}：{msg}', { p, msg: e.message }))

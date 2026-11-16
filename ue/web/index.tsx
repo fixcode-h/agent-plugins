@@ -10,6 +10,7 @@ import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
+import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
@@ -59,6 +60,8 @@ const activate: ActivateWeb = (host) => {
       { id: 'inspect-cats', label: t('检视 · 分类栏'), tune: ['menu'], Specimen: CategoryBarSpecimen },
       // 资源页文件夹树上面的收藏区和行尾星标：跟面板「行」「菜单」的调节项
       { id: 'fav-folders', label: t('资源 · 收藏的文件夹'), tune: ['row', 'menu'], Specimen: FavFoldersSpecimen },
+      // 资源页选中文件夹时右栏的内容表：跟面板「徽标」「行」的调节项
+      { id: 'folder-table', label: t('资源 · 文件夹内容表'), tune: ['badge', 'row'], Specimen: FolderTableSpecimen },
       // 启动编辑器按钮上的启动进度：跟面板「按钮」「进度条」的调节项
       { id: 'launch-button', label: 'UE · LaunchButton', tune: ['button', 'progress'], Specimen: LaunchButtonSpecimen },
       // AssetForge 页的同步状态徽标、配置 → 资源关系条、作业报告：跟面板「徽标」「行」的调节项
