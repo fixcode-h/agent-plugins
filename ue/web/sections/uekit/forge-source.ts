@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { op } from '../../api.ts'
+import { op, ppost } from '../../api.ts'
 import type { ForgeEntry } from './Forge.tsx'
 
 /**
@@ -19,6 +19,24 @@ export interface ForgeData {
 export interface ForgeHealth {
   configRoot: string
   configRootExists: boolean
+  /** 配置根不存在、自动建也失败了（指到项目和 ProjectDoc 以外、没权限）：空状态显示原因 */
+  createError?: string
+}
+
+/**
+ * 拿配置根；不存在就直接建出来（用户 2026-11-16：插件启动就默认建对应的文件夹，不再显示「配置根还不存在」）。
+ * 建在面板服务端（ext/forge/root），不经 UE：UEKit 不用为这个发版，编辑器没开也能建。
+ */
+async function loadHealth(project: string): Promise<ForgeHealth> {
+  const r = await op<{ configRoot?: string; configRootExists?: boolean }>(project, 'forge.health')
+  const h: ForgeHealth = { configRoot: r.configRoot ?? '', configRootExists: r.configRootExists !== false }
+  if (h.configRootExists || !h.configRoot) return h
+  try {
+    await ppost(project, 'ext/forge/root', { root: h.configRoot })
+    return { ...h, configRootExists: true }
+  } catch (e) {
+    return { ...h, createError: (e as Error).message }
+  }
 }
 
 async function loadAll(project: string, deep: boolean): Promise<ForgeData> {
@@ -61,8 +79,8 @@ export function useForgeSource(project: string, installed: boolean | undefined) 
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(''))
     // 配置根可能刚被建出来（导出了第一份配置），一起重拉
-    void op<{ configRoot?: string; configRootExists?: boolean }>(project, 'forge.health')
-      .then((r) => setHealth({ configRoot: r.configRoot ?? '', configRootExists: r.configRootExists !== false }))
+    void loadHealth(project)
+      .then(setHealth)
       .catch(() => undefined)
   }
 

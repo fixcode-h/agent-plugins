@@ -8,6 +8,7 @@ import { setHost, t } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
 import { MenuSpecimen } from './menu.tsx'
+import { PathTextSpecimen } from './path-text.tsx'
 import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
@@ -61,6 +62,8 @@ const activate: ActivateWeb = (host) => {
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
+      // 一行放不下的长路径（AssetForge 配置根、新建配置弹窗）：省略前面的目录，悬停看全、点一下复制
+      { id: 'path-text', label: 'UE · PathText', Specimen: PathTextSpecimen },
       // 对象页、资源页的检视区（设计稿 designs/对象页合并与资源导航-设计稿.md 第 9 节）：「最近看过」「更多」下拉跟面板「菜单」走
       { id: 'inspect-bar', label: t('检视 · 导航条'), tune: ['menu'], Specimen: InspectorBarSpecimen },
       { id: 'inspect-ref', label: t('检视 · 引用'), Specimen: RefChipSpecimen },

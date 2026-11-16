@@ -7,7 +7,7 @@ import { c, run, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
-import { forgeFileAction } from './forge-files.ts'
+import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { EXT_EVENT, watch } from './stream.ts'
@@ -81,6 +81,12 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/forge/file':
       // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
       return forgeFileAction(p.root, b)
+    case 'POST ext/forge/root':
+      // 打开 AssetForge 页时配置根还不存在：直接建出来
+      return forgeEnsureRoot(p.root, b)
+    case 'POST ext/forge/create':
+      // 「新建配置」：模板生成的 JSON 写进配置根；让 AI 写时先建好目录
+      return forgeCreateConfig(p.root, b)
     case 'POST ext/forge/watch':
       // AssetForge 页右栏选中的配置：存盘了推 forge.file，页面重拉差异、重新演练（不轮询）
       if (!b.root) throw new BridgeError(t('不知道配置根在哪：先刷新 AssetForge 页'))
