@@ -14,6 +14,8 @@ import { mcpText } from './util.ts'
 import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
+import { runLuaGm } from './lua-gm/run.ts'
+import { listGm } from './lua-gm/tool.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -68,9 +70,10 @@ const DEFS = [
   ),
   tool(
     'ue_gm',
-    'GM：action=list 列出所有 GM（Exec 函数、继承 UAgentPanelGMLibrary 的函数），带参数类型和说明，filter 按名字前缀筛；action=run 执行 name（args 按顺序给参数，同名多处时用 owner 指定类）；action=macro 按名字执行项目里存的宏。',
+    'GM：action=list 列出项目的 GM，带参数类型和说明，filter 按名字前缀筛。来源有两种：C++（Exec 函数、继承 UAgentPanelGMLibrary 的函数，要 UE 在运行）和 Lua（项目的 Lua GM 文件由扫描脚本列出，source: lua，UE 没开也能列；参数的 table 是它关联的配置表列，填值前可以用 table.query 查）。source=lua 只列 Lua 的并重新扫描一次。action=run 执行 name（args 按顺序给参数；Lua 的 GM 要写 source=lua；C++ 同名多处时用 owner 指定类）；action=macro 按名字执行项目里存的宏。',
     {
       action: { type: 'string', enum: ['list', 'run', 'macro'] },
+      source: { type: 'string', enum: ['cpp', 'lua'] },
       name: { type: 'string' },
       owner: { type: 'string' },
       args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
@@ -80,11 +83,11 @@ const DEFS = [
     ['action'],
     async (a, ctx) => {
       if (a.action === 'run')
-        return out(await runOp(ctx, 'gm.run', { name: a.name, owner: a.owner, args: a.args ?? [] }))
+        return a.source === 'lua'
+          ? out(await runLuaGm(ctx, str(a.name), (a.args as unknown[]) ?? []))
+          : out(await runOp(ctx, 'gm.run', { name: a.name, owner: a.owner, args: a.args ?? [] }))
       if (a.action === 'macro') return out(await runMacro(ctx, str(a.name)))
-      const r = (await runOp(ctx, 'gm.list', {})) as { items?: { name: string }[] }
-      const f = str(a.filter).toLowerCase()
-      return out((r.items ?? []).filter((i) => !f || i.name.toLowerCase().startsWith(f)))
+      return out(await listGm(ctx, str(a.source), str(a.filter)))
     },
   ),
   tool(

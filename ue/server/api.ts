@@ -9,6 +9,7 @@ import { cancelJob, getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
+import { luaGmRoute } from './lua-gm/api.ts'
 import { extRoute } from './uekit/api-ext.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
@@ -190,6 +191,9 @@ export async function handle(req: Request): Promise<Response> {
         const ext = await extRoute(ctx, `${req.method} ${route}`, b, url)
         if (ext instanceof Response) return ext
         if (ext !== undefined) return json(ext)
+        // GM 页 Lua 来源（扫描脚本、参数关联、执行）在 lua-gm/api.ts
+        const lua = await luaGmRoute(ctx, `${req.method} ${route}`, b)
+        if (lua !== undefined) return json(lua)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)

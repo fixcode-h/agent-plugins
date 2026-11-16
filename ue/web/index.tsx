@@ -1,3 +1,4 @@
+import { TablePickSpecimen } from './sections/gm/TablePick.tsx'
 import type { ActivateWeb, Task } from '../../sdk/web.ts'
 import type { UeProject } from '../server/types.ts'
 import { get } from './api.ts'
@@ -68,6 +69,8 @@ const activate: ActivateWeb = (host) => {
         tune: ['badge', 'row'],
         Specimen: ForgeSpecimen,
       },
+      // GM 页参数关联表格列的可搜索下拉（设计稿 designs/GM页重设计-效果图）：跟面板「输入框」「菜单」的调节项
+      { id: 'gm-table-pick', label: t('GM · 参数关联表格下拉'), tune: ['input', 'menu'], Specimen: TablePickSpecimen },
     ],
   }
 }
