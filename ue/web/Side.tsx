@@ -2,6 +2,7 @@ import { Camera, ChevronDown, Plus, Search, type LucideIcon } from 'lucide-react
 import { useEffect, useRef, useState } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
 import { ppost } from './api.ts'
+import { BusyText, busyConn } from './busy/busy.tsx'
 import { useUe } from './ctx.tsx'
 import { GamepadIcon } from './icon.tsx'
 import { h, t } from './host.ts'
@@ -131,9 +132,10 @@ export function connLine(s: ProjectState | undefined) {
   const live = s.instances.filter((i) => i.kind !== 'background')
   if (!s.bridge) return { tone: 'warn' as const, text: t('还没装桥接插件') }
   if (!live.length) return { tone: 'muted' as const, text: t('UE 没在运行') }
-  const bad = live.filter((i) => !i.online)
+  // 忙着的（同步加载等，进程活着只是不回应）不算连不上，单独显示
+  const bad = live.filter((i) => !i.online && !i.busy)
   if (bad.length) return { tone: 'danger' as const, text: t('{n} 个进程连不上', { n: bad.length }) }
-  return { tone: 'ok' as const, text: t('已连接') }
+  return busyConn(s) ?? { tone: 'ok' as const, text: t('已连接') }
 }
 
 /**
@@ -181,11 +183,15 @@ export function TargetCard() {
           />
           <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-caption ue:text-subtle">
             {w && <WorldBadge world={w} />}
-            <span className="ue:truncate" title={inst?.error}>
-              {inst?.online
-                ? [`PID ${inst.pid}`, w?.map, w?.player].filter(Boolean).join(' · ')
-                : inst?.error || t('连不上')}
-            </span>
+            {inst?.busy && !inst.online ? (
+              <BusyText inst={inst} />
+            ) : (
+              <span className="ue:truncate" title={inst?.error}>
+                {inst?.online
+                  ? [`PID ${inst.pid}`, w?.map, w?.player].filter(Boolean).join(' · ')
+                  : inst?.error || t('连不上')}
+              </span>
+            )}
           </div>
         </>
       ) : (

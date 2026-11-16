@@ -1,6 +1,7 @@
 import { ArrowDown, Package, Search, type LucideIcon } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
+import { busyOf, EditorBusy } from './busy/busy.tsx'
 import { useLaunch } from './launch.ts'
 import { LaunchButton } from './launch-progress/LaunchButton.tsx'
 import { useUe } from './ctx.tsx'
@@ -402,6 +403,8 @@ export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: strin
   const { state, go } = useUe()
   const { ui } = h()
   const launch = useLaunch()
+  // 进程活着只是忙（同步加载等）：不是「没在运行」，不给启动按钮，显示在忙什么、等它回应
+  const busy = busyOf(state)[0]
   const link = (label: string, section: string, sub?: string) => (
     <button
       type="button"
@@ -411,6 +414,7 @@ export function NotRunning({ icon: Icon, what }: { icon: LucideIcon; what: strin
       {label}
     </button>
   )
+  if (busy) return <EditorBusy inst={busy} />
   return (
     <div className="ue:flex ue:flex-1 ue:items-center ue:justify-center ue:p-6">
       <div className="ue:flex ue:max-w-lg ue:flex-col ue:items-center ue:gap-3 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:px-8 ue:py-8 ue:text-center">

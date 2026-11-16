@@ -1,6 +1,8 @@
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
+import { busyFromLog } from './busy/activity.ts'
+import { lastLogOf } from './busy/state.ts'
 import { backgroundState } from './editor.ts'
 import { launchProgress } from './launch/track.ts'
 import { markUndone, readHistory, record } from './history.ts'
@@ -19,7 +21,14 @@ import { t } from './util.ts'
 export async function projectState(p: UeProject): Promise<ProjectState> {
   const cards = await liveCards(p.root)
   const [instances, bridge, bundled] = await Promise.all([
-    Promise.all(cards.map(info)),
+    // 忙着的进程补上「在忙什么」：日志路径用它上次回应时报的，没有就是项目的默认日志
+    Promise.all(
+      cards.map(async (card) => {
+        const i = await info(card)
+        if (i.busy) i.busy = { ...i.busy, ...(await busyFromLog(lastLogOf(card.pid) ?? logFile(p))) }
+        return i
+      }),
+    ),
     bridgeVersionIn(p.root),
     availableVersion(),
   ])

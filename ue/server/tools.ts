@@ -46,6 +46,8 @@ const DEFS = [
           pid: i.pid,
           kind: i.kind,
           online: i.online,
+          // 忙（同步加载、编译着色器、断点）不是断开：等它回应，不要另起编辑器
+          busy: i.busy,
           error: i.error,
           worlds: i.worlds,
         })),

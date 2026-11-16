@@ -1,5 +1,6 @@
 import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { markBusy, markDown, markOnline } from './busy/state.ts'
 import type { Instance, Target } from './types.ts'
 import { bundledVersion, cmpVersion, pluginVersion } from './uelink.ts'
 import { alive, readJson, t } from './util.ts'
@@ -135,6 +136,7 @@ export async function info(card: Card): Promise<Instance> {
       signal: AbortSignal.timeout(3000),
     })
     const body = (await res.json()) as Partial<Instance> & { ok?: boolean; error?: string }
+    markOnline(card.pid, body.log)
     if (!body.ok) return { ...base, error: body.error || `HTTP ${res.status}` }
     return {
       ...base,
@@ -146,7 +148,17 @@ export async function info(card: Card): Promise<Instance> {
       ops: Array.isArray(body.ops) ? body.ops : undefined,
     }
   } catch (e) {
-    return { ...base, error: (e as Error).message }
+    const err = e as Error
+    // 连上了却等不到回应：UELink 在游戏线程上回请求，游戏线程卡在同步加载里时就是这样（进程活着，liveCards 已经按 PID 筛过）。
+    // 当成「忙」而不是断开，网页不提示再启动一个编辑器（用户 2026-11-16）
+    if (err.name === 'TimeoutError' || err.name === 'AbortError')
+      return {
+        ...base,
+        busy: { since: markBusy(card.pid) },
+        error: t('UE 进程 {pid} 暂时没有回应（可能在加载），忙完会自动连上', { pid: card.pid }),
+      }
+    markDown(card.pid)
+    return { ...base, error: err.message }
   }
 }
 

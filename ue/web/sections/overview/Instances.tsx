@@ -1,3 +1,4 @@
+import { BusyText } from '../../busy/busy.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Badge, Card, Dot, WorldBadge, kindLabel, useTargetInfo, worldLabel } from '../../ui.tsx'
@@ -38,11 +39,11 @@ export function Instances() {
                     w.id && 'ue:pl-9',
                   )}
                 >
-                  <Dot tone={i.online ? 'ok' : 'danger'} />
+                  <Dot tone={i.online ? 'ok' : i.busy ? 'run' : 'danger'} />
                   <span className="ue:text-body ue:text-fg">{w.label}</span>
                   {w.badge}
                   <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-subtle">
-                    {i.online ? w.detail : i.error}
+                    {i.online ? w.detail : i.busy ? <BusyText inst={i} /> : i.error}
                   </span>
                   {on && (
                     <span className="ue:ml-auto">
