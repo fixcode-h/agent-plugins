@@ -49,6 +49,7 @@ import { usePendingPie } from './launch.ts'
 import { useLaunchEvents } from './launch-progress/store.ts'
 import { Jump } from './Jump.tsx'
 import { useJumpKeys } from './jump/keys.ts'
+import { loadIndex } from './jump/index-data.ts'
 import { ShotDialog } from './Shot.tsx'
 import { JumpEntry, NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
 
@@ -159,6 +160,8 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   useJumpKeys(() => setJump(true))
   useEffect(() => {
     setPidTarget(undefined)
+    // 跳转的本地索引先在后台建起来（不碰 UE，只读 UEToVS 的索引文件或扫磁盘），第一次按快捷键时就能直接筛
+    if (project) void loadIndex(project.id).catch(() => undefined)
   }, [project?.id])
   // 记下每个分区最后停在哪（选中的对象、资源）：从左栏切回来时回到原处，不是回到空白页
   useEffect(() => {

@@ -2176,5 +2176,17 @@
   "让 AI 改…": "Change with AI…",
   "存为模板": "Save as template",
   "没写 kind": "No kind",
-  "项目模板：{p}": "Project template: {p}"
+  "项目模板：{p}": "Project template: {p}",
+  "重建索引": "Rebuild index",
+  "还有 {n} 个，到资源页搜": "{n} more, search on the Assets page",
+  "资源（{n} 个，UEToVS 索引）": "Assets ({n}, UEToVS index)",
+  "资源（{n} 个）": "Assets ({n})",
+  "Lua 模块（{n} 个）": "Lua modules ({n})",
+  "Lua 模块 {m}（{f}）": "Lua module {m} ({f})",
+  "索引没建好：{msg}": "Index not ready: {msg}",
+  "正在建索引…": "Building index…",
+  "来自 UEToVS 的索引": "from the UEToVS index",
+  "面板扫磁盘建的索引": "scanned from disk by the panel",
+  "，Lua 模块 {n} 个": ", {n} Lua modules",
+  "已索引资源 {n} 个{lua}（{from}），打字直接筛": "{n} assets indexed{lua} ({from}); type to filter"
 }
