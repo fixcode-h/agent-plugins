@@ -2452,5 +2452,9 @@
   "等待 {s} 秒": "Wait {s}s",
   "等待": "Wait",
   "「{s}」{k}": "\"{s}\" {k}",
-  "{a} {w}": "{a} {w}"
+  "{a} {w}": "{a} {w}",
+  "点击方式": "Click method",
+  "不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。": "Without the mouse: call the button's click directly (press, click, release); if there's no button, send virtual mouse events, so you can keep using your mouse during playback. Real mouse: move the cursor and press/release, which catches occlusion and hover issues, but don't touch the mouse during playback. A step's own via takes precedence.",
+  "不动鼠标（默认）": "Without the mouse (default)",
+  "真实鼠标": "Real mouse"
 }
