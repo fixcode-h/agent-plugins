@@ -5,7 +5,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { TableSchema, TablesConfig } from '../../shared/tables.ts'
-import { listTables, lockedByOffice, openTable, safeRel } from './files.ts'
+import { lockedByOffice, openTable, safeRel } from './files.ts'
+import { listTables } from './list-index.ts'
 import { searchTables } from './search.ts'
 
 function project() {

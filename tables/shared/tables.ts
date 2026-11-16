@@ -112,6 +112,10 @@ export interface TablesIndex {
   files: TableFile[]
   /** 文件太多只列了前面一部分 */
   truncated?: boolean
+  /** 这份列表的索引键（表格页按它认后台扫描推来的增量，见 server/tables/list-index.ts） */
+  key?: string
+  /** 给出的是存下的索引，后台正在重新扫描目录，扫完推增量过来 */
+  scanning?: boolean
 }
 
 /** 打开的一个表格文件 */

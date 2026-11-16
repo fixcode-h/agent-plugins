@@ -14,6 +14,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/menu'
 import { buildTableTree, middleEllipsis, type TableNode } from './table-tree'
+import { useTreeWindow } from './use-tree-window'
 
 /** 每层缩进 */
 const INDENT = 14
@@ -76,6 +77,8 @@ export function TableTree({
       return next.size === s.size ? s : next
     })
   }, [active])
+  // 展开的行多了（全展开、名字搜索命中几千个）只画看得见的那一段，上下用空白撑住滚动高度
+  const win = useTreeWindow()
   const toggle = (p: string) =>
     setOpened((s) => {
       const next = new Set(s)
@@ -88,34 +91,40 @@ export function TableTree({
         {query ? t('没有名字里带「{q}」的表格', { q: query }) : t('表格目录里还没有表格')}
       </p>
     )
-  const rows: React.ReactNode[] = []
+  const flat: { node: TableNode; depth: number; open: boolean }[] = []
   const walk = (nodes: TableNode[], depth: number) => {
     for (const n of nodes) {
       const open = !!query || opened.has(n.path)
-      rows.push(
-        <TreeRow
-          key={n.path}
-          node={n}
-          depth={depth}
-          open={open}
-          active={n.path === active}
-          dirty={!!dirty?.has(n.path)}
-          problems={problems?.get(n.path) ?? 0}
-          locked={!!readOnly?.has(n.path)}
-          onClick={() => (n.file ? onOpen(n.path) : toggle(n.path))}
-          onMenu={() => setMenuAt(n)}
-        />,
-      )
+      flat.push({ node: n, depth, open })
       if (!n.file && open) walk(n.children, depth + 1)
     }
   }
   walk(tree, 0)
+  const w = win.layout(flat.length)
+  const rows = flat
+    .slice(w.start, w.end)
+    .map(({ node: n, depth, open }) => (
+      <TreeRow
+        key={n.path}
+        node={n}
+        depth={depth}
+        open={open}
+        active={n.path === active}
+        dirty={!!dirty?.has(n.path)}
+        problems={problems?.get(n.path) ?? 0}
+        locked={!!readOnly?.has(n.path)}
+        onClick={() => (n.file ? onOpen(n.path) : toggle(n.path))}
+        onMenu={() => setMenuAt(n)}
+      />
+    ))
   const under = menuAt ? filesUnder(menuAt) : []
   return (
     <ContextMenu onOpenChange={(o) => !o && setMenuAt(null)}>
       <ContextMenuTrigger asChild>
-        <div role="tree" aria-label={t('表格文件')} className="tb:flex tb:flex-col tb:gap-px">
+        <div ref={win.ref} role="tree" aria-label={t('表格文件')} className="tb:flex tb:flex-col tb:gap-px">
+          {w.before > 0 && <div aria-hidden style={{ height: w.before }} className="tb:shrink-0" />}
           {rows}
+          {w.after > 0 && <div aria-hidden style={{ height: w.after }} className="tb:shrink-0" />}
         </div>
       </ContextMenuTrigger>
       {menuAt && (

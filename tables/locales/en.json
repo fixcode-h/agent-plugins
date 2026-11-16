@@ -1224,5 +1224,6 @@
   "有 {n} 项格式不对没收下：{items}": "{n} items were malformed and left out: {items}",
   "枚举 {name}：{error}": "Enum {name}: {error}",
   "扫描规则 {n}：{error}": "Scan rule {n}: {error}",
-  "类型 {name}": "Type {name}"
+  "类型 {name}": "Type {name}",
+  "正在后台检查表格目录的变化": "Checking the table folders for changes in the background"
 }

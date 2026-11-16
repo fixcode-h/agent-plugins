@@ -12,7 +12,8 @@ import { TableSchema, TablesConfig, tableKind, tablesOf, tablesOn } from '../../
 import type { Project } from '../../shared/schema.ts'
 import { resolvePath } from '../fs.ts'
 import { revealItem } from '../open.ts'
-import { absPath, listTables, openTable, safeRel } from './files.ts'
+import { absPath, openTable, safeRel } from './files.ts'
+import { PAGE_RESCAN_MS, listTables } from './list-index.ts'
 import { MAX_HITS, searchTables } from './search.ts'
 import { replaceTables } from './bulk-replace.ts'
 import { TableReplaceBody } from '../../shared/table-search.ts'
@@ -104,7 +105,7 @@ export function tablesApi(deps: TablesDeps) {
         try {
           const { dir, cfg } = await projectOf(deps, c.req.param('id'))
           if (!tablesOn(cfg)) return c.json({ dirs: [], missing: [], files: [] })
-          return c.json(await listTables(dir, cfg, c.req.query('fresh') === '1'))
+          return c.json(await listTables(dir, cfg, c.req.query('fresh') === '1', PAGE_RESCAN_MS))
         } catch (e) {
           return fail(c, e)
         }

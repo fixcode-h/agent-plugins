@@ -11,16 +11,8 @@ import { csvFormat, parseCsv, writeCsv } from '../../shared/csv.ts'
 import { applyOps, cellRef, gridDiff, setCells, type TableSave } from '../../shared/table-edit.ts'
 import { tableKind, type TableDoc, type TablesConfig } from '../../shared/tables.ts'
 import { DATA_DIR } from '../store.ts'
-import {
-  forgetLists,
-  forgetTable,
-  lockedByOffice,
-  openTable,
-  parseTable,
-  primeTable,
-  readTableXlsx,
-  safeRel,
-} from './files.ts'
+import { forgetLists } from './list-index.ts'
+import { forgetTable, lockedByOffice, openTable, parseTable, primeTable, readTableXlsx, safeRel } from './files.ts'
 import type { SheetData } from '../../shared/files.ts'
 import { editXlsx } from './xlsx-write.ts'
 import { HttpError } from './http-error.ts'
@@ -92,7 +84,7 @@ export async function saveTable(
   if (sheets) await primeTable(full, sheets)
   else forgetTable(full)
   // 列表里的大小、修改时间也变了
-  forgetLists()
+  forgetLists(false)
   return openTable(dir, rel, cfg)
 }
 

@@ -10,7 +10,8 @@ import { t } from '../../shared/i18n.ts'
 import type { SheetData } from '../../shared/files.ts'
 import { detectVcs } from '../projects-analyze.ts'
 import { parseZtag } from '../p4-split.ts'
-import { forgetLists, forgetTable, parseTableBuffer } from './files.ts'
+import { forgetTable, parseTableBuffer } from './files.ts'
+import { forgetLists } from './list-index.ts'
 import { HttpError } from './http-error.ts'
 import { gitVcs, vcsRun } from './history.ts'
 
@@ -111,7 +112,7 @@ async function ensureOurs(full: string, ours: Buffer | null, backup: () => Promi
     throw new HttpError(t('写入失败：{err}', { err: (e as Error).message }), 409)
   }
   forgetTable(full)
-  forgetLists()
+  forgetLists(false)
   return true
 }
 
