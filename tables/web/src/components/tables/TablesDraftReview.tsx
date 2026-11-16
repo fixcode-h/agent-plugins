@@ -5,6 +5,7 @@ import { TYPE_NAMES } from '@shared/tables'
 import { fromWhere, scanName } from '@shared/table-enum-scan'
 import type { HeaderRule } from '@shared/table-header'
 import { typeKindLabel } from './TypeEditor'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { roleShort } from '@/components/files/sheet-roles'
@@ -31,11 +32,17 @@ export function DraftReview({
   draft,
   onCancel,
   onApply,
+  fill = false,
 }: {
   draft: TablesDraft
   /** 丢掉这份结果（项目设置里暂存的那份）；分析窗口右侧的是对话里的回复，没有这个按钮 */
   onCancel?: () => void
   onApply: (picked: Set<string>) => Promise<void>
+  /**
+   * 放在分析窗口右侧功能面板里：列表不限高、随面板一起滚，应用按钮贴在底部，内容铺满面板（用户 2026-11-16：
+   * 限高 20rem 时下面空一大块）。项目设置里还是限高的小卡片
+   */
+  fill?: boolean
 }) {
   const ids = useMemo(() => draftItemIds(draft), [draft])
   const [picked, setPicked] = useState(() => new Set(ids))
@@ -133,7 +140,7 @@ export function DraftReview({
       {items.length === 0 ? (
         <p className="tb:px-3 tb:py-3 tb:text-footnote tb:text-subtle">{t('这次分析没有给出可以写进结构文件的内容')}</p>
       ) : (
-        <ul className="tb:max-h-80 tb:divide-y tb:overflow-y-auto">
+        <ul className={fill ? 'tb:divide-y' : 'tb:max-h-80 tb:divide-y tb:overflow-y-auto'}>
           {items.map((it) => (
             <li key={it.id} className="tb:flex tb:items-start tb:gap-3 tb:px-3 tb:py-2">
               <Checkbox
@@ -159,7 +166,12 @@ export function DraftReview({
           ))}
         </ul>
       )}
-      <footer className="tb:flex tb:items-center tb:justify-end tb:gap-2 tb:border-t tb:px-3 tb:py-2">
+      <footer
+        className={cn(
+          'tb:flex tb:items-center tb:justify-end tb:gap-2 tb:border-t tb:px-3 tb:py-2',
+          fill && 'tb:sticky tb:bottom-0 tb:rounded-b-(--c-card-radius) tb:bg-panel',
+        )}
+      >
         {onCancel && (
           <Button size="sm" variant="ghost" onClick={onCancel}>
             {t('不要了')}

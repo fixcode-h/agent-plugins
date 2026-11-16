@@ -87,11 +87,23 @@ export type TablesDraft = z.infer<typeof TablesDraft>
 /** 任务提示词的上限（shared/schema.ts 里任务的 prompt） */
 const PROMPT_MAX = 20000
 
-export function buildTablesPrompt(sample: string, convo: string, langWord: string) {
+/** 提示词里附带的：全项目表头固定取值的统计、项目里保存的上次分析结果（JSON） */
+export interface TablesPromptExtra {
+  headerStats?: string
+  previous?: string
+}
+
+export function buildTablesPrompt(sample: string, convo: string, langWord: string, extra: TablesPromptExtra = {}) {
   return [
     '你是「Agent 面板」里的表格分析助手，正在帮用户总结**这个项目的游戏配置表的风格**，结果用来让网页上的表格能结构化显示和修改（固定表头、枚举下拉、引用检查）。',
     '面板从项目里挑了下面几张表（不用看全部表）。**一张一张来**：每张表用面板动作 `table.sample`（app_do，参数 `{ "path": 表格路径 }`）读它的表头和前几行，先写一两行这张表的结论（表头从第几行开始、每行是什么、主键、类型名、枚举定义在哪），再看下一张；全部看完再汇总。**不要自己写脚本解析 xlsx，不要读其它文件，不要改任何文件。**',
     `## 要看的表\n${sample}`,
+    extra.headerStats
+      ? `## 全项目表头的固定取值（面板统计的）\n${extra.headerStats}\n样本只看了几张表，修饰、导出端这类表头行能填哪些值以这份统计为准：统计里出现过的都写进 enums，不要只写样本里见到的。`
+      : '',
+    extra.previous
+      ? `## 项目里保存的上次分析结果\n这个项目以前分析过（可能是别的分支、别人做的），结果如下。在它的基础上核对样本、补全漏掉的、改掉不对的，最后照样输出完整的结果：\n\`\`\`json\n${extra.previous}\n\`\`\``
+      : '',
     `## 要总结的
 - style.header：**这个项目的表头配置**。表头是一个数组 rows，数组里每一项对应表格表头的一行，从第 start 行（从 0 数）开始按顺序往下排。
   要从你读到的表里自己总结：每张表开头几行哪些是表头、各是什么，取大多数表都一样的那种排法。每项写：
@@ -130,7 +142,8 @@ export function buildTablesPrompt(sample: string, convo: string, langWord: strin
   只写有把握的；没有就给空对象。`,
     convo ? `## 对话\n${convo}` : '',
     `## 输出格式
-先用两三句${langWord}说明看到的风格。然后输出且只输出一个代码块，语言名写 ${TABLES_STYLE_LANG}，内容是 JSON（面板会把它画在对话右侧，让用户逐项勾选应用）：
+先用两三句${langWord}说明看到的风格。然后输出且只输出一个代码块，语言名写 ${TABLES_STYLE_LANG}，内容是 JSON（面板会把它画在对话右侧，让用户逐项勾选应用）。
+之后用户补充、纠正、让你重新分析时，**每次回复末尾都要重新输出完整的 ${TABLES_STYLE_LANG} 代码块**（所有项都写上，不是只写改了的那几项）：面板只认最新一条带这个代码块的回复，只用文字说改了什么，用户就应用不到。
 \`\`\`${TABLES_STYLE_LANG}
 { "summary": "一句话总结", "style": { "header": { "start": 0, "rows": [{ "kind": "modifier", "label": "修饰", "values": "Modifier" }, { "kind": "side", "label": "导出端" }, { "kind": "type", "label": "类型", "values": "@types" }, { "kind": "name", "label": "字段名" }, { "kind": "comment", "label": "注释" }] }, "key": "ID", "listSep": ";", "primitives": ["uint32", "int32", "string", "bytes", "bool", "float"], "arrayMarks": ["repeated"], "exceptions": [{ "glob": "Config/Enum/*.xlsx", "header": { "start": 0, "rows": [{ "kind": "name" }, { "kind": "comment" }] }, "why": "枚举表只有字段名和注释" }] }, "enums": { "Modifier": { "values": [{ "name": "optional" }, { "name": "repeated" }] } }, "scans": [{ "name": "EnumType 页签", "from": { "kind": "block", "file": "Config/**/*.xlsx", "sheet": "EnumType", "enumCol": "A", "nameCol": "B", "valueCol": "C", "descCol": "D" }, "auto": "open" }], "columns": {}, "types": { "FVector": { "kind": "struct", "fields": [{ "name": "X", "type": "float" }, { "name": "Y", "type": "float" }, { "name": "Z", "type": "float" }], "store": "{X}#{Y}#{Z}" } }, "formats": { "mapStore": { "sep": ";", "entry": "{K}:{V}" } } }
 \`\`\``,
@@ -149,8 +162,13 @@ export function buildTablesBody(subject: Record<string, string>, messages: Assis
     .join('\n\n')
   // 清单很短；多轮对话越来越长时只留最近的，整段提示词要在任务提示词上限以内
   const sample = (subject.sample ?? '').slice(0, 3000)
-  const room = PROMPT_MAX - 500 - buildTablesPrompt(sample, '', promptLangWord()).length
-  return buildTablesPrompt(sample, convo.length > room ? `…\n${convo.slice(-room)}` : convo, promptLangWord())
+  // 上次的结果太长就不带（截断的 JSON 反而误导），统计截到 2000 字
+  const extra: TablesPromptExtra = {
+    headerStats: (subject.headerStats ?? '').slice(0, 2000),
+    previous: (subject.previous ?? '').length <= 6000 ? subject.previous : undefined,
+  }
+  const room = PROMPT_MAX - 500 - buildTablesPrompt(sample, '', promptLangWord(), extra).length
+  return buildTablesPrompt(sample, convo.length > room ? `…\n${convo.slice(-room)}` : convo, promptLangWord(), extra)
 }
 
 /**
@@ -327,3 +345,16 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
   }
   return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, analyzedAt: at }
 }
+
+/**
+ * 存进项目的分析结果（结构文件目录的 analysis.json，跟着项目进版本控制）：P4 / git 的别的分支、别的同事不用重新分析，
+ * 打开项目设置 →「表格」→「AI 分析」直接勾选应用；再分析时也带给 AI 在它的基础上补全（用户 2026-11-16）。
+ * 只认更新的：at 是那条回复的时间，打开旧的分析对话不会把新结果盖掉
+ */
+export const SavedAnalysis = z.object({
+  at: z.string().max(40),
+  /** 哪条回复（对话里的消息 id），同一条不重复写 */
+  messageId: z.string().max(100).default(''),
+  draft: TablesDraft,
+})
+export type SavedAnalysis = z.infer<typeof SavedAnalysis>

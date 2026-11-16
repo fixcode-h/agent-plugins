@@ -1227,5 +1227,10 @@
   "类型 {name}": "Type {name}",
   "正在后台检查表格目录的变化": "Checking the table folders for changes in the background",
   "正在读取表格目录…": "Reading the table folders…",
-  "正在扫描表格目录：已找到 {n} 个表格，看过 {d} 个目录": "Scanning table folders: {n} tables found in {d} folders so far"
+  "正在扫描表格目录：已找到 {n} 个表格，看过 {d} 个目录": "Scanning table folders: {n} tables found in {d} folders so far",
+  "后面的回复没有给出新的结果，下面还是之前那次的。可以在对话里让它重新输出完整的结果。": "Later replies didn't give a new result, so this is still the earlier one. Ask it in the conversation to output the full result again.",
+  "分析结果格式不对": "The analysis result is malformed",
+  "结果没能存进项目：{error}": "Couldn't save the result to the project: {error}",
+  "结果已存进项目（结构文件目录的 analysis.json），提交后别的分支在项目设置 → 表格 → AI 分析里直接应用。": "Saved to the project (analysis.json in the structure folder). Once committed, other branches can apply it from Project settings → Tables → AI analysis.",
+  "项目里存着 {time} 的分析结果（结构文件目录的 analysis.json，提交后别的分支也能直接应用）：": "The project has an analysis result from {time} (analysis.json in the structure folder; other branches can apply it once committed):"
 }

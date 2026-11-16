@@ -12,6 +12,7 @@ import type { ReplaceResult, TableReplaceBody, TableSearchOpts } from '@shared/t
 import type { CellAt, CellChange } from '@shared/table-blame'
 import type { EnumScan, ScanRun, ScanState } from '@shared/table-enum-scan'
 import type { ScanExample } from '@shared/table-enum-scan-ai'
+import type { SavedAnalysis } from '@shared/tables-assist'
 import { failure, json, request } from './api'
 import { trackedFetch } from './connection'
 
@@ -71,6 +72,9 @@ export const tablesApi = {
   sample: (projectId: string) => request<{ text: string; files: number }>(`${BASE}/${projectId}/sample`),
   /** AI 分析表格风格的第一句话（服务端读好样本、按面板的回复语言拼好） */
   analyzePrompt: (projectId: string) => request<{ prompt: string }>(`${BASE}/${projectId}/analyze-prompt`),
+  analysis: (projectId: string) => request<{ saved: SavedAnalysis | null }>(`${BASE}/${projectId}/analysis`),
+  saveAnalysis: (projectId: string, a: SavedAnalysis) =>
+    request<{ saved: SavedAnalysis }>(`${BASE}/${projectId}/analysis`, json('PUT', a)),
   /** 版本记录 */
   history: (projectId: string, path: string) => request<TableHistory>(`${BASE}/${projectId}/history?path=${q(path)}`),
   /** 某一版的内容 */
