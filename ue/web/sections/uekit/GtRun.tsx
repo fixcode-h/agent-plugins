@@ -20,6 +20,7 @@ import { Badge, ErrorText } from '../../ui.tsx'
 import { coordClickAt } from './gt-steps.ts'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 import { useToWidget } from './gt-convert.ts'
+import { TidyButtons, useGtTidy } from './GtTidy.tsx'
 import type { GtBatch } from './GtBatch.tsx'
 import {
   CheckMark,
@@ -166,6 +167,7 @@ export function GtRun({
   const planned = job?.planned || scenario.steps
   const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
   const toWidget = useToWidget({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
+  const tidy = useGtTidy({ project: project.id, root, path: scenario.relativePath, live: !offline, onSaved: onChanged })
 
   const stepMenu = (e: React.MouseEvent, r: StepRow) => {
     const s = rowSummary(r)
@@ -205,6 +207,7 @@ export function GtRun({
           <span className="ue:ml-auto ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
             {scenario.relativePath}
           </span>
+          <TidyButtons tidy={tidy} disabled={running || !!scenario.parseError} />
           <ui.IconButton
             icon={FileJson}
             size="sm"
@@ -229,6 +232,7 @@ export function GtRun({
             onClick={runCheck}
           />
         </header>
+        {tidy.bar}
         {check && (
           <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote">
             <ScanSearch className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
@@ -321,7 +325,21 @@ export function GtRun({
                   </span>
                   <CheckMark check={r.check} />
                 </span>
-                {sum.human ? (
+                {sum.note ? (
+                  // AI 整理（或手写）过的步骤有说明：说明当主文字，人话 / 选择器退到后面
+                  <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
+                    {sum.ambiguous && (
+                      <span title={t('选择器可能不唯一：{r}', { r: sum.ambiguous })} className="ue:shrink-0">
+                        <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
+                      </span>
+                    )}
+                    <span className="ue:min-w-0 ue:shrink-0 ue:truncate ue:text-fg">{sum.note}</span>
+                    <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-subtle">
+                      {sum.human || (sum.target && <span className="ue:font-mono">{sum.target}</span>)}
+                    </span>
+                    {r.res?.message && <span className="ue:truncate ue:text-muted">· {r.res.message}</span>}
+                  </span>
+                ) : sum.human ? (
                   <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
                     {sum.ambiguous && (
                       <span title={t('选择器可能不唯一：{r}', { r: sum.ambiguous })} className="ue:shrink-0">
@@ -350,6 +368,7 @@ export function GtRun({
       <section className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:lg:flex-1">
         {row ? <StepDetail row={row} live={row.i === liveRow} scenario={scenario} /> : null}
       </section>
+      {tidy.dialogs}
     </div>
   )
 }
