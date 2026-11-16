@@ -1,4 +1,8 @@
-/** AssetForge 自动建配置根、模板新建配置：只在项目和 ProjectDoc 里建，不覆盖已有配置，出了配置根拒绝 */
+/**
+ * AssetForge 自动建配置根、模板新建配置：只在项目和 ProjectDoc 里建，不覆盖已有配置，出了配置根拒绝。
+ * forge-files.ts 经 instances.ts 间接引到面板模块，要挂面板解析钩子跑：
+ * AGENT_PLUGIN_PANEL=../.panel AGENT_PLUGIN_DIR=$PWD node --import ../scripts/lib/panel-register.mjs --test server/uekit/forge-files.test.ts（在 ue/ 下）
+ */
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
