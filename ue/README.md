@@ -5,7 +5,7 @@
 ## 组成
 
 - **面板插件**（`server/`、`web/`）：
-  - 图标栏里的 UE 管理页。分区有概览、控制台、GM、Lua（UnLua 项目）、对象（大纲、UObject 树、按类搜，点属性里的引用在同一页往下看）、资源 / DataTable（文件夹树和搜索）、监视、性能、日志、操作记录、UE 插件（UELink 和 UEKit 扩展的安装、升级、编译）、权限与设置。
+  - 图标栏里的 UE 管理页。概览一屏看清要处理什么（崩溃交给 Agent 诊断、没保存的资源、可撤回的修改、失败的测试、可升级的插件）和最近发生的事；双击 Shift 或 Ctrl+K 打开跳转，GM、控制台收藏打字就筛。分区有概览、控制台、GM、Lua（UnLua 项目）、对象（大纲、UObject 树、按类搜，点属性里的引用在同一页往下看）、资源 / DataTable（文件夹树和搜索）、监视、性能、日志、操作记录、UE 插件（UELink 和 UEKit 扩展的安装、升级、编译）、权限与设置。
   - 添加项目的弹窗。
   - 对话右栏的「UE」页签。
   - `.uasset` 的查看窗口（面板 SDK 的 `fileViewers`，`web/AssetFile.tsx`）：对话里的文件标记、文件浏览页点 `.uasset` 时弹出，DataTable 显示成表格，DataAsset 等显示属性，蓝图多一页大纲和图表伪代码，都有「摘要与引用」；只看不改，底栏可以跳到资源分区去改。旧面板没有这个扩展点，照旧交给系统打开。
@@ -23,7 +23,8 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 
 - Object 页可以只看绑了 Lua 模块的对象、按模块名搜；属性面板多一个「Lua」页签看和改实例表的字段。
 - 「Lua」页：执行 Lua 代码（`self` 可以是某个对象的实例表），按路径看全局表里纯 Lua 的单例和管理器。
-- Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认）。
+- 「Lua」页「编译」页签：在「权限与设置 → Lua 编译」配全编译、增量编译两条指令（`{files}` / `{filelist}` 换成改过的文件）、工作目录、脚本目录、报错格式（`{file}:{line}: {message}` 模板或 `/正则/`）、编完是否自动重载。编译在面板本机起进程、不经过 UE，输出实时推到页面，报错认成 文件:行，点了用设置的编辑器打开到那一行，能交给 Agent 修。改过的文件按「上次编译成功」以来的修改时间找，P4 项目再加上签出的。
+- Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认；`action=compile mode=incremental|full` 只跑设置里配好的编译指令，不用确认，超过 20 秒先回 job）。
 - 读写只用 Lua 的 C 接口：UnLua 注册表里「UObject 指针 → 实例表」的对象表名字对不上时，扫注册表认出来；会触发元方法的读写都在 `lua_pcall` 里。
 - 只有「拿到 lua_State」和 UnLua 版本有关：UELink 的 `UELinkCore.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
 

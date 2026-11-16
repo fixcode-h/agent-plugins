@@ -51,7 +51,7 @@ export function GmPage() {
   const find = (k: string) => byKey.get(k) ?? all.find((e) => e.src !== 'lua' && `cpp:${e.name}` === k)
   const favs = d.gm.favGm.map(parseFav)
   const favKeys = new Set(
-    favs.map((f) => (f.lua ? `lua:${f.name}` : all.find((e) => e.src !== 'lua' && e.name === f.name)?.key ?? '')),
+    favs.map((f) => (f.lua ? `lua:${f.name}` : (all.find((e) => e.src !== 'lua' && e.name === f.name)?.key ?? ''))),
   )
   const project_ = all.filter((e) => e.src !== 'engine')
   const counts = {
@@ -210,15 +210,16 @@ export function GmPage() {
         return t('全部 · {n} 条（不含引擎自带）', { n })
     }
   })()
-  const emptyText = !d.inst && view.kind !== 'lua' && !counts.lua
-    ? t('UE 没在运行：C++ GM 要连上运行中的编辑器或游戏才列得出。Lua GM 设置好扫描脚本后不用开 UE 也能看')
-    : view.kind === 'fav'
-      ? t('还没有收藏：选一条 GM，填好参数点「收藏这组参数」')
-      : view.kind === 'recent'
-        ? t('还没有执行过')
-        : q
-          ? t('没有名字、说明或参数里含「{q}」的 GM', { q })
-          : t('这里没有 GM')
+  const emptyText =
+    !d.inst && view.kind !== 'lua' && !counts.lua
+      ? t('UE 没在运行：C++ GM 要连上运行中的编辑器或游戏才列得出。Lua GM 设置好扫描脚本后不用开 UE 也能看')
+      : view.kind === 'fav'
+        ? t('还没有收藏：选一条 GM，填好参数点「收藏这组参数」')
+        : view.kind === 'recent'
+          ? t('还没有执行过')
+          : q
+            ? t('没有名字、说明或参数里含「{q}」的 GM', { q })
+            : t('这里没有 GM')
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -273,7 +274,11 @@ export function GmPage() {
             empty={emptyText}
             onAdd={
               macro
-                ? (r) => void saveMacro({ ...macro, steps: [...macro.steps, stepOf(r.entry, r.args ?? args[r.entry.key] ?? [])] })
+                ? (r) =>
+                    void saveMacro({
+                      ...macro,
+                      steps: [...macro.steps, stepOf(r.entry, r.args ?? args[r.entry.key] ?? [])],
+                    })
                 : undefined
             }
           />
@@ -286,7 +291,9 @@ export function GmPage() {
               find={find}
               onSave={saveMacro}
               onDelete={() =>
-                void d.saveGm({ ...d.gm, macros: d.gm.macros.filter((x) => x.id !== macro.id) }).then(() => setView({ kind: 'all' }))
+                void d
+                  .saveGm({ ...d.gm, macros: d.gm.macros.filter((x) => x.id !== macro.id) })
+                  .then(() => setView({ kind: 'all' }))
               }
               canRun={canRun}
               toChat={chat.available ? chat.send : undefined}

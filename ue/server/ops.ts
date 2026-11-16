@@ -200,7 +200,7 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'forge.export':
       return `AssetForge ${t('导出到配置')}\n${((args.assets as string[]) ?? []).join('\n')}`
     case 'gt.run':
-      return `GameTest ${t('运行')} ${args.scenario ?? args.name ?? ''}`.trim()
+      return `GameTest ${t('运行')} ${args.scenario ?? (args.tag ? `tag:${args.tag}` : (args.name ?? ''))}`.trim()
     case 'gt.step': {
       const step = (args.step ?? args) as Record<string, unknown>
       return `GameTest ${step.action ?? ''} ${step.target ?? ''}`.trim()

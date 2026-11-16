@@ -17,13 +17,21 @@ export async function runEntry(projectId: string, e: GmEntry, args: string[], ta
   try {
     if (e.src === 'lua') {
       code = e.lua ? luaCall(e.lua, args) : e.name
-      const r = await ppost<{ output?: string[]; results?: { v?: unknown }[]; code?: string }>(projectId, 'lua-gm/run', {
-        name: e.name,
-        args,
-        target,
-      })
+      const r = await ppost<{ output?: string[]; results?: { v?: unknown }[]; code?: string }>(
+        projectId,
+        'lua-gm/run',
+        {
+          name: e.name,
+          args,
+          target,
+        },
+      )
       const ret = (r.results ?? []).map((x) => (typeof x.v === 'string' ? x.v : JSON.stringify(x.v))).filter(Boolean)
-      return { ok: true, lines: [...(r.output ?? []), ...(ret.length ? [`→ ${ret.join(', ')}`] : [])], code: r.code ?? code }
+      return {
+        ok: true,
+        lines: [...(r.output ?? []), ...(ret.length ? [`→ ${ret.join(', ')}`] : [])],
+        code: r.code ?? code,
+      }
     }
     code = cppLine(e.name, args)
     const r = await op<{ output?: string[] }>(

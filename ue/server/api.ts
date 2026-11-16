@@ -10,6 +10,7 @@ import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
 import { luaGmRoute } from './lua-gm/api.ts'
+import { luaBuildRoute } from './lua-build/api.ts'
 import { extRoute } from './uekit/api-ext.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
 import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
@@ -151,7 +152,7 @@ export async function handle(req: Request): Promise<Response> {
       case 'POST undo/all':
         return json(await undoAll(ctx))
       case 'GET badges':
-        return json(await badges(ctx))
+        return json(await badges(ctx, url.searchParams.get('overview') === '1'))
       case 'POST history/clear':
         await clearHistory(project.id)
         return json({ ok: true })
@@ -194,6 +195,9 @@ export async function handle(req: Request): Promise<Response> {
         // GM 页 Lua 来源（扫描脚本、参数关联、执行）在 lua-gm/api.ts
         const lua = await luaGmRoute(ctx, `${req.method} ${route}`, b)
         if (lua !== undefined) return json(lua)
+        // Lua 页「编译」页签的接口在 lua-build/api.ts
+        const lb = await luaBuildRoute(ctx, `${req.method} ${route}`, b)
+        if (lb !== undefined) return json(lb)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)

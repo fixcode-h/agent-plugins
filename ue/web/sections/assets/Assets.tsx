@@ -12,6 +12,7 @@ import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, PageHead } from '../../ui.tsx'
 import { MenuHost } from '../../menu.tsx'
 import { AssetFolders } from './Folders.tsx'
+import { FolderView } from './FolderView.tsx'
 import { AssetSearch } from './Search.tsx'
 
 /**
@@ -40,11 +41,33 @@ export function Assets() {
   const [tick, setTick] = useState(0)
   const pane = usePane('assets', '26%', 220)
   const ref = useRef<HTMLElement>(null)
+  // 右栏在列哪个文件夹的内容（设计稿「UE 插件优化与扩展」三.3）：空串时右栏是检视区。
+  // 文件夹之间的后退 / 前进单独记一份，不进检视区的导航历史（那份只记资源和对象）
+  const [fnav, setFnav] = useKept<{ items: string[]; i: number; on: boolean }>(`${kk}/folderNav`, {
+    items: [],
+    i: -1,
+    on: false,
+  })
+  const folder = fnav.on ? (fnav.items[fnav.i] ?? '') : ''
+  const showFolder = (p: string) =>
+    setFnav((s) => {
+      if (s.items[s.i] === p) return { ...s, on: true }
+      const items = [...s.items.slice(0, s.i + 1), p].slice(-50)
+      return { items, i: items.length - 1, on: true }
+    })
+  const openAsset = (p: string, from: 'folders' | 'assetSearch') => {
+    setFnav((s) => ({ ...s, on: false }))
+    nav.open('assets', p, { from })
+  }
 
   // 不是在文件夹树里点的（点引用、后退前进、别处跳过来）：树展开到它所在的文件夹并选中
   const cur = nav.current?.path === path ? nav.current : undefined
   useEffect(() => {
-    if (path && cur && cur.from !== 'folders') setReveal(path)
+    if (path && cur && cur.from !== 'folders') {
+      setReveal(path)
+      // 检视区后退前进、别处跳过来看资源：右栏换回检视区
+      setFnav((s) => ({ ...s, on: false }))
+    }
     // 只在换了资源时看
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [path, cur?.from])
@@ -86,15 +109,17 @@ export function Assets() {
           {tab === 'folders' ? (
             <AssetFolders
               key={tick}
-              selected={path}
-              onSelect={(p) => nav.open('assets', p, { from: 'folders' })}
+              selected={folder ? '' : path}
+              onSelect={(p) => openAsset(p, 'folders')}
               reveal={reveal}
+              folder={folder}
+              onFolder={showFolder}
             />
           ) : (
             <AssetSearch
               key={tick}
               selected={path}
-              onOpen={(p) => nav.open('assets', p, { from: 'assetSearch' })}
+              onOpen={(p) => openAsset(p, 'assetSearch')}
               onReveal={(p) => {
                 setTab('folders')
                 setReveal(p)
@@ -103,16 +128,29 @@ export function Assets() {
           )}
         </Card>
         <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
-        <Inspector
-          key={tick}
-          page="assets"
-          empty={t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看组件、大纲和图表')}
-          onChanged={save.reload}
-          onReveal={(p) => {
-            setTab('folders')
-            setReveal(p)
-          }}
-        />
+        {folder ? (
+          <FolderView
+            path={folder}
+            tick={tick}
+            canBack={fnav.i > 0}
+            canForward={fnav.i < fnav.items.length - 1}
+            onBack={() => setFnav((s) => ({ ...s, i: Math.max(0, s.i - 1) }))}
+            onForward={() => setFnav((s) => ({ ...s, i: Math.min(s.items.length - 1, s.i + 1) }))}
+            onFolder={showFolder}
+            onOpen={(p) => openAsset(p, 'folders')}
+          />
+        ) : (
+          <Inspector
+            key={tick}
+            page="assets"
+            empty={t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看组件、大纲和图表')}
+            onChanged={save.reload}
+            onReveal={(p) => {
+              setTab('folders')
+              setReveal(p)
+            }}
+          />
+        )}
       </div>
       {save.dialog}
       <MenuHost />

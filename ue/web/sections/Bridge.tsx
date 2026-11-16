@@ -5,6 +5,7 @@ import { STACK } from '../split.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, Confirm, PageHead } from '../ui.tsx'
+import { LuaBuildSettings } from './lua/BuildSettings.tsx'
 
 /**
  * 权限与设置：Agent 权限；GM 预设、资源页收藏存哪；引擎目录和编译命令；从 UE 页移除项目。
@@ -170,6 +171,7 @@ export function Bridge() {
             </div>
           </form>
         </Card>
+        <LuaBuildSettings />
       </div>
       <Confirm
         open={removing}

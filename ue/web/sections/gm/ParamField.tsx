@@ -56,7 +56,18 @@ export function ParamField({
         options={[{ value: '', label: '—' }, ...(p.enum ?? ['true', 'false']).map((x) => ({ value: x, label: x }))]}
       />
     )
-  else if (entry.src === 'lua') field = <LuaTableField entry={entry} p={p} value={value} onChange={onChange} config={config} fallback={input} onEditBinding={onEditBinding} />
+  else if (entry.src === 'lua')
+    field = (
+      <LuaTableField
+        entry={entry}
+        p={p}
+        value={value}
+        onChange={onChange}
+        config={config}
+        fallback={input}
+        onEditBinding={onEditBinding}
+      />
+    )
   else field = <CppField entry={entry} p={p} value={value} onChange={onChange} gm={gm} onGm={onGm} input={input} />
 
   return (
@@ -122,8 +133,11 @@ function LuaTableField({
       <>
         {fallback}
         {(hint || edited) && resolved.error ? (
-          <span className="ue:max-w-48 ue:shrink-0 ue:truncate ue:text-caption ue:text-warning" title={resolved.error}>
-            {t('读不到关联的表：{msg}', { msg: resolved.error })}
+          <span className="ue:max-w-60 ue:shrink-0 ue:truncate ue:text-caption ue:text-warning" title={resolved.error}>
+            {/* 没装表格插件的那句本身说得清，不再加「读不到关联的表」 */}
+            {/^没装|tables plugin/.test(resolved.error)
+              ? resolved.error
+              : t('读不到关联的表：{msg}', { msg: resolved.error })}
           </span>
         ) : null}
         <button

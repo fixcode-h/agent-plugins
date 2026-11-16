@@ -35,7 +35,8 @@ import { Lua } from './sections/lua/LuaPage.tsx'
 import { Objects } from './sections/objects/Objects.tsx'
 import { showOutline } from './sections/objects/Browse.tsx'
 import { scopeOf, syncNav } from './inspect/history.ts'
-import { Overview } from './sections/Overview.tsx'
+import { Overview } from './sections/overview/Overview.tsx'
+import { upgradesOf, useExtStatus } from './sections/overview/ext-data.ts'
 import { Perf } from './sections/Perf.tsx'
 import { Forge } from './sections/uekit/Forge.tsx'
 import { GameTest } from './sections/uekit/GameTest.tsx'
@@ -45,8 +46,9 @@ import { SplitHandle, usePane } from './split.tsx'
 import { usePendingPie } from './launch.ts'
 import { useLaunchEvents } from './launch-progress/store.ts'
 import { Jump } from './Jump.tsx'
+import { useJumpKeys } from './jump/keys.ts'
 import { ShotDialog } from './Shot.tsx'
-import { NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
+import { JumpEntry, NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
 
 /**
  * UE 管理页（设计文档 4.2，图 1）：左栏切项目和分区，右边是分区内容。地址 #/plugin/ue/main/<项目>/<分区>/<子位置>，
@@ -139,23 +141,18 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const [pidTarget, setPidTarget] = useState<number>()
   const [shot, setShot] = useState(false)
   const [jump, setJump] = useState(false)
-  // 左栏的数字：5 秒一次，一个请求取全（服务端 badges.ts）
+  // 左栏的数字：5 秒一次，一个请求取全（服务端 badges.ts）；在概览页时同一个请求多带概览要的几项（server/overview.ts）
+  const onOverview = sectionId === 'overview'
   const badges = useLoad(
-    () => (project ? pget<Badges>(project.id, 'badges') : Promise.resolve(undefined)),
-    [project?.id],
+    () =>
+      project ? pget<Badges>(project.id, onOverview ? 'badges?overview=1' : 'badges') : Promise.resolve(undefined),
+    [project?.id, onOverview],
     5000,
   )
-  // Ctrl+K（Mac 上 Cmd+K）打开跳转；只在 UE 页里生效
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setJump(true)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  // 左栏「UE 插件 · N 可升级」：扩展的可升级情况换项目时取一次（服务端缓存了插件库目录）
+  const ext = useExtStatus(project?.id)
+  // Ctrl+K（Mac 上 Cmd+K）、双击 Shift 打开跳转；只在 UE 页里生效
+  useJumpKeys(() => setJump(true))
   useEffect(() => {
     setPidTarget(undefined)
   }, [project?.id])
@@ -243,15 +240,22 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const groups = [...new Set(visible.map((s) => s.group()))]
   const View = section.View
   const b = badges.data
+  // 徽标统一写成「数字 + 一个词」：错误红、待处理黄、其他灰（设计稿三.4）
+  const ups = upgradesOf(state.data, ext.data?.items).length
   const counts: Record<string, Parameters<typeof NavItem>[0]['count']> = {
     logs: b?.errors
-      ? { text: String(b.errors), tone: 'danger', title: t('本次日志 {n} 个错误', { n: b.errors }) }
+      ? { text: t('{n} 错误', { n: b.errors }), tone: 'danger', title: t('本次日志 {n} 个错误', { n: b.errors }) }
       : undefined,
-    watch: b?.watch ? { text: String(b.watch) } : undefined,
+    watch: b?.watch ? { text: t('{n} 项', { n: b.watch }), title: t('监视着 {n} 项', { n: b.watch }) } : undefined,
     history: b?.undoable
-      ? { text: t('{n} 可撤', { n: b.undoable }), title: t('{n} 处运行时修改还在生效，可以撤回', { n: b.undoable }) }
+      ? {
+          text: t('{n} 可撤', { n: b.undoable }),
+          tone: 'warn',
+          title: t('{n} 处运行时修改还在生效，可以撤回', { n: b.undoable }),
+        }
       : undefined,
     assets: b?.dirty ? { text: t('{n} 未存', { n: b.dirty }), tone: 'warn' } : undefined,
+    plugins: ups ? { text: t('{n} 可升级', { n: ups }), title: t('有 {n} 个 UE 插件能升级', { n: ups }) } : undefined,
   }
   return (
     <Ctx.Provider value={ctx}>
@@ -269,6 +273,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
             onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}
           />
           <TargetCard />
+          <JumpEntry onClick={() => setJump(true)} />
           <nav
             className="ue:flex ue:gap-1 ue:overflow-x-auto ue:md:mt-1 ue:md:flex-col ue:md:overflow-visible"
             aria-label={t('UE 页分区')}
@@ -291,7 +296,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
               </div>
             ))}
           </nav>
-          <SideFoot onShot={() => setShot(true)} onJump={() => setJump(true)} onAdd={() => setAdding(true)} />
+          <SideFoot onShot={() => setShot(true)} onAdd={() => setAdding(true)} />
           <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} edge />
         </aside>
         <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">

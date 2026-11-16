@@ -84,7 +84,13 @@ const ENGINE = new Set(
     'NavigationSystemV1',
   ].map((x) => x.toLowerCase()),
 )
-const isEngine = (owner: string) => ENGINE.has(owner.replace(/^Default__/, '').replace(/_C$/, '').toLowerCase())
+const isEngine = (owner: string) =>
+  ENGINE.has(
+    owner
+      .replace(/^Default__/, '')
+      .replace(/_C$/, '')
+      .toLowerCase(),
+  )
 
 /** 分组名统一：「Cheat Manager」「CheatManager」「cheat_manager」算一组（截图里同一个类出现两次） */
 export const groupKey = (g: string) => g.replace(/[\s_\-|]/g, '').toLowerCase()
@@ -154,7 +160,9 @@ export const favOf = (e: GmEntry, args: string[]) =>
   [e.src === 'lua' ? `lua:${e.name}` : e.name, ...args.map((a) => a.replace(/\s+/g, '_'))].join(' ').trim()
 export function parseFav(f: string) {
   const [head, ...args] = f.split(' ')
-  return head.startsWith('lua:') ? { key: `lua:${head.slice(4)}`, name: head.slice(4), lua: true, args } : { name: head, lua: false, args }
+  return head.startsWith('lua:')
+    ? { key: `lua:${head.slice(4)}`, name: head.slice(4), lua: true, args }
+    : { name: head, lua: false, args }
 }
 
 /** 参数实际用的表格关联：GM 设置里改过的优先，其次扫描脚本给的 <表>.<列> 提示 */

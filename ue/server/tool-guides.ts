@@ -56,8 +56,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_lua: {
     title: '执行 Lua',
-    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出',
-    useWhen: 'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时',
+    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出；在本机跑项目配好的 Lua 增量 / 全编译',
+    useWhen:
+      'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时；改完 Lua 要确认能编过时用 action=compile（默认增量），按返回的 文件:行 修',
     avoidWhen: '只读字段用 ue_get、改简单字段用 ue_set（能撤回），不用每次请用户确认',
     confirms: true,
     group: RUN,
@@ -151,7 +152,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: 'AssetForge 配置',
     summary: '用 JSON 配置管理 UE 资产：看同步状态、属性差异，导入写成资产、导出写回配置',
     useWhen:
-      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
+      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：写配置前先 schema kind=<kind> 看结构、schema class=<类> 看 props 能写哪些属性，改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
     avoidWhen:
       '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；导入导出是后台作业，返回编号后用 action=job 查结果',
     confirms: true,
@@ -161,7 +162,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '游戏测试',
     summary: '在 PIE 里跑 GameTest 场景、单步执行测试动作、看报告',
     useWhen:
-      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下）用 run 跑，job / report 看结果；不知道某个控件的选择器怎么写时用 inspect 指着它看',
+      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下），写完用 resolve 核对选择器，再用 run 跑，job / report 看结果；失败时读 report 里 payload.evidence 的截图、控件快照和日志找原因；改完代码要回归时 run tag=… 批量跑；不知道某个控件的选择器怎么写时用 inspect 指着它看',
     avoidWhen:
       '只读运行时数值用 ue_get；只截一张图用 ue_screenshot；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
     group: RUN,

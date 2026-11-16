@@ -336,6 +336,34 @@ try {
   const bad = await call('ue_lua', { code: 'error("x")' }, { confirm: async () => ({ allow: true, message: '' }) })
   assert.ok(bad.isError && /boom/.test(text(bad)), text(bad))
 
+  // Lua GM（GM 页 Lua 来源）：扫描脚本列出 GM；Agent 执行按「运行时」权限走，不像 ue_lua 每次确认
+  mkdirSync(path.join(proj, 'Content', 'Script', 'GM'), { recursive: true })
+  writeFileSync(
+    path.join(proj, 'Content', 'Script', 'GM', 'GMBag.lua'),
+    '--- 加道具\n---@param itemId integer Item.Id\nfunction GM.AddItem(itemId, count)\nend\n',
+  )
+  const noScript = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'lua' })))
+  assert.match(noScript.luaNote, /扫描脚本/)
+  await api('POST', '/p/p1/lua-gm/config', { files: ['Content/Script/GM/**/*.lua'] })
+  const store = path.join(proj, 'docs', 'AgentPanel', 'UE')
+  mkdirSync(store, { recursive: true })
+  writeFileSync(
+    path.join(store, 'lua-gm-scan.mjs'),
+    `export default (files) => files.flatMap((f) => [...f.text.matchAll(/^function GM\\.(\\w+)\\(([^)]*)\\)/gm)].map((m) => ({
+      name: m[1], file: f.path, line: f.text.slice(0, m.index).split('\\n').length, call: 'GM.' + m[1] + '({args})',
+      params: m[2].split(',').map((x) => x.trim()).filter(Boolean).map((n) => ({ name: n, type: 'integer', table: n === 'itemId' ? 'Item.Id' : undefined })),
+    })))`,
+  )
+  const luaList = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'lua' })))
+  assert.deepEqual(luaList.lua.map((x) => [x.name, x.at]), [['AddItem', 'Content/Script/GM/GMBag.lua:3']])
+  assert.equal(luaList.lua[0].params[0].table, 'Item.Id')
+  const gmRun = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] })
+  assert.ok(!gmRun.isError, text(gmRun))
+  assert.equal(bridge.state.lua.exec.at(-1), 'GM.AddItem(1001, 5)')
+  assert.ok((await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] })).isError, '数字参数填了字母')
+  const webGm = await api('POST', '/p/p1/lua-gm/run', { name: 'AddItem', args: ['7'] })
+  assert.equal(webGm.code, 'GM.AddItem(7)')
+
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })
   assert.match(text(tail), /connection timeout/)

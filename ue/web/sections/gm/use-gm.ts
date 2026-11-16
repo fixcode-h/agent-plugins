@@ -1,3 +1,4 @@
+import { FileCode } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import type { LuaGmConfig, LuaGmScan } from '../../../server/lua-gm/types.ts'
 import type { GmRun, LocalState } from '../../../server/store.ts'
@@ -6,10 +7,40 @@ import { op, pget, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h } from '../../host.ts'
 import { useTargetInfo } from '../../ui.tsx'
+import { gmCache, registerJumpSource } from '../../jump/local.ts'
+import { setPending } from '../../pending.ts'
 import { fromCpp, fromLua, type CppGm, type GmEntry } from './data.ts'
 
-/** gm.list 要遍历所有类，按进程缓存（同一个进程的 GM 不会变；Live Coding 后点「刷新」重取） */
-const cppCache = new Map<number, CppGm[]>()
+/**
+ * gm.list 要遍历所有类，按进程缓存（同一个进程的 GM 不会变；Live Coding 后点「刷新」重取）。
+ * 缓存放在 jump/local.ts：双击 Shift 的跳转直接在这份列表里匹配
+ */
+const cppCache = gmCache
+/**
+ * 双击 Shift 跳转里也能搜到 Lua GM（W1 留的 registerJumpSource）：用 GM 页取过的扫描结果，打字不发请求。
+ * 按项目记最近一次的结果；跳转弹窗只搜当前打开的项目
+ */
+const luaSeen = { items: [] as GmEntry[] }
+registerJumpSource({
+  id: 'lua-gm',
+  match: (q, env) =>
+    luaSeen.items
+      .filter((g) => g.name.toLowerCase().includes(q) || g.desc.toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((g) => ({
+        key: `lua-gm:${g.name}`,
+        icon: FileCode,
+        label: g.name,
+        detail: g.params.map((p) => p.name).join(', '),
+        hint: g.group ? `Lua GM · ${g.group}` : 'Lua GM',
+        chat: `Lua GM ${g.name}（${g.file}:${g.line}）`,
+        run: () => {
+          setPending('gm', g.name)
+          env.go('gm')
+        },
+      })),
+})
+
 const EMPTY: GmStore = { presets: [], macros: [], favConsole: [], favGm: [] }
 
 /**
@@ -50,6 +81,7 @@ export function useGm(nonce: number) {
     () => [...fromLua(lua.data?.scan.items ?? []), ...fromCpp(cpp.data ?? [])],
     [lua.data, cpp.data],
   )
+  luaSeen.items = entries.filter((e) => e.src === 'lua')
   const gm = { ...EMPTY, ...store.data }
   const saveGm = async (next: GmStore) => {
     await ppost(project.id, 'gm', next)

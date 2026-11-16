@@ -131,7 +131,12 @@ export function TablePick({
                 ? ''
                 : res
                   ? res.q
-                    ? t('{file} · {key} 或名字含「{q}」· {n} 行', { file: fileName ?? '', key: binding.key, q: res.q, n: res.total })
+                    ? t('{file} · {key} 或名字含「{q}」· {n} 行', {
+                        file: fileName ?? '',
+                        key: binding.key,
+                        q: res.q,
+                        n: res.total,
+                      })
                     : t('{file} · 前 {n} 行', { file: fileName ?? '', n: rows.length })
                   : t('正在读表…')}
             </span>

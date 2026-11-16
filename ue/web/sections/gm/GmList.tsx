@@ -76,8 +76,10 @@ export function GmList({
               {s.id && (
                 <button
                   type="button"
-                  onClick={() => setClosed((c) => new Set(c.has(s.id) ? [...c].filter((x) => x !== s.id) : [...c, s.id]))}
-                  className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:border-b ue:border-line ue:bg-hover ue:px-3 ue:text-footnote ue:font-medium ue:text-fg"
+                  onClick={() =>
+                    setClosed((c) => new Set(c.has(s.id) ? [...c].filter((x) => x !== s.id) : [...c, s.id]))
+                  }
+                  className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:border-b ue:border-line ue:bg-card ue:px-3 ue:text-footnote ue:font-medium ue:text-fg"
                 >
                   <ChevronRight className={cn('ue:h-3 ue:w-3 ue:text-subtle', open && 'ue:rotate-90')} />
                   <span className="ue:truncate">{s.label}</span>
@@ -97,13 +99,22 @@ export function GmList({
                       onClick={() => onSel(r)}
                       onKeyDown={(ev) => ev.key === 'Enter' && onSel(r)}
                       className={cn(
-                        'ue:flex ue:cursor-pointer ue:flex-col ue:gap-0.5 ue:border-b ue:border-line/60 ue:px-3 ue:py-2',
+                        'ue:flex ue:cursor-pointer ue:flex-col ue:gap-0.5 ue:border-b ue:border-line/60 ue:px-3 ue:py-1.5',
                         on ? 'ue:bg-sel ue:shadow-[inset_2px_0_0_var(--accent)]' : 'ue:hover:bg-hover',
                       )}
                     >
                       <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
-                        <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">{e.name}</span>
-                        {favs.has(e.key) && <Star className="ue:h-3 ue:w-3 ue:shrink-0 ue:fill-current ue:text-warning" />}
+                        <span className="ue:max-w-[60%] ue:shrink-0 ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">
+                          {e.name}
+                        </span>
+                        {favs.has(e.key) && (
+                          <Star className="ue:h-3 ue:w-3 ue:shrink-0 ue:fill-current ue:text-warning" />
+                        )}
+                        {/* 说明跟在名字后面，一条 GM 只占两行（用户嫌旧页的卡片太大，2026-11-16） */}
+                        <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-footnote ue:text-subtle">
+                          {e.src !== 'lua' && e.library ? `${e.owner} · ` : ''}
+                          {e.desc}
+                        </span>
                         <span className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-1">
                           {e.params.some((p) => p.table) && (
                             <Badge>
@@ -128,21 +139,19 @@ export function GmList({
                           )}
                         </span>
                       </div>
-                      {(e.desc || (e.owner && e.src !== 'lua')) && (
-                        <span className="ue:truncate ue:text-footnote ue:text-subtle">
-                          {e.src !== 'lua' && e.library ? `${e.owner} · ` : ''}
-                          {e.desc}
+                      {/* 没参数的 GM 只占一行 */}
+                      {(r.args || r.note || e.params.length > 0) && (
+                        <span className="ue:flex ue:min-w-0 ue:gap-2 ue:text-caption ue:text-subtle">
+                          <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono">
+                            {r.args
+                              ? r.args.join(' ') || t('（无参数）')
+                              : e.params
+                                  .map((p) => `${p.name}: ${p.type}${p.default ? ` = ${p.default}` : ''}`)
+                                  .join(', ')}
+                          </span>
+                          {r.note && <span className={cn('ue:shrink-0', r.bad && 'ue:text-danger')}>{r.note}</span>}
                         </span>
                       )}
-                      <span className="ue:flex ue:min-w-0 ue:gap-2 ue:text-caption ue:text-subtle">
-                        <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono">
-                          {r.args
-                            ? r.args.join(' ') || t('（无参数）')
-                            : e.params.map((p) => `${p.name}: ${p.type}${p.default ? ` = ${p.default}` : ''}`).join(', ') ||
-                              '—'}
-                        </span>
-                        {r.note && <span className={cn('ue:shrink-0', r.bad && 'ue:text-danger')}>{r.note}</span>}
-                      </span>
                     </div>
                   )
                 })}

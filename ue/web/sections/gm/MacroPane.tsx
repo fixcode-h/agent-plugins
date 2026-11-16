@@ -116,7 +116,13 @@ export function MacroPane({
                 </code>
                 {r && (
                   <>
-                    <span className={cn('ue:max-w-56 ue:truncate ue:text-caption', r.ok ? 'ue:text-subtle' : 'ue:text-danger')} title={out}>
+                    <span
+                      className={cn(
+                        'ue:max-w-56 ue:truncate ue:text-caption',
+                        r.ok ? 'ue:text-subtle' : 'ue:text-danger',
+                      )}
+                      title={out}
+                    >
                       {out}
                     </span>
                     {r.ok ? (
@@ -127,7 +133,13 @@ export function MacroPane({
                   </>
                 )}
                 <span className="ue:flex ue:shrink-0 ue:gap-1 ue:text-subtle ue:opacity-0 ue:group-hover:opacity-100 ue:focus-within:opacity-100">
-                  <button type="button" title={t('上移')} disabled={!i} onClick={() => move(i, -1)} className="ue:grid ue:cursor-pointer ue:hover:text-fg ue:disabled:opacity-30">
+                  <button
+                    type="button"
+                    title={t('上移')}
+                    disabled={!i}
+                    onClick={() => move(i, -1)}
+                    className="ue:grid ue:cursor-pointer ue:hover:text-fg ue:disabled:opacity-30"
+                  >
                     <ArrowUp className="ue:h-3.5 ue:w-3.5" />
                   </button>
                   <button
@@ -139,16 +151,19 @@ export function MacroPane({
                   >
                     <ArrowDown className="ue:h-3.5 ue:w-3.5" />
                   </button>
-                  <button type="button" title={t('删掉这一步')} onClick={() => set(steps.filter((_, k) => k !== i))} className="ue:grid ue:cursor-pointer ue:hover:text-danger">
+                  <button
+                    type="button"
+                    title={t('删掉这一步')}
+                    onClick={() => set(steps.filter((_, k) => k !== i))}
+                    className="ue:grid ue:cursor-pointer ue:hover:text-danger"
+                  >
                     <Trash2 className="ue:h-3.5 ue:w-3.5" />
                   </button>
                 </span>
               </div>
             )
           })}
-          {!steps.length && (
-            <p className="ue:px-3 ue:py-3 ue:text-footnote ue:text-subtle">{t('还没有步骤')}</p>
-          )}
+          {!steps.length && <p className="ue:px-3 ue:py-3 ue:text-footnote ue:text-subtle">{t('还没有步骤')}</p>}
         </div>
         <form
           className="ue:flex ue:items-center ue:gap-2 ue:text-footnote ue:text-subtle"
@@ -170,7 +185,12 @@ export function MacroPane({
           />
         </form>
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-          <ui.Button size="sm" disabled={busy || !steps.length || !!canRun} title={canRun || undefined} onClick={() => void run()}>
+          <ui.Button
+            size="sm"
+            disabled={busy || !steps.length || !!canRun}
+            title={canRun || undefined}
+            onClick={() => void run()}
+          >
             <Play className="ue:h-3.5 ue:w-3.5" /> {t('执行全部')}
           </ui.Button>
           {toChat && (

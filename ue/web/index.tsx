@@ -11,8 +11,11 @@ import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
+import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
+import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
+import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
 import { UePage } from './UePage.tsx'
@@ -60,8 +63,17 @@ const activate: ActivateWeb = (host) => {
       { id: 'inspect-cats', label: t('检视 · 分类栏'), tune: ['menu'], Specimen: CategoryBarSpecimen },
       // 资源页文件夹树上面的收藏区和行尾星标：跟面板「行」「菜单」的调节项
       { id: 'fav-folders', label: t('资源 · 收藏的文件夹'), tune: ['row', 'menu'], Specimen: FavFoldersSpecimen },
+      // 资源页选中文件夹时右栏的内容表：跟面板「徽标」「行」的调节项
+      { id: 'folder-table', label: t('资源 · 文件夹内容表'), tune: ['badge', 'row'], Specimen: FolderTableSpecimen },
       // 启动编辑器按钮上的启动进度：跟面板「按钮」「进度条」的调节项
       { id: 'launch-button', label: 'UE · LaunchButton', tune: ['button', 'progress'], Specimen: LaunchButtonSpecimen },
+      // 概览的读数、「需要你处理」、时间线，跳转弹窗的行和左栏入口：跟面板「行」「徽标」「按钮」的调节项
+      {
+        id: 'overview-parts',
+        label: t('概览 · 需要你处理 · 跳转'),
+        tune: ['row', 'badge', 'button'],
+        Specimen: OverviewSpecimen,
+      },
       // AssetForge 页的同步状态徽标、配置 → 资源关系条、作业报告：跟面板「徽标」「行」的调节项
       {
         id: 'forge-parts',
@@ -71,6 +83,13 @@ const activate: ActivateWeb = (host) => {
       },
       // GM 页参数关联表格列的可搜索下拉（设计稿 designs/GM页重设计-效果图）：跟面板「输入框」「菜单」的调节项
       { id: 'gm-table-pick', label: t('GM · 参数关联表格下拉'), tune: ['input', 'menu'], Specimen: TablePickSpecimen },
+      // GameTest 页的历史条、批量运行条、失败证据：跟面板「徽标」「行」「进度条」的调节项
+      {
+        id: 'gametest-parts',
+        label: 'GameTest · HistoryBar · BatchBar · Evidence',
+        tune: ['badge', 'row', 'progress'],
+        Specimen: GtSpecimen,
+      },
     ],
   }
 }

@@ -13,6 +13,7 @@ import { ForgeMulti } from './ForgeMulti.tsx'
 import { canImport, forgeMenus } from './forge-menus.ts'
 import { useForgePick } from './forge-pick.ts'
 import { useForgeSource } from './forge-source.ts'
+import { useForgeFileWatch } from './forge-watch.ts'
 import { FILTERS, kindMeta, stateMeta, type FilterId } from './kinds.ts'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
@@ -73,6 +74,8 @@ export function Forge() {
   // 右栏页签由这里控制：只对记下时选中的那份生效，换了选中项就回到 undefined，由右栏按状态挑默认页签
   const [tabOf, setTabOf] = useState<{ key: string; tab: ForgeTab }>()
   const [expand, setExpand] = useState<ExpandSignal>()
+  // 选中的配置存盘了几次（forge.file 推送）：右栏据此重拉差异、重新演练
+  const [fileRev, setFileRev] = useState(0)
   const configRoot = health?.configRoot ?? ''
 
   useEffect(() => {
@@ -83,6 +86,9 @@ export function Forge() {
       .catch(() => undefined)
   }, [project.id, installed])
 
+  const selected = data?.entries.find((e) => e.key === sub || e.asset === sub || e.config === sub)
+  useForgeFileWatch(project.id, configRoot, selected?.config)
+
   useExtEvents(project.id, (e) => {
     if (e.event === 'forge.job') {
       const j = e as unknown as ForgeJob & { phase?: string }
@@ -92,6 +98,11 @@ export function Forge() {
       if (j.phase === 'finished') reload()
     } else if (e.event === 'forge.changed') reload()
     else if (e.event === 'forge.reveal' && typeof e.asset === 'string') go('assetforge', e.asset)
+    else if (e.event === 'forge.file' && selected?.config && samePath(String(e.path ?? ''), selected.config)) {
+      // 编辑器或 Agent 存了右栏这份配置：同步状态会变（被改过），清单和右栏一起刷新
+      reload()
+      setFileRev((n) => n + 1)
+    }
   })
 
   const entries = useMemo(() => data?.entries ?? [], [data])
@@ -112,7 +123,6 @@ export function Forge() {
         .map((e) => ({ path: treePath(e), data: e })),
     [entries, filter, q],
   )
-  const selected = entries.find((e) => e.key === sub || e.asset === sub || e.config === sub)
   const pick = useForgePick(selected)
   const pickedEntries = useMemo(() => entries.filter((e) => pick.picked.includes(e.key)), [entries, pick.picked])
   const pickedPaths = useMemo(() => new Set(pickedEntries.map(treePath)), [pickedEntries])
@@ -323,6 +333,7 @@ export function Forge() {
             busy={locked}
             configRoot={configRoot}
             tab={tabOf?.key === selected.key ? tabOf.tab : undefined}
+            fileRev={fileRev}
             onTab={(tab) => setTabOf({ key: selected.key, tab })}
           />
         ) : (
@@ -333,6 +344,9 @@ export function Forge() {
     </div>
   )
 }
+
+const samePath = (a: string, b: string) =>
+  a.replace(/\\/g, '/').replace(/^\//, '').toLowerCase() === b.replace(/\\/g, '/').replace(/^\//, '').toLowerCase()
 
 /** 文件夹右边：有问题的先用彩色数字标出来，再是总数 */
 function FolderCount({ leaves }: { leaves: ForgeEntry[] }) {

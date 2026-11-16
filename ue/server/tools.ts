@@ -16,6 +16,7 @@ import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { listGm } from './lua-gm/tool.ts'
+import { luaCompileTool } from './lua-build/tool.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -204,15 +205,21 @@ const DEFS = [
   ),
   tool(
     'ue_lua',
-    '在 UE 的 UnLua 环境里执行 Lua 代码（每次都会请用户确认）。code 是代码：单个表达式直接返回它的值（如 GameSystemManager:GetCount()），多条语句用 return 返回结果；print 的内容和执行期间的日志在 output 里。path 给了对象时代码里的 self 是它的 Lua 实例表。timeoutMs 超时中止（默认 5000，最多 60000）。只读字段优先用 ue_get，改简单字段用 ue_set（能撤回）。',
+    'UnLua 的 Lua：action=exec（默认）在 UE 的 Lua 环境里执行代码（每次都会请用户确认）。code 是代码：单个表达式直接返回它的值（如 GameSystemManager:GetCount()），多条语句用 return 返回结果；print 的内容和执行期间的日志在 output 里。path 给了对象时代码里的 self 是它的 Lua 实例表。timeoutMs 超时中止（默认 5000，最多 60000）。只读字段优先用 ue_get，改简单字段用 ue_set（能撤回）。\n' +
+      'action=compile 在本机跑项目设置里配好的 Lua 编译（不经过 UE，不能自己传命令）：mode=incremental 只编上次编译成功以来改过的文件（默认），full 全编译。最多等 20 秒，没编完返回 job，之后带 job 再调一次接着等。结果是错误条数和前几条（文件:行），完整输出在 logFile。',
     {
+      action: { type: 'string', enum: ['exec', 'compile'] },
       code: { type: 'string' },
       path: { type: 'string' },
       timeoutMs: { type: 'number' },
+      mode: { type: 'string', enum: ['incremental', 'full'] },
+      job: { type: 'string' },
       target: TARGET,
     },
-    ['code'],
+    [],
     async (a, ctx) => {
+      if (a.action === 'compile') return luaCompileTool(a, ctx)
+      if (!str(a.code).trim()) return mcpText('action=exec 要给 code', true)
       const timeoutMs = Math.min(Math.max(Number(a.timeoutMs) || 5000, 100), 60000)
       return out(await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs }, timeoutMs + 10000))
     },

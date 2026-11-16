@@ -197,7 +197,7 @@ function follow(p: UeProject, dirs: string[]) {
     clearTimeout(w.timer)
     w.timer = setTimeout(() => {
       void scan(p).then(
-        (r) => c().pages.push(LUA_GM_EVENT, { project: p.id, scannedAt: r.scannedAt, error: r.error ?? '' }),
+        (r) => c().pages?.push(LUA_GM_EVENT, { project: p.id, scannedAt: r.scannedAt, error: r.error ?? '' }),
         () => undefined,
       )
     }, 400)

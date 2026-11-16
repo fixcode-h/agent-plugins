@@ -202,7 +202,9 @@ export function BindDialog({
         {field(t('填进参数的列'), key, setKey, 'Id')}
         {field(t('名字列'), label, setLabel, 'Name', t('和 Id 一起搜、一起显示，可以不填'))}
         {field(t('下拉里多显示的列'), extra, setExtra, 'Quality', t('一两列关键信息，逗号隔开'))}
-        <p className="ue:text-caption ue:text-subtle">{t('存在 GM 扫描设置里（项目里，团队共用），优先于扫描脚本给的关联')}</p>
+        <p className="ue:text-caption ue:text-subtle">
+          {t('存在 GM 扫描设置里（项目里，团队共用），优先于扫描脚本给的关联')}
+        </p>
       </div>
     </ui.Modal>
   )

@@ -1,5 +1,6 @@
 import { request } from '@panel/web/src/lib/api'
 import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
+import { t } from '../../host.ts'
 
 /**
  * GM 参数下拉的数据：经面板动作入口调表格插件的 table.list / table.query（插件之间不互相 import，设计稿 4.2）。
@@ -7,7 +8,12 @@ import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
  * 表格插件没装、没启用时动作不存在，抛出的原因给界面，界面退回普通输入框
  */
 const act = <T>(name: string, args: Record<string, unknown>) =>
-  request<T>(`/actions/${name}`, { method: 'POST', body: JSON.stringify(args) })
+  request<T>(`/actions/${name}`, { method: 'POST', body: JSON.stringify(args) }).catch((e: Error) => {
+    // 面板的原话会列出全部动作名，很长；没装表格插件是常见情况，换成一句能照做的
+    if (/没有这个动作|no such action/i.test(e.message))
+      throw new Error(t('没装或没启用表格插件，先直接填；装好后这里会变成能搜的下拉'))
+    throw e
+  })
 
 export interface TableRow {
   key: string
@@ -32,9 +38,9 @@ export function resolveHint(projectId: string, table: string, key: string): Prom
       const files = list.files.map((f) => f.replace(/（只读）$/, ''))
       const base = (f: string) => (f.split('/').pop() ?? '').replace(/\.[^.]+$/, '').toLowerCase()
       const file = files.find((f) => base(f) === table.toLowerCase()) ?? files[0]
-      if (!file) throw new Error(`表格目录里没有名字含「${table}」的表`)
+      if (!file) throw new Error(t('表格目录里没有名字含「{table}」的表', { table }))
       const q = await act<{ fields: string[] }>('table.query', { projectId, path: file, limit: 1 })
-      if (!q.fields.includes(key)) throw new Error(`${file} 没有「${key}」列`)
+      if (!q.fields.includes(key)) throw new Error(t('{file} 没有「{key}」列', { file, key }))
       const label = NAME_COLS.find((c) => q.fields.includes(c))
       return { table: file, key, ...(label ? { label } : {}) }
     })()
@@ -71,7 +77,11 @@ export function searchRows(projectId: string, b: LuaGmBinding, q: string) {
           const key = r.values[b.key] ?? ''
           if (!key || seen.has(key)) continue
           seen.add(key)
-          out.push({ key, label: b.label ? (r.values[b.label] ?? '') : '', extra: (b.extra ?? []).map((c) => r.values[c] ?? '') })
+          out.push({
+            key,
+            label: b.label ? (r.values[b.label] ?? '') : '',
+            extra: (b.extra ?? []).map((c) => r.values[c] ?? ''),
+          })
         }
       // Id 完全相同的排最前：输入 1001 时 1001 在 10010 前面
       out.sort((a, c) => Number(c.key === word) - Number(a.key === word))
