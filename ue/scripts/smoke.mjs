@@ -298,12 +298,18 @@ try {
     path.join(proj, 'Config', 'DefaultGameplayTags.ini'),
     '[/Script/GameplayTags.GameplayTagsSettings]\n+GameplayTagList=(Tag="Ability.Fire",DevComment="开火")\n',
   )
-  const cfgKeys = await api('POST', '/p/p1/tools/config', { file: 'Engine', section: '/Script/Engine.RendererSettings' })
+  const cfgKeys = await api('POST', '/p/p1/tools/config', {
+    file: 'Engine',
+    section: '/Script/Engine.RendererSettings',
+  })
   const shadow = cfgKeys.keys.find((k) => k.key === 'r.Shadow')
   assert.deepEqual([shadow.values, shadow.live, shadow.differs], [['0'], ['3'], true], JSON.stringify(cfgKeys))
   assert.ok(cfgKeys.keys.some((k) => k.key === 'r.FromPlugin' && !k.layers.length))
   const cfgSecs = await api('POST', '/p/p1/tools/config', { file: 'Engine' })
-  assert.ok(cfgSecs.sections.some((x) => x.name === 'Plugin.OnlyLive' && x.liveOnly), JSON.stringify(cfgSecs))
+  assert.ok(
+    cfgSecs.sections.some((x) => x.name === 'Plugin.OnlyLive' && x.liveOnly),
+    JSON.stringify(cfgSecs),
+  )
   assert.match(text(await call('ue_console', { action: 'config', query: 'r.shadow' })), /DefaultEngine/)
   const tagRes = await api('POST', '/p/p1/tools/tags', {})
   assert.equal(tagRes.items.find((x) => x.tag === 'Ability.Fire').comment, '开火')
@@ -320,8 +326,14 @@ try {
   const fixed = await api('POST', '/p/p1/tools/redirectors/fix', { path: '/Game/Old' })
   assert.equal(fixed.fixed.length, 1, JSON.stringify(fixed))
   const diag = await api('GET', '/p/p1/tools/diagnose')
-  assert.ok(diag.items.some((i) => i.id === 'installed' && i.state === 'fail'), JSON.stringify(diag))
-  assert.ok(diag.items.some((i) => i.id.startsWith('port-') && i.state === 'ok'), JSON.stringify(diag))
+  assert.ok(
+    diag.items.some((i) => i.id === 'installed' && i.state === 'fail'),
+    JSON.stringify(diag),
+  )
+  assert.ok(
+    diag.items.some((i) => i.id.startsWith('port-') && i.state === 'ok'),
+    JSON.stringify(diag),
+  )
 
   // 危险命令：没有确认卡片 → 报错；拒绝 → 不执行；允许 → 执行
   assert.ok((await call('ue_console', { command: 'quit' })).isError)
@@ -379,6 +391,39 @@ try {
   const bad = await call('ue_lua', { code: 'error("x")' }, { confirm: async () => ({ allow: true, message: '' }) })
   assert.ok(bad.isError && /boom/.test(text(bad)), text(bad))
 
+  // Lua GM（GM 页 Lua 来源）：扫描脚本列出 GM；Agent 执行按「运行时」权限走，不像 ue_lua 每次确认
+  mkdirSync(path.join(proj, 'Content', 'Script', 'GM'), { recursive: true })
+  writeFileSync(
+    path.join(proj, 'Content', 'Script', 'GM', 'GMBag.lua'),
+    '--- 加道具\n---@param itemId integer Item.Id\nfunction GM.AddItem(itemId, count)\nend\n',
+  )
+  const noScript = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'lua' })))
+  assert.match(noScript.luaNote, /扫描脚本/)
+  await api('POST', '/p/p1/lua-gm/config', { files: ['Content/Script/GM/**/*.lua'] })
+  const store = path.join(proj, 'docs', 'AgentPanel', 'UE')
+  mkdirSync(store, { recursive: true })
+  writeFileSync(
+    path.join(store, 'lua-gm-scan.mjs'),
+    `export default (files) => files.flatMap((f) => [...f.text.matchAll(/^function GM\\.(\\w+)\\(([^)]*)\\)/gm)].map((m) => ({
+      name: m[1], file: f.path, line: f.text.slice(0, m.index).split('\\n').length, call: 'GM.' + m[1] + '({args})',
+      params: m[2].split(',').map((x) => x.trim()).filter(Boolean).map((n) => ({ name: n, type: 'integer', table: n === 'itemId' ? 'Item.Id' : undefined })),
+    })))`,
+  )
+  const luaList = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'lua' })))
+  assert.deepEqual(
+    luaList.lua.map((x) => [x.name, x.at]),
+    [['AddItem', 'Content/Script/GM/GMBag.lua:3']],
+  )
+  assert.equal(luaList.lua[0].params[0].table, 'Item.Id')
+  const gmRun = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] })
+  assert.ok(!gmRun.isError, text(gmRun))
+  assert.equal(bridge.state.lua.exec.at(-1), 'GM.AddItem(1001, 5)')
+  assert.ok(
+    (await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] })).isError,
+    '数字参数填了字母',
+  )
+  const webGm = await api('POST', '/p/p1/lua-gm/run', { name: 'AddItem', args: ['7'] })
+  assert.equal(webGm.code, 'GM.AddItem(7)')
   // UELink 2.4：Lua 改完能验（check → reload → errors）、调 Lua 函数、函数签名，ue_status 带编辑器选中
   const chk = await call('ue_lua', { action: 'check', files: ['Content/Script/UI/BadPanel.lua'] })
   assert.match(text(chk), /'end' expected/)

@@ -92,6 +92,7 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'livecoding':
     case 'lua.set':
     case 'lua.exec':
+    case 'lua.gm':
     // 2.4：调 Lua 函数、重载模块都在改正在运行的游戏，按运行时权限走（不像 lua.exec 每次确认，设计稿四.1）
     case 'lua.call':
     case 'lua.reload':
@@ -212,6 +213,8 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
     case 'lua.exec':
       return `${args.snippet ? `-- ${t('片段')} ${args.snippet}\n` : ''}${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+    case 'lua.gm':
+      return `Lua GM · ${String(args.code ?? '')}`
     case 'lua.call':
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])}${args.self ? ' (self)' : ''}(${((args.args as unknown[]) ?? []).map(v).join(', ')})`
     case 'lua.reload':
@@ -378,6 +381,7 @@ function undoOf(op: string, args: Record<string, unknown>, res: Record<string, u
   if (op === 'lua.call') return { noUndo: t('调用 Lua 函数不能自动撤回') }
   if (op === 'lua.reload') return { noUndo: t('重载的模块不能自动撤回：改回文件再重载一次') }
   if (op === 'lua.exec') return { noUndo: t('执行的 Lua 代码不能自动撤回') }
+  if (op === 'lua.gm') return { noUndo: t('命令、GM 和函数调用不能自动撤回') }
   if (op === 'cvar.set') return { undo: { op: 'cvar.set', args: { name: args.name, value: res.prev } } }
   if (op === 'log.clear') return { noUndo: t('清空日志不能撤回') }
   // 包在编辑器事务里的资源修改：按事务 id 撤同一步（之后编辑器里又有别的修改时桥接会拒绝）
@@ -440,7 +444,10 @@ export async function runOp(
     const res =
       op === 'python'
         ? await python(ctx.project, card, String(args.code ?? ''), timeoutMs)
-        : await rpc(card, op, args, timeoutMs)
+        : op === 'lua.gm'
+          ? // Lua GM（lua-gm/run.ts）：面板按扫描结果拼好的代码，桥接上就是 lua.exec；单独的操作名只为权限按「运行时」走
+            await rpc(card, 'lua.exec', { code: args.code, timeoutMs: args.timeoutMs, world: args.world }, timeoutMs)
+          : await rpc(card, op, args, timeoutMs)
     if (op === 'asset.save') res.vcs = await p4After(ctx.project, 'add', added)
     if (op === 'asset.delete' && res.onDisk)
       res.vcs = await p4After(ctx.project, 'delete', [String(res.file)], !!res.fileRemoved)

@@ -9,6 +9,7 @@ import { availableVersion } from './uelink.ts'
 import { projectJobs } from './jobs.ts'
 import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile, tailFile } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
+import { runLuaGm } from './lua-gm/run.ts'
 import { readGm } from './store.ts'
 import type { ProjectState, UeProject } from './types.ts'
 import { t } from './util.ts'
@@ -175,7 +176,9 @@ export async function runMacro(ctx: OpCtx, id: string) {
     try {
       const res = s.console
         ? await runOp(ctx, 'console', { command: s.console })
-        : await runOp(ctx, 'gm.run', { name: s.gm, args: s.args ?? [] })
+        : s.lua
+          ? await runLuaGm(ctx, s.lua, s.args ?? [])
+          : await runOp(ctx, 'gm.run', { name: s.gm, args: s.args ?? [] })
       steps.push({ step: i + 1, ok: true, output: res.output })
     } catch (e) {
       steps.push({ step: i + 1, ok: false, error: (e as Error).message })

@@ -195,7 +195,8 @@ export interface GmPreset {
 export interface GmMacro {
   id: string
   name: string
-  steps: { gm?: string; console?: string; args?: string[] }[]
+  /** 一步：C++ GM（gm）、Lua GM（lua，扫描出来的 GM 名，见 lua-gm/）或控制台命令（console） */
+  steps: { gm?: string; lua?: string; console?: string; args?: string[] }[]
 }
 export interface GmStore {
   presets: GmPreset[]

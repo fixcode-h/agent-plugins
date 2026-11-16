@@ -9,6 +9,7 @@ import { cancelJob, getJob } from './jobs.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
+import { luaGmRoute } from './lua-gm/api.ts'
 import { luaBuildRoute } from './lua-build/api.ts'
 import { toolsRoute } from './editor-tools/api-tools.ts'
 import { extRoute } from './uekit/api-ext.ts'
@@ -198,6 +199,9 @@ export async function handle(req: Request): Promise<Response> {
         const ext = await extRoute(ctx, `${req.method} ${route}`, b, url)
         if (ext instanceof Response) return ext
         if (ext !== undefined) return json(ext)
+        // GM 页 Lua 来源（扫描脚本、参数关联、执行）在 lua-gm/api.ts
+        const gmLua = await luaGmRoute(ctx, `${req.method} ${route}`, b)
+        if (gmLua !== undefined) return json(gmLua)
         // Lua 页「编译」页签的接口在 lua-build/api.ts
         const lb = await luaBuildRoute(ctx, `${req.method} ${route}`, b)
         if (lb !== undefined) return json(lb)

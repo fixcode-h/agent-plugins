@@ -30,8 +30,22 @@ export interface LocalState {
   pinned: { path: string; label: string }[]
   /** 资源页文件夹树里收藏的文件夹（包路径 /Game/Data） */
   folders: string[]
+  /** GM 页最近执行的（新的在前，最多 60 条）：只存本机，点一行把参数填回去 */
+  gmRecent: GmRun[]
 }
-const LOCAL: LocalState = { console: [], watch: [], recent: [], pinned: [], folders: [] }
+export interface GmRun {
+  /** GM 页里的条目 key（lua:名字 / cpp:类.名字） */
+  key: string
+  name: string
+  args: string[]
+  /** 实际执行的：Lua 代码或控制台写法 */
+  code: string
+  ok: boolean
+  /** 输出的头一行或报错 */
+  out: string
+  at: string
+}
+const LOCAL: LocalState = { console: [], watch: [], recent: [], pinned: [], folders: [], gmRecent: [] }
 const localFile = (id: string) => path.join(c().dataDir, 'local', `${encodeURIComponent(id)}.json`)
 
 export async function readLocal(id: string): Promise<LocalState> {
