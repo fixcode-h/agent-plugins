@@ -12,6 +12,7 @@ import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-fil
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { EXT_EVENT, watch } from './stream.ts'
+import { upgradeAll, type UpgradePlan } from './upgrade-all.ts'
 
 /**
  * UE 页「UE 插件」「AssetForge」「GameTest」用的接口（挂在 /api/plugins/ue/p/<项目>/ext/ 下）。
@@ -43,6 +44,21 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
         mode: b.mode === 'vcs' || b.mode === 'local' ? (b.mode as InstallMode) : undefined,
       })
       return { job: job.id, ok: job.status === 'done' }
+    }
+    case 'POST ext/upgrade-all': {
+      // 「全部升级」：网页把卡片上算好的升级计划传过来，服务端按依赖顺序串起来做（upgrade-all.ts）
+      const plan = b as unknown as UpgradePlan
+      const job = upgradeAll(p, {
+        uelink: plan.uelink ? { prerelease: String(plan.uelink.prerelease ?? '') } : undefined,
+        extensions: (Array.isArray(plan.extensions) ? plan.extensions : []).map((x) => ({
+          name: String(x.name),
+          version: x.version ? String(x.version) : undefined,
+          mode: x.mode === 'vcs' || x.mode === 'local' ? x.mode : undefined,
+        })),
+        build: plan.build !== false,
+        title: plan.title ? String(plan.title) : undefined,
+      })
+      return { job: job.id }
     }
     case 'POST ext/uninstall': {
       const job = await uninstallExtension(p, String(b.name))

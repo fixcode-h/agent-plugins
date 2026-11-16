@@ -6,6 +6,7 @@ import type { UeProject } from '../types.ts'
 import { findPluginDirs, pluginVersion, UELINK, type UELinkManifest } from '../uelink.ts'
 import { c, readJson } from '../util.ts'
 import { netGet } from './net.ts'
+import { kitInfo, type KitFields, type KitInfo } from './kit-info.ts'
 import { engineTooOld, pickOffer } from './offer.ts'
 
 /**
@@ -18,12 +19,10 @@ export const DEFAULT_CATALOG = 'https://raw.githubusercontent.com/fixcode-h/UEKi
 /** 面板认得的扩展：有专门的页面和工具。目录里别的扩展照样列出、能装，只是没有页面 */
 export const KNOWN_EXTENSIONS = ['AssetForge', 'GameTest'] as const
 
-export interface KitManifest extends UELinkManifest {
+export interface KitManifest extends UELinkManifest, KitFields {
   displayName?: string
   description?: string
   kind?: 'base' | 'extension'
-  requires?: Record<string, string>
-  engineTested?: string
 }
 
 export interface CatalogEntry {
@@ -42,6 +41,10 @@ interface CatalogResult {
   error?: string
   /** cacheOnly 且这次运行里还没读过：没去 GitHub，等用户点「检查更新」 */
   unchecked?: boolean
+  /** 读的时间（毫秒时间戳），UE 插件页状态条显示「几分钟前检查」 */
+  at?: number
+  /** 从哪读的：GitHub、镜像地址或本机目录 */
+  source?: string
 }
 
 /**
@@ -82,7 +85,9 @@ export async function readCatalog(refresh = false, cacheOnly = false): Promise<C
   } catch (e) {
     result = { plugins: [], base: '', error: (e as Error).message }
   }
-  cache = { at: Date.now(), result }
+  result.at = Date.now()
+  result.source = spec.dir ?? (spec.url === DEFAULT_CATALOG ? 'fixcode-h/UEKit' : spec.url)
+  cache = { at: result.at, result }
   return result
 }
 
@@ -134,6 +139,16 @@ export interface ExtensionStatus {
   offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string; uelink?: string }
   /** 开着的 UE 进程里实际加载的版本（装了新版没重编时和磁盘上的不同） */
   loaded?: string
+  /** 卡片上的实测引擎、依赖、可选插件、工具（取能装的那一版，没有时取最新版） */
+  info?: KitInfo
+}
+
+/** UE 插件页 UELink 卡片要的目录信息（安装、版本仍看 state.bridge / bundled） */
+export interface UELinkCatalog {
+  description?: string
+  latest?: string
+  prerelease?: string
+  info?: KitInfo
 }
 
 /** UE 插件页用：目录里的每个扩展 + 项目里装着、目录里没有的（旧镜像、手动放的） */
@@ -141,12 +156,21 @@ export async function extensionStatus(
   project: UeProject,
   loaded: Map<string, string>,
   refresh = false,
-): Promise<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean; uelinkPreUpdate?: string }> {
+): Promise<{
+  items: ExtensionStatus[]
+  error?: string
+  unchecked?: boolean
+  uelinkPreUpdate?: string
+  uelink?: UELinkCatalog
+  checkedAt?: number
+  source?: string
+}> {
   // 打开页面只看缓存，点「检查更新」才去 GitHub（同时重读 UELink 的发布清单，见 api-ext.ts）
   const cat = await readCatalog(refresh, true)
   const entries = cat.plugins.filter((e) => e.kind !== 'base' && e.name !== UELINK)
   // 扩展要的 UELink 只有预发布版时，UE 插件页给「升级到预发布」（正式版、自带的都不够新才用它）
-  const pre = cat.plugins.find((e) => e.name === UELINK)?.prerelease?.version
+  const base = cat.plugins.find((e) => e.name === UELINK)
+  const pre = base?.prerelease?.version
   const have = await bridgeVersionIn(project.root)
   const names = [...new Set([...KNOWN_EXTENSIONS, ...entries.map((e) => e.name)])]
   const items = await Promise.all(
@@ -178,13 +202,28 @@ export async function extensionStatus(
             }
           : undefined,
         loaded: loaded.get(name),
+        info: await kitInfo(project, offerM ?? e?.latest ?? e?.prerelease),
       }
     }),
   )
   // 项目里装的已经是 UELink 预发布版（为装扩展升上去的）时，继续给更新的预发布版：
   // 查更新只认正式版，否则修了编译错误的新预发布永远到不了用户手上（5.4 上实际碰到过）
   const uelinkPreUpdate = pre && /-/.test(have) && cmpVersion(pre, have) > 0 ? pre : undefined
-  return { items, error: cat.error, unchecked: cat.unchecked, uelinkPreUpdate }
+  const uelink: UELinkCatalog | undefined = base && {
+    description: base.description || base.latest?.description || base.prerelease?.description,
+    latest: base.latest?.version,
+    prerelease: base.prerelease?.version,
+    info: await kitInfo(project, base.latest ?? base.prerelease),
+  }
+  return {
+    items,
+    error: cat.error,
+    unchecked: cat.unchecked,
+    uelinkPreUpdate,
+    uelink,
+    checkedAt: cat.at,
+    source: cat.source,
+  }
 }
 
 /** 按名字和版本取清单（安装用） */

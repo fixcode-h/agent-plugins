@@ -17,6 +17,7 @@ import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { DiagSpecimen } from './sections/uekit/LinkDiagnose.tsx'
+import { PluginCardSpecimen } from './sections/uekit/plugins/Specimen.tsx'
 import { ConfigKeySpecimen } from './sections/config/parts.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
@@ -104,7 +105,9 @@ const activate: ActivateWeb = (host) => {
         tune: ['badge', 'row', 'progress'],
         Specimen: GtSpecimen,
       },
-      // UE 插件页 UELink 卡片的连接诊断：每项一行，跟面板「行」「按钮」的调节项
+      // UE 插件页的插件卡片（版本、实测引擎、依赖、工具的字段表）：跟面板「徽标」「按钮」的调节项
+      { id: 'plugin-card', label: t('UE 插件 · 插件卡片'), tune: ['badge', 'button'], Specimen: PluginCardSpecimen },
+      // UE 插件页的连接诊断：每项一行，跟面板「行」「按钮」的调节项
       { id: 'link-diagnose', label: t('UE · 连接诊断'), tune: ['row', 'button'], Specimen: DiagSpecimen },
       // 配置页一个键的各层写法：跟面板「徽标」「行」的调节项
       { id: 'config-key', label: t('UE · 配置的分层'), tune: ['badge', 'row'], Specimen: ConfigKeySpecimen },

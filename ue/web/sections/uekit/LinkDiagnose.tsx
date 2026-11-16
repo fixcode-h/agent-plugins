@@ -1,12 +1,19 @@
-import { CheckCircle2, CircleAlert, CircleMinus, CircleX, Download, Hammer, Play, Stethoscope } from 'lucide-react'
-import { useState } from 'react'
+import {
+  CheckCircle2,
+  ChevronUp,
+  CircleAlert,
+  CircleMinus,
+  CircleX,
+  Download,
+  Hammer,
+  Play,
+  Stethoscope,
+} from 'lucide-react'
 import type { DiagItem, DiagState } from '../../../server/editor-tools/diagnose.ts'
-import { pget, ppost, useAction } from '../../api.ts'
-import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 
 /**
- * UELink 卡片里的「连接诊断」（设计稿「UE 插件优化与扩展」UELink 小项）：连不上时一页说清卡在哪一步，
+ * UE 插件页的「连接诊断」（入口在状态条）（设计稿「UE 插件优化与扩展」UELink 小项）：连不上时一页说清卡在哪一步，
  * 每项一行，不正常的给怎么修，能直接做的给按钮（安装、编译、启动编辑器）。点了才查，不自动跑（要连端口、查进程）。
  */
 const ICON: Record<DiagState, { icon: typeof CheckCircle2; tone: string }> = {
@@ -61,43 +68,33 @@ export function DiagList({
   )
 }
 
-/** 卡片里的那一块：按钮 + 结果。onAction 交给卡片（安装、编译和卡片自己的按钮走同一套作业输出） */
-export function LinkDiagnose({ onAction }: { onAction: (a: 'install' | 'build') => void }) {
-  const { project, reload } = useUe()
+/** UE 插件页状态条下面展开的诊断结果（StatusStrip 点「连接诊断」后出现） */
+export function DiagPanel({
+  res,
+  busy,
+  onAction,
+  onClose,
+}: {
+  res: { items: DiagItem[]; at: string }
+  busy: boolean
+  onAction: (a: NonNullable<DiagItem['action']>) => void
+  onClose: () => void
+}) {
   const { ui } = h()
-  const { busy, run } = useAction()
-  const [res, setRes] = useState<{ items: DiagItem[]; at: string }>()
-  const check = () => run('diag', async () => setRes(await pget(project.id, 'tools/diagnose')))
-  const bad = res?.items.filter((i) => i.state === 'fail' || i.state === 'warn').length ?? 0
+  const bad = res.items.filter((i) => i.state === 'fail' || i.state === 'warn').length
   return (
-    <div className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:pt-3">
-      <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+    <div className="ue:flex ue:flex-col ue:gap-2 ue:bg-card ue:px-4 ue:py-3">
+      <div className="ue:flex ue:items-center ue:gap-2">
+        <Stethoscope className="ue:h-4 ue:w-4 ue:text-subtle" />
         <span className="ue:text-body ue:font-medium ue:text-fg">{t('连接诊断')}</span>
         <span className="ue:min-w-0 ue:flex-1 ue:text-footnote ue:text-subtle">
-          {res
-            ? bad
-              ? t('{n} 项要处理', { n: bad })
-              : t('都正常')
-            : t('连不上 UE 时查一遍：装没装、编译过没有、名片、端口、令牌、版本、推送通道')}
+          {bad ? t('{n} 项要处理', { n: bad }) : t('都正常')}
         </span>
-        <ui.Button size="sm" variant="secondary" disabled={busy === 'diag'} onClick={() => void check()}>
-          <Stethoscope className="ue:h-3.5 ue:w-3.5" /> {busy === 'diag' ? t('诊断中…') : res ? t('重新诊断') : t('诊断')}
+        <ui.Button size="sm" variant="ghost" onClick={onClose}>
+          <ChevronUp className="ue:h-3.5 ue:w-3.5" /> {t('收起')}
         </ui.Button>
       </div>
-      {res && (
-        <DiagList
-          items={res.items}
-          busy={!!busy}
-          onAction={(a) => {
-            if (a === 'launch')
-              void run('launch', async () => {
-                await ppost(project.id, 'editor')
-                reload()
-              })
-            else onAction(a)
-          }}
-        />
-      )}
+      <DiagList items={res.items} busy={busy} onAction={onAction} />
     </div>
   )
 }

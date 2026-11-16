@@ -9,7 +9,7 @@ import { LuaBuildSettings } from './lua/BuildSettings.tsx'
 
 /**
  * 权限与设置：Agent 权限；GM 预设、资源页收藏存哪；引擎目录和编译命令；从 UE 页移除项目。
- * UELink 的安装、升级、编译挪到了「UE 插件」页（uekit/UELinkCard.tsx），和 UEKit 的扩展放在一起
+ * UELink 的安装、升级、编译挪到了「UE 插件」页（uekit/Plugins.tsx），和 UEKit 的扩展放在一起
  */
 export function Bridge() {
   const { project, state, reload } = useUe()

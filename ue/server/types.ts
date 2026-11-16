@@ -232,6 +232,8 @@ export interface Job {
   hint?: { kind: 'live-coding'; blockers: BuildBlocker[] }
   /** 用户在网页上取消的 */
   canceled?: boolean
+  /** 分几步做的作业（UE 插件页「全部升级」）：每一步的插件名和状态，卡片按它显示升级中 / 排队中 */
+  steps?: { name: string; status: 'wait' | 'run' | 'done' | 'failed' }[]
 }
 
 /** 挡住编译的编辑器进程（server/procs.ts） */
