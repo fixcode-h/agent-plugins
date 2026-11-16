@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.16.7",
+  "version": "0.16.8",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -26,11 +26,11 @@
       "type": "select",
       "group": "离线读取",
       "label": "编辑器没开时读资源",
-      "desc": "后台编辑器首次启动 30–60 秒，之后常驻；占 2–6 GB 内存",
-      "default": "background",
+      "desc": "后台编辑器首次启动 30–60 秒，之后常驻；占 2–6 GB 内存。默认不自动起，要用时在 UE 页目标卡点「启动后台编辑器」；编译和启动编辑器时会自动关掉",
+      "default": "off",
       "options": [
-        { "value": "background", "label": "起后台编辑器（不开窗口）" },
-        { "value": "off", "label": "不读，提示先开编辑器" }
+        { "value": "off", "label": "不自动起，提示先开编辑器或手动起后台编辑器" },
+        { "value": "background", "label": "自动起后台编辑器（不开窗口）" }
       ]
     },
     {
