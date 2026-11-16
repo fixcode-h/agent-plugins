@@ -1543,5 +1543,8 @@
   "看结果": "View results",
   "{name} {v} 可升级": "{name} {v} available",
   "现在是 {v}；升级后要在本地重新编译": "Currently {v}; recompile locally after updating",
-  "去 UE 插件": "Go to UE plugins"
+  "去 UE 插件": "Go to UE plugins",
+  "只能盯配置根里的 .json：{p}": "Can only watch .json files inside the config root: {p}",
+  "配置已保存，正在重新演练…": "Config saved, re-running the dry run…",
+  "已按 {time} 保存的配置刷新": "Refreshed from the config saved at {time}"
 }

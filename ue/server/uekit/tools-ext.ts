@@ -10,11 +10,11 @@ const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) && v !== '' &
 export const EXT_TOOLS = [
   tool(
     'ue_forge',
-    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；list 列配置和资产的同步状态（state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；plan 演练导入看会做哪些改动；diff 看属性差异（导入后哪些属性会变）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果；stop 取消作业。',
+    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；schema 写配置前先取：给 kind 回这种配置的 JSON Schema（根节点 class、能不能有 children、文档级字段），给 class（类或结构体）回它在 props 里能写的属性和类型（filter 按名字筛，offset 翻页）；list 列配置和资产的同步状态（state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；plan 演练导入看会做哪些改动；diff 看属性差异（导入后哪些属性会变）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果；stop 取消作业。',
     {
       action: {
         type: 'string',
-        enum: ['status', 'list', 'describe', 'plan', 'diff', 'import', 'export', 'job', 'stop'],
+        enum: ['status', 'schema', 'list', 'describe', 'plan', 'diff', 'import', 'export', 'job', 'stop'],
       },
       config: { type: 'string', description: '配置路径（相对配置根，如 umg/UI/WBP_HUD.json）' },
       asset: { type: 'string', description: '资产路径（/Game/UI/WBP_HUD）' },
@@ -25,6 +25,8 @@ export const EXT_TOOLS = [
       state: { type: 'string' },
       kind: { type: 'string' },
       query: { type: 'string' },
+      class: { type: 'string', description: 'schema：看哪个类或结构体的属性（/Script/Engine.WorldSettings、TextBlock、数据表的 rowStruct）' },
+      filter: { type: 'string' },
       deep: { type: 'boolean' },
       offset: { type: 'number' },
       limit: { type: 'number' },
@@ -38,6 +40,8 @@ export const EXT_TOOLS = [
           const [health, kinds] = await Promise.all([op('forge.health', {}), op('forge.kinds', {})])
           return out({ ...health, kinds: kinds.kinds })
         }
+        case 'schema':
+          return out(await forgeSchema(op, a))
         case 'list':
           return out(
             await op(
@@ -136,6 +140,24 @@ export const EXT_TOOLS = [
     },
   ),
 ]
+
+/**
+ * ue_forge action=schema：forge.kinds 带 kind / class（AssetForge 1.1.0 起）。旧版不认这两个参数、照样回整张列表，
+ * 这时说清楚要升级，不把列表当成 schema 交给 Agent
+ */
+async function forgeSchema(
+  op: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>,
+  a: Record<string, unknown>,
+) {
+  if (!a.kind && !a.class) return { error: '给 kind（配置的 schema）或 class（类的属性表），kind 的取值看 status 的 kinds' }
+  const r = await op('forge.kinds', {
+    ...(a.kind ? { kind: str(a.kind) } : {}),
+    ...(a.class ? { class: str(a.class), filter: a.filter, offset: num(a.offset, 0), limit: Math.min(num(a.limit, 60), 150) } : {}),
+  })
+  if ((a.kind && !r.schema) || (a.class && !r.props))
+    return { error: '编辑器里的 AssetForge 太旧，不会回 schema：在 UE 页「UE 插件」把 AssetForge 升到 1.1.0 以上并重新编译' }
+  return r
+}
 
 /** 工具名 → 要装了哪个扩展才挂 */
 export const EXT_TOOL_PLUGIN: Record<string, string> = { ue_forge: 'AssetForge', ue_gametest: 'GameTest' }
