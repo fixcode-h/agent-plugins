@@ -355,7 +355,6 @@
   "C 函数": "C function",
   "UE 没在运行：Lua 环境要在运行中的编辑器或游戏里": "UE isn't running: the Lua environment lives in a running editor or game",
   "这个进程的桥接没有编进 Lua 支持：项目里要有 UnLua，并把桥接更新到 1.1.0 以上后重新编译": "This process's bridge was built without Lua support: the project needs UnLua, and the bridge must be updated to 1.1.0+ and rebuilt",
-  "UnLua 的 Lua 环境：执行代码、按路径看全局表里的单例和管理器": "UnLua's Lua environment: run code and browse singletons and managers in the global table by path",
   "现在拿不到 Lua 环境": "The Lua environment isn't available right now",
   "执行 Lua": "Run Lua",
   "单个表达式直接显示它的值，多条语句用 return 返回；print 的内容显示在下面。Ctrl+Enter 执行": "A single expression shows its value; use return for multiple statements. print output shows below. Ctrl+Enter to run",
@@ -1486,5 +1485,7 @@
   "悬停文件夹点行尾的星标，或右键「收藏」": "Hover a folder and click the star at the end, or right-click → Favorite",
   "已在 UE 编辑器里打开": "Opened in UE Editor",
   "编辑器没开": "Editor not running",
-  "复制对象路径": "Copy object path"
+  "复制对象路径": "Copy object path",
+  "UnLua 的 Lua 环境：看和改运行中的 Lua 对象、执行代码": "UnLua's Lua environment: inspect and edit live Lua objects, run code",
+  "Lua 页签": "Lua tabs"
 }
