@@ -37,7 +37,7 @@ export function TablesAnalysisReport({
   messageId,
   text,
 }: {
-  task: { projectId: string }
+  task: { projectId: string; messages?: { id: string; role: string; text: string }[] }
   messageId: string
   text: string
 }) {
@@ -48,39 +48,61 @@ export function TablesAnalysisReport({
     return r.proposal ? { draft: r.proposal.draft } : { error: r.error ?? t('没有找到结果') }
   }, [text])
   const [applied, setApplied] = useState(() => readApplied().includes(messageId))
+  // 面板只画最新一条带结果块的回复：后面还有回复却没给新的结果块（用户补充后 AI 只用文字说了改什么），
+  // 这里摆的还是旧结果，照实提醒，免得用户以为补充的内容已经在里面了（用户 2026-11-16）
+  const msgs = task.messages ?? []
+  const at = msgs.findIndex((m) => m.id === messageId)
+  const stale = at >= 0 && msgs.slice(at + 1).some((m) => m.role === 'agent' && m.text.trim())
+  const staleNote = stale && (
+    <p className="tb:px-[1.125rem] tb:pt-3 tb:text-footnote tb:text-warning">
+      {t('后面的回复没有给出新的结果，下面还是之前那次的。可以在对话里让它重新输出完整的结果。')}
+    </p>
+  )
 
   if (!task.projectId) return null
   if (!parsed.draft)
     return (
       <div className="tb:space-y-2 tb:px-[1.125rem] tb:py-3">
+        {stale && (
+          <p className="tb:text-footnote tb:text-warning">
+            {t('后面的回复没有给出新的结果，下面还是之前那次的。可以在对话里让它重新输出完整的结果。')}
+          </p>
+        )}
         <p className="tb:text-footnote tb:text-danger">{t('分析结果读不出来：{error}', { error: parsed.error })}</p>
         <p className="tb:text-footnote tb:text-subtle">{t('可以在对话里让它按要求重新输出结果。')}</p>
       </div>
     )
   if (applied)
     return (
-      <div className="tb:flex tb:items-start tb:gap-3 tb:px-[1.125rem] tb:py-3">
-        <CircleCheck className="tb:mt-0.5 tb:h-4 tb:w-4 tb:shrink-0 tb:text-success" />
-        <div className="tb:min-w-0 tb:flex-1 tb:space-y-2">
-          <p className="tb:text-footnote">
-            {t('这次分析的结果已经应用到表格设置，项目设置的「表格」页和表格页都按新的结构显示。')}
-          </p>
-          <Button size="sm" variant="ghost" onClick={() => setApplied(false)}>
-            {t('重新勾选')}
-          </Button>
+      <>
+        {staleNote}
+        <div className="tb:flex tb:items-start tb:gap-3 tb:px-[1.125rem] tb:py-3">
+          <CircleCheck className="tb:mt-0.5 tb:h-4 tb:w-4 tb:shrink-0 tb:text-success" />
+          <div className="tb:min-w-0 tb:flex-1 tb:space-y-2">
+            <p className="tb:text-footnote">
+              {t('这次分析的结果已经应用到表格设置，项目设置的「表格」页和表格页都按新的结构显示。')}
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => setApplied(false)}>
+              {t('重新勾选')}
+            </Button>
+          </div>
         </div>
-      </div>
+      </>
     )
   return (
-    <div className="tb:px-[1.125rem] tb:py-3">
-      <DraftReview
-        draft={parsed.draft}
-        onApply={async (picked) => {
-          if (!(await applyAnalysis(task.projectId, parsed.draft, picked))) return
-          markApplied(messageId)
-          setApplied(true)
-        }}
-      />
-    </div>
+    <>
+      {staleNote}
+      <div className="tb:px-[1.125rem] tb:py-3">
+        <DraftReview
+          fill
+          draft={parsed.draft}
+          onApply={async (picked) => {
+            if (!(await applyAnalysis(task.projectId, parsed.draft, picked))) return
+            markApplied(messageId)
+            setApplied(true)
+          }}
+        />
+      </div>
+    </>
   )
 }
