@@ -99,10 +99,10 @@ const activate: ActivateWeb = (host) => {
         tune: ['input', 'menu'],
         Specimen: TableBindDialogSpecimen,
       },
-      // GameTest 页的历史条、批量运行条、失败证据：跟面板「徽标」「行」「进度条」的调节项
+      // GameTest 页的历史条、步骤列表的行、批量运行条、失败证据：跟面板「徽标」「行」「进度条」的调节项
       {
         id: 'gametest-parts',
-        label: 'GameTest · HistoryBar · BatchBar · Evidence',
+        label: 'GameTest · HistoryBar · StepRow · BatchBar · Evidence',
         tune: ['badge', 'row', 'progress'],
         Specimen: GtSpecimen,
       },

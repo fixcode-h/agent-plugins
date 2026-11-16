@@ -2,9 +2,11 @@ import { t } from '../../host.ts'
 import { GtBatchBar, type GtBatch } from './GtBatch.tsx'
 import { GtEvidence } from './GtEvidence.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
+import { GtStepRow } from './GtStepRow.tsx'
+import type { StepRow } from './GtStepDetail.tsx'
 
 /**
- * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤详情里的失败证据。
+ * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的失败证据。
  * 全是假数据，不连 UE（设置页里没有 UE 页的上下文），所以证据的截图不显示、「看前后日志」是灰的
  */
 const BATCH: GtBatch = {
@@ -30,6 +32,32 @@ const BATCH: GtBatch = {
   ],
 }
 
+/** 步骤列表：有 note 的、按 hint 生成的、等待 / 光标 / 按键、跑失败的、正在跑的、还没轮到的 */
+const STEPS: StepRow[] = [
+  {
+    i: 0,
+    def: { action: 'pie.start', map: '/Game/Maps/Lobby' },
+    res: { index: 0, action: 'pie.start', status: 'succeeded', durationMs: 2100 },
+  },
+  {
+    i: 1,
+    def: { action: 'click', target: 'WBP_Main:Root/#GMEntrance', note: '点击 GM 入口按钮' },
+    res: { index: 1, action: 'click', status: 'succeeded', durationMs: 135 },
+  },
+  {
+    i: 2,
+    def: {
+      action: 'click',
+      target: 'WBP_Main:Root/#GMItem#4/Button_Event',
+      hint: { class: 'SPButton', text: '常用', ambiguous: '同一界面有 6 个 GMItem' },
+    },
+    res: { index: 2, action: 'click', status: 'failed', message: '点到的是 GMItem#3', durationMs: 412 },
+  },
+  { i: 3, def: { action: 'wait', until: 'seconds', seconds: 0.55 } },
+  { i: 4, def: { action: 'input.cursor', x: 0.034, y: 0.548 } },
+  { i: 5, def: { action: 'key', key: 'LeftMouseButton', phase: 'tap' } },
+]
+
 export function GtSpecimen() {
   const noop = () => undefined
   return (
@@ -44,6 +72,11 @@ export function GtSpecimen() {
         <span className="ue:flex ue:items-center ue:gap-2">
           <GtHistoryBar /> {t('还没跑过')}
         </span>
+      </div>
+      <div className="ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
+        {STEPS.map((r) => (
+          <GtStepRow key={r.i} row={r} selected={r.i === 1} live={r.i === 3} dim={r.i > 3} onClick={noop} />
+        ))}
       </div>
       <div className="ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
         <GtBatchBar batch={BATCH} onStop={noop} />
