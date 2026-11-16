@@ -7,6 +7,7 @@ import { Inspector } from '../../inspect/Inspector.tsx'
 import { splitSub } from '../../inspect/nav-state.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, NotRunning, PageHead, useTargetInfo } from '../../ui.tsx'
+import { SelectionBar } from '../../selection/SelectionBar.tsx'
 import { Browse } from './Browse.tsx'
 
 /**
@@ -47,6 +48,7 @@ export function Objects() {
             style={pane.style('calc(100% - 600px)')}
             bodyClass="ue:flex ue:min-h-0 ue:flex-col"
           >
+            <SelectionBar page="objects" current={path} onOpen={(p) => nav.open('objects', p, { from: 'jump' })} />
             <Browse
               tick={tick}
               selected={path}

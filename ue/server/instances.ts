@@ -143,6 +143,7 @@ export async function info(card: Card): Promise<Instance> {
       worlds: body.worlds ?? [],
       lua: body.lua,
       extensions: body.extensions ?? card.extensions,
+      ops: Array.isArray(body.ops) ? body.ops : undefined,
     }
   } catch (e) {
     return { ...base, error: (e as Error).message }

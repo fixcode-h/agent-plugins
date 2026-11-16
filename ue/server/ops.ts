@@ -63,6 +63,9 @@ const ASSET_OPS = new Set([
   'bp.edit',
   'bp.compile',
   'python',
+  // 编辑器小工具：重定向器、Tag 的引用方都只有资源注册表知道，编辑器没开时后台编辑器也能做
+  'asset.redirectors',
+  'tags.refs',
   // AssetForge（UEKit 扩展）：读配置和资产，编辑器没开时后台编辑器也能做
   'forge.health',
   'forge.kinds',
@@ -88,6 +91,9 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'lua.set':
     case 'lua.exec':
     case 'lua.gm':
+    // 2.4：调 Lua 函数、重载模块都在改正在运行的游戏，按运行时权限走（不像 lua.exec 每次确认，设计稿四.1）
+    case 'lua.call':
+    case 'lua.reload':
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
@@ -119,6 +125,12 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return args.dryRun ? 'read' : 'struct'
     case 'asset.delete':
       return args.dryRun ? 'read' : 'delete'
+    // 修复重定向器会改写、保存引用方并删掉重定向器；在关卡里放 / 删 Actor 改的是关卡：都按结构性操作确认
+    case 'asset.redirectors':
+      return args.fix ? 'struct' : 'read'
+    case 'editor.spawn':
+    case 'editor.destroy':
+      return 'struct'
     case 'python':
       return 'python'
     case 'asset.save':
@@ -183,6 +195,12 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${t('删除')} ${args.path}${args.force ? ` · ${t('强删（引用它的资源会断开）')}` : ''}`
     case 'asset.undo':
       return `${t('撤回')} ${args.path ?? ''} · ${args.tx}`
+    case 'asset.redirectors':
+      return `${t('修复重定向器')} ${args.path}`
+    case 'editor.spawn':
+      return `${t('在关卡里放')} ${args.class}${Array.isArray(args.location) ? ` @ ${(args.location as unknown[]).join(', ')}` : ''}${args.level ? ` · ${args.level}` : ''}`
+    case 'editor.destroy':
+      return `${t('从关卡里删掉')}\n${((args.actors as string[]) ?? []).join('\n')}`
     case 'bp.edit':
       return `${args.path}${args.dryRun ? ` · ${t('演练')}` : ''}\n${describeOps(args.ops)}`
     case 'bp.compile':
@@ -195,6 +213,10 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
     case 'lua.gm':
       return `Lua GM · ${String(args.code ?? '')}`
+    case 'lua.call':
+      return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])}${args.self ? ' (self)' : ''}(${((args.args as unknown[]) ?? []).map(v).join(', ')})`
+    case 'lua.reload':
+      return `${t('重载 Lua 模块')} ${args.changed ? t('改过的') : ((args.modules as string[]) ?? []).join(', ')}`
     case 'forge.import':
       return `AssetForge ${t('导入')}${args.dryRun ? ` · ${t('演练')}` : ''}\n${args.pending ? t('全部待导入') : ((args.configs as string[]) ?? []).join('\n')}`
     case 'forge.export':
@@ -276,7 +298,11 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
       throw new BridgeError(
         t('UE 页「权限与设置」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
       )
-    if (struct === 'ask') await ask(ctx, { title: t('Agent 要新建 / 复制 / 改名 UE 资源'), detail: what })
+    if (struct === 'ask')
+      await ask(ctx, {
+        title: op.startsWith('editor.') ? t('Agent 要改编辑器里打开的关卡') : t('Agent 要新建 / 复制 / 改名 UE 资源'),
+        detail: what,
+      })
   } else if (kind === 'delete') {
     if (struct === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
@@ -344,8 +370,12 @@ async function p4After(p: UeProject, verb: 'add' | 'delete', files: string[], ke
 function undoOf(op: string, args: Record<string, unknown>, res: Record<string, unknown>, world: string) {
   if (op === 'set' && isRuntimePath(String(args.path)))
     return { undo: { op: 'set', args: { path: args.path, prop: args.prop, value: res.prev, world } } }
+  // 2.4：原值是表、整个换掉的没有 prev，撤不回
+  if (op === 'lua.set' && res.undoable === false) return { noUndo: t('原值是表，整个换掉后不能自动撤回') }
   if (op === 'lua.set')
     return { undo: { op: 'lua.set', args: { path: args.path, keys: args.keys, value: res.prev ?? null, world } } }
+  if (op === 'lua.call') return { noUndo: t('调用 Lua 函数不能自动撤回') }
+  if (op === 'lua.reload') return { noUndo: t('重载的模块不能自动撤回：改回文件再重载一次') }
   if (op === 'lua.exec') return { noUndo: t('执行的 Lua 代码不能自动撤回') }
   if (op === 'lua.gm') return { noUndo: t('命令、GM 和函数调用不能自动撤回') }
   if (op === 'cvar.set') return { undo: { op: 'cvar.set', args: { name: args.name, value: res.prev } } }

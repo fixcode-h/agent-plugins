@@ -3,7 +3,10 @@ import { t } from '../../host.ts'
 import { LuaBuild } from './Build.tsx'
 import { LuaBuildHead } from './BuildParts.tsx'
 import { useBuildBadge } from './build-store.ts'
+import { LuaErrors, useErrorsBadge } from './Errors.tsx'
 import { LuaExec } from './Exec.tsx'
+import { CheckSyntax, ReloadChanged } from './HeadActions.tsx'
+import { LuaModules } from './Modules.tsx'
 import { LuaObjects } from './Objects.tsx'
 
 /**
@@ -24,7 +27,9 @@ export interface LuaTab {
 
 export const LUA_TABS: LuaTab[] = [
   { id: 'objects', order: 10, label: () => t('对象'), View: LuaObjects },
-  // order 20 GM、30 模块、40 报错
+  // order 20 GM
+  { id: 'modules', order: 30, label: () => t('模块'), View: LuaModules },
+  { id: 'errors', order: 40, label: () => t('报错'), View: LuaErrors, useBadge: useErrorsBadge },
   { id: 'build', order: 50, label: () => t('编译'), View: LuaBuild, useBadge: useBuildBadge, offline: true },
   { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec },
 ].sort((a, b) => a.order - b.order)
@@ -34,6 +39,8 @@ export const LUA_TABS: LuaTab[] = [
  * 组件自己判断能不能用（例如桥接没有 lua.reload 时不显示），不能用时返回 null
  */
 export const LUA_HEAD_ACTIONS: { id: string; order: number; View: ComponentType }[] = [
+  { id: 'check', order: 10, View: CheckSyntax },
   // 20 增量编译、30 全编译（一个组件出两个按钮）
   { id: 'build', order: 20, View: LuaBuildHead },
+  { id: 'reload', order: 40, View: ReloadChanged },
 ].sort((a, b) => a.order - b.order)

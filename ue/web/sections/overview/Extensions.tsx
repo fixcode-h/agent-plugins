@@ -1,9 +1,10 @@
-import { Blocks, MousePointerClick } from 'lucide-react'
+import { Blocks } from 'lucide-react'
 import type { ExtensionStatus } from '../../../server/uekit/catalog.ts'
 import { useUe } from '../../ctx.tsx'
 import { t } from '../../host.ts'
 import { Badge, Card, LinkBtn } from '../../ui.tsx'
 import type { Upgrade } from './ext-data.ts'
+import { SelectionCard } from '../../selection/SelectionCard.tsx'
 
 /**
  * 概览右栏「扩展」：UELink 和项目里装了的 UEKit 扩展各一行 —— 版本、有没有加载进开着的 UE、能不能升级。
@@ -60,25 +61,5 @@ export function Extensions({ exts, upgrades }: { exts?: ExtensionStatus[]; upgra
   )
 }
 
-/**
- * 概览右栏「编辑器里选中」的位置：要 UELink 2.4 的 editor.selection（另一批做，接上后在这里显示关卡里选中的 Actor、
- * 内容浏览器选中的资源和跟随开关）。现在编辑器开着时说明一句，没开不占地方
- */
-export function SelectionSlot() {
-  const { state } = useUe()
-  const editor = (state?.instances ?? []).some((i) => i.kind === 'editor' && i.online)
-  if (!editor) return null
-  return (
-    <Card
-      title={
-        <>
-          <MousePointerClick className="ue:h-4 ue:w-4" /> {t('编辑器里选中')}
-        </>
-      }
-    >
-      <p className="ue:px-4 ue:py-3 ue:text-footnote ue:text-subtle">
-        {t('UELink 2.4 起，编辑器里选中的 Actor 和资源会显示在这里，也会告诉 Agent')}
-      </p>
-    </Card>
-  )
-}
+/** 概览右栏「编辑器里选中」：实现在 selection/SelectionCard.tsx（UELink 2.4 的 editor.selection） */
+export const SelectionSlot = SelectionCard

@@ -7,6 +7,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Badge, Card, Term } from '../../ui.tsx'
 import { BuildHint } from '../BuildHint.tsx'
+import { LinkDiagnose } from './LinkDiagnose.tsx'
 
 /**
  * UE 插件页最上面的 UELink（UEKit 的基础插件，扩展都挂在它上面）：安装、升级、编译、卸载和输出。
@@ -135,6 +136,7 @@ export function UELinkCard({ needPre, onChanged }: { needPre?: string; onChanged
             </Term>
           </div>
         )}
+        <LinkDiagnose onAction={(a) => void act(a, a === 'install' ? { mode } : undefined)} />
       </div>
     </Card>
   )

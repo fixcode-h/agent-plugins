@@ -15,6 +15,7 @@ const hasEntries = (d) => readdirSync(d).length > 0
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fakeLuaError } from './fake-lua-dev.mjs'
 import { startFakeBridge } from './fake-bridge.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -115,6 +116,11 @@ try {
     [],
   )
   assert.ok(catTools.every((x) => !('call' in x)))
+  // 面板 ADR 0067：一个工具的定义（说明 + 参数 schema）不超过 3000 字
+  for (const x of catTools) {
+    const len = String(x.description ?? '').length + JSON.stringify(x.inputSchema ?? x.parameters ?? {}).length
+    assert.ok(len <= 3000, `${x.name} 的定义 ${len} 字，超过 3000`)
+  }
   const runTools = await plugin.tools({
     taskId: 't1',
     agentName: 'UE 调试',
@@ -280,6 +286,50 @@ try {
   const py = await call('ue_python', { code: 'print(1)' }, yes)
   assert.ok(!py.isError && bridge.state.calls.some((c) => /^py ".*run-\d+\.py"$/.test(c)), text(py))
 
+  // 编辑器小工具（UELink 2.4）：配置分层 + 进程里的最终值、Tag（进程 + ini 注释）、放删 Actor 按结构性操作确认并能撤回、修复重定向器
+  mkdirSync(path.join(proj, 'Config'), { recursive: true })
+  writeFileSync(path.join(proj, 'Config', 'DefaultEngine.ini'), '[/Script/Engine.RendererSettings]\nr.Shadow=0\n')
+  writeFileSync(
+    path.join(proj, 'Config', 'DefaultGameplayTags.ini'),
+    '[/Script/GameplayTags.GameplayTagsSettings]\n+GameplayTagList=(Tag="Ability.Fire",DevComment="开火")\n',
+  )
+  const cfgKeys = await api('POST', '/p/p1/tools/config', {
+    file: 'Engine',
+    section: '/Script/Engine.RendererSettings',
+  })
+  const shadow = cfgKeys.keys.find((k) => k.key === 'r.Shadow')
+  assert.deepEqual([shadow.values, shadow.live, shadow.differs], [['0'], ['3'], true], JSON.stringify(cfgKeys))
+  assert.ok(cfgKeys.keys.some((k) => k.key === 'r.FromPlugin' && !k.layers.length))
+  const cfgSecs = await api('POST', '/p/p1/tools/config', { file: 'Engine' })
+  assert.ok(
+    cfgSecs.sections.some((x) => x.name === 'Plugin.OnlyLive' && x.liveOnly),
+    JSON.stringify(cfgSecs),
+  )
+  assert.match(text(await call('ue_console', { action: 'config', query: 'r.shadow' })), /DefaultEngine/)
+  const tagRes = await api('POST', '/p/p1/tools/tags', {})
+  assert.equal(tagRes.items.find((x) => x.tag === 'Ability.Fire').comment, '开火')
+  assert.match(text(await call('ue_console', { action: 'tags', tag: 'Ability.Fire' })), /BP_Hero/)
+  assert.ok((await call('ue_editor', { action: 'spawn', class: 'PointLight' })).isError, '结构性操作默认要确认')
+  assert.ok(!(await call('ue_editor', { action: 'spawn', class: 'PointLight', location: [0, 0, 100] }, yes)).isError)
+  assert.equal(bridge.state.tools.spawned.length, 1)
+  const spawnHist = (await api('GET', '/p/p1/history')).items.find((i) => i.op === 'editor.spawn')
+  assert.ok(spawnHist?.undo, JSON.stringify(spawnHist))
+  assert.ok(!(await call('ue_undo', { id: spawnHist.id })).isError)
+  assert.equal(bridge.state.tools.spawned.length, 0)
+  const redir = await api('POST', '/p/p1/tools/redirectors', { path: '/Game/Old' })
+  assert.equal(redir.items.length, 1)
+  const fixed = await api('POST', '/p/p1/tools/redirectors/fix', { path: '/Game/Old' })
+  assert.equal(fixed.fixed.length, 1, JSON.stringify(fixed))
+  const diag = await api('GET', '/p/p1/tools/diagnose')
+  assert.ok(
+    diag.items.some((i) => i.id === 'installed' && i.state === 'fail'),
+    JSON.stringify(diag),
+  )
+  assert.ok(
+    diag.items.some((i) => i.id.startsWith('port-') && i.state === 'ok'),
+    JSON.stringify(diag),
+  )
+
   // 危险命令：没有确认卡片 → 报错；拒绝 → 不执行；允许 → 执行
   assert.ok((await call('ue_console', { command: 'quit' })).isError)
   const denied = await call(
@@ -355,14 +405,46 @@ try {
     })))`,
   )
   const luaList = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'lua' })))
-  assert.deepEqual(luaList.lua.map((x) => [x.name, x.at]), [['AddItem', 'Content/Script/GM/GMBag.lua:3']])
+  assert.deepEqual(
+    luaList.lua.map((x) => [x.name, x.at]),
+    [['AddItem', 'Content/Script/GM/GMBag.lua:3']],
+  )
   assert.equal(luaList.lua[0].params[0].table, 'Item.Id')
   const gmRun = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] })
   assert.ok(!gmRun.isError, text(gmRun))
   assert.equal(bridge.state.lua.exec.at(-1), 'GM.AddItem(1001, 5)')
-  assert.ok((await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] })).isError, '数字参数填了字母')
+  assert.ok(
+    (await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] })).isError,
+    '数字参数填了字母',
+  )
   const webGm = await api('POST', '/p/p1/lua-gm/run', { name: 'AddItem', args: ['7'] })
   assert.equal(webGm.code, 'GM.AddItem(7)')
+  // UELink 2.4：Lua 改完能验（check → reload → errors）、调 Lua 函数、函数签名，ue_status 带编辑器选中
+  const chk = await call('ue_lua', { action: 'check', files: ['Content/Script/UI/BadPanel.lua'] })
+  assert.match(text(chk), /'end' expected/)
+  const mods = await call('ue_lua', { action: 'modules' })
+  assert.match(text(mods), /UI\.BagPanel/)
+  assert.doesNotMatch(text(mods), /GameInstance/, '默认只列改过还没重载的')
+  const rl = await call('ue_lua', { action: 'reload', changed: true })
+  assert.ok(!rl.isError, text(rl))
+  assert.equal(bridge.state.lua.modules[1].stale, false)
+  fakeLuaError(bridge.state, 'UI/BagPanel.lua:42: attempt to index a nil value', 'UI/BagPanel.lua:42')
+  fakeLuaError(bridge.state, 'UI/BagPanel.lua:42: attempt to index a nil value', 'UI/BagPanel.lua:42')
+  const errs = JSON.parse(text(await call('ue_lua', { action: 'errors' })))
+  assert.equal(errs.items[0].count, 2)
+  const gold = bridge.state.lua.inst.Gold
+  const called = await call('ue_lua', { action: 'call', path: bridge.gi, lua: 'AddGold', self: true, args: [5] })
+  assert.ok(!called.isError, text(called))
+  assert.equal(bridge.state.lua.inst.Gold, gold + 5)
+  assert.match(text(called), /"after": 105/)
+  const sig = await call('ue_get', { path: bridge.gi, lua: '', functions: true })
+  assert.match(text(sig), /MAX_GOLD/)
+  const callHist = JSON.parse(text(await call('ue_undo', {}))).find((i) => i.op === 'lua.call')
+  assert.ok(callHist && !callHist.undo, JSON.stringify(callHist))
+  const stSel = JSON.parse(text(await call('ue_status', {})))
+  assert.match(JSON.stringify(stSel.selection), /Hero/)
+  assert.match(JSON.stringify(stSel.selection), /Event BeginPlay/)
+  bridge.state.lua.inst.Gold = gold
 
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })

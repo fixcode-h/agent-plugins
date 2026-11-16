@@ -6,6 +6,7 @@ import {
   Database,
   Eye,
   FileCode2,
+  FileSliders,
   FlaskConical,
   Gauge,
   LayoutGrid,
@@ -28,6 +29,7 @@ import { keep, kept } from './keep.ts'
 import { Assets } from './sections/assets/Assets.tsx'
 import { Bridge } from './sections/Bridge.tsx'
 import { Console } from './sections/Console.tsx'
+import { ConfigPage } from './sections/config/ConfigPage.tsx'
 import { Gm } from './sections/Gm.tsx'
 import { History } from './sections/History.tsx'
 import { Logs } from './sections/Logs.tsx'
@@ -67,6 +69,8 @@ interface Section {
 const SECTIONS: Section[] = [
   { id: 'overview', label: () => t('概览'), icon: LayoutGrid, group: () => t('运行时'), View: Overview },
   { id: 'console', label: () => t('控制台'), icon: SquareTerminal, group: () => t('运行时'), View: Console },
+  // 配置和 GameplayTag 浏览（只读，UE 没开也能看磁盘上的 ini）：放在控制台旁边（设计稿「UE 插件优化与扩展」二 P2）
+  { id: 'config', label: () => t('配置'), icon: FileSliders, group: () => t('运行时'), View: ConfigPage },
   { id: 'gm', label: () => 'GM', icon: Wand2, group: () => t('运行时'), View: Gm },
   {
     id: 'lua',
