@@ -76,7 +76,11 @@ const s = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === 
 
 /** 校验并整理脚本输出：整体不对直接报错；个别条目不对丢掉并记一句，页面上照样显示 */
 export function normalize(raw: unknown, files: string[]) {
-  const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as { items?: unknown }).items : undefined
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object'
+      ? (raw as { items?: unknown }).items
+      : undefined
   if (!Array.isArray(list))
     throw new Error(t('扫描脚本要返回 GM 数组（或 { items: [...] }），实际返回的是 {type}', { type: typeof raw }))
   const items: LuaGmItem[] = []
@@ -158,7 +162,8 @@ async function doScan(p: UeProject): Promise<LuaGmScan> {
     scannedAt: new Date().toISOString(),
     ms: 0,
   }
-  if (cfg.files.length && !files.length) res.error = t('GM 文件设置里的路径一个文件也没找到：{files}', { files: cfg.files.join('、') })
+  if (cfg.files.length && !files.length)
+    res.error = t('GM 文件设置里的路径一个文件也没找到：{files}', { files: cfg.files.join('、') })
   else if (res.hasScript && files.length) {
     try {
       Object.assign(res, normalize(await runScript(p.root, script, files), files))

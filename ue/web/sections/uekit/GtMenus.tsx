@@ -1,10 +1,11 @@
-import { Copy, CopyPlus, FolderOpen, Layers, Pencil, Play, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, Download, FileJson, FolderOpen, Layers, Pencil, Play, Trash2 } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import { Confirm } from '../../ui.tsx'
 import type { GtRunSummary } from './GtRun.tsx'
+import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 
 /** GameTest 左栏一项场景（gt.scenarios 的一条） */
 export interface Scenario {
@@ -81,6 +82,13 @@ export function useScenarioMenus(o: {
             toast.success(t('已复制成 {p}', { p: r.path }))
             o.reload()
           }),
+      },
+      'sep',
+      { label: t('复制为 JSON'), icon: FileJson, onClick: () => copyScenarioJson(o.project, o.root, s.relativePath) },
+      {
+        label: t('导出 JSON…'),
+        icon: Download,
+        onClick: () => downloadScenarioJson(o.project, o.root, s.relativePath),
       },
       'sep',
       { label: t('复制路径'), icon: Copy, hint: t('相对场景根'), onClick: () => copyText(s.relativePath) },

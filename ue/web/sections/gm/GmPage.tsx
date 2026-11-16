@@ -15,9 +15,11 @@ import { favOf, groupKey, parseFav, search, type GmEntry, type GmParam } from '.
 import { GmDetail } from './GmDetail.tsx'
 import { GmList, type GmRow } from './GmList.tsx'
 import { GmNav, sameView, type GmView } from './GmNav.tsx'
-import { BindDialog, LuaSetup } from './LuaSetup.tsx'
+import { LuaSetup } from './LuaSetup.tsx'
 import { MacroPane } from './MacroPane.tsx'
 import { runEntry, type RunOut } from './run.ts'
+import { TableBindDialog } from './TableBindDialog.tsx'
+import { listTables, searchRows, tableShape } from './tables.ts'
 import { useGm } from './use-gm.ts'
 
 /**
@@ -306,7 +308,6 @@ export function GmPage() {
               onArgs={fill}
               config={d.lua.data?.config}
               gm={d.gm}
-              onGm={d.saveGm}
               onRun={() => void exec()}
               running={running}
               out={outs[entry.key]}
@@ -336,17 +337,33 @@ export function GmPage() {
         />
       )}
       {bind && (
-        <BindDialog
+        <TableBindDialog
           param={bind.p.name}
           current={bind.current}
-          hint={bind.p.table}
+          hint={bind.entry.src === 'lua' ? bind.p.table : undefined}
+          load={{
+            tables: (q) => listTables(project.id, q),
+            shape: (table, sheet) => tableShape(project.id, table, sheet),
+            rows: (b, q) => searchRows(project.id, b, q),
+          }}
           onClose={() => setBind(undefined)}
           onSave={async (b) => {
+            const key = `${bind.entry.name}.${bind.p.name}`
             try {
-              const r = await ppost<{ config: LuaGmConfig; scan: LuaGmScan }>(project.id, 'lua-gm/config', {
-                binding: { key: `${bind.entry.name}.${bind.p.name}`, value: b },
-              })
-              d.lua.setData(r)
+              if (bind.entry.src === 'lua') {
+                const r = await ppost<{ config: LuaGmConfig; scan: LuaGmScan }>(project.id, 'lua-gm/config', {
+                  binding: { key, value: b },
+                })
+                d.lua.setData(r)
+              } else {
+                // C++ GM 的关联存 gm.json（团队共用）；改成关联表格后旧的 DataTable 绑定一起去掉
+                const tableBindings = { ...d.gm.tableBindings }
+                const bindings = { ...d.gm.bindings }
+                delete bindings[key]
+                if (b) tableBindings[key] = b
+                else delete tableBindings[key]
+                await d.saveGm({ ...d.gm, tableBindings, bindings })
+              }
               setBind(undefined)
             } catch (e) {
               toast.error((e as Error).message)

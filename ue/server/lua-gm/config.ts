@@ -52,7 +52,11 @@ export async function patchConfig(
     cur.files = [
       ...new Set(
         b.files
-          .map((x) => String(x ?? '').trim().replaceAll('\\', '/'))
+          .map((x) =>
+            String(x ?? '')
+              .trim()
+              .replaceAll('\\', '/'),
+          )
           .filter((x) => x && !path.isAbsolute(x) && !x.split('/').includes('..')),
       ),
     ].slice(0, 50)
@@ -66,11 +70,15 @@ export async function patchConfig(
   return cur
 }
 
-function cleanBinding(v: LuaGmBinding | null): LuaGmBinding | null {
+/** 辅助描述列最多几列：再多下拉一行放不下 */
+export const MAX_EXTRA = 6
+
+export function cleanBinding(v: LuaGmBinding | null): LuaGmBinding | null {
   if (!v || !String(v.table ?? '').trim() || !String(v.key ?? '').trim()) return null
-  const extra = Array.isArray(v.extra) ? v.extra.map(String).filter(Boolean).slice(0, 3) : []
+  const extra = Array.isArray(v.extra) ? v.extra.map(String).filter(Boolean).slice(0, MAX_EXTRA) : []
   return {
     table: String(v.table).trim(),
+    ...(v.sheet?.trim() ? { sheet: v.sheet.trim() } : {}),
     key: String(v.key).trim(),
     ...(v.label?.trim() ? { label: v.label.trim() } : {}),
     ...(extra.length ? { extra } : {}),
@@ -104,7 +112,11 @@ export function splitPattern(pattern: string) {
     else if (ch === '?') re += '[^/]'
     else re += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   }
-  return { base: segs.slice(0, i).join('/'), re: new RegExp(`^${re}$`, 'i'), deep: rest.includes('**') || i < segs.length - 1 }
+  return {
+    base: segs.slice(0, i).join('/'),
+    re: new RegExp(`^${re}$`, 'i'),
+    deep: rest.includes('**') || i < segs.length - 1,
+  }
 }
 
 /**

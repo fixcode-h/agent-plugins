@@ -4,7 +4,7 @@ import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { luaText, type LuaDesc, type LuaField } from '../../Lua.tsx'
-import { Card, Term } from '../../ui.tsx'
+import { Card, Term, useTargetInfo } from '../../ui.tsx'
 import { LuaSnippets } from './Snippets.tsx'
 
 interface Result extends LuaDesc {
@@ -30,6 +30,13 @@ const MAX_ENTRIES = 100
 export function LuaExec() {
   const { project, target } = useUe()
   const { ui } = h()
+  const { inst } = useTargetInfo()
+  // UE 没运行时页签照常打开（片段能看、能改），只是不能执行
+  const cantRun = !inst
+    ? t('UE 没在运行：执行要连着运行中的编辑器或游戏')
+    : !inst.lua
+      ? t('这个进程的桥接没有编进 Lua 支持')
+      : ''
   const { busy, run } = useAction()
   const [code, setCode] = useState('')
   const [self, setSelf] = useState('')
@@ -54,7 +61,7 @@ export function LuaExec() {
 
   const exec = () => {
     const c = code.trim()
-    if (!c) return
+    if (!c || cantRun) return
     return record(
       { code: c, self: self.trim() || undefined, output: [], results: [] },
       op(project.id, 'lua.exec', { code: c, path: self.trim(), timeoutMs: 10000 }, target, 20000),
@@ -130,10 +137,12 @@ export function LuaExec() {
           }}
         />
         <div className="ue:flex ue:items-center ue:gap-2">
-          <ui.Button size="sm" disabled={busy === 'exec' || !code.trim()} onClick={() => void exec()}>
+          <ui.Button size="sm" disabled={!!cantRun || busy === 'exec' || !code.trim()} onClick={() => void exec()}>
             <Play className="ue:h-3.5 ue:w-3.5" /> {t('执行')}
           </ui.Button>
-          <span className="ue:text-caption ue:text-subtle">{t('超过 10 秒自动中止；执行的代码会记进操作记录')}</span>
+          <span className="ue:text-caption ue:text-subtle">
+            {cantRun || t('超过 10 秒自动中止；执行的代码会记进操作记录')}
+          </span>
         </div>
       </Card>
       <LuaSnippets
@@ -143,6 +152,7 @@ export function LuaExec() {
           setCode(sn.code)
           setSelf(sn.self ?? '')
         }}
+        cantRun={cantRun}
         onRun={(sn, p) =>
           void record({ code: `-- ${t('片段')} ${sn.name}\n${sn.code}`, self: sn.self, output: [], results: [] }, p)
         }

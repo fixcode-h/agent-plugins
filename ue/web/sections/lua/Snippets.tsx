@@ -15,6 +15,7 @@ export function LuaSnippets({
   self,
   onPick,
   onRun,
+  cantRun,
 }: {
   code: string
   self: string
@@ -22,6 +23,8 @@ export function LuaSnippets({
   onPick: (s: SnippetView) => void
   /** 执行完把结果交给执行页显示 */
   onRun: (s: SnippetView, r: Promise<Record<string, unknown>>) => void
+  /** 不能执行的原因（UE 没在运行），空串表示能执行：片段照样能看、能改 */
+  cantRun?: string
 }) {
   const { project } = useUe()
   const { busy, run } = useAction()
@@ -85,7 +88,8 @@ export function LuaSnippets({
               <SmallBtn
                 icon={Play}
                 label={t('执行')}
-                disabled={!!busy}
+                title={cantRun || undefined}
+                disabled={!!cantRun || !!busy}
                 onClick={() => onRun(s, ppost(project.id, 'lua/snippets/run', { name: s.name }))}
               />
               <SmallBtn

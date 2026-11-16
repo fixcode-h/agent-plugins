@@ -2,6 +2,8 @@ import {
   CircleStop,
   Copy,
   Crosshair,
+  Download,
+  FileJson,
   Loader2,
   MousePointerClick,
   Play,
@@ -16,6 +18,7 @@ import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import { Badge, ErrorText } from '../../ui.tsx'
 import { coordClickAt } from './gt-steps.ts'
+import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 import { useToWidget } from './gt-convert.ts'
 import type { GtBatch } from './GtBatch.tsx'
 import {
@@ -81,6 +84,7 @@ export function GtRun({
   onStop,
   onRunFrom,
   onChanged,
+  offline,
 }: {
   scenario: {
     name: string
@@ -102,6 +106,8 @@ export function GtRun({
   onRunFrom?: (file: GtScenarioFile, i: number) => void
   /** 场景文件被面板改过（转成控件步骤）：父组件重新要场景列表，步数变了这里会重新读文件 */
   onChanged: () => void
+  /** 编辑器没连上（没开或正忙）：报告从磁盘读，核对选择器不能用 */
+  offline?: boolean
 }) {
   const { project } = useUe()
   const { ui, cn, toast } = h()
@@ -114,8 +120,8 @@ export function GtRun({
     [project.id, root, scenario.relativePath, scenario.revision, scenario.steps],
   )
   const report = useLoad(
-    () => (!running && last ? loadReport(project.id, last.runId) : Promise.resolve(undefined)),
-    [last?.runId, running],
+    () => (!running && last ? loadReport(project.id, last.runId, !!offline) : Promise.resolve(undefined)),
+    [last?.runId, running, offline],
   )
   const results = running ? (job?.steps ?? []) : (report.data ?? [])
   // 「核对选择器」的结果（gt.resolve，只看这一刻屏上的界面）：按步骤分好，场景文件变了就作废
@@ -200,10 +206,26 @@ export function GtRun({
             {scenario.relativePath}
           </span>
           <ui.IconButton
+            icon={FileJson}
+            size="sm"
+            label={t('复制为 JSON：场景文件原文')}
+            onClick={() => copyScenarioJson(project.id, root, scenario.relativePath)}
+          />
+          <ui.IconButton
+            icon={Download}
+            size="sm"
+            label={t('导出 JSON：把场景文件存一份到本机')}
+            onClick={() => downloadScenarioJson(project.id, root, scenario.relativePath)}
+          />
+          <ui.IconButton
             icon={checking ? Loader2 : ScanSearch}
             size="sm"
-            label={t('核对选择器：对着游戏里此刻的界面解析每一步的选择器，不执行（要开着 PIE）')}
-            disabled={running || checking || !!scenario.parseError}
+            label={
+              offline
+                ? t('核对选择器要对着游戏里此刻的界面：先启动编辑器、开 PIE')
+                : t('核对选择器：对着游戏里此刻的界面解析每一步的选择器，不执行（要开着 PIE）')
+            }
+            disabled={offline || running || checking || !!scenario.parseError}
             onClick={runCheck}
           />
         </header>
@@ -334,10 +356,13 @@ export function GtRun({
 
 /**
  * 一次运行每一步的结果：gt.report 直接回报告本身（不是 { report }）；超过 12000 字时 UE 把整份写进文件、
- * 只回 file，这时由面板读那份文件
+ * 只回 file，这时由面板读那份文件。disk：编辑器没连上，由面板从产物目录里的 report.json 读
  */
-async function loadReport(project: string, runId: string): Promise<GtStep[]> {
-  const r = await op<{ steps?: GtStep[]; truncated?: boolean; file?: string }>(project, 'gt.report', { runId })
+async function loadReport(project: string, runId: string, disk: boolean): Promise<GtStep[]> {
+  const r = await op<{ steps?: GtStep[]; truncated?: boolean; file?: string }>(project, 'gt.report', {
+    runId,
+    ...(disk ? { disk: true } : {}),
+  })
   if (r.steps) return r.steps
   if (r.file) return (await ppost<{ steps?: GtStep[] }>(project, 'ext/gt/report', { file: r.file })).steps ?? []
   return []

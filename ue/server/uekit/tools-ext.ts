@@ -40,7 +40,10 @@ export const EXT_TOOLS = [
       state: { type: 'string' },
       kind: { type: 'string' },
       query: { type: 'string' },
-      class: { type: 'string', description: 'schema：看哪个类或结构体的属性（/Script/Engine.WorldSettings、TextBlock、数据表的 rowStruct）' },
+      class: {
+        type: 'string',
+        description: 'schema：看哪个类或结构体的属性（/Script/Engine.WorldSettings、TextBlock、数据表的 rowStruct）',
+      },
       filter: { type: 'string' },
       deep: { type: 'boolean' },
       offset: { type: 'number' },
@@ -100,7 +103,7 @@ export const EXT_TOOLS = [
   ),
   tool(
     'ue_gametest',
-    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，schemaVersion 2，status 返回实际位置）。每步一个动作，参数以 actions 为准：click（默认真实指针：自动等控件可见、可用、不动、没被挡再点，点完核对接住的是不是目标；at=[x,y] 控件内位置；via="code" 是旧的代码点击）、drag、wheel、type（真实按键，append 接着打）、key、wait、assert、snapshot、screenshot……不用在 UI 操作前插 wait。选择器：`屏:路径`（屏写 WBP 名或资源路径）、`List[3]` / `List[Id=5]`、`A>B` 进嵌套 WBP、`A>>SButton[text=确定]` 找纯 Slate 控件。action=status 看 PIE、场景根和有没有 run 在跑；actions 列动作和参数；scenarios 列场景（query 筛，带 tags）；run 跑场景（scenario）、临时步骤（steps + name）或批量（tag 跑带这个标签的全部场景，scenarios 给几份），马上返回编号；step 立即执行一步探路；resolve 只核对选择器不执行（scenario 核对它每一步，或 targets），要开着 PIE；inspect 看视口某点是哪个控件、选择器怎么写；job 看进度（批量在 batch 里）；report 取完整报告，失败的步骤 payload.evidence 有截图、控件快照、前后 50 行日志的路径，按路径读文件；history 看某个场景最近 10 次的结果；stop 取消（批量整批取消）。跑场景文件通过的 report / job 算进完成依据。',
+    'GameTest：在 PIE 或游戏进程里跑 UI / 玩法测试场景（场景根下的 JSON，schemaVersion 2，status 返回实际位置）。每步一个动作，参数以 actions 为准：click（默认真实指针：自动等控件可见、可用、不动、没被挡再点，点完核对接住的是不是目标；at=[x,y] 控件内位置；via="code" 是旧的代码点击）、drag、wheel、type（真实按键，append 接着打）、key、wait、assert、snapshot、screenshot……不用在 UI 操作前插 wait。选择器：`屏:路径`（屏写 WBP 名或资源路径）、`List[3]` / `List[Id=5]`、`A>B` 进嵌套 WBP、`A>>SButton[text=确定]` 找纯 Slate 控件。action=status 看 PIE、场景根和有没有 run 在跑；actions 列动作和参数；scenarios 列场景（query 筛，带 tags）；run 跑场景（scenario）、临时步骤（steps + name）或批量（tag 跑带这个标签的全部场景，scenarios 给几份），马上返回编号；step 立即执行一步探路；resolve 只核对选择器不执行（scenario 核对它每一步，或 targets），要开着 PIE；inspect 看视口某点是哪个控件、选择器怎么写；job 看进度（批量在 batch 里）；report 取完整报告，失败的步骤 payload.evidence 有截图、控件快照、前后 50 行日志的路径，按路径读文件；history 看某个场景最近 10 次的结果；stop 取消（批量整批取消）。编辑器没开时 scenarios / report / history 直接读磁盘上的文件（返回带 offline: true），其余要先开编辑器。跑场景文件通过的 report / job 算进完成依据，offline 读到的旧报告不算。',
     {
       action: {
         type: 'string',
@@ -189,13 +192,18 @@ async function forgeSchema(
   op: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>,
   a: Record<string, unknown>,
 ) {
-  if (!a.kind && !a.class) return { error: '给 kind（配置的 schema）或 class（类的属性表），kind 的取值看 status 的 kinds' }
+  if (!a.kind && !a.class)
+    return { error: '给 kind（配置的 schema）或 class（类的属性表），kind 的取值看 status 的 kinds' }
   const r = await op('forge.kinds', {
     ...(a.kind ? { kind: str(a.kind) } : {}),
-    ...(a.class ? { class: str(a.class), filter: a.filter, offset: num(a.offset, 0), limit: Math.min(num(a.limit, 60), 150) } : {}),
+    ...(a.class
+      ? { class: str(a.class), filter: a.filter, offset: num(a.offset, 0), limit: Math.min(num(a.limit, 60), 150) }
+      : {}),
   })
   if ((a.kind && !r.schema) || (a.class && !r.props))
-    return { error: '编辑器里的 AssetForge 太旧，不会回 schema：在 UE 页「UE 插件」把 AssetForge 升到 1.1.0 以上并重新编译' }
+    return {
+      error: '编辑器里的 AssetForge 太旧，不会回 schema：在 UE 页「UE 插件」把 AssetForge 升到 1.1.0 以上并重新编译',
+    }
   return r
 }
 

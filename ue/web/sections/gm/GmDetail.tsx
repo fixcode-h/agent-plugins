@@ -20,7 +20,6 @@ export function GmDetail({
   onArgs,
   config,
   gm,
-  onGm,
   onRun,
   running,
   out,
@@ -38,7 +37,6 @@ export function GmDetail({
   onArgs: (a: string[]) => void
   config?: LuaGmConfig
   gm: GmStore
-  onGm: (s: GmStore) => unknown
   onRun: () => void
   running: boolean
   out?: RunOut
@@ -88,7 +86,6 @@ export function GmDetail({
             onChange={(v) => onArg(i, v)}
             config={config}
             gm={gm}
-            onGm={onGm}
             onEditBinding={onEditBinding}
           />
         ))}

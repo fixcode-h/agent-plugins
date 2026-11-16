@@ -82,7 +82,16 @@ test('文件模式：固定开头 + 通配符；** 跨目录，* 不跨', async 
 
 test('脚本输出：不是数组直接报错，个别条目不对丢掉并记警告', () => {
   assert.throws(() => normalize('oops', []), /数组/)
-  const r = normalize({ items: [{ name: 'A', params: ['x', { name: 'y', type: 'integer', default: 2 }] }, { desc: '没名字' }, { name: 'A' }] }, ['f.lua'])
+  const r = normalize(
+    {
+      items: [
+        { name: 'A', params: ['x', { name: 'y', type: 'integer', default: 2 }] },
+        { desc: '没名字' },
+        { name: 'A' },
+      ],
+    },
+    ['f.lua'],
+  )
   assert.equal(r.items.length, 1)
   assert.deepEqual(r.items[0].params, [
     { name: 'x', type: 'any' },
@@ -145,8 +154,23 @@ test('真跑扫描脚本：读 GM 文件、出错原样带出来', async () => {
 
 test('参数关联按键合并，null 表示去掉脚本给的关联，undefined 删掉这条改动', async () => {
   const p = proj('cfg')
-  await patchConfig(p, { binding: { key: 'AddItem.itemId', value: { table: 'Config/Item.xlsx', key: 'Id', label: 'Name' } } })
+  await patchConfig(p, {
+    binding: { key: 'AddItem.itemId', value: { table: 'Config/Item.xlsx', key: 'Id', label: 'Name' } },
+  })
   await patchConfig(p, { binding: { key: 'AddItem.count', value: null } })
+  // 页签、辅助描述列原样存（关联弹窗：表格 → 页签 → 主列 → 描述列 → 辅助描述列）
+  await patchConfig(p, {
+    binding: {
+      key: 'SpawnMonster.id',
+      value: { table: 'Config/Monster.xlsx', sheet: 'Boss', key: 'Id', extra: ['Level', 'Type', ''] },
+    },
+  })
+  assert.deepEqual((await readConfig(p)).bindings['SpawnMonster.id'], {
+    table: 'Config/Monster.xlsx',
+    sheet: 'Boss',
+    key: 'Id',
+    extra: ['Level', 'Type'],
+  })
   let c = await readConfig(p)
   assert.deepEqual(c.bindings['AddItem.itemId'], { table: 'Config/Item.xlsx', key: 'Id', label: 'Name' })
   assert.equal(c.bindings['AddItem.count'], null)
