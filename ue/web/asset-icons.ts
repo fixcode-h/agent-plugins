@@ -120,3 +120,10 @@ export function assetIcon(cls: string): { icon: LucideIcon; tone: string } {
   if (/Blueprint$/.test(cls)) return ASSET_KINDS['object-blueprint']
   return UNKNOWN
 }
+
+/** 资源类名的显示名（文件夹内容表的类型列和类型胶囊）：AssetForge 认得的用它的中文名，其余照类名 */
+export function assetClassLabel(cls: string): string {
+  if (!cls) return t('未知类型')
+  const kind = CLASS_KIND[cls]
+  return kind && kind !== 'actor-blueprint' && kind !== 'object-blueprint' ? ASSET_KINDS[kind].label() : cls
+}

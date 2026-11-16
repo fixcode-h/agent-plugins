@@ -50,7 +50,60 @@ export interface UeProject {
   buildCmd: string
   /** 网页上选的目标：实例类型（editor / game / server / background）和世界 id */
   target: { kind: string; world: string }
+  /** Lua 页「编译」的设置（server/lua-build/config.ts），没配过为空 */
+  luaBuild?: LuaBuildConfig
   addedAt: string
+}
+
+/** Lua 编译设置（设计稿四.3）：只能跑这里配好的两条指令 */
+export interface LuaBuildConfig {
+  /** 全编译的命令行（经 shell 执行） */
+  full: string
+  /** 增量编译的命令行：{files} 换成改过的文件（相对脚本目录、带引号），{filelist} 换成写了文件列表的临时文件 */
+  incremental: string
+  /** 工作目录，相对项目根；空是项目根 */
+  cwd: string
+  /** Lua 脚本根目录，相对项目根（UnLua 默认 Content/Script）：找改过的文件、文件名换模块名都按它 */
+  scriptDir: string
+  /** 报错格式：{file}:{line}: {message} 这样的模板，或前后带 / 的正则（命名分组 file、line、col、message） */
+  errorFormat: string
+  /** 编译成功后重载这次编过的模块 */
+  autoReload: boolean
+  /** 用哪个编辑器打开报错位置：{file}、{line} 占位，例如 code -g "{file}:{line}"；空用系统默认程序打开（不跳行） */
+  editor: string
+}
+
+/** 编译里认出来的一条错误 */
+export interface LuaBuildError {
+  /** 相对项目根（项目外的文件保留绝对路径），/ 分隔 */
+  file: string
+  line: number
+  col?: number
+  message: string
+  /** 磁盘上找到了这个文件（找不到的不能点开） */
+  exists: boolean
+}
+
+/** 一次 Lua 编译（网页和 Agent 共用；输出逐行推给网页，事件 ue-lua-build） */
+export interface LuaBuildRun {
+  id: string
+  mode: 'full' | 'incremental'
+  status: 'running' | 'ok' | 'failed' | 'stopped'
+  /** 实际执行的命令行 */
+  command: string
+  /** 增量编了哪些文件（相对脚本目录）；全编译是脚本目录下的 .lua 个数 */
+  files: string[]
+  fileCount: number
+  startedAt: number
+  endedAt?: number
+  code?: number
+  errors: LuaBuildError[]
+  /** 完整输出写在这个文件里（Agent 只拿路径） */
+  logFile: string
+  /** 谁点的：网页上的你 / Agent */
+  by: 'user' | 'agent'
+  /** 编完自动重载的结果：重载了哪些模块，或者为什么没重载 */
+  reload?: { ok: boolean; modules: string[]; message: string }
 }
 
 /** 项目检测的结果（添加项目弹窗第二步） */
@@ -96,6 +149,8 @@ export interface Instance {
   lua?: { available: boolean; error?: string; version?: string }
   /** 进程里加载了的 UELink 扩展（UEKit 的 AssetForge、GameTest），旧 UELink 没有这个字段 */
   extensions?: { name: string; version: string }[]
+  /** 这个进程的桥接认得的操作（/info 的 ops）：网页按它决定显示不显示新功能（选中跟随、Lua 检视……），旧 UELink 没有 */
+  ops?: string[]
 }
 
 export interface Target {
@@ -140,7 +195,8 @@ export interface GmPreset {
 export interface GmMacro {
   id: string
   name: string
-  steps: { gm?: string; console?: string; args?: string[] }[]
+  /** 一步：C++ GM（gm）、Lua GM（lua，扫描出来的 GM 名，见 lua-gm/）或控制台命令（console） */
+  steps: { gm?: string; lua?: string; console?: string; args?: string[] }[]
 }
 export interface GmStore {
   presets: GmPreset[]
@@ -192,6 +248,8 @@ export interface ProjectState {
   bundled: string
   background: { running: boolean; starting: boolean; pid?: number; error?: string }
   jobs: Job[]
+  /** 项目 Plugins/ 里有 UnLua（UE 没开时也列 Lua 页） */
+  unlua?: boolean
   /** 项目里装了的 UEKit 扩展（磁盘上的版本） */
   extensions?: { name: string; version: string }[]
   /** 面板刚启动的编辑器的启动进度（server/launch/），没在启动时为空 */

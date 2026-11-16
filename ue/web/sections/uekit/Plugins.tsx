@@ -23,8 +23,16 @@ export function Plugins() {
   const [refresh, setRefresh] = useState(0)
   const [jobId, setJobId] = useState('')
   const [removing, setRemoving] = useState<ExtensionStatus>()
+  // 打开页面只看服务端缓存，不自动去 GitHub；点「检查更新」才重读，读完刷新概况（UELink 卡片的「可升级」跟着变）
   const list = useLoad(
-    () => pget<{ items: ExtensionStatus[]; error?: string }>(project.id, `ext${refresh ? '?refresh=1' : ''}`),
+    () =>
+      pget<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean }>(
+        project.id,
+        `ext${refresh ? '?refresh=1' : ''}`,
+      ).then((r) => {
+        if (refresh) reload()
+        return r
+      }),
     [project.id, refresh],
   )
   const job = useLoad(() => (jobId ? get<Job>(`/jobs/${jobId}`) : Promise.resolve(undefined)), [jobId])
@@ -72,6 +80,11 @@ export function Plugins() {
               })}
             </ErrorText>
           </div>
+        )}
+        {list.data?.unchecked && (
+          <p className="ue:px-4 ue:pt-3 ue:text-footnote ue:text-subtle">
+            {t('还没检查 UEKit 插件目录，点右上角「检查更新」从 GitHub 读取最新版本。')}
+          </p>
         )}
         <UELinkCard needPre={needPre} onChanged={() => list.reload()} />
         {(list.data?.items ?? []).map((x) => {

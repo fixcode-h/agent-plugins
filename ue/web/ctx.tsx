@@ -1,3 +1,4 @@
+import type { OverviewExtra } from '../server/overview.ts'
 import { createContext, useContext } from 'react'
 import type { ProjectState, Target, UeProject } from '../server/types.ts'
 
@@ -27,6 +28,8 @@ export interface Badges {
   watch: number
   undoable: number
   dirty: number
+  /** 只在概览页取（badges?overview=1）：崩溃、没保存的名字、帧时间、最近的错误 */
+  overview?: OverviewExtra
 }
 
 export const Ctx = createContext<UeCtx | null>(null)

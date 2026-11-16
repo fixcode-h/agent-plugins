@@ -1,4 +1,14 @@
-import { CircleStop, Copy, Crosshair, Loader2, MousePointerClick, Play, TriangleAlert } from 'lucide-react'
+import {
+  CircleStop,
+  Copy,
+  Crosshair,
+  Loader2,
+  MousePointerClick,
+  Play,
+  ScanSearch,
+  TriangleAlert,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -7,7 +17,18 @@ import { copyText, openMenu } from '../../menu.tsx'
 import { Badge, ErrorText } from '../../ui.tsx'
 import { coordClickAt } from './gt-steps.ts'
 import { useToWidget } from './gt-convert.ts'
-import { StepDetail, StepIcon, ms, rowSummary, type GtStep, type StepDef, type StepRow } from './GtStepDetail.tsx'
+import type { GtBatch } from './GtBatch.tsx'
+import {
+  CheckMark,
+  StepDetail,
+  StepIcon,
+  ms,
+  rowSummary,
+  type GtResolveItem,
+  type GtStep,
+  type StepDef,
+  type StepRow,
+} from './GtStepDetail.tsx'
 
 /**
  * 一个场景：顶上一条结果（通过 / 失败 / 运行中和进度），中间列出场景文件里的每一步（没跑过也列），
@@ -25,11 +46,15 @@ export interface GtJob {
   planned?: number
   failed: number
   steps: GtStep[]
+  /** 批量运行（GameTest 1.2）：两个场景之间 busy 也是 true */
+  batch?: GtBatch
 }
 
 export interface GtRunSummary {
   runId: string
   name: string
+  /** 跑的场景文件（相对场景根，GameTest 1.2 起）：场景重名时按它认 */
+  scenario?: string
   succeeded: boolean
   total: number
   failed: number
@@ -79,7 +104,7 @@ export function GtRun({
   onChanged: () => void
 }) {
   const { project } = useUe()
-  const { ui, cn } = h()
+  const { ui, cn, toast } = h()
   const running = !!job?.busy
   const file = useLoad(
     () =>
@@ -93,12 +118,35 @@ export function GtRun({
     [last?.runId, running],
   )
   const results = running ? (job?.steps ?? []) : (report.data ?? [])
+  // 「核对选择器」的结果（gt.resolve，只看这一刻屏上的界面）：按步骤分好，场景文件变了就作废
+  const [check, setCheck] = useState<{ found: number; missing: number; byStep: Map<number, GtResolveItem[]> }>()
+  const [checking, setChecking] = useState(false)
+  useEffect(() => setCheck(undefined), [file.data])
+  const runCheck = () => {
+    setChecking(true)
+    op<{ results?: GtResolveItem[]; found?: number; missing?: number; file?: string }>(project.id, 'gt.resolve', {
+      scenario: scenario.relativePath,
+    })
+      .then(async (r) => {
+        // 结果太长时 UE 写成文件只回 file：由面板读那份文件
+        const full = r.results ? r : await ppost<typeof r>(project.id, 'ext/gt/report', { file: r.file })
+        const byStep = new Map<number, GtResolveItem[]>()
+        for (const x of full.results ?? [])
+          if (x.step !== undefined) byStep.set(x.step, [...(byStep.get(x.step) ?? []), x])
+        setCheck({ found: full.found ?? 0, missing: full.missing ?? 0, byStep })
+      })
+      .catch((e: Error) => toast.error(e.message))
+      .finally(() => setChecking(false))
+  }
   const rows = useMemo(() => {
     const defs = file.data?.steps ?? []
     const byRow = new Map(results.map((r) => [r.index + offset, r]))
     const n = Math.max(defs.length, ...[...byRow.keys()].map((k) => k + 1))
-    return Array.from({ length: n }, (_, i): StepRow => ({ i, def: defs[i], res: byRow.get(i) }))
-  }, [file.data, results, offset])
+    return Array.from(
+      { length: n },
+      (_, i): StepRow => ({ i, def: defs[i], res: byRow.get(i), check: check?.byStep.get(i) }),
+    )
+  }, [file.data, results, offset, check])
   const [pick, setPick] = useState<number>()
   // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败、没跑过就第一步）
   useEffect(() => {
@@ -151,7 +199,30 @@ export function GtRun({
           <span className="ue:ml-auto ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
             {scenario.relativePath}
           </span>
+          <ui.IconButton
+            icon={checking ? Loader2 : ScanSearch}
+            size="sm"
+            label={t('核对选择器：对着游戏里此刻的界面解析每一步的选择器，不执行（要开着 PIE）')}
+            disabled={running || checking || !!scenario.parseError}
+            onClick={runCheck}
+          />
         </header>
+        {check && (
+          <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote">
+            <ScanSearch className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+            <span className="ue:min-w-0 ue:flex-1 ue:text-fg">
+              {t(
+                '核对了 {n} 个选择器：{f} 个找得到，{m} 个找不到。只看此刻屏上的界面，后面步骤才打开的界面找不到是正常的',
+                {
+                  n: check.found + check.missing,
+                  f: check.found,
+                  m: check.missing,
+                },
+              )}
+            </span>
+            <ui.IconButton icon={X} size="sm" label={t('清掉核对结果')} onClick={() => setCheck(undefined)} />
+          </div>
+        )}
         {scenario.parseError ? (
           <div className="ue:p-4">
             <ErrorText>{scenario.parseError}</ErrorText>
@@ -222,8 +293,11 @@ export function GtRun({
               >
                 <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{r.i + 1}</span>
                 <StepIcon s={status} live={r.i === liveRow} />
-                <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
-                  {r.def?.action || r.res?.action}
+                <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1">
+                  <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
+                    {r.def?.action || r.res?.action}
+                  </span>
+                  <CheckMark check={r.check} />
                 </span>
                 {sum.human ? (
                   <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-footnote">
@@ -252,7 +326,7 @@ export function GtRun({
         </div>
       </section>
       <section className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:lg:flex-1">
-        {row ? <StepDetail row={row} live={row.i === liveRow} /> : null}
+        {row ? <StepDetail row={row} live={row.i === liveRow} scenario={scenario} /> : null}
       </section>
     </div>
   )

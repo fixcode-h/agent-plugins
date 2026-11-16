@@ -1,4 +1,4 @@
-import { Copy, CopyPlus, FolderOpen, Pencil, Play, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, FolderOpen, Layers, Pencil, Play, Trash2 } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
@@ -32,6 +32,8 @@ export function useScenarioMenus(o: {
   reload: () => void
   open: (s: Scenario) => void
   runScenario: (s: Scenario) => void
+  /** 批量运行几份场景（文件夹右键「运行这里的全部场景」）；旧 GameTest 不支持批量时不给 */
+  runBatch?: (paths: string[], label: string) => void
   scenarios: Scenario[]
 }) {
   const { ui, toast } = h()
@@ -91,13 +93,25 @@ export function useScenarioMenus(o: {
   const folderMenu = (e: MouseEvent, path: string, leaves: Scenario[]) =>
     openMenu(e, [
       { title: t('{p}（{n} 个场景）', { p: path, n: leaves.length }) },
+      o.runBatch && {
+        label: t('运行这里的全部场景'),
+        icon: Layers,
+        hint: t('一个接一个'),
+        disabled: o.locked || !leaves.some((s) => !s.parseError),
+        onClick: () =>
+          o.runBatch!(
+            leaves.filter((s) => !s.parseError).map((s) => s.relativePath),
+            path,
+          ),
+      },
+      o.runBatch && 'sep',
       { label: t('复制路径'), icon: Copy, hint: t('相对场景根'), onClick: () => copyText(path) },
       { label: t('复制完整路径'), icon: Copy, onClick: () => copyText(fullPath(path)) },
       { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => void fileOp(path, 'reveal') },
     ])
 
   const runMenu = (e: MouseEvent, r: GtRunSummary) => {
-    const s = o.scenarios.find((x) => x.name === r.name)
+    const s = o.scenarios.find((x) => (r.scenario ? x.relativePath === r.scenario : x.name === r.name))
     openMenu(e, [
       { title: r.name },
       s && { label: t('打开场景'), icon: FolderOpen, onClick: () => o.open(s) },

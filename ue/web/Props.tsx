@@ -4,6 +4,7 @@ import { op, show, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 import { LuaTable } from './Lua.tsx'
+import { LuaSource } from './sections/lua/LuaSource.tsx'
 import { Badge, KindBadge, Note, useTargetInfo, worldLabel } from './ui.tsx'
 import { useToChat } from './chat.tsx'
 import { CdoNote } from './CdoNote.tsx'
@@ -111,8 +112,7 @@ export function Props({
   })
   // Actor：细节面板最上面是根组件的变换（UE 一样）
   const rootComp = props.find((p) => p.name === 'RootComponent' && typeof p.value === 'string' && p.value)?.value as
-    | string
-    | undefined
+    string | undefined
 
   const server = inst?.worlds.find((w) => w.netMode === 'ListenServer' || w.netMode === 'DedicatedServer')
 
@@ -200,7 +200,10 @@ export function Props({
       {moreTab && more?.some((m) => m.id === moreTab) ? (
         more.find((m) => m.id === moreTab)!.view
       ) : tab === 'lua' && hasLua ? (
-        <LuaTable path={path} onOpen={onOpen && ((p) => onOpen(p, 'Lua'))} />
+        <>
+          <LuaSource path={path} />
+          <LuaTable path={path} onOpen={onOpen && ((p) => onOpen(p, 'Lua'))} />
+        </>
       ) : tab === 'fns' && !noFns ? (
         <Functions path={path} />
       ) : (

@@ -39,6 +39,8 @@ interface CatalogResult {
   /** 源码包的位置：http(s) 地址的目录或本机目录；GitHub 上按清单里的 url 下载 */
   base: string
   error?: string
+  /** cacheOnly 且这次运行里还没读过：没去 GitHub，等用户点「检查更新」 */
+  unchecked?: boolean
 }
 
 /**
@@ -53,12 +55,16 @@ function sourceSpec() {
 }
 
 let cache: { at: number; result: CatalogResult } | undefined
-const CACHE_MS = 3600 * 1000
 
-/** 读插件目录（1 小时内用缓存，refresh 时重读）。读不到不抛，error 里说原因 */
-export async function readCatalog(refresh = false): Promise<CatalogResult> {
-  if (!refresh && cache && Date.now() - cache.at < CACHE_MS) return cache.result
+/**
+ * 读插件目录：有缓存就用缓存（不管多旧），refresh 时重读。读不到不抛，error 里说原因。
+ * cacheOnly（打开页面时）没有缓存也不去网上读，返回 unchecked：拉 GitHub 只能由用户手动触发（用户定的长期规则）；
+ * 本机目录不走网络，照常读
+ */
+export async function readCatalog(refresh = false, cacheOnly = false): Promise<CatalogResult> {
+  if (!refresh && cache) return cache.result
   const spec = sourceSpec()
+  if (!refresh && cacheOnly && !spec.dir) return { plugins: [], base: '', unchecked: true }
   let result: CatalogResult
   try {
     if (spec.dir) {
@@ -142,8 +148,9 @@ export async function extensionStatus(
   project: UeProject,
   loaded: Map<string, string>,
   refresh = false,
-): Promise<{ items: ExtensionStatus[]; error?: string }> {
-  const cat = await readCatalog(refresh)
+): Promise<{ items: ExtensionStatus[]; error?: string; unchecked?: boolean }> {
+  // 打开页面只看缓存，点「检查更新」才去 GitHub（同时重读 UELink 的发布清单，见 api-ext.ts）
+  const cat = await readCatalog(refresh, true)
   const entries = cat.plugins.filter((e) => e.kind !== 'base' && e.name !== UELINK)
   // 扩展要的 UELink 只有预发布版时，UE 插件页给「升级到预发布」（正式版、自带的都不够新才用它）
   const pre = cat.plugins.find((e) => e.name === UELINK)?.prerelease?.version
@@ -185,7 +192,7 @@ export async function extensionStatus(
       }
     }),
   )
-  return { items, error: cat.error }
+  return { items, error: cat.error, unchecked: cat.unchecked }
 }
 
 /** 按名字和版本取清单（安装用） */

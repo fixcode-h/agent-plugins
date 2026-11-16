@@ -23,6 +23,8 @@ export interface OpCtx {
   target?: Target
   /** 网页上你已经在弹窗里确认过危险命令 */
   confirmed?: boolean
+  /** 你批准过的 Lua 片段的代码（lua-debug/snippets.ts）：Agent 执行它时不再逐次确认 */
+  approvedLua?: string
 }
 
 /**
@@ -63,6 +65,9 @@ const ASSET_OPS = new Set([
   'bp.edit',
   'bp.compile',
   'python',
+  // 编辑器小工具：重定向器、Tag 的引用方都只有资源注册表知道，编辑器没开时后台编辑器也能做
+  'asset.redirectors',
+  'tags.refs',
   // AssetForge（UEKit 扩展）：读配置和资产，编辑器没开时后台编辑器也能做
   'forge.health',
   'forge.kinds',
@@ -87,6 +92,10 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'livecoding':
     case 'lua.set':
     case 'lua.exec':
+    case 'lua.gm':
+    // 2.4：调 Lua 函数、重载模块都在改正在运行的游戏，按运行时权限走（不像 lua.exec 每次确认，设计稿四.1）
+    case 'lua.call':
+    case 'lua.reload':
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
@@ -118,6 +127,12 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return args.dryRun ? 'read' : 'struct'
     case 'asset.delete':
       return args.dryRun ? 'read' : 'delete'
+    // 修复重定向器会改写、保存引用方并删掉重定向器；在关卡里放 / 删 Actor 改的是关卡：都按结构性操作确认
+    case 'asset.redirectors':
+      return args.fix ? 'struct' : 'read'
+    case 'editor.spawn':
+    case 'editor.destroy':
+      return 'struct'
     case 'python':
       return 'python'
     case 'asset.save':
@@ -182,6 +197,12 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${t('删除')} ${args.path}${args.force ? ` · ${t('强删（引用它的资源会断开）')}` : ''}`
     case 'asset.undo':
       return `${t('撤回')} ${args.path ?? ''} · ${args.tx}`
+    case 'asset.redirectors':
+      return `${t('修复重定向器')} ${args.path}`
+    case 'editor.spawn':
+      return `${t('在关卡里放')} ${args.class}${Array.isArray(args.location) ? ` @ ${(args.location as unknown[]).join(', ')}` : ''}${args.level ? ` · ${args.level}` : ''}`
+    case 'editor.destroy':
+      return `${t('从关卡里删掉')}\n${((args.actors as string[]) ?? []).join('\n')}`
     case 'bp.edit':
       return `${args.path}${args.dryRun ? ` · ${t('演练')}` : ''}\n${describeOps(args.ops)}`
     case 'bp.compile':
@@ -191,13 +212,19 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'lua.set':
       return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])} = ${v(args.value ?? null)}`
     case 'lua.exec':
-      return `${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+      return `${args.snippet ? `-- ${t('片段')} ${args.snippet}\n` : ''}${args.path ? `self = ${args.path}\n` : ''}${String(args.code ?? '')}`
+    case 'lua.gm':
+      return `Lua GM · ${String(args.code ?? '')}`
+    case 'lua.call':
+      return `${args.path || '_G'} · ${formatLuaPath((args.keys as LuaKey[]) ?? [])}${args.self ? ' (self)' : ''}(${((args.args as unknown[]) ?? []).map(v).join(', ')})`
+    case 'lua.reload':
+      return `${t('重载 Lua 模块')} ${args.changed ? t('改过的') : ((args.modules as string[]) ?? []).join(', ')}`
     case 'forge.import':
       return `AssetForge ${t('导入')}${args.dryRun ? ` · ${t('演练')}` : ''}\n${args.pending ? t('全部待导入') : ((args.configs as string[]) ?? []).join('\n')}`
     case 'forge.export':
       return `AssetForge ${t('导出到配置')}\n${((args.assets as string[]) ?? []).join('\n')}`
     case 'gt.run':
-      return `GameTest ${t('运行')} ${args.scenario ?? args.name ?? ''}`.trim()
+      return `GameTest ${t('运行')} ${args.scenario ?? (args.tag ? `tag:${args.tag}` : (args.name ?? ''))}`.trim()
     case 'gt.step': {
       const step = (args.step ?? args) as Record<string, unknown>
       return `GameTest ${step.action ?? ''} ${step.target ?? ''}`.trim()
@@ -263,7 +290,9 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
     if (runtime === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what }))
     // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
-    if (op === 'lua.exec') await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
+    // 例外：你在 Lua 页批准过的片段（代码没改过）按「运行时」权限走，不再逐次确认（设计稿四.4）
+    const approved = op === 'lua.exec' && !!ctx.approvedLua && ctx.approvedLua === args.code
+    if (op === 'lua.exec' && !approved) await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
     else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
   } else if (kind === 'asset') {
     if (asset === 'read')
@@ -273,7 +302,11 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
       throw new BridgeError(
         t('UE 页「权限与设置」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
       )
-    if (struct === 'ask') await ask(ctx, { title: t('Agent 要新建 / 复制 / 改名 UE 资源'), detail: what })
+    if (struct === 'ask')
+      await ask(ctx, {
+        title: op.startsWith('editor.') ? t('Agent 要改编辑器里打开的关卡') : t('Agent 要新建 / 复制 / 改名 UE 资源'),
+        detail: what,
+      })
   } else if (kind === 'delete') {
     if (struct === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
@@ -341,9 +374,14 @@ async function p4After(p: UeProject, verb: 'add' | 'delete', files: string[], ke
 function undoOf(op: string, args: Record<string, unknown>, res: Record<string, unknown>, world: string) {
   if (op === 'set' && isRuntimePath(String(args.path)))
     return { undo: { op: 'set', args: { path: args.path, prop: args.prop, value: res.prev, world } } }
+  // 2.4：原值是表、整个换掉的没有 prev，撤不回
+  if (op === 'lua.set' && res.undoable === false) return { noUndo: t('原值是表，整个换掉后不能自动撤回') }
   if (op === 'lua.set')
     return { undo: { op: 'lua.set', args: { path: args.path, keys: args.keys, value: res.prev ?? null, world } } }
+  if (op === 'lua.call') return { noUndo: t('调用 Lua 函数不能自动撤回') }
+  if (op === 'lua.reload') return { noUndo: t('重载的模块不能自动撤回：改回文件再重载一次') }
   if (op === 'lua.exec') return { noUndo: t('执行的 Lua 代码不能自动撤回') }
+  if (op === 'lua.gm') return { noUndo: t('命令、GM 和函数调用不能自动撤回') }
   if (op === 'cvar.set') return { undo: { op: 'cvar.set', args: { name: args.name, value: res.prev } } }
   if (op === 'log.clear') return { noUndo: t('清空日志不能撤回') }
   // 包在编辑器事务里的资源修改：按事务 id 撤同一步（之后编辑器里又有别的修改时桥接会拒绝）
@@ -406,7 +444,10 @@ export async function runOp(
     const res =
       op === 'python'
         ? await python(ctx.project, card, String(args.code ?? ''), timeoutMs)
-        : await rpc(card, op, args, timeoutMs)
+        : op === 'lua.gm'
+          ? // Lua GM（lua-gm/run.ts）：面板按扫描结果拼好的代码，桥接上就是 lua.exec；单独的操作名只为权限按「运行时」走
+            await rpc(card, 'lua.exec', { code: args.code, timeoutMs: args.timeoutMs, world: args.world }, timeoutMs)
+          : await rpc(card, op, args, timeoutMs)
     if (op === 'asset.save') res.vcs = await p4After(ctx.project, 'add', added)
     if (op === 'asset.delete' && res.onDisk)
       res.vcs = await p4After(ctx.project, 'delete', [String(res.file)], !!res.fileRemoved)

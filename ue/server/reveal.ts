@@ -16,3 +16,16 @@ export function revealInFolder(file: string) {
   child.on('error', () => undefined)
   child.unref()
 }
+
+/** 交给系统默认程序打开文件（.lua 一般是用户设的编辑器）。打不开（没有关联程序）时静默：用户看得到没反应，再用复制路径 */
+export function openWithSystem(file: string) {
+  const [cmd, args] =
+    process.platform === 'win32'
+      ? ['cmd.exe', ['/c', 'start', '""', file]]
+      : process.platform === 'darwin'
+        ? ['open', [file]]
+        : ['xdg-open', [file]]
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true })
+  child.on('error', () => undefined)
+  child.unref()
+}

@@ -4,8 +4,10 @@ import { availableVersion } from './uelink.ts'
 import { bridgeVersionIn, olderVersion } from './instances.ts'
 import { handle } from './api.ts'
 import { stopAllBackground } from './editor.ts'
+import { stopForgeWatches } from './uekit/forge-watch.ts'
 import { stopAllStreams } from './uekit/stream.ts'
 import { stopAllLaunchTracks } from './launch/track.ts'
+import { stopLuaGmWatch } from './lua-gm/scan.ts'
 import { installedIn } from './uekit/catalog.ts'
 import { EXT_TOOL_PLUGIN } from './uekit/tools-ext.ts'
 import { listProjects, projectForRun } from './registry.ts'
@@ -129,7 +131,9 @@ const activate: ActivateServer = async (ctx) => {
     stop() {
       stopAllBackground()
       stopAllStreams()
+      stopForgeWatches()
       stopAllLaunchTracks()
+      stopLuaGmWatch()
     },
   }
 }

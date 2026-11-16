@@ -5,6 +5,8 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
 import { makeDetails } from './fake-details.mjs'
+import { luaDevOps } from './fake-lua-dev.mjs'
+import { editorToolOps } from './fake-editor-tools.mjs'
 
 export async function startFakeBridge(root, { kind = 'editor' } = {}) {
   const token = 'fake-token'
@@ -64,6 +66,8 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
     Shield: { Name: '木盾', Price: 80, Icon: '/Game/UI/T_Shield.T_Shield', Tags: ['Armor'] },
   }
   const ops = {
+    // 编辑器小工具（配置、Tag、重定向器、放删 Actor）在 fake-editor-tools.mjs
+    ...editorToolOps(state),
     // 资源转文本：真桥接在编辑器里加载那一版；这里只读临时文件（冒烟测试写的是文本），查参数和临时文件的位置
     'asset.textify': (a) => {
       state.textify = (state.textify ?? 0) + 1
@@ -301,6 +305,71 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       if (/error\(/.test(a.code)) throw new Error('[string "AgentPanel"]:1: boom')
       return { results: [{ t: 'number', v: 42, int: true }], output: ['hello'], ms: 0.3 }
     },
+    // UELink 2.4 的 Lua 深度调试（快照点、采样、持有的已销毁对象）：固定样例，加快照点马上算命中一次
+    'lua.snap': (a) => {
+      const snaps = (state.lua.snaps ??= [])
+      if (a.action === 'add') {
+        if (!a.file || !a.line) throw new Error('要给 file 和 line')
+        const s = { id: snaps.length + 1, file: a.file, line: a.line, hits: 1, max: a.hits ?? 1, active: (a.hits ?? 1) > 1 }
+        s.created = new Date().toISOString()
+        s.expiresIn = 600
+        s.captures = [
+          {
+            at: new Date().toISOString(),
+            fn: 'RefreshSlots',
+            src: `...${a.file}:${a.line}`,
+            line: a.line,
+            locals: [
+              { name: 'self', t: 'table', n: 3, fields: [{ k: 'PageIndex', v: 2 }] },
+              { name: 'slotIndex', t: 'number', v: 7, int: true },
+            ],
+            stack: [`${a.file}:${a.line}: in method 'RefreshSlots'`],
+          },
+        ]
+        snaps.push(s)
+        const { captures: _c, ...snap } = s
+        return { snap, note: 'fake' }
+      }
+      if (a.action === 'remove') {
+        const before = snaps.length
+        state.lua.snaps = a.id ? snaps.filter((s) => s.id !== a.id) : []
+        return { removed: before - state.lua.snaps.length }
+      }
+      const items = snaps.filter((s) => !a.id || s.id === a.id).map(({ captures, ...s }) => (a.id ? { ...s, captures } : s))
+      if (a.id && !items.length) throw new Error(`没有编号 ${a.id} 的快照点`)
+      return { items }
+    },
+    'lua.profile': (a) => {
+      if (a.action === 'start') {
+        state.lua.prof = Date.now() + (a.seconds ?? 5) * 1000
+        return { started: true, seconds: a.seconds ?? 5 }
+      }
+      if (a.action === 'stop') {
+        state.lua.prof = Date.now()
+        return { stopped: true }
+      }
+      if (!state.lua.prof) throw new Error('还没有采样过：先 action=start')
+      if (Date.now() < state.lua.prof) return { running: true, remaining: Math.ceil((state.lua.prof - Date.now()) / 1000) }
+      return {
+        running: false,
+        seconds: 5,
+        events: 12000,
+        total: 2,
+        items: [
+          { fn: 'Tick', src: 'UI/BagPanel.lua:88', file: 'UI/BagPanel.lua', line: 88, c: false, calls: 300, totalMs: 40.2, selfMs: 12.5 },
+          { fn: 'SetText', src: '[C]', line: 0, c: true, calls: 900, totalMs: 6.1, selfMs: 6.1 },
+        ],
+        report: path.join(root, 'Saved', 'UELink', 'lua-profile', 'profile-fake.json'),
+      }
+    },
+    'lua.leaks': () => ({
+      items: [{ kind: 'destroyed', module: 'UI.ShopPanel', path: '_G.UIManager.OpenedPanels[3]' }],
+      total: 1,
+      visited: 5120,
+      truncated: false,
+      ms: 12,
+      report: path.join(root, 'Saved', 'UELink', 'lua-leaks', 'leaks-fake.json'),
+    }),
     console: (a) => {
       state.calls.push(a.command)
       log('LogConsole', 'Log', `ran ${a.command}`)
@@ -665,6 +734,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
       compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
     }),
   }
+  Object.assign(ops, luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }))
   const server = createServer((req, res) => {
     const send = (code, body) => {
       res.writeHead(code, { 'Content-Type': 'application/json' })
@@ -678,6 +748,7 @@ export async function startFakeBridge(root, { kind = 'editor' } = {}) {
         pid: process.pid,
         log: path.join(root, 'Saved', 'Logs', 'Fake.log'),
         lua: { available: true, version: 'Lua 5.4.6' },
+        ops: Object.keys(ops),
         worlds: [
           { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
           { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },
