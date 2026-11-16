@@ -23,7 +23,8 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 
 - Object 页可以只看绑了 Lua 模块的对象、按模块名搜；属性面板多一个「Lua」页签看和改实例表的字段。
 - 「Lua」页：执行 Lua 代码（`self` 可以是某个对象的实例表），按路径看全局表里纯 Lua 的单例和管理器。
-- Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认）。
+- 「Lua」页「编译」页签：在「权限与设置 → Lua 编译」配全编译、增量编译两条指令（`{files}` / `{filelist}` 换成改过的文件）、工作目录、脚本目录、报错格式（`{file}:{line}: {message}` 模板或 `/正则/`）、编完是否自动重载。编译在面板本机起进程、不经过 UE，输出实时推到页面，报错认成 文件:行，点了用设置的编辑器打开到那一行，能交给 Agent 修。改过的文件按「上次编译成功」以来的修改时间找，P4 项目再加上签出的。
+- Agent：`ue_find kind=lua`、`ue_get` / `ue_set` 的 `lua` 参数、`ue_lua`（执行代码，不管权限设成什么每次都请用户确认；`action=compile mode=incremental|full` 只跑设置里配好的编译指令，不用确认，超过 20 秒先回 job）。
 - 读写只用 Lua 的 C 接口：UnLua 注册表里「UObject 指针 → 实例表」的对象表名字对不上时，扫注册表认出来；会触发元方法的读写都在 `lua_pcall` 里。
 - 只有「拿到 lua_State」和 UnLua 版本有关：UELink 的 `UELinkCore.Build.cs` 扫 UnLua 头文件里有 `GetEnv(UObject*)`、`GetEnv()` 还是 `UnLua::GetState()`。改过的分支这几个都没有时，在项目模块里调 `FAgentPanelLua::SetStateProvider` 提供。
 

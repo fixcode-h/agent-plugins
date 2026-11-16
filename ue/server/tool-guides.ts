@@ -56,8 +56,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_lua: {
     title: '执行 Lua',
-    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出',
-    useWhen: 'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时',
+    summary: '在 UnLua 环境里执行一段 Lua，返回值和输出；在本机跑项目配好的 Lua 增量 / 全编译',
+    useWhen:
+      'UnLua 项目里要调 Lua 函数、读写复杂的表，ue_get / ue_set 做不到时；改完 Lua 要确认能编过时用 action=compile（默认增量），按返回的 文件:行 修',
     avoidWhen: '只读字段用 ue_get、改简单字段用 ue_set（能撤回），不用每次请用户确认',
     confirms: true,
     group: RUN,
