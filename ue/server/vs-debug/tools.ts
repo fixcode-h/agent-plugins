@@ -2,6 +2,7 @@ import type { OpCtx } from '../ops.ts'
 import { out, tool } from '../toolkit.ts'
 import { t } from '../util.ts'
 import { vsCall } from './connect.ts'
+import { beforeVsLaunch } from './fg-launch.ts'
 import { openVs } from './open-vs.ts'
 import { BP_OPS, INSPECT_OPS, SESSION_OPS, VsDebugError } from './protocol.ts'
 
@@ -35,7 +36,7 @@ export const VS_TOOLS = [
       'stop 停止调试并结束 UE（detach=true 只断开、UE 继续跑）；restart 重启调试；attach 附加到已在跑的 UE（pid，或 name 默认 UnrealEditor）；' +
       'build 只编译启动项目（之后 wait 看 buildDone / buildFailed 和 buildErrors）；pause 全部中断；continue 继续（waitMs>0 等下一次停下）；' +
       'step 单步（kind=into / over / out / toLine，toLine 给 file+line；默认等到停下返回新位置）；wait 等到停下 / 退出 / 编译完（timeoutMs 最多 120000，默认 30000）。' +
-      'VS 没开时 start / attach / build 会先打开 VS 和解决方案（最多等 3 分钟）。stop / restart 会请用户确认。',
+      'VS 没开时 start / attach / build 会先打开 VS 和解决方案（最多等 3 分钟）。start / restart 前会先关掉后台编辑器（同时只开一个编辑器）。stop / restart 会请用户确认。',
     {
       action: { type: 'string', enum: [...SESSION_OPS] },
       configuration: {
@@ -65,6 +66,7 @@ export const VS_TOOLS = [
       if (op === 'stop' && a.detach !== true) await confirmKill(ctx, t('Agent 要停止 VS 调试（结束 UE 进程）'))
       // 要 VS 才能做的动作：VS 没开先打开，等调试控制就绪
       const opened = ['start', 'attach', 'build'].includes(op) ? (await openVs(ctx.project)).opened : false
+      await beforeVsLaunch(ctx.project, op)
       const result = await vsCall(ctx.project, op, rest(a))
       return out(opened ? { openedVs: true, ...result } : result)
     },

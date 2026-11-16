@@ -2385,5 +2385,8 @@
   "运行设置：UI 等待上限、自动关掉的阻挡界面": "Run settings: UI wait limit, blocking UIs to close automatically",
   "正在读状态": "Reading status",
   "正在向 UE 读同步状态（编辑器没开时要先启动后台编辑器）": "Reading sync status from UE (starts a background editor first if the editor is closed)",
-  "同步状态没读到：{e}": "Couldn't read sync status: {e}"
+  "同步状态没读到：{e}": "Couldn't read sync status: {e}",
+  "VS 正在编译或启动 UE：同时只开一个编辑器，不另起后台编辑器": "VS is building or launching UE: only one editor runs at a time, so no background editor is started",
+  "VS 正在调试 UE（PID {pid}）：同时只开一个编辑器，不另起后台编辑器": "VS is debugging UE (PID {pid}): only one editor runs at a time, so no background editor is started",
+  "前台编辑器启动了，后台编辑器已关掉：等编辑器加载完，读写走编辑器": "The editor is starting, so the background editor was closed: wait for the editor to finish loading; reads and writes go through it"
 }
