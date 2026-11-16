@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { t } from '@shared/i18n'
 import { draftItemIds, type TablesDraft } from '@shared/tables-assist'
 import { TYPE_NAMES } from '@shared/tables'
+import { fromWhere, scanName } from '@shared/table-enum-scan'
 import type { HeaderRule } from '@shared/table-header'
 import { typeKindLabel } from './TypeEditor'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,14 @@ export function DraftReview({
         detail: e.values.map((v) => v.name).join(', '),
       }
     }
+    if (id.startsWith('scan:')) {
+      const sc = draft.scans[Number(id.slice(5))]
+      return {
+        id,
+        label: t('枚举扫描规则：{name}', { name: scanName(sc) }),
+        detail: t('按规则批量扫 {where}，应用后马上扫一次', { where: fromWhere(sc.from) }),
+      }
+    }
     if (id.startsWith('type:')) {
       const ty = draft.types[id.slice(5)]
       return {
@@ -112,6 +121,14 @@ export function DraftReview({
       <header className="tb:border-b tb:px-3 tb:py-2.5">
         <p className="tb:text-body tb:font-medium">{t('AI 分析结果')}</p>
         {draft.summary && <p className="tb:mt-0.5 tb:text-footnote tb:text-muted">{draft.summary}</p>}
+        {draft.skipped.length > 0 && (
+          <p className="tb:mt-0.5 tb:text-footnote tb:text-warning" title={draft.skipped.join('\n')}>
+            {t('有 {n} 项格式不对没收下：{items}', {
+              n: draft.skipped.length,
+              items: draft.skipped.slice(0, 3).join('；'),
+            })}
+          </p>
+        )}
       </header>
       {items.length === 0 ? (
         <p className="tb:px-3 tb:py-3 tb:text-footnote tb:text-subtle">{t('这次分析没有给出可以写进结构文件的内容')}</p>

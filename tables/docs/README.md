@@ -24,30 +24,30 @@
 
 ## 入口
 
-| 文件                                                       | 做什么                                                                                        |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `shared/tables.ts`                                         | 项目设置里的 `TablesConfig`、表格页的数据结构、结构文件 `TableSchema`、通配和表头优先级       |
-| `shared/csv.ts`                                            | CSV 的读、写回（保持分隔符 / 换行 / BOM / 结尾换行）                                          |
-| `server/tables/files.ts`                                   | 列表格文件、解析（按 mtime + 大小缓存）、锁文件检查、路径越界检查                             |
-| `server/tables/search.ts`、`shared/table-search.ts`        | 跨表搜索（`/search`）：「字段名:值」、区分大小写 / 整格 / 正则，匹配规则和替换共用            |
-| `server/tables/bulk-replace.ts`                            | 跨表批量替换（`/replace`）：预览时试一遍保存、列出拒绝原因，勾选后逐个文件原地保存            |
-| `server/tables/schema-store.ts`                            | 结构文件读写：`.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，拆成 4 个 json            |
-| `server/tables/routes.ts`                                  | `/api/plugins/tables/api/tables/:id`（列表）、`/probe`、`/file`、`/search`、`/schema`         |
-| `web/src/lib/tables-api.ts`                                | 页面调接口                                                                                    |
-| `web/src/lib/tables-nav.ts`                                | 侧栏「表格」入口打开哪个项目（上次看的 / 第一个设了表格目录的）                               |
-| `web/src/pages/TablesPage.tsx`                             | 表格页：左边文件树 + 名字 / 内容搜索，右边文件页签 + 工作表 + 表头栏 + 表格                   |
-| `web/src/components/tables/`                               | `TableTree`、`TableHits`、`TableTabs`、`TableView`                                            |
-| `web/src/components/projects/ProjectTablesSection.tsx`     | 项目设置的「表格」页；目录列表是 `projects/DirList.tsx`（设置 → 组件里有样例）                |
-| `server/tables/xlsx-write.ts`、`zip.ts`、`write.ts`        | 保存：xlsx 原地改单元格（其余 zip 条目逐字节照抄）、CSV 保持格式、备份、锁 / 改动 / P4 检查   |
-| `shared/table-edit.ts`、`components/tables/table-edits.ts` | 改动的表示（行操作 + 格子）、撤销重做、剪贴板；页面和服务端共用同一份 applyRowOps / setCells  |
-| `shared/table-struct.ts`                                   | 结构化：每列是什么（类型、枚举、引用、范围、repeated）、下拉选项、按结构检查、整本检查        |
-| `server/tables/check.ts`                                   | 全项目检查（`/check`），引用的表从磁盘读                                                      |
-| `shared/tables-assist.ts`、`server/tables/sample.ts`       | AI 分析表格风格：样本（`/sample`）、提示词、结果校验、按勾选并进结构文件                      |
-| `shared/sheet-diff.ts`                                     | 格子级差异（版本差异、跨项目对比共用）、只看变化的折叠、跨项目「拷到另一边」                  |
-| `server/tables/history.ts`                                 | 版本记录（`/history`：git log / p4 filelog / svn log）、取某一版（`/at`：show / print / cat） |
-| `server/tables/compare.ts`                                 | 跨项目对比（`/compare?other=`）：按相对路径配对，比解析出来的格子                             |
-| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / schema / edit / propose / check`      |
-| `shared/table-describe.ts`                                 | `table.schema` 的列结构：类型、数组分隔符、枚举值、引用、范围和校验规则                       |
+| 文件                                                       | 做什么                                                                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `shared/tables.ts`                                         | 项目设置里的 `TablesConfig`、表格页的数据结构、结构文件 `TableSchema`、通配和表头优先级                   |
+| `shared/csv.ts`                                            | CSV 的读、写回（保持分隔符 / 换行 / BOM / 结尾换行）                                                      |
+| `server/tables/files.ts`                                   | 走表格目录（`walkTables`）、解析（按 mtime + 大小缓存）、锁文件检查、路径越界检查；列表走 `list-index.ts` |
+| `server/tables/search.ts`、`shared/table-search.ts`        | 跨表搜索（`/search`）：「字段名:值」、区分大小写 / 整格 / 正则，匹配规则和替换共用                        |
+| `server/tables/bulk-replace.ts`                            | 跨表批量替换（`/replace`）：预览时试一遍保存、列出拒绝原因，勾选后逐个文件原地保存                        |
+| `server/tables/schema-store.ts`                            | 结构文件读写：`.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，拆成 4 个 json                        |
+| `server/tables/routes.ts`                                  | `/api/plugins/tables/api/tables/:id`（列表）、`/probe`、`/file`、`/search`、`/schema`                     |
+| `web/src/lib/tables-api.ts`                                | 页面调接口                                                                                                |
+| `web/src/lib/tables-nav.ts`                                | 侧栏「表格」入口打开哪个项目（上次看的 / 第一个设了表格目录的）                                           |
+| `web/src/pages/TablesPage.tsx`                             | 表格页：左边文件树 + 名字 / 内容搜索，右边文件页签 + 工作表 + 表头栏 + 表格                               |
+| `web/src/components/tables/`                               | `TableTree`、`TableHits`、`TableTabs`、`TableView`                                                        |
+| `web/src/components/projects/ProjectTablesSection.tsx`     | 项目设置的「表格」页；目录列表是 `projects/DirList.tsx`（设置 → 组件里有样例）                            |
+| `server/tables/xlsx-write.ts`、`zip.ts`、`write.ts`        | 保存：xlsx 原地改单元格（其余 zip 条目逐字节照抄）、CSV 保持格式、备份、锁 / 改动 / P4 检查               |
+| `shared/table-edit.ts`、`components/tables/table-edits.ts` | 改动的表示（行操作 + 格子）、撤销重做、剪贴板；页面和服务端共用同一份 applyRowOps / setCells              |
+| `shared/table-struct.ts`                                   | 结构化：每列是什么（类型、枚举、引用、范围、repeated）、下拉选项、按结构检查、整本检查                    |
+| `server/tables/check.ts`                                   | 全项目检查（`/check`），引用的表从磁盘读                                                                  |
+| `shared/tables-assist.ts`、`server/tables/sample.ts`       | AI 分析表格风格：样本（`/sample`）、提示词、结果校验、按勾选并进结构文件                                  |
+| `shared/sheet-diff.ts`                                     | 格子级差异（版本差异、跨项目对比共用）、只看变化的折叠、跨项目「拷到另一边」                              |
+| `server/tables/history.ts`                                 | 版本记录（`/history`：git log / p4 filelog / svn log）、取某一版（`/at`：show / print / cat）             |
+| `server/tables/compare.ts`                                 | 跨项目对比（`/compare?other=`）：按相对路径配对，比解析出来的格子                                         |
+| `shared/table-agent.ts`、`server/actions.ts`               | 给 Agent 的动作 `table.list / sample / query / schema / edit / propose / check`                           |
+| `shared/table-describe.ts`                                 | `table.schema` 的列结构：类型、数组分隔符、枚举值、引用、范围和校验规则                                   |
 
 ## 表格目录
 
@@ -58,7 +58,8 @@
 
 ## 表格页的显示
 
-- 文件树（`TableTree`）：文件夹默认折叠，只画展开了的；只有一个顶层目录时它默认展开，打开的文件所在的目录自动展开；顶层开头一串单个子目录并成一个节点。一个项目最多列 20000 个文件。
+- 文件树（`TableTree`）：文件夹默认折叠，只画展开了的；只有一个顶层目录时它默认展开，打开的文件所在的目录自动展开；顶层开头一串单个子目录并成一个节点。展开的行到 300 行以上只画滚动区里看得见的一段（`use-tree-window.ts`，行高按画出来的行量）。
+- 文件列表的索引（`server/tables/list-index.ts`，2026-11-16）：每次扫完存进插件数据目录 `list-index/<键>.json`（键是项目目录 + 表格目录 + 包含 / 排除的哈希）。表格页取列表先给存下的（`scanning: true`），后台重走目录，扫完把增删改推给页面（事件 `tables-list`，`shared/table-list.ts` 算增量和合并；超过 3000 条只推 `reload` 让页面重取）。页面取列表距上次扫完超过 5 秒、内部用（搜索、检查、对比）超过 60 秒才补扫；刷新按钮、新建表格、切版本之后等新扫的结果，保存只让下次后台补扫。一个项目最多列 20 万个文件（只防表格目录设成整个盘）。
 - 表格（`SheetTable`，`fill` + `widthKey`）：数据画不满时接着画空行空列；列名右边线拖动改列宽（记在 localStorage `sheet-colw:<项目>:<文件#工作表>`，双击恢复）；数据区隔行底色 `--c-grid-stripe`；表头每种行一个颜色。
 - 版本差异、跨项目对比：差异在后台线程算（`web/src/lib/sheet-diff-async.ts` + `sheet-diff.worker.ts`，小表直接算），`SheetDiffView` 自己带滚动区、只画看得见的行、固定列宽。
 
@@ -99,6 +100,7 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 
 用户定：枚举定义在表格的某个页签（用户项目的 `EnumType`：A 列只在每组第一行写枚举名、B 成员名、C 值，没有表头）、C++ 或 Lua 里时，按规则一键扫描，打开时自动刷新。设计稿在项目共享目录 `designs/表格枚举扫描-设计稿.md`，一期（1.3.0）做了表格里的写法；二到四期（1.4.0）加了 C++ / Lua / 正则 / 自定义命令、AI 总结规则、盯着改动、改名提示。
 
+- 表格类写法的 `file` 可以写通配（`Excel/**/*.xlsx`，`server/tables/enum-scan-sheets.ts`）：在表格目录里找对上的表格，有规则写的页签的都扫（xlsx 先只看 workbook.xml 的页签名），同名枚举用排前面的并提醒，每个文件按修改时间和大小缓存。
 - 规则：结构文件 `enum-scans.json`（`TableSchema.scans`，`shared/table-enum-scan.ts` 的 `EnumScan`）。写法 `block` 分组块 / `rows` 每行写枚举名 / `sheets` 一页一个枚举；列写 Excel 列号或字段名，全写列号时不按项目表头跳行、从第 1 行扫；`rename` 去前缀、加前缀、手动对照；`auto` 是 `open`（打开时）、`watch`（盯着改动）或 `off`。一条写坏了只丢那一条。
 - 结果：`enum-scan-results.json`（按规则 id：时间、源文件的修改时间和大小、扫出的枚举、提醒、错误），只在扫描时写（`server/tables/enum-scan-store.ts`）。`readSchema` 并进对应枚举的 `scanned`（只读，规则顺序靠前的赢）；`writeSchema` 去掉 `scanned`，只靠扫描才有的枚举不进 `enums.json`。`enumOptions` 扫描的排前面，手写同名的不重复。
 - 执行（`server/tables/enum-scan.ts`）：`POST /enum-scan`（`ids` 手动；`auto` 只扫 `open` 的规则且源文件修改时间 / 大小变了的，`file` 时只看用到它的规则）、`POST /enum-scan/try`（试跑不写）、`GET /enum-scan`（每条上次的情况）。同一个结构文件目录排队跑；失败时旧结果留着、记下错误，照实报给页面。
@@ -118,6 +120,7 @@ AI 分析的结果（`TablesDraft`）里的表头和结构文件同一个格式�
 - 检查：拆不开算类型不对；拆开后每个叶子按字段的类型、范围、枚举、引用查，原因带位置（「第 2 项 · Count：不能小于 1」）。集合重复、映射键重复也算。
 - 表格里显示：`cell-display.ts` 给面板 SheetTable 的 `display`，按列缓存；双击 / 回车打开 `TypedValueDialog`（`TypedValueForm` 按类型树逐项填，颜色带拾色器，底下能直接改存储的原文）。一行的表单里有「逐项编辑」按钮。
 - AI 分析时按格子实际的写法总结 `types` 和 `formats`，逐项勾选后写进去。
+- AI 分析不再把配置表里的枚举一个个列出来（只看几张样本列不全、表一改就过时，2026-11-16 用户定）：它用 `table.enum_scan_peek` / `table.enum_scan_try` 调出枚举扫描规则（`scans`，`file` 写通配批量扫所有表格里同名的枚举页签），应用后写进 `enum-scans.json` 并马上扫一次。`enums` 只留表头行的固定取值（修饰、导出端）。AI 把枚举写成数组、值写成数字也认，单项写坏的丢掉并在结果顶上列出来（`skipped`），不让整份读不出来。
 
 ## 校验规则
 

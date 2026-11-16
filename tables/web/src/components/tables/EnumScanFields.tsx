@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { t } from '@shared/i18n'
-import { SKIP_SENTINEL, type CodeFrom, type ScanFrom, type SheetFrom } from '@shared/table-enum-scan'
+import { SKIP_SENTINEL, isFileGlob, type CodeFrom, type ScanFrom, type SheetFrom } from '@shared/table-enum-scan'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ComboInput, Field, Input, Select, Textarea } from '@/components/ui/input'
 import { tablesApi } from '@/lib/tables-api'
@@ -38,7 +38,8 @@ function useSheetNames(projectId: string, file: string) {
   const [names, setNames] = useState<string[]>([])
   useEffect(() => {
     setNames([])
-    if (!/\.(xlsx|xlsm|csv|tsv)$/i.test(file.trim())) return
+    // 通配（批量扫好几个表格）时没有一个确定的文件可读页签
+    if (!/\.(xlsx|xlsm|csv|tsv)$/i.test(file.trim()) || isFileGlob(file)) return
     let live = true
     const timer = setTimeout(() => {
       tablesApi
@@ -80,7 +81,10 @@ export function SheetFields({
   return (
     <>
       <div className="tb:grid tb:gap-3 tb:md:grid-cols-[2fr_1fr_90px]">
-        <Field label={t('文件')}>
+        <Field
+          label={t('文件')}
+          tip={t('可以写通配批量扫，例如 Excel/**/*.xlsx：对上的表格里有这个页签的都按同样的写法扫。')}
+        >
           <ComboInput
             size="sm"
             value={from.file}
