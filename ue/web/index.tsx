@@ -23,6 +23,7 @@ import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { LuaDebugSpecimen } from './sections/lua/DebugSpecimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
+import { VsDebugSpecimen } from './vs-debug/Specimen.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
 import { UePage } from './UePage.tsx'
 
@@ -117,6 +118,13 @@ const activate: ActivateWeb = (host) => {
         label: t('Lua · 采样 · 快照 · 已销毁对象'),
         tune: ['row', 'badge'],
         Specimen: LuaDebugSpecimen,
+      },
+      // 概览的「VS 调试」卡片（UEToVS 0.8.0 调试控制）：没开 VS、运行中、停在断点三种状态，跟面板「按钮」「图标按钮」「小标签」「输入框」的调节项
+      {
+        id: 'vs-debug',
+        label: t('UE · VS 调试'),
+        tune: ['button', 'iconButton', 'badge', 'input'],
+        Specimen: VsDebugSpecimen,
       },
     ],
   }

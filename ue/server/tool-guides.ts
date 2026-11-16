@@ -177,6 +177,34 @@ export const UE_GUIDES: Record<string, Guide> = {
       '只读运行时数值用 ue_get（控件属性用 ue_get tree=true），找 Actor 用 ue_find；只截一张图看用 ue_screenshot（图直接返回），只临时开停 PIE 用 ue_editor，只敲一条控制台命令用 ue_console——要写进报告、能回放时才用对应的场景步骤；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
     group: RUN,
   },
+  ue_vs_debug: {
+    title: 'VS 调试会话',
+    summary: '用 VS 自带的调试器启动、附加、停止、编译 UE，暂停、继续、单步，等它停下',
+    useWhen:
+      '要查 C++ 逻辑在哪一步出错、某个函数有没有被调到、参数和成员当时是什么值，或者 UE 崩溃 / check / ensure 要看现场时：没在调试就 start（要看全局部变量用 configuration=DebugGame Editor）或 attach 到已开的编辑器，下好断点后用 ue_gametest run、ue_console、PIE 触发，再 wait 等停下；改了 C++ 要复测时 stop → build（wait 看 buildErrors）→ start',
+    avoidWhen:
+      '只看运行时属性值用 ue_get、看报错用 ue_log，不必挂调试器；只改了已加载模块的函数体用 ue_editor livecoding，不用 stop / build；UE 停在断点时进程冻住、所有 ue_* 工具都不通，先 continue 再用它们；Lua 逻辑用 ue_lua 的 snap',
+    confirms: true,
+    group: DIAG,
+  },
+  ue_vs_breakpoints: {
+    title: 'VS 断点',
+    summary: '列、加、删、启停 VS 里的 C++ 断点：行、函数、条件、命中次数、日志断点、数据断点',
+    useWhen:
+      '要让 UE 在某行 C++ 或某个函数停下看现场时 add file+line 或 function；只想知道走没走到、值是多少又不想停下时用 message 做日志断点；要查谁改了某个值时，先停在能访问它的地方再 add data=this->成员；调试完 clear 清掉自己下的',
+    avoidWhen:
+      '蓝图和 Lua 的断点它管不了；clear 默认只删 Agent 下的，scope=all 会连用户自己的断点一起删，用户没要求别用',
+    group: DIAG,
+  },
+  ue_vs_inspect: {
+    title: 'VS 检视',
+    summary: 'UE 停在 VS 里时看调用栈、线程、局部变量，按监视窗口求值，读调试输出，存小转储',
+    useWhen:
+      'ue_vs_debug wait 返回 break（断点、单步、崩溃、check / ensure）后：先 stack 看停在哪，再 locals 看参数和局部变量，需要时 eval 算表达式；崩溃或 ensure 要留证据时 dump；挂着调试器时 output 能看到 UE_LOG 和日志断点的输出',
+    avoidWhen:
+      '没停下时 stack / locals / eval 用不了，先 pause 或等断点；eval 能调用函数、有副作用，只读成员和无副作用的 getter，别调 Destroy、Set 这类会改状态的函数；看普通日志用 ue_log',
+    group: DIAG,
+  },
 }
 
 /** 能力目录和 MCP 握手里说的「这个服务做什么」 */

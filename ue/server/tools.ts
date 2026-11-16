@@ -22,6 +22,7 @@ import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
 import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
 import { DEBUG_ACTIONS, DEBUG_PROPS, debugAction } from './lua-debug/tool-actions.ts'
+import { VS_TOOLS } from './vs-debug/tools.ts'
 
 /**
  * 给 Agent 的工具（设计文档 5；ue_lua 是 UnLua 项目用的；ue_blueprint、ue_python 和资源通用动作在 tools-asset.ts，ue_perf、ue_capture 在 tools-perf.ts），MCP 服务名 ue。工具只在接入了 UE 的项目的对话里挂，
@@ -518,6 +519,8 @@ const DEFS = [
 DEFS.push(...PERF_DEFS)
 // UEKit 扩展（AssetForge、GameTest）的工具在 uekit/tools-ext.ts
 DEFS.push(...EXT_TOOLS)
+// 通过 VS 调试 UE（UEToVS 的调试控制管道）的工具在 vs-debug/tools.ts
+DEFS.push(...VS_TOOLS)
 
 export const TOOL_NAMES = DEFS.map((d) => d.name)
 

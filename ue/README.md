@@ -1,6 +1,6 @@
 # UE 插件
 
-按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 19 个 `ue_*` 工具。
+按项目连接正在运行的 Unreal Engine（5.4 及以上）。网页上有「UE」管理页，对话里的 Agent 有 24 个 `ue_*` 工具。
 
 ## 组成
 
@@ -47,6 +47,18 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 - 桥接 1.4.x 录停在半帧的 trace，最后一帧的结束时间是无穷大，写成 JSON 是 `inf`，面板解析不了，帧条一直显示加载；1.5.0 起换成 trace 结尾，网页也会把读不到帧的错误显示出来。
 - trace 是录完再分析（停止后几秒到几十秒出结果），录制中看的是实时读数；边录边分析要等在真实引擎上验证过 TraceServices 的实时会话再做。分析服务的 C++ 还没在真实引擎上编译过。
 - 解析器按 UE 5.4 的文件格式写，测试数据是手写的样例（`scripts/perf-fixtures.mjs`），还没用真实项目的文件验证过。`node ue/scripts/perf-test.mjs` 跑解析器测试。
+
+## 通过 VS 调试 UE
+
+UEToVS（VS 扩展）0.8.0 起在 VS 进程里开一条调试控制管道，用 VS 自带的调试器启停、下断点、单步、读变量（协议见 UEToVS 仓库 `docs/design/VS-调试控制.md`）。面板这一侧在 `server/vs-debug/`：
+
+- **发现**：在项目目录、外层目录和引擎根目录（和读 UEToVS 索引同一组候选目录，`search-index/uetovs.ts` 的 `solutionDirs`）找 `.vs/UEToVS/Debug/endpoint.json`，写着这个 `.uproject` 的优先；管道 `\\.\pipe\<pipe>`，一行一个 JSON，带文件里的令牌。连接超时 2 秒，`wait` / `step` 这类会阻塞的按等待时间再加 5 秒。连不上、文件不在、协议版本不对都给中文原因和办法（开 VS、装 UEToVS 0.8.0、打开设置「允许 Agent 通过 VS 调试 UE」），不重试。只支持 Windows。
+- **打开 VS**：VS 没开时用 vswhere 找 devenv，`devenv <sln>` 分离启动，按退避间隔检查发现文件和管道，最多等 3 分钟。网页「打开 VS」和 Agent 的 start / attach / build 共用。
+- **状态**：`GET state` 的 `vsDebug`（status 带 5 帧栈 + 前 50 个断点），整体 1.5 秒拿不到就是 `available=false`，不拖慢刷新；没有 `.sln` 时不带。
+- **网页接口**：`POST vs-debug` `{op, args}` → `{result}` / `{error}`（原样转发，协议外的 op 拒绝）；`POST vs-debug/open-vs` → `{ok, opened}` / `{error}`。
+- **Agent 工具**：`ue_vs_debug`（会话：status、start、stop、restart、attach、build、pause、continue、step、wait；stop / restart 会结束 UE，先请用户确认）、`ue_vs_breakpoints`（list、add、remove、enable、clear）、`ue_vs_inspect`（stack、threads、locals、eval、output、dump）。用法写在 `ue-runtime-debug` 技能的「用 VS 断点调试」。
+- **停在断点**：UE 停在 VS 里时进程冻住，UELink 调不通。`ue_*` 工具超时 / 连不上、网页判断「忙」时，如果 VS 处于 break，说明换成「UE 停在 VS 断点 文件:行（函数），先 ue_vs_debug continue 继续」。
+- 单测：`node --test ue/server/vs-debug/vs-debug.test.ts`（假服务端用 unix socket 代替命名管道）。还没在真实的 VS + UEToVS 0.8.0 上联调过。
 
 ## 只认 Agent 模式里的项目
 

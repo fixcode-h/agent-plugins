@@ -23,6 +23,7 @@ import { historyWithLive, undoAll } from './undo.ts'
 import { json, now, t } from './util.ts'
 import { enableFor } from './capability.ts'
 import { searchIndexRoute } from './search-index/index.ts'
+import { vsDebugRoute } from './vs-debug/api.ts'
 
 /**
  * 网页用的接口（挂在 /api/plugins/ue/ 下）。你在网页上的操作记成 actor=user，不受 Agent 权限限制，
@@ -218,6 +219,9 @@ export async function handle(req: Request): Promise<Response> {
         // 跳转弹窗的本地索引（资源、Lua 模块）在 search-index/
         const idx = await searchIndexRoute(project, `${req.method} ${route}`, url)
         if (idx !== undefined) return json(idx)
+        // UE 页「VS 调试」卡片（UEToVS 的调试控制管道）在 vs-debug/api.ts
+        const vs = await vsDebugRoute(ctx, `${req.method} ${route}`, b)
+        if (vs !== undefined) return json(vs)
         // 性能和内存抓取的接口在 perf-api.ts
         const perf = await perfRoute(ctx, `${req.method} ${route}`, b)
         return perf === undefined ? json({ error: 'not found' }, 404) : json(perf)
