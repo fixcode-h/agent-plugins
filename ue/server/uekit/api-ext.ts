@@ -6,7 +6,7 @@ import type { InstallMode } from '../types.ts'
 import { c, run, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
-import { insideProject, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
@@ -72,6 +72,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/report':
       // gt.report 太长时 UE 写成文件只回路径：页面要每一步的结果，从这份文件取
       return readReportFile(p.root, String(b.file ?? ''))
+    case 'POST ext/gt/text':
+      // 步骤详情里展开失败证据的日志（log.txt）、控件快照（widgets.json）
+      return readEvidenceText(p.root, String(b.file ?? ''))
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)

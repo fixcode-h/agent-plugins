@@ -1,12 +1,15 @@
-import { CircleCheck, CircleDot, CircleX, FileJson, FlaskConical, Loader2, Play } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, FileJson, FlaskConical, Layers, Loader2, Play } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost } from '../../menu.tsx'
+import { MenuHost, openMenu } from '../../menu.tsx'
 import { Confirm, ErrorText, NotRunning } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
+import { GtBatchBar } from './GtBatch.tsx'
+import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
+import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
 import { GtRun, type GtJob, type GtRunSummary, type GtScenarioFile } from './GtRun.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
@@ -48,6 +51,12 @@ export function GameTest() {
   const [offsets, setOffsets] = useState<Record<string, number>>({})
   // 推送里已经结束的 run：第一步就失败的 run 在 gt.run 返回之前就推了「结束」，返回后不能再标成运行中
   const finished = useRef(new Set<string>())
+  // 每个场景最近 10 次的通过 / 失败（GameTest 1.2 的 gt.history，最新在前）；旧版本没有这个操作时是空的，列表退回只看最近一次
+  const [history, setHistory] = useState<Record<string, string>>({})
+  // 跑完的批量结果关掉了（按批量编号记）
+  const [closedBatch, setClosedBatch] = useState<string>()
+  // 推送里批量已经跑完了几个（跑完一个就重拉历史）
+  const batchSeen = useRef(0)
 
   const reload = () => {
     op<ScenarioList>(project.id, 'gt.scenarios', { limit: 1000 })
@@ -59,12 +68,13 @@ export function GameTest() {
     void op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs')
       .then((r) => setRuns(r.runs ?? []))
       .catch(() => undefined)
+    void loadHistory(project.id).then(setHistory)
   }
   useEffect(() => {
     if (!installed || !live) return
     reload()
     void op<GtJob>(project.id, 'gt.job', { steps: 200 })
-      .then((j) => j.busy && setJob(j))
+      .then((j) => (j.busy || j.batch) && setJob(j))
       .catch(() => undefined)
     void op<RecordStatus>(project.id, 'gt.record.status', { last: 20 })
       .then((r) => {
@@ -79,13 +89,12 @@ export function GameTest() {
   useExtEvents(project.id, (e) => {
     if (e.event === 'gt.job') {
       const j = e as unknown as GtJob & { phase?: string; lastStep?: GtJob['steps'][number] }
-      setJob((old) => {
-        // 事件不带全部步骤，只带最新一步：接到已有的列表后面
-        const steps = old?.runId === j.runId ? [...(old?.steps ?? [])] : []
-        if (j.lastStep && !steps.some((s) => s.index === j.lastStep!.index)) steps.push(j.lastStep)
-        return { ...j, steps }
-      })
-      if (j.phase === 'finished') {
+      setJob((old) => mergeJobEvent(old, j))
+      // 批量里每跑完一个场景，历史条和最近运行就要跟上：整批跑完前事件一直是 progress，按跑完的个数变没变判断
+      const done = batchDone(j.batch)
+      const moreDone = done > batchSeen.current
+      batchSeen.current = j.batch ? done : 0
+      if (j.phase === 'finished' || moreDone) {
         if (j.runId) finished.current.add(j.runId)
         reload()
       }
@@ -99,12 +108,16 @@ export function GameTest() {
     }
   })
 
+  // 每个场景最近一次 run：GameTest 1.2 起按场景文件认（场景重名也分得清），旧版本按名字
   const lastRun = useMemo(() => {
     const m = new Map<string, GtRunSummary>()
-    for (const r of runs)
-      if (!m.has(r.name) || (r.startedAtUtc ?? '') > (m.get(r.name)!.startedAtUtc ?? '')) m.set(r.name, r)
+    for (const r of runs) {
+      const key = r.scenario ?? r.name
+      if (!m.has(key) || (r.startedAtUtc ?? '') > (m.get(key)!.startedAtUtc ?? '')) m.set(key, r)
+    }
     return m
   }, [runs])
+  const lastOf = (s: Scenario) => lastRun.get(s.relativePath) ?? lastRun.get(s.name)
   const q = query.trim().toLowerCase()
   const items: TreeLeaf<Scenario>[] = useMemo(
     () =>
@@ -116,7 +129,9 @@ export function GameTest() {
 
   const selected = list?.scenarios.find((s) => s.relativePath === sub)
   // 已经出现在最近运行里的 run 一定跑完了：推送丢了、页面晚连上时也不会一直停在「运行中」
-  const running = !!job?.busy && !runs.some((r) => r.runId === job.runId)
+  const batch = job?.batch && job.batch.id !== closedBatch ? job.batch : undefined
+  const batchActive = !!job?.batch?.active
+  const running = (!!job?.busy && !runs.some((r) => r.runId === job.runId)) || batchActive
   const recording = !!rec?.recording
   /** 开跑：gt.run 里 UE 会立刻推进一次，第一步就失败的 run 返回时已经结束（finished），这时不再标成运行中 */
   const startRun = (name: string, args: Record<string, unknown>, offset: number) =>
@@ -136,6 +151,55 @@ export function GameTest() {
       )
     })
   const runScenario = (s: Scenario) => startRun(s.name, { scenario: s.relativePath }, 0)
+  /** 批量：一个接一个跑（GameTest 1.2），进度和结果从 gt.job 事件的 batch 来 */
+  const startBatch = (args: { tag?: string; scenarios?: string[]; name?: string }) =>
+    run('run', async () => {
+      const r = await op<{ batchId: string; scenarios: number }>(project.id, 'gt.run', args)
+      setClosedBatch(undefined)
+      // 推送可能比返回先到：已经有这一批的进度就留着
+      setJob((old) =>
+        old?.batch?.id === r.batchId
+          ? old
+          : {
+              status: 'running',
+              busy: true,
+              steps: [],
+              total: 0,
+              failed: 0,
+              batch: {
+                id: r.batchId,
+                label: args.name ?? (args.tag ? `tag:${args.tag}` : ''),
+                active: true,
+                total: r.scenarios,
+                passed: 0,
+                failed: 0,
+              },
+            },
+      )
+    })
+  const tags = useMemo(() => batchTags(list?.scenarios ?? []), [list])
+  const tagMenu = (e: React.MouseEvent) =>
+    openMenu(e, [
+      { title: t('批量运行') },
+      ...tags.map(([tag, n]) => ({
+        label: tag,
+        icon: Layers,
+        hint: t('{n} 个场景', { n }),
+        onClick: () => void startBatch({ tag }),
+      })),
+      tags.length > 0 && 'sep',
+      {
+        label: t('全部场景'),
+        icon: Layers,
+        hint: t('{n} 个场景', { n: (list?.scenarios ?? []).filter((s) => !s.parseError).length }),
+        disabled: !list?.scenarios.some((s) => !s.parseError),
+        onClick: () =>
+          void startBatch({
+            scenarios: (list?.scenarios ?? []).filter((s) => !s.parseError).map((s) => s.relativePath),
+            name: t('全部场景'),
+          }),
+      },
+    ])
   const runFrom = (s: Scenario, file: GtScenarioFile, i: number) =>
     startRun(
       s.name,
@@ -163,6 +227,7 @@ export function GameTest() {
     reload,
     open: (s) => go('gametest', s.relativePath),
     runScenario,
+    runBatch: (scenarios, label) => void startBatch({ scenarios, name: label }),
     scenarios: list?.scenarios ?? [],
   })
   const startRecord = () =>
@@ -190,6 +255,13 @@ export function GameTest() {
         placeholder={t('按名字找场景')}
         extra={
           <>
+            <ui.IconButton
+              icon={Layers}
+              size="sm"
+              label={t('批量运行：按标签或全部场景，一个接一个跑')}
+              disabled={running || recording || !!busy || !list?.scenarios.length}
+              onClick={tagMenu}
+            />
             <ui.IconButton
               icon={CircleDot}
               size="sm"
@@ -236,7 +308,7 @@ export function GameTest() {
             runs={runs}
             onMenu={menus.runMenu}
             onOpen={(r) => {
-              const s = list.scenarios.find((x) => x.name === r.name)
+              const s = list.scenarios.find((x) => (r.scenario ? x.relativePath === r.scenario : x.name === r.name))
               if (s) go('gametest', s.relativePath)
             }}
           />
@@ -255,7 +327,8 @@ export function GameTest() {
                 : { icon: FileJson, tone: s.parseError ? 'ue:text-danger' : 'ue:text-subtle' }
             }
             leafRight={(s) => {
-              const r = lastRun.get(s.name)
+              const r = lastOf(s)
+              const marks = history[s.relativePath]
               return (
                 <>
                   {(s.tags ?? []).includes('recorded') && (
@@ -263,12 +336,16 @@ export function GameTest() {
                       {t('录制')}
                     </span>
                   )}
-                  {r &&
+                  {marks ? (
+                    <GtHistoryBar marks={marks} />
+                  ) : (
+                    r &&
                     (r.succeeded ? (
                       <CircleCheck className="ue:h-3 ue:w-3 ue:text-success" />
                     ) : (
                       <CircleX className="ue:h-3 ue:w-3 ue:text-danger" />
-                    ))}
+                    ))
+                  )}
                   <span className={cn(s.parseError && 'ue:text-danger')}>
                     {s.parseError ? t('解析失败') : t('{n} 步', { n: s.steps })}
                   </span>
@@ -276,7 +353,10 @@ export function GameTest() {
               )
             }}
             folderRight={(leaves) => {
-              const failed = leaves.filter((s) => lastRun.get(s.name)?.succeeded === false).length
+              // 最近一次失败的：有历史看历史的最新一次（跨编辑器会话），没有看本次会话的最近一次
+              const failed = leaves.filter((s) =>
+                history[s.relativePath] ? history[s.relativePath][0] === 'f' : lastOf(s)?.succeeded === false,
+              ).length
               return (
                 <>
                   {failed > 0 && <span className="ue:text-danger">{t('{n} 失败', { n: failed })}</span>}
@@ -295,6 +375,14 @@ export function GameTest() {
         )}
       </ListCol>
       <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
+        {batch && !recording && (
+          <GtBatchBar
+            batch={batch}
+            onOpen={(p) => go('gametest', p)}
+            onStop={() => void stop()}
+            onClose={() => setClosedBatch(batch.id)}
+          />
+        )}
         {recording && rec ? (
           <GtRecord status={rec} onDone={() => setRec(undefined)} />
         ) : selected ? (
@@ -302,9 +390,13 @@ export function GameTest() {
             key={selected.relativePath}
             scenario={selected}
             root={list?.absoluteRootDir ?? ''}
-            job={running && job?.name === selected.name ? job : undefined}
-            last={lastRun.get(selected.name)}
-            offset={offsets[(running ? job?.runId : lastRun.get(selected.name)?.runId) ?? ''] ?? 0}
+            job={
+              running && job?.busy && job.name === selected.name && !runs.some((r) => r.runId === job.runId)
+                ? job
+                : undefined
+            }
+            last={lastOf(selected)}
+            offset={offsets[(running ? job?.runId : lastOf(selected)?.runId) ?? ''] ?? 0}
             onStop={() => void stop()}
             onRunFrom={running || recording ? undefined : (file, i) => void runFrom(selected, file, i)}
             onChanged={reload}

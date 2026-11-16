@@ -12,6 +12,7 @@ import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
+import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
@@ -78,6 +79,13 @@ const activate: ActivateWeb = (host) => {
         label: 'AssetForge · StatePill · ForgeLink · JobReport',
         tune: ['badge', 'row'],
         Specimen: ForgeSpecimen,
+      },
+      // GameTest 页的历史条、批量运行条、失败证据：跟面板「徽标」「行」「进度条」的调节项
+      {
+        id: 'gametest-parts',
+        label: 'GameTest · HistoryBar · BatchBar · Evidence',
+        tune: ['badge', 'row', 'progress'],
+        Specimen: GtSpecimen,
       },
     ],
   }
