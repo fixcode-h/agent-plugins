@@ -2382,5 +2382,8 @@
   "毫秒再处理": "ms before handling",
   "启用": "Enabled",
   "存在 {p}（跟着场景进版本管理，全组共用）": "Stored in {p} (versioned with the scenarios, shared by the team)",
-  "运行设置：UI 等待上限、自动关掉的阻挡界面": "Run settings: UI wait limit, blocking UIs to close automatically"
+  "运行设置：UI 等待上限、自动关掉的阻挡界面": "Run settings: UI wait limit, blocking UIs to close automatically",
+  "正在读状态": "Reading status",
+  "正在向 UE 读同步状态（编辑器没开时要先启动后台编辑器）": "Reading sync status from UE (starts a background editor first if the editor is closed)",
+  "同步状态没读到：{e}": "Couldn't read sync status: {e}"
 }
