@@ -1,5 +1,5 @@
 import { Copy, CopyPlus, ListPlus, Pin, Trash2, Undo2 } from 'lucide-react'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { usePropMark } from './marks.ts'
 import { show } from '../api.ts'
 import { h, t } from '../host.ts'
@@ -102,6 +102,20 @@ function expandable(n: Node) {
   return typeof v === 'object' && v !== null && !vecKeys(v)
 }
 
+/**
+ * 点整行展开时，这一下是不是该算「展开」：点在输入框、下拉、按钮、链接这类控件上的不算（它们有自己的事），
+ * 从弹出层（下拉菜单在 portal 里，React 事件照样冒泡上来）来的不算，拖选文字的也不算
+ */
+export function rowClickToggles(e: MouseEvent<HTMLElement>) {
+  const el = e.target as Element
+  if (!(el instanceof Element) || !e.currentTarget.contains(el)) return false
+  const hit = el.closest(
+    'button,a,input,select,textarea,label,[role="button"],[role="checkbox"],[role="combobox"],[role="switch"],[contenteditable="true"],[data-no-row-toggle]',
+  )
+  if (hit && e.currentTarget.contains(hit)) return false
+  return !window.getSelection()?.toString()
+}
+
 /** 子行：从完整的值里拆出结构体成员 / 数组元素 / 映射的键 */
 function childrenOf(n: Node, full: unknown): Node[] {
   const ro = n.readOnly || n.container === 'set'
@@ -169,9 +183,14 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
 
   return (
     <>
+      {/* 能展开的行点整行都能展开收起（用户嫌只能点箭头，2026-11-16）；点在值控件、按钮上的不算 */}
       <div
+        onClick={(e) => {
+          if (canOpen && rowClickToggles(e)) void toggle()
+        }}
         className={cn(
           'ue:group ue:grid ue:min-h-8 ue:grid-cols-[var(--ue-name-w)_minmax(0,1fr)_4.5rem] ue:border-b ue:border-line/50 ue:transition-colors ue:hover:bg-hover/50',
+          canOpen && 'ue:cursor-pointer',
           mark && 'ue:bg-warning/8 ue:shadow-[inset_2px_0_0_var(--warning)]',
         )}
       >
@@ -186,7 +205,10 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
               type="button"
               aria-expanded={open}
               aria-label={open ? t('收起') : t('展开')}
-              onClick={() => void toggle()}
+              onClick={(e) => {
+                e.stopPropagation()
+                void toggle()
+              }}
               className="ue:flex ue:h-4 ue:w-4 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:text-muted ue:hover:text-fg"
             >
               <Caret open={open} />

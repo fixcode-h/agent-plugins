@@ -109,6 +109,8 @@ export function CompTree({
           aria-expanded={ch.length ? open : undefined}
           tabIndex={0}
           onClick={() => onSelect(c.path)}
+          // 单击选中，双击整行展开收起（和 UE 组件面板一样），不必瞄准箭头
+          onDoubleClick={ch.length ? () => setClosed((x) => ({ ...x, [c.path]: open })) : undefined}
           onKeyDown={(e) => {
             if (e.key === 'Enter') onSelect(c.path)
             else if (e.key === 'ArrowLeft' && ch.length) setClosed((x) => ({ ...x, [c.path]: true }))

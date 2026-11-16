@@ -164,6 +164,8 @@ function TreeRow({
         <button
           type="button"
           onClick={() => onSel(node.path)}
+          // 单击选中，双击展开收起，不必瞄准箭头
+          onDoubleClick={has ? () => setOpen((v) => !v) : undefined}
           title={node.path}
           className={cn(
             'ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-baseline ue:gap-2 ue:text-left',
