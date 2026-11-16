@@ -6,6 +6,7 @@ import type { UeProject } from '../types.ts'
 import { findPluginDirs, pluginVersion, UELINK, type UELinkManifest } from '../uelink.ts'
 import { c, readJson } from '../util.ts'
 import { netGet } from './net.ts'
+import { engineTooOld, pickOffer } from './offer.ts'
 
 /**
  * UEKit 插件库（fixcode-h/UEKit）里 UELink 的扩展插件（AssetForge、GameTest）：查插件目录 catalog.json、
@@ -96,14 +97,6 @@ export async function installedIn(root: string, name: string) {
   return { dir: dirs[0], rel: path.relative(root, dirs[0]), version, mode: record?.mode }
 }
 
-/** "5.8" 这类引擎版本前两段比较：项目引擎读不出来时不拦 */
-function engineTooOld(project: UeProject, min?: string) {
-  const v = project.engine?.version
-  if (!min || !v) return false
-  const two = (s: string) => s.split('.').slice(0, 2).join('.')
-  return cmpVersion(two(v), two(min)) < 0
-}
-
 /** requires 里的 ">=2.2.0-beta.1"：只支持 >=（UEKit 的 kit.json 只这么写） */
 export function satisfies(installed: string, range: string) {
   const m = /^>=\s*(\S+)$/.exec(range.trim())
@@ -137,7 +130,7 @@ export interface ExtensionStatus {
   installed?: { version: string; rel: string; mode?: string }
   latest?: string
   prerelease?: string
-  /** 能装的那一版（有正式版装正式版，没有时用预发布版） */
+  /** 能装的那一版（见 pickOffer） */
   offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string; uelink?: string }
   /** 开着的 UE 进程里实际加载的版本（装了新版没重编时和磁盘上的不同） */
   loaded?: string
@@ -160,11 +153,7 @@ export async function extensionStatus(
     names.map(async (name): Promise<ExtensionStatus> => {
       const e = entries.find((x) => x.name === name)
       const inst = await installedIn(project.root, name)
-      const pick = e?.latest ?? e?.prerelease ?? null
-      const offerM =
-        e?.latest && e.prerelease && inst?.version && cmpVersion(inst.version, e.latest.version) > 0
-          ? e.prerelease // 已经装着预发布版的，继续给它更新的预发布版
-          : pick
+      const offerM = e ? pickOffer(project, e, inst?.version) : null
       return {
         name,
         displayName: e?.displayName || name,
