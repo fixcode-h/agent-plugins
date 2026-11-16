@@ -63,11 +63,13 @@ function sourceSpec() {
 }
 
 let cache: { at: number; result: { manifest?: UELinkManifest; base: string; error?: string } } | undefined
-const CACHE_MS = 6 * 3600 * 1000
 
-/** 读公共库的发布清单（6 小时内用缓存；refresh 时重读）。读不到不抛，error 里说原因 */
+/**
+ * 读公共库的发布清单（有缓存就用，refresh 时重读）。读不到不抛，error 里说原因。
+ * 只在用户手动操作时调（「检查更新」、安装 / 升级）：拉 GitHub 不自动做（用户定的长期规则）
+ */
 export async function remoteManifest(refresh = false) {
-  if (!refresh && cache && Date.now() - cache.at < CACHE_MS) return cache.result
+  if (!refresh && cache) return cache.result
   const spec = sourceSpec()
   let result: { manifest?: UELinkManifest; base: string; error?: string }
   try {
@@ -100,11 +102,10 @@ export function cachedRemoteVersion() {
 }
 
 /**
- * 现在能装到的最新版本（自带的和公共库的取高的）：公共库只看缓存，缓存过期就在后台重读，
- * 下次刷新概况时就能看到公共库的新版本
+ * 现在能装到的最新版本（自带的和公共库的取高的）：公共库只看缓存，不在后台去 GitHub 重读，
+ * 用户在「UE 插件」页点「检查更新」后才看得到公共库的新版本
  */
 export async function availableVersion() {
-  if (!cache || Date.now() - cache.at >= CACHE_MS) void remoteManifest().catch(() => undefined)
   const bundled = await bundledVersion()
   const remote = cachedRemoteVersion()
   return remote && cmpVersion(remote, bundled) > 0 ? remote : bundled

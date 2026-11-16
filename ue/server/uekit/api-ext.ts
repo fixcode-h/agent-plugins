@@ -4,6 +4,7 @@ import type { OpCtx } from '../ops.ts'
 import { liveCards } from '../instances.ts'
 import type { InstallMode } from '../types.ts'
 import { run, t } from '../util.ts'
+import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { insideProject, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { forgeFileAction } from './forge-files.ts'
@@ -28,8 +29,12 @@ async function loadedVersions(root: string) {
 export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Promise<Response | Body | undefined> {
   const p = ctx.project
   switch (route) {
-    case 'GET ext':
-      return extensionStatus(p, await loadedVersions(p.root), url.searchParams.get('refresh') === '1')
+    case 'GET ext': {
+      const refresh = url.searchParams.get('refresh') === '1'
+      // 「检查更新」：插件目录和 UELink 的发布清单一起重读，UELink 卡片和概况页的「可升级」才跟得上
+      if (refresh) await remoteManifest(true)
+      return extensionStatus(p, await loadedVersions(p.root), refresh)
+    }
     case 'POST ext/install': {
       const job = await installExtension(p, String(b.name), {
         version: b.version ? String(b.version) : undefined,

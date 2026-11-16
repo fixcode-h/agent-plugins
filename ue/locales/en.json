@@ -1112,6 +1112,7 @@
   "{name} 是 UEKit 里 UELink 的扩展插件，只支持 UE 5.8。装好后要完整编译一次、重启编辑器。": "{name} is a UELink extension from UEKit and supports UE 5.8 only. After installing, do a full build and restart the editor.",
   "去「UE 插件」安装": "Install it in \"UE plugins\"",
   "检查更新": "Check for updates",
+  "还没检查 UEKit 插件目录，点右上角「检查更新」从 GitHub 读取最新版本。": "The UEKit plugin catalog hasn't been checked yet. Click \"Check for updates\" at the top right to load the latest versions from GitHub.",
   "读不到插件目录：{e}。可以在插件设置里把「UEKit 插件目录」换成镜像或本机目录": "Can't read the plugin catalog: {e}. You can switch \"UEKit plugin catalog\" to a mirror or local folder in the plugin settings",
   "预发布": "Pre-release",
   "装在 {dir}（{mode}）": "Installed in {dir} ({mode})",
