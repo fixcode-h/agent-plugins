@@ -12,6 +12,8 @@ export interface GtHint {
   text?: string
   /** 视口里的归一化矩形 [x, y, w, h] */
   rect?: number[]
+  /** 录制时视口像素 [宽, 高]（GameTest 1.2.5）：回放时屏幕比例不同就放宽按位置挑 */
+  vp?: number[]
   /** 选择器不唯一、但回放按位置和文字挑得回来时的说明 */
   pick?: string
   ambiguous?: string | boolean
