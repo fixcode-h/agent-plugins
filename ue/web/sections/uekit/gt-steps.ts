@@ -15,7 +15,16 @@ export interface GtHint {
   /** 选择器不唯一、但回放按位置和文字挑得回来时的说明 */
   pick?: string
   ambiguous?: string | boolean
+  /** GameTest 1.2.4：按位置写的选择器只按序号点，不按文字在同容器里找回 */
+  byIndex?: boolean
 }
+
+/**
+ * 选择器里有按位置写的段（`#类名#序号`、`列表[序号]`）：容器顺序一变就指到别的控件。
+ * GameTest 1.2.4 起回放先按 hint.text 在同容器里找回，用户可以把这一步定成只按序号（hint.byIndex）
+ */
+export const isPositional = (target?: unknown) =>
+  typeof target === 'string' && /(^|[/>:])#[^#/>]+#\d+($|[/>])|\[\d+\]/.test(target)
 
 export const hintOf = (def?: Record<string, unknown>): GtHint | undefined => {
   const h = def?.hint
