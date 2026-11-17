@@ -23,6 +23,7 @@ import { useStepEdit } from './GtStepEdit.tsx'
 import { TidyButtons, useGtTidy } from './GtTidy.tsx'
 import type { GtBatch } from './GtBatch.tsx'
 import { GtStepRow } from './GtStepRow.tsx'
+import { GtSetupRows } from './GtSetupRows.tsx'
 import {
   StepDetail,
   StepIcon,
@@ -124,7 +125,10 @@ export function GtRun({
     () => (!running && last ? loadReport(project.id, last.runId, !!offline) : Promise.resolve(undefined)),
     [last?.runId, running, offline],
   )
-  const results = running ? (job?.steps ?? []) : (report.data ?? [])
+  const allResults = running ? (job?.steps ?? []) : (report.data ?? [])
+  // 前置步骤（运行配置的 setup）不占场景的步骤序号：单独显示在列表上方，不按 index 对到场景步骤上
+  const setupResults = useMemo(() => allResults.filter((r) => r.setup), [allResults])
+  const results = useMemo(() => allResults.filter((r) => !r.setup), [allResults])
   // 「核对选择器」的结果（gt.resolve，只看这一刻屏上的界面）：按步骤分好，场景文件变了就作废
   const [check, setCheck] = useState<{ found: number; missing: number; byStep: Map<number, GtResolveItem[]> }>()
   const [checking, setChecking] = useState(false)
@@ -301,6 +305,7 @@ export function GtRun({
               <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
             </div>
           )}
+          <GtSetupRows steps={setupResults} />
           {rows.map((r) => (
             <GtStepRow
               key={r.i}

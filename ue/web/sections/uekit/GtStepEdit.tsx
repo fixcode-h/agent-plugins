@@ -14,6 +14,11 @@ const templates = (current: StepDef): { id: string; label: string; step: Record<
   { id: 'key', label: t('按键'), step: { action: 'key', key: 'Escape' } },
   { id: 'assert', label: t('断言控件可见'), step: { action: 'assert', target: '屏名:路径', visible: true } },
   { id: 'console', label: t('控制台指令'), step: { action: 'console', command: '' } },
+  {
+    id: 'reset',
+    label: t('GM：重置状态'),
+    step: { action: 'console', command: 'gm.ResetGuide', note: '重置引导，换成项目自己的 GM' },
+  },
   { id: 'screenshot', label: t('截图'), step: { action: 'screenshot', name: 'shot' } },
   { id: 'mark', label: t('写一句说明'), step: { action: 'mark', text: '' } },
 ]

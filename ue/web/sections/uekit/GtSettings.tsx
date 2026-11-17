@@ -8,6 +8,7 @@ import { useSearchIndex } from '../../jump/index-data.ts'
 import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
+import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
 /**
  * GameTest 的项目运行配置（场景根的 _settings.json，GameTest 1.2.0-beta.6 的 gt.config）：
@@ -28,6 +29,10 @@ interface GtRunConfig {
   /** click 没写 via 时的点击方式（GameTest 1.2.0-beta.7）：code 不动鼠标（默认），pointer 真实鼠标 */
   clickVia?: 'code' | 'pointer'
   blockers: GtBlockerRule[]
+  /** 前置步骤（GameTest 1.2.5）：从场景文件跑时先跑，放清引导、重置存档之类的 GM */
+  setup?: Record<string, unknown>[]
+  /** 开跑前固定引擎全局随机（GameTest 1.2.5） */
+  randomSeed?: number
 }
 
 interface ConfigReply {
@@ -62,6 +67,8 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
   const [wait, setWait] = useState('')
   const [clickVia, setClickVia] = useState<'code' | 'pointer'>('code')
   const [rules, setRules] = useState<GtBlockerRule[]>([])
+  const [setup, setSetup] = useState('')
+  const [seed, setSeed] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   // 阻挡界面的 WBP 候选：跳转弹窗同一份本地索引，打开设置时取一次（没变只回 same），打字只在网页里筛
@@ -74,6 +81,8 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
         setWait(r.config.uiWaitTimeoutMs === undefined ? '' : String(r.config.uiWaitTimeoutMs / 1000))
         setRules(r.config.blockers ?? [])
         setClickVia(r.config.clickVia ?? 'code')
+        setSetup(setupText(r.config.setup))
+        setSeed(r.config.randomSeed === undefined ? '' : String(r.config.randomSeed))
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -86,6 +95,12 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
       setError(t('等待上限要填不小于 0 的秒数，0 是不限'))
       return
     }
+    const setupParsed = parseSetup(setup)
+    const seedParsed = parseSeed(seed)
+    if (setupParsed.error || seedParsed.error) {
+      setError((setupParsed.error ?? seedParsed.error)!)
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -95,6 +110,8 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
         ...(clickVia === 'pointer' ? { clickVia } : {}),
         // 空行不存：点了「添加」没填的不该让整份配置保存失败
         blockers: rules.filter((r) => r.widget.trim()).map((r) => ({ ...r, widget: r.widget.trim() })),
+        ...(setupParsed.steps?.length ? { setup: setupParsed.steps } : {}),
+        ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
       }
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
@@ -164,6 +181,37 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
               { value: 'code', label: t('不动鼠标（默认）') },
               { value: 'pointer', label: t('真实鼠标') },
             ]}
+          />
+        </ui.Field>
+
+        <ui.Field
+          label={t('前置步骤')}
+          hint={t(
+            '每次从场景文件跑都先跑这几步（写法和场景步骤一样），用来清引导、重置任务、发道具，让回放从同一个存档状态开始。场景写 "setup": false 的跳过；「从这一步开始运行」不跑。需要 GameTest 1.2.5。',
+          )}
+        >
+          <ui.Textarea
+            rows={4}
+            className="ue:font-mono"
+            placeholder={SETUP_PLACEHOLDER}
+            value={setup}
+            onChange={(e: { target: { value: string } }) => setSetup(e.target.value)}
+          />
+        </ui.Field>
+
+        <ui.Field
+          label={t('随机种子')}
+          hint={t(
+            '填整数时每次开跑前固定引擎的全局随机（蓝图 Random 节点、FMath::Rand）；游戏自己的随机流、Lua 的 math.random 管不到，用前置步骤里的 GM 固定。空着不固定。',
+          )}
+        >
+          <ui.Input
+            size="sm"
+            className="ue:w-32"
+            inputMode="numeric"
+            placeholder={t('不固定')}
+            value={seed}
+            onChange={(e: { target: { value: string } }) => setSeed(e.target.value)}
           />
         </ui.Field>
 
