@@ -1,5 +1,5 @@
 import { Box, ChevronRight, Info } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { Details } from '../../details/Details.tsx'
 import { looksLikePath } from '../../details/model.ts'
 import type { DetailsApi } from '../../details/rows.tsx'
@@ -134,29 +134,7 @@ export function ForgeConfigPreview({
           aside={t('来自配置')}
           bodyClass="ue:overflow-auto ue:py-1"
         >
-          {lines.map((l) => (
-            <button
-              key={l.key}
-              type="button"
-              aria-selected={l === cur}
-              onClick={() => setSel(l.key)}
-              title={[l.node.name, l.node.class].filter(Boolean).join('\n')}
-              style={{ paddingLeft: 8 + l.depth * 14 }}
-              className="ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-left ue:text-body ue:text-fg ue:hover:bg-sel/60 ue:aria-selected:bg-sel ue:aria-selected:font-medium"
-            >
-              {l.node.children?.length ? (
-                <ChevronRight className="ue:h-3 ue:w-3 ue:shrink-0 ue:rotate-90 ue:text-subtle" />
-              ) : (
-                <span className="ue:w-3 ue:shrink-0" />
-              )}
-              <Box className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-              <span className="ue:min-w-0 ue:flex-1 ue:truncate">{l.node.name ?? t('（没有名字）')}</span>
-              {/* 类名让着控件名：栏窄时先截类名（控件名才是要找的） */}
-              <span className="ue:max-w-[45%] ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">
-                {l.node.class}
-              </span>
-            </button>
-          ))}
+          <PreviewTree lines={lines} cur={cur?.key} onPick={setSel} />
         </Card>
         <SplitHandle pane={pane} paneRef={treeRef} reserve={() => 360} />
         <Card
@@ -210,3 +188,52 @@ export function ForgeConfigPreviewSpecimen() {
     </div>
   )
 }
+
+/**
+ * 结构树：一份界面配置能有几百个控件（示例界面约 610 个），拖分栏、选中都会让整页重渲染，
+ * 树和每一行都 memo 住，只有选中变化的两行重画。
+ */
+const PreviewTree = memo(function PreviewTree({
+  lines,
+  cur,
+  onPick,
+}: {
+  lines: Line[]
+  cur?: string
+  onPick: (key: string) => void
+}) {
+  return lines.map((l) => <TreeRow key={l.key} l={l} selected={l.key === cur} onPick={onPick} />)
+})
+
+const TreeRow = memo(function TreeRow({
+  l,
+  selected,
+  onPick,
+}: {
+  l: Line
+  selected: boolean
+  onPick: (key: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-selected={selected}
+      onClick={() => onPick(l.key)}
+      title={[l.node.name, l.node.class].filter(Boolean).join('\n')}
+      style={{ paddingLeft: 8 + l.depth * 14 }}
+      className="ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-1.5 ue:pr-2 ue:text-left ue:text-body ue:text-fg ue:hover:bg-sel/60 ue:aria-selected:bg-sel ue:aria-selected:font-medium"
+    >
+      {l.node.children?.length ? (
+        <ChevronRight className="ue:h-3 ue:w-3 ue:shrink-0 ue:rotate-90 ue:text-subtle" />
+      ) : (
+        <span className="ue:w-3 ue:shrink-0" />
+      )}
+      <Box className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+      <span className="ue:min-w-0 ue:flex-1 ue:truncate">{l.node.name ?? t('（没有名字）')}</span>
+      {/* 类名让着控件名：栏窄时先截类名（控件名才是要找的） */}
+      <span className="ue:max-w-[45%] ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">
+        {l.node.class}
+      </span>
+    </button>
+  )
+})
