@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ppost } from '../../api.ts'
+import { t } from '../../host.ts'
 
 /**
  * trace 视图的数据：都走 perf/trace（服务端转给编辑器 / 后台编辑器里的 TraceServices，见 server/trace-query.ts）。
@@ -7,7 +8,13 @@ import { ppost } from '../../api.ts'
  */
 export interface TraceBase {
   analyzing: boolean
+  /** 秒，从录制开始算（桥接 2.8.1 起，服务端按第一帧换算过） */
   duration: number
+  /** 桥接 2.8.1 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
+  readBytes?: number
+  fileBytes?: number
+  caughtUp?: boolean
+  live?: boolean
 }
 export interface Lane {
   id: number
@@ -99,6 +106,8 @@ export const traceQuery = <T>(project: string, id: string, args: Record<string, 
 /**
  * 分析状态：第一次查要等编辑器 / 后台编辑器分析（几秒到几十秒，后台编辑器没起来还要先启动），
  * analyzing 时每 1.5 秒再问一次，分析完停。
+ * 已经有帧就算 ready，先把分析到的部分显示出来（不等整份分析完）；录制中（live）桥接一直跟着文件往下读，
+ * 这里每 2 秒问一次，rev 跟着变，详情页据此刷新帧条和时间轴末尾。轮询同时给桥接「还有人在看」续命，停了桥接就收尾。
  */
 export function useTraceInfo(project: string, id: string) {
   const [info, setInfo] = useState<TraceInfo>()
@@ -112,7 +121,7 @@ export function useTraceInfo(project: string, id: string) {
         if (stop) return
         setInfo(r)
         setError('')
-        if (r.analyzing) timer = setTimeout(tick, 1500)
+        if (r.analyzing) timer = setTimeout(tick, r.live && r.caughtUp ? 2000 : 1500)
       } catch (e) {
         if (!stop) setError((e as Error).message)
       }
@@ -123,7 +132,18 @@ export function useTraceInfo(project: string, id: string) {
       clearTimeout(timer)
     }
   }, [project, id])
-  return { info, error, ready: !!info && !info.analyzing }
+  // 旧桥接（没有 fileBytes）分析中会从头重来，部分结果一闪一闪，还是等分析完
+  const ready = !!info && (!info.analyzing || (info.frames > 0 && info.fileBytes !== undefined))
+  return { info, error, ready, rev: info?.analyzing ? info.duration : -1 }
+}
+
+/** 分析进度的说明：桥接 2.8.1 起按字节，旧桥接只有分析到的秒数 */
+export function progressNote(info: TraceBase) {
+  if (info.fileBytes) {
+    const mb = (n: number) => (n / 1048576).toFixed(n >= 1048576 * 100 ? 0 : 1)
+    return t('正在分析 trace（已读 {a} / {b} MB）…', { a: mb(info.readBytes ?? 0), b: mb(info.fileBytes) })
+  }
+  return t('正在分析 trace（已分析到第 {s} 秒）…', { s: info.duration.toFixed(1) })
 }
 
 /** 延迟一点再取（拖动、滚轮缩放时不每一帧都发请求），只认最后一次的结果 */

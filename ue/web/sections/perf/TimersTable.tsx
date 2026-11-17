@@ -27,12 +27,15 @@ export function TimersTable({
   seconds,
   picked,
   actions,
+  rev = -1,
 }: {
   id: string
   range?: Range
   seconds: number
   picked?: number
   actions: TimerActions
+  /** trace 还在长时由详情页给，一变就重算（没选范围时才看它：选了范围那段数据不会变） */
+  rev?: number
 }) {
   const { project } = useUe()
   const { cn, ui } = h()
@@ -44,7 +47,7 @@ export function TimersTable({
   const [show, setShow] = useState({ gpu: true, cpu: true })
   const [cols, setCols] = useState<Col[]>([])
   const [closed, setClosed] = useState<string[]>([])
-  const key = `${id}|${range?.t0}|${range?.t1}|${filter}|${sort}`
+  const key = `${id}|${range?.t0}|${range?.t1}|${filter}|${sort}|${range ? '' : rev}`
   const res = useDebounced(
     () =>
       traceQuery<TraceBase & { items: TimerRow[]; total: number; seconds: number }>(project.id, id, {
