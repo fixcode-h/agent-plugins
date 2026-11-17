@@ -21,6 +21,7 @@ import {
   type SavedStyle,
 } from '@shared/design'
 import { api } from '@/lib/api'
+import { useData } from '@/lib/data'
 import { useDesignData } from '@/lib/design-store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -149,10 +150,12 @@ function Body({
   onSaved?: (p: DesignProject) => void
   onClose: () => void
 }) {
-  const { setDesignProjects, setDesigns } = useDesignData()
+  const { setDesignProjects, setDesigns, owner, designProjects } = useDesignData()
+  // 新建时照当前面板项目填好（1.4.0 起 UI 项目归在面板项目下）：项目里第一个 UI 项目默认同名，目录默认是项目目录
+  const host = useData().projects.find((p) => p.id === owner)
   const [section, setSection] = useState<DesignProjectSection>(initial)
-  const [name, setName] = useState(project?.name ?? '')
-  const [dir, setDir] = useState(project?.path ?? '')
+  const [name, setName] = useState(project?.name ?? (designProjects.length ? '' : (host?.name ?? '')))
+  const [dir, setDir] = useState(project?.path ?? host?.path ?? '')
   const [prompts, setPrompts] = useState<ProjectPrompt[]>(project?.prompts ?? [])
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -197,7 +200,9 @@ function Body({
       // 等翻译时提示词可能又变了：用最新的
       const latest = await new Promise<ProjectPrompt[]>((r) => setPrompts((l) => (r(l), l)))
       const input = { name: name.trim(), path: dir.trim(), prompts: latest }
-      const p = project ? await api.updateDesignProject(project.id, input) : await api.createDesignProject(input)
+      const p = project
+        ? await api.updateDesignProject(project.id, input)
+        : await api.createDesignProject({ ...input, owner })
       setDesignProjects((l) => (project ? l.map((x) => (x.id === p.id ? p : x)) : [...l, p]))
       onSaved?.(p)
       if (project) toast.success(t('项目设置已保存'))

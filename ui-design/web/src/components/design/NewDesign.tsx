@@ -32,7 +32,7 @@ const WEB_SIZES = [
 ]
 
 export function NewDesign({ projectId }: { projectId?: string }) {
-  const { designProjects: projects, setDesigns } = useDesignData()
+  const { designProjects: projects, owner, setDesigns } = useDesignData()
   const { go } = useNav()
   const [creatingProject, setCreatingProject] = useState(false)
   const [pid, setPid] = useState(projectId || projects[0]?.id || '')
@@ -102,7 +102,9 @@ export function NewDesign({ projectId }: { projectId?: string }) {
         <DesignProjectDialog open={creatingProject} onOpenChange={setCreatingProject} onSaved={(p) => setPid(p.id)} />
         {!projects.length ? (
           <div className="ud:mt-8 ud:rounded-xl ud:bg-panel ud:p-5 ud:text-body ud:text-muted">
-            {t('设计放在 UI 项目里（和 Agent 的项目分开）。先建一个项目吧，一般一个游戏一个项目。')}
+            {owner
+              ? t('设计放在 UI 项目里，这个项目里还没有。先建一个吧，一般一个游戏一个，美术提示词也设在 UI 项目上。')
+              : t('设计放在 UI 项目里（和 Agent 的项目分开）。先建一个项目吧，一般一个游戏一个项目。')}
             <Button className="ud:mt-3" onClick={() => setCreatingProject(true)}>
               <Plus className="ud:h-4 ud:w-4" />
               {t('新建 UI 项目')}
@@ -207,9 +209,9 @@ export function NewDesign({ projectId }: { projectId?: string }) {
             </div>
             <div className="ud:grid ud:grid-cols-1 ud:gap-4 ud:sm:grid-cols-2">
               <div className="ud:flex ud:flex-col ud:gap-1.5">
-                <span className="ud:text-body ud:font-medium">{t('项目')}</span>
+                <span className="ud:text-body ud:font-medium">{owner ? t('UI 项目') : t('项目')}</span>
                 <Select
-                  aria-label={t('项目')}
+                  aria-label={owner ? t('UI 项目') : t('项目')}
                   value={pid}
                   onChange={(e) => (e.target.value === '+new' ? setCreatingProject(true) : setPid(e.target.value))}
                   options={[

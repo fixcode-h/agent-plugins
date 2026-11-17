@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore, type SetStateAction } from 'react'
+import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type SetStateAction } from 'react'
 import type { DesignMeta, DesignProject } from '@shared/design'
 import { api } from '@/lib/api'
 
@@ -80,12 +80,33 @@ function watchRunning() {
   }
 }
 
-/** 设计列表和 UI 项目，和原来 useData() 里的字段同名 */
+/**
+ * 当前的面板项目（UI 设计 1.4.0 起按项目启用：整页从项目工具打开，UiDesignPage 给出）和面板现有项目的 id。
+ * owner 空是不分项目（旧面板不给项目、无头截图页），所有 UI 项目都列出来。
+ * 面板项目由 UiDesignPage 从 useData 取了放进来：无头截图页没有面板的数据上下文，这里不能直接调 useData
+ */
+export const DesignOwner = createContext<{ owner: string; panel: string[] }>({ owner: '', panel: [] })
+export const useDesignOwner = () => useContext(DesignOwner).owner
+
+/**
+ * 设计列表和 UI 项目，和原来 useData() 里的字段同名。designProjects 只有当前面板项目的；
+ * others 是还没归属、或归属的面板项目已经删了的 UI 项目（页面里列成「其他 UI 项目」，点一下归到当前项目）。
+ * designs 不按项目筛：设计页打开别的项目的设计（旧链接）时还找得到它
+ */
 export function useDesignData() {
   const s = useSyncExternalStore(subscribe, () => state)
+  const { owner, panel } = useContext(DesignOwner)
   // 第一次用到时取一次（subscribe 里也会取，这里兜住 StrictMode 下先退订再订阅的情况）
   useEffect(() => {
     if (!loading) void reloadDesigns()
   }, [])
-  return { ...s, setDesigns, setDesignProjects, reloadDesigns }
+  const scoped = useMemo(() => {
+    if (!owner) return { designProjects: s.designProjects, others: [] as DesignProject[] }
+    const known = new Set(panel)
+    return {
+      designProjects: s.designProjects.filter((p) => p.owner === owner),
+      others: s.designProjects.filter((p) => !p.owner || !known.has(p.owner)),
+    }
+  }, [s.designProjects, owner, panel])
+  return { ...s, ...scoped, owner, setDesigns, setDesignProjects, reloadDesigns }
 }

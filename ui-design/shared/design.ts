@@ -497,12 +497,18 @@ zh 是给用户看的中文（简短，几个字到一句话），en 是发给�
 }
 
 /**
- * UI 设计自己的项目：和 Agent 的项目分开，互不影响。path 是可选的本机目录，「导出到项目目录」写到这里
+ * UI 项目：挂在面板的项目下（UI 设计 1.4.0 起按项目启用，只在项目工具里出现），一个面板项目里可以有几个 UI 项目。
+ * path 是可选的本机目录，「导出到项目目录」写到这里
  */
 export const DesignProject = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string().default(''),
+  /**
+   * 属于哪个面板项目（项目 id）。1.4.0 以前的 UI 项目没有，插件启动时按 id、目录归一次（server/design-owners.ts）；
+   * 归不上或那个面板项目删了的，在 UI 设计页的「其他 UI 项目」里列着，点一下归到当前项目
+   */
+  owner: z.string().default(''),
   /** 项目级的提示词：这个项目里所有设计、所有图片都带上，保证整个游戏美术风格统一 */
   prompts: z.array(ProjectPrompt).max(300).default([]),
   createdAt: z.string(),
@@ -512,6 +518,7 @@ export type DesignProject = z.infer<typeof DesignProject>
 export const DesignProjectInput = z.object({
   name: z.string().trim().min(1).max(100),
   path: z.string().trim().max(1000).default(''),
+  owner: z.string().trim().max(200).default(''),
   prompts: z.array(ProjectPrompt).max(300).default([]),
 })
 export type DesignProjectInput = z.input<typeof DesignProjectInput>

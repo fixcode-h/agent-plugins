@@ -149,7 +149,13 @@ const meta = (d: Design): DesignMeta => ({
   updatedAt: d.updatedAt,
 })
 
-export function designsApi(deps: { projects: Lister<Project> }) {
+export function designsApi(deps: {
+  projects: Lister<Project>
+  /** 启动后读 UI 项目时，把还没归属的归到面板项目（只做一次，design-owners.ts）；改了返回 true */
+  adopt?: (list: DesignProject[]) => Promise<boolean>
+  /** UI 项目归到某个面板项目时，在那个项目里打开 UI 设计（不然从项目工具找不到） */
+  enable?: (projectId: string) => Promise<void>
+}) {
   const cache = new Map<string, Design>()
   let loaded = false
   const writing = new Map<string, Promise<void>>()
@@ -222,6 +228,7 @@ export function designsApi(deps: { projects: Lister<Project> }) {
           id: pid,
           name: old?.name ?? t('未分类'),
           path: old?.path ?? '',
+          owner: old ? pid : '',
           prompts: [],
           createdAt: at,
           updatedAt: at,
@@ -229,6 +236,7 @@ export function designsApi(deps: { projects: Lister<Project> }) {
       }
       await saveProjects()
     }
+    if (deps.adopt && (await deps.adopt(projects))) await saveProjects()
     return projects
   }
   const saveProjects = () => writeJsonAtomic(PROJECTS_FILE(), projects ?? [], true)
@@ -1585,6 +1593,7 @@ export function designsApi(deps: { projects: Lister<Project> }) {
       const item: DesignProject = { id: randomUUID(), ...p.data, createdAt: at, updatedAt: at }
       list.push(item)
       await saveProjects()
+      if (item.owner) await deps.enable?.(item.owner)
       return c.json(item, 201)
     })
     // 只改传了的字段：改名时不会把提示词清掉
@@ -1614,8 +1623,10 @@ export function designsApi(deps: { projects: Lister<Project> }) {
       if (!item) return bad(c, t('项目不存在'), 404)
       // 默认值会补上没传的字段，只取请求里有的
       const patch = Object.fromEntries(Object.entries(p.data).filter(([k]) => k in (body as object)))
+      const moved = typeof patch.owner === 'string' && patch.owner && patch.owner !== item.owner
       Object.assign(item, patch, { updatedAt: now() })
       await saveProjects()
+      if (moved) await deps.enable?.(item.owner)
       return c.json(item)
     })
     // 删除项目时连同它的设计一起删
@@ -2333,6 +2344,8 @@ export function designsApi(deps: { projects: Lister<Project> }) {
 
   return {
     routes,
+    /** 读一遍 UI 项目（启动时调：顺带把旧的 UI 项目归到面板项目） */
+    loadProjects,
     running: () => [...jobs.values()].filter((j) => j.status === 'running').length,
     /** 插件关掉、删除、升级前：停掉还在跑的设计任务，关掉无头浏览器 */
     stop: () => {

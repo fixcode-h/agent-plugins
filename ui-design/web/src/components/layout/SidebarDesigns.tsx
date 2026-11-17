@@ -15,6 +15,7 @@ import {
 import { toast } from '@/lib/toast'
 import type { DesignMeta, DesignProject } from '@shared/design'
 import { DesignProjectDialog, type DesignProjectSection } from '@/components/design/DesignProjectDialog'
+import { OtherProjects } from './OtherDesignProjects'
 import { api } from '@/lib/api'
 import { useNav } from '@/lib/data'
 import { useDesignData } from '@/lib/design-store'
@@ -61,7 +62,7 @@ const KINDS = [
 
 /** 设计模式的侧栏（设计数据见 lib/design-store） */
 export function UiDesignList() {
-  const { designProjects: projects, setDesignProjects, designs, setDesigns } = useDesignData()
+  const { designProjects: projects, others, owner, setDesignProjects, designs, setDesigns } = useDesignData()
   const { route, go } = useNav()
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const [renaming, setRenaming] = useState('')
@@ -239,15 +240,19 @@ export function UiDesignList() {
   return (
     <div className="ud:scroll-fade ud:flex ud:min-h-0 ud:flex-1 ud:flex-col ud:overflow-y-auto ud:px-2.5 ud:pb-2">
       <div className="ud:mb-1.5 ud:flex ud:h-6 ud:shrink-0 ud:items-center ud:pr-1 ud:pl-2">
-        {/* 上面的下拉已经写了是 UI 设计，分组标题只写「项目」（照设计稿） */}
-        <p className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>{t('项目')}</p>
+        {/* 顶上的卡片是面板项目，这里列的是它下面的 UI 项目，标题写全免得混 */}
+        <p className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>
+          {owner ? t('UI 项目') : t('项目')}
+        </p>
         <IconButton icon={Plus} label={t('新建 UI 项目')} onClick={() => setEditing(null)} />
       </div>
       {!projects.length && (
         <EmptyPanel as="div" size="md" className="ud:mx-0.5 ud:mt-1 ud:flex ud:flex-col ud:items-center ud:gap-2">
           <Palette className="ud:h-5 ud:w-5 ud:text-subtle" strokeWidth={2} />
           <p className="ud:text-xs ud:leading-relaxed ud:text-subtle">
-            {t('还没有 UI 项目。UI 设计的项目和 Agent 的项目是分开的。')}
+            {owner
+              ? t('这个项目里还没有 UI 项目。设计放在 UI 项目里，一般一个游戏一个。')
+              : t('还没有 UI 项目。UI 设计的项目和 Agent 的项目是分开的。')}
           </p>
           <Button variant="link" onClick={() => setEditing(null)} className="ud:text-xs ud:font-medium">
             {t('新建 UI 项目')}
@@ -357,6 +362,7 @@ export function UiDesignList() {
           </section>
         )
       })}
+      {owner && others.length > 0 && <OtherProjects list={others} owner={owner} />}
       <DesignProjectDialog
         open={editing !== undefined}
         onOpenChange={(o) => !o && setEditing(undefined)}
