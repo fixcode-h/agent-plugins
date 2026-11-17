@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { csvCompare, csvQuery, csvSummary, parseCsv, splitCsvLine } from '../server/perf/csv.ts'
 import { memCompare, memQuery, memSummary, parseMemReport } from '../server/perf/memreport.ts'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
+import { trimTree } from '../server/perf/trace-trim.ts'
+import { withLuaChannels, withoutLuaChannels, parseLuaTrace } from '../server/perf/lua-trace.ts'
 
 // ---------- CSV ----------
 assert.deepEqual(splitCsvLine('a,"b, c",d'), ['a', 'b, c', 'd'])
@@ -89,4 +91,33 @@ assert.equal(diff.shrunk.length, 0)
 
 assert.throws(() => parseMemReport('hello world'), /不像 memreport/)
 
+// ---------- trace 带 Lua：通道合并去重 ----------
+assert.equal(withLuaChannels('cpu,gpu,frame', true), 'cpu,gpu,frame,lua,luac,counters', 'Lua 计数器要 counters 通道')
+assert.equal(withLuaChannels('cpu,LUA,counters', 'noc'), 'cpu,LUA,counters', '自定义里已经勾了 lua 不重复')
+assert.equal(withLuaChannels('cpu,lua', false), 'cpu,lua,counters', '自定义里勾了 lua 也补 counters')
+assert.equal(withLuaChannels('cpu', false), 'cpu')
+assert.equal(withoutLuaChannels('cpu,lua,luac,frame'), 'cpu,frame')
+assert.equal(parseLuaTrace('noc'), 'noc')
+assert.equal(parseLuaTrace('false'), false)
+assert.equal(parseLuaTrace(undefined), undefined)
+
+// ---------- 调用树裁给 Agent：最热的先留，整棵 JSON 不超过预算 ----------
+{
+  let n = 0
+  const mk = (depth, incl) => ({
+    id: n++,
+    name: `BP_Some_Long_Module_Name_C:Function_${n}`,
+    count: 10,
+    incl,
+    excl: incl / 4,
+    children: depth ? Array.from({ length: 12 }, (_, i) => mk(depth - 1, incl / (i + 2))) : undefined,
+  })
+  const big = mk(5, 1000)
+  const cut = trimTree(big)
+  assert.ok(JSON.stringify(cut).length <= 4000, `裁完 ${JSON.stringify(cut).length} 字`)
+  assert.equal(cut.children[0].incl, big.children[0].incl, '最热的那支要留下')
+  assert.ok(cut.more > 0, '裁掉的子节点要记在 more')
+  const small = { id: -1, name: '全部', count: 1, incl: 10, children: [{ id: 1, name: 'a', count: 1, incl: 9 }] }
+  assert.deepEqual(trimTree(small), small, '小树原样返回')
+}
 console.log('性能解析器测试通过：CSV 和 memreport')

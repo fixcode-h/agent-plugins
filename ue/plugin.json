@@ -134,6 +134,50 @@
       "unit": "秒"
     },
     {
+      "key": "perfShareLow",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "中性色以下",
+      "desc": "调用树和火焰图里占根不到这个比例的行用很淡的中性色",
+      "default": 5,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareMid",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "强调色到",
+      "desc": "从上一档到这个比例用强调色，再往上用警告色",
+      "default": 20,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareHigh",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "危险色起",
+      "desc": "占根到这个比例以上用危险色（红），最重的几支一眼能看出来",
+      "default": 50,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareStrength",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "颜色强度",
+      "desc": "占比底条的浓淡：100 是默认，调小更淡、调大更浓（文字始终在上面，不会被盖住）",
+      "default": 100,
+      "min": 25,
+      "max": 300,
+      "unit": "%"
+    },
+    {
       "key": "dangerous",
       "type": "text",
       "group": "安全",

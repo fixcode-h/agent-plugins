@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useState, type MouseEvent, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
+import { shareColor, shareTone } from './share-tone.ts'
 import { openMenu, type MenuItem } from '../../menu.tsx'
 
 /**
@@ -251,6 +252,7 @@ function TreeRow({
   const kids = node.children ?? []
   const [open, setOpen] = useState(mode === 'all' || (mode === 'auto' && depth < 2) || depth === 0)
   const pRoot = (node.incl / total) * 100
+  const tone = shareTone()
   const pParent = parent ? (node.incl / Math.max(parent.incl, 1e-9)) * 100 : 100
   const pct = (v: number) => (v >= 99.95 ? '100%' : `${v.toFixed(v < 10 ? 2 : 1)}%`)
   return (
@@ -275,11 +277,11 @@ function TreeRow({
           .filter(Boolean)
           .join('\n')}
       >
-        {/* 行底一条淡的占根比例条（和计时器表一样），比单独一列进度条省地方 */}
+        {/* 行底一条占根比例条，按占根分档变色（share-tone.ts），比单独一列进度条省地方、轻重一眼能分 */}
         <span
           aria-hidden
-          className="ue:pointer-events-none ue:absolute ue:inset-y-0 ue:left-0 ue:bg-accent/8 ue:transition-[width] ue:duration-300"
-          style={{ width: `${Math.min(100, pRoot)}%` }}
+          className="ue:pointer-events-none ue:absolute ue:inset-y-0 ue:left-0 ue:transition-[width,background-color] ue:duration-300"
+          style={{ width: `${Math.min(100, pRoot)}%`, background: shareColor(pRoot, tone) }}
         />
         <span className="ue:relative ue:flex ue:min-w-0 ue:items-center ue:gap-1">
           <button

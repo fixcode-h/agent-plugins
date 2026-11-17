@@ -1,43 +1,9 @@
 import { t } from '../../host.ts'
-import type { LeakItem, ProfItem, SnapCapture } from './debug-types.ts'
-import { CaptureView, LeakList, ProfileTable } from './DebugViews.tsx'
+import type { LeakItem, SnapCapture } from './debug-types.ts'
+import { CaptureView, LeakList } from './DebugViews.tsx'
 
-/** 设置 →「组件」里 Lua「调试」页签三块结果的示例（示例数据，不连 UE） */
+/** 设置 →「组件」里 Lua「调试」页签两块结果的示例（示例数据，不连 UE） */
 const ROOT = 'D:/Proj/MyGame'
-
-const PROF: ProfItem[] = [
-  {
-    fn: 'Tick',
-    src: '...Script/UI/BagPanel.lua:88',
-    file: `${ROOT}/Content/Script/UI/BagPanel.lua`,
-    line: 88,
-    c: false,
-    calls: 1240,
-    totalMs: 412.6,
-    selfMs: 96.3,
-  },
-  {
-    fn: 'RefreshSlots',
-    src: '...Script/UI/BagPanel.lua:140',
-    file: `${ROOT}/Content/Script/UI/BagPanel.lua`,
-    line: 140,
-    c: false,
-    calls: 310,
-    totalMs: 290.1,
-    selfMs: 61.8,
-  },
-  {
-    fn: 'GetItemConfig',
-    src: '...Script/Data/ItemData.lua:12',
-    file: `${ROOT}/Content/Script/Data/ItemData.lua`,
-    line: 12,
-    c: false,
-    calls: 18600,
-    totalMs: 120.4,
-    selfMs: 58.2,
-  },
-  { fn: 'SetText', src: '[C]', line: 0, c: true, calls: 9300, totalMs: 44.7, selfMs: 44.7 },
-]
 
 const CAP: SnapCapture = {
   at: new Date().toISOString(),
@@ -80,10 +46,6 @@ const noop = () => undefined
 export function LuaDebugSpecimen() {
   return (
     <div className="ue:flex ue:flex-col ue:gap-6">
-      <div>
-        <div className="ue:mb-2 ue:text-caption ue:text-subtle">{t('性能采样')}</div>
-        <ProfileTable items={PROF} onOpen={noop} />
-      </div>
       <div>
         <div className="ue:mb-2 ue:text-caption ue:text-subtle">{t('快照点')}</div>
         <CaptureView cap={CAP} onOpen={noop} />
