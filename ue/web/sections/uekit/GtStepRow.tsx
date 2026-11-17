@@ -19,6 +19,7 @@ import {
 import { h, t } from '../../host.ts'
 import { CheckMark, ms, StepIcon, type StepRow } from './GtStepDetail.tsx'
 import { ambiguousOf } from './gt-steps.ts'
+import { keyOf } from './gt-key.ts'
 import { stepTitle } from './gt-step-title.ts'
 
 /** 动作 → 行首的小图标：一眼分出点击、等待、按键，不用读动作名 */
@@ -69,7 +70,7 @@ function actionIcon(a?: string): LucideIcon {
 /**
  * GameTest 步骤列表的一行：序号、状态、动作图标、一句中文（stepTitle），右边是耗时。
  * 选择器、hint、参数、结果消息都不在行里，选中后在右边详情看；只留两个要马上看到的标记：
- * 选择器可能不唯一（黄三角）、「核对选择器」的结果（准星 / 红三角）
+ * 选择器可能不唯一（黄三角）、「核对选择器」的结果（准星 / 红三角）、条目怎么认待定（黄字，GameTest 1.4.0）
  */
 export function GtStepRow({
   row,
@@ -93,6 +94,8 @@ export function GtStepRow({
   const Icon = actionIcon(action)
   const title = stepTitle(row.def, row.res?.action, row.res?.target)
   const ambiguous = ambiguousOf(row.def)
+  // 录制时点在列表条目上、没定下用哪个字段认（GameTest 1.4.0）：标「待定」，详情里「回放怎么认」再定
+  const pending = keyOf(row.def?.hint as Record<string, unknown> | undefined)?.by === 'pending'
   const status = row.res?.status
   return (
     <button
@@ -119,6 +122,14 @@ export function GtStepRow({
         {ambiguous && (
           <span title={t('选择器可能不唯一：{r}', { r: ambiguous })} className="ue:shrink-0">
             <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
+          </span>
+        )}
+        {pending && (
+          <span
+            title={t('这一格怎么认还没定：选中后在「回放怎么认」里挑')}
+            className="ue:shrink-0 ue:text-caption ue:text-warning"
+          >
+            {t('待定')}
           </span>
         )}
         <CheckMark check={row.check} />

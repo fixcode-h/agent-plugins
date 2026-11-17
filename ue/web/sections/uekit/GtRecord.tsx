@@ -6,6 +6,7 @@ import { h, t } from '../../host.ts'
 import { Note } from '../../ui.tsx'
 import { humanStep } from './gt-steps.ts'
 import { moveLine } from './gt-move.ts'
+import type { KeyAsk } from './gt-key.ts'
 import { GtRecordQuick, type RecordQuick } from './GtRecordQuick.tsx'
 
 /**
@@ -21,6 +22,10 @@ export interface RecordStatus extends RecordQuick {
   /** 录制器认「谁接住了输入」靠什么：slateDebugging 准；hitPath 是这个进程没编 Slate 调试，按命中路径推断 */
   handlerSource?: 'slateDebugging' | 'hitPath' | string
   keepPace?: boolean
+  /** 正在暂停问某一步的条目怎么认（GameTest 1.4.0） */
+  ask?: KeyAsk
+  askKey?: string
+  askTimeoutSec?: number
 }
 
 /** handlerSource=hitPath 时的提示：开始录制前（对话框里）和录制中都显示 */

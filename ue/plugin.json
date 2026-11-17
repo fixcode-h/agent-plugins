@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -108,6 +108,30 @@
       "label": "录完自动认按钮上的字",
       "desc": "停止录制后用 OCR 认截图里红框中的字，补进步骤名（不影响回放怎么找控件）；要先在下面下载 OCR",
       "default": true
+    },
+    {
+      "key": "gtAskKey",
+      "type": "select",
+      "group": "GameTest 录制",
+      "label": "点到列表条目时",
+      "desc": "录制时点到列表、格子里的条目，要挑一个能唯一认出它的字段（如物品 Id），回放才不会因为顺序变了点错。拿不准时暂停游戏、在这里弹窗让你挑",
+      "default": "unsure",
+      "options": [
+        { "value": "unsure", "label": "只在拿不准时暂停问我" },
+        { "value": "always", "label": "每次都暂停问我" },
+        { "value": "never", "label": "不问，录完在步骤详情里再定" }
+      ]
+    },
+    {
+      "key": "gtAskTimeout",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "暂停多久自动继续",
+      "desc": "暂停问条目怎么认时，这么久没选就按自动挑的继续，这一步标「待定」。0 表示一直等你选",
+      "default": 0,
+      "min": 0,
+      "max": 3600,
+      "unit": "秒"
     },
     {
       "key": "dangerous",

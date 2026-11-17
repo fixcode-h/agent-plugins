@@ -21,6 +21,8 @@ import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtOfflineBar } from './GtOffline.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
+import { keyAskArgs } from './gt-key.ts'
+import { GtKeyAsk } from './GtKeyAsk.tsx'
 import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
@@ -272,6 +274,7 @@ export function GameTest() {
         name: recName.trim() || t('新录制'),
         keepPace,
         shots: shotsArg(),
+        ...keyAskArgs(),
       })
       setRec({ ...r, last: [] })
     })
@@ -431,6 +434,15 @@ export function GameTest() {
             onOpen={(p) => go('gametest', p)}
             onStop={() => void stop()}
             onClose={() => setClosedBatch(batch.id)}
+          />
+        )}
+        {recording && rec?.ask && (
+          <GtKeyAsk
+            key={`${rec.ask.step}`}
+            project={project.id}
+            ask={rec.ask}
+            timeoutSec={rec.askTimeoutSec}
+            onDone={() => undefined}
           />
         )}
         {recording && rec ? (

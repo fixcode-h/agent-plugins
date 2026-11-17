@@ -9,6 +9,7 @@ import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
+import { GtKeyRules, tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
 /**
@@ -38,6 +39,8 @@ interface GtRunConfig {
   randomSeed?: number
   /** move 步骤和录制快捷键（GameTest 1.3.0） */
   move?: GtMoveConfig
+  /** 条目怎么认的规则（GameTest 1.4.0） */
+  itemKeys?: GtKeyRule[]
 }
 
 interface ConfigReply {
@@ -80,6 +83,7 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
   const [setup, setSetup] = useState('')
   const [seed, setSeed] = useState('')
   const [move, setMove] = useState<GtMoveConfig>({})
+  const [keyRules, setKeyRules] = useState<GtKeyRule[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   // 阻挡界面的 WBP 候选：跳转弹窗同一份本地索引，打开设置时取一次（没变只回 same），打字只在网页里筛
@@ -96,6 +100,7 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         setSetup(setupText(r.config.setup))
         setSeed(r.config.randomSeed === undefined ? '' : String(r.config.randomSeed))
         setMove(r.config.move ?? {})
+        setKeyRules(r.config.itemKeys ?? [])
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -132,6 +137,8 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         ...(setupParsed.steps?.length ? { setup: setupParsed.steps } : {}),
         ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
         ...(tidyMove(move) ? { move: tidyMove(move) } : {}),
+        // 录制弹窗里存的规则也在这份文件里：表单整份重写，不带上就丢了
+        ...(tidyKeyRules(keyRules).length ? { itemKeys: tidyKeyRules(keyRules) } : {}),
       }
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
@@ -237,6 +244,8 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
       </ui.Field>
 
       <GtMoveSettings value={move} onChange={setMove} />
+
+      <GtKeyRules value={keyRules} onChange={setKeyRules} />
 
       <section className="ue:flex ue:flex-col ue:gap-2">
         <div className="ue:flex ue:items-center ue:gap-2">
