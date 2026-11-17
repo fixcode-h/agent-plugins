@@ -26,6 +26,7 @@ import { LuaDebugSpecimen } from './sections/lua/DebugSpecimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { VsDebugSpecimen } from './vs-debug/Specimen.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
+import { SuggestInputSpecimen } from './SuggestInput.tsx'
 import { UePage } from './UePage.tsx'
 
 /** 接入了 UE 的面板项目（对话右栏的「UE」页签按它判断）：激活时取一次，之后每分钟刷新 */
@@ -65,6 +66,8 @@ const activate: ActivateWeb = (host) => {
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
+      // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项
+      { id: 'suggest-input', label: 'UE · SuggestInput', tune: ['input', 'menu'], Specimen: SuggestInputSpecimen },
       // 一行放不下的长路径（AssetForge 配置根、新建配置弹窗）：省略前面的目录，悬停看全、点一下复制
       { id: 'path-text', label: 'UE · PathText', Specimen: PathTextSpecimen },
       // 对象页、资源页的检视区（设计稿 designs/对象页合并与资源导航-设计稿.md 第 9 节）：「最近看过」「更多」下拉跟面板「菜单」走
