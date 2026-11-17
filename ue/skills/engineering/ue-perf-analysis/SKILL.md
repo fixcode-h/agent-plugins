@@ -40,7 +40,7 @@ user-invocable: true
 
 CSV 只能说明「哪些帧慢、哪一类慢」。要知道具体哪个函数慢，录 trace（桥接 1.5.0 以上）：
 
-1. `ue_perf action=start kind=trace seconds=20 label=<名字>`；要看蓝图函数名加 `preset=named`，查加载慢用 `preset=loading`。操作前后照样 `mark`。
+1. `ue_perf action=start kind=trace seconds=20 label=<名字>`；要看蓝图函数名加 `preset=named`；按问题选预设：渲染慢 `gpu`、加载卡顿 `loading`、内存 `memtag`（UE 要 -llm）、网络 `net`、动画 `animation`、任务等待和线程切换 `task`、对象创建销毁 `object`（都在标准通道上加）。操作前后照样 `mark`。
 2. `ue_perf action=stop`，再 `ue_capture action=summary id=<id>`。第一次查要等编辑器或后台编辑器分析，返回 `analyzing` 就过几秒再查。
 3. 看 `topTimers`（按独占时间排）和 `worstFrames`，然后：
    - `query what=timers frame=<最慢那帧>` 或 `from` / `to` 写书签名，只看那一段；
@@ -53,7 +53,7 @@ CSV 只能说明「哪些帧慢、哪一类慢」。要知道具体哪个函数�
 
 ## Lua（UnLua 项目）
 
-Lua 函数和 UE 的作用域录在同一份 trace 里（UELink 2.8 起），能看出哪一帧慢、慢在哪个 Lua 函数、它是从哪个 UE 回调（Actor Tick、动画更新、UI 事件）进来的。
+Lua 函数和 UE 的作用域录在同一份 trace 里（UELink 2.9 起），能看出哪一帧慢、慢在哪个 Lua 函数、它是从哪个 UE 回调（Actor Tick、动画更新、UI 事件）进来的。
 
 1. `ue_perf action=start kind=trace lua=true`，和任何 `preset` 叠加。不写 `lua` 时按项目设置（装了 UnLua 默认开）。`lua=true` 时 C 函数（`UE.GetVelocity` 这类 UE 接口、`string.format` 这类库函数）单独成块；调用特别密集、只想看 Lua 结构时用 `lua="noc"`，C 函数的时间算进调用它的 Lua 函数，trace 也更小。返回里有 `luaNote` 就是没录上 Lua（UELink 太旧、项目没装 UnLua），原样告诉用户。
 2. 停止后 `summary` 带 `lua: true` 时：
@@ -61,7 +61,7 @@ Lua 函数和 UE 的作用域录在同一份 trace 里（UELink 2.8 起），能
    - `query what=tree luaOnly=true`（可加 `frame` 或 `from` / `to`）：从最外层的 Lua 函数往下的调用树，每层只留最热的几支；要细看某一支，用它的 `id` 当 `root` 再查。`root=<UE 计时器名>`（如 `UWorld::Tick`）也能从 UE 作用域往下看。
    - `query what=butterfly timer=<Lua 函数名>` 的 `callers` 看它是从哪个 UE 回调进来的。
 3. 读数时注意：录 Lua 时 Lua 会变慢一些（每次调用多一个事件），看占比、看谁最重，不看绝对毫秒数。IDE 的 Lua 调试器连着时录不到 Lua，先断开。
-4. `ue_lua action=profile` 只有按函数平铺的总表，看不出哪一帧、谁调了谁，只在 UELink 低于 2.8、录不了 Lua trace 时临时用。
+4. `ue_lua action=profile` 只有按函数平铺的总表，看不出哪一帧、谁调了谁，只在 UELink 低于 2.9、录不了 Lua trace 时临时用。
 
 ## 内存
 

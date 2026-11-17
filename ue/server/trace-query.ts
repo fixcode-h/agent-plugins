@@ -6,6 +6,7 @@ import { BridgeError, liveCards, rpc, type Card } from './instances.ts'
 import type { OpCtx } from './ops.ts'
 import { isRecordingTrace } from './perf.ts'
 import { shiftArgs, shiftResult } from './perf/trace-origin.ts'
+import { LUA_TRACE_BRIDGE } from './perf/lua-trace.ts'
 import { trimTree, type TreeNode } from './perf/trace-trim.ts'
 import type { UeProject } from './types.ts'
 import { c, exists, t } from './util.ts'
@@ -118,7 +119,7 @@ interface TimerRow {
   inclMax: number
   excl: number
   gpu?: boolean
-  /** Lua 计时器（UELink 2.8 起）：.lua 文件和定义行；C 函数 file 是 <lua:C>、c=true */
+  /** Lua 计时器（UELink 2.9 起）：.lua 文件和定义行；C 函数 file 是 <lua:C>、c=true */
   file?: string
   line?: number
   c?: boolean
@@ -175,7 +176,7 @@ export async function traceSummary(ctx: OpCtx, id: string) {
     topTimers: timers.items.map(brief),
     bookmarks: marks.items.slice(0, 30).map((m) => ({ at: r2(m.t), name: m.text })),
     next: 'query what=timers（from/to 或 frame 限定范围）→ what=butterfly timer=<名字或 id> 看调用者 / 被调用者 → what=stack lane=<泳道> time=<秒> 看那一刻的调用堆栈',
-    // 录了 Lua 的 trace（UELink 2.8 起 info 带 lua）：提示怎么只看 Lua
+    // 录了 Lua 的 trace（UELink 2.9 起 info 带 lua）：提示怎么只看 Lua
     ...(info.lua
       ? {
           lua: true,
@@ -187,7 +188,7 @@ export async function traceSummary(ctx: OpCtx, id: string) {
 }
 
 const NO_LUA =
-  '没有 Lua 计时器：这份 trace 没录 Lua（ue_perf action=start lua=true），或者分析用的 UELink 低于 2.8.0（去 UE 页「UE 插件」升级）'
+  '没有 Lua 计时器：这份 trace 没录 Lua（ue_perf action=start lua=true），或者分析用的 UELink 低于 2.9.0（去 UE 页「UE 插件」升级）'
 
 const brief = (x: TimerRow) => ({
   id: x.id,
@@ -312,7 +313,7 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
       return { stats: frameStats(f), worst: list.slice(0, top) }
     }
     case 'timers': {
-      // lua：只要 Lua 计时器（含 C 函数）；mergeC：C 函数的时间并进调用它的 Lua 函数（UELink 2.8 起，设计稿 9.2）
+      // lua：只要 Lua 计时器（含 C 函数）；mergeC：C 函数的时间并进调用它的 Lua 函数（UELink 2.9 起，设计稿 9.2）
       const lua = q.lua === true || q.lua === 'true'
       const mergeC = q.mergeC === true || q.mergeC === 'true'
       const res = (await wrap({
@@ -354,15 +355,17 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
         throw new BridgeError(
           t('{msg}（what=tree 要分析用的编辑器里 UELink 是 {min} 起，去 UE 页「UE 插件」升级）', {
             msg: (e as Error).message,
-            min: '2.8.0',
+            min: LUA_TRACE_BRIDGE,
           }),
         )
       }
       if (res.analyzing) throw new BridgeError(ANALYZING(res).next)
-      if (!res.root) throw new BridgeError(t('分析用的 UELink 没返回调用树：要 {min} 起', { min: '2.8.0' }))
+      if (!res.root) throw new BridgeError(t('分析用的 UELink 没返回调用树：要 {min} 起', { min: LUA_TRACE_BRIDGE }))
+      // 给了 root 时桥接的根（id -1「全部」）下面只有它一个孩子：直接从它开始，少一层
+      const top = root !== undefined && res.root.children?.length === 1 ? res.root.children[0] : res.root
       return {
         range: { from: range.t0 ?? 0, to: range.t1 ?? res.duration },
-        root: trimTree(res.root),
+        root: trimTree(top),
         note: '时间单位毫秒；每层只留最热的几支（按包含时间），more 是没列出的子节点数；要看某一支往下就用它的 id 当 root 再查',
       }
     }

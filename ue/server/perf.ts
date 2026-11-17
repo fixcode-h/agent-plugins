@@ -107,21 +107,28 @@ export const TRACE_CHANNELS = [
   'memory',
   'screenshot',
   'contextswitch',
-  // UELink 2.8 起：Lua 函数、C 函数单独成块（luac 要和 lua 一起开），见 perf/lua-trace.ts
+  // UELink 2.9 起：Lua 函数、C 函数单独成块（luac 要和 lua 一起开），见 perf/lua-trace.ts
   'lua',
   'luac',
 ] as const
 
 /**
- * trace 录制预设（性能页设计 3.4，默认「标准」）。命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，
- * 开销大一些所以单独一档。内存标签要 UE 用 -llm 启动才有数据。
+ * trace 录制预设（性能页设计 3.4，默认「标准」；2026-11-17 照 Unreal Insights 常用组合补齐，网页 PresetPicker.tsx 同一份键）。
+ * 命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，开销大一些所以单独一档。
+ * 内存标签要 UE 用 -llm 启动才有数据；rhicommands / rendercommands 开销大；contextswitch 要管理员权限。
+ * 旧键（standard / named / loading / memtag）不改名，Agent 和用户的提示词里写死了它们。Lua 不进预设，是叠加的 lua 参数
  */
 const STANDARD = 'cpu,gpu,frame,bookmark,counters,log'
 export const TRACE_PRESETS: Record<string, { channels: string; named?: boolean }> = {
   standard: { channels: STANDARD },
   named: { channels: STANDARD, named: true },
-  loading: { channels: `${STANDARD},loadtime,assetloadtime` },
+  gpu: { channels: `${STANDARD},rhicommands,rendercommands` },
+  loading: { channels: `${STANDARD},loadtime,assetloadtime,file` },
   memtag: { channels: `${STANDARD},memtag` },
+  net: { channels: `${STANDARD},net` },
+  animation: { channels: `${STANDARD},animation` },
+  task: { channels: `${STANDARD},task,contextswitch` },
+  object: { channels: `${STANDARD},object` },
 }
 
 function traceChannels(preset: string, custom: string, namedEvents?: boolean) {
@@ -133,13 +140,15 @@ function traceChannels(preset: string, custom: string, namedEvents?: boolean) {
   }
   const p = TRACE_PRESETS[preset]
   if (!p)
-    throw new BridgeError(t('不认识的录制预设：{p}（standard / named / loading / memtag / custom）', { p: preset }))
+    throw new BridgeError(
+      t('不认识的录制预设：{p}（可选：{list} / custom）', { p: preset, list: Object.keys(TRACE_PRESETS).join(' / ') }),
+    )
   return { channels: p.channels, named: !!p.named }
 }
 
 /**
  * trace 的 Lua 通道（Lua 性能分析设计稿 5.1、9.3）：和预设、自定义通道合并去重；arg 没给时跟项目设置。
- * 项目没装 UnLua、目标进程的 UELink 低于 2.8 时去掉 Lua 通道照常录 UE 部分，返回一句说明（网页和 Agent 都看得到）
+ * 项目没装 UnLua、目标进程的 UELink 低于 2.9 时去掉 Lua 通道照常录 UE 部分，返回一句说明（网页和 Agent 都看得到）
  */
 async function luaChannels(
   ctx: OpCtx,
@@ -149,7 +158,8 @@ async function luaChannels(
   const p = ctx.project
   const ch = withLuaChannels(channels, parseLuaTrace(arg) ?? (await luaTraceDefault(p)))
   if (!hasLuaChannel(ch)) return { channels: ch, lua: false }
-  const drop = (luaNote: string) => ({ channels: withoutLuaChannels(ch), lua: false, luaNote })
+  // 去掉 Lua 时从原来的通道串去（不带为 Lua 补的 counters）
+  const drop = (luaNote: string) => ({ channels: withoutLuaChannels(channels), lua: false, luaNote })
   if (!(await hasUnLua(p.root))) return drop(t('项目没装 UnLua，没录 Lua，只录 UE 部分'))
   // 和 runOp 选进程的规则一致（运行时操作不发给后台编辑器）；选不到时交给后面的 runOp 报错
   const target = ctx.target ?? { instance: p.target.kind || undefined }

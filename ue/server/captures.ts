@@ -25,7 +25,7 @@ export interface CaptureMeta {
   pid?: number
   /** trace 的录制预设 */
   preset?: string
-  /** trace 录了 Lua 通道（UELink 2.8 起）：抓取列表上打「Lua」标签 */
+  /** trace 录了 Lua 通道（UELink 2.9 起）：抓取列表上打「Lua」标签 */
   lua?: boolean
 }
 

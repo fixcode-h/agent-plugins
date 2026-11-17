@@ -92,8 +92,9 @@ assert.equal(diff.shrunk.length, 0)
 assert.throws(() => parseMemReport('hello world'), /不像 memreport/)
 
 // ---------- trace 带 Lua：通道合并去重 ----------
-assert.equal(withLuaChannels('cpu,gpu,frame', true), 'cpu,gpu,frame,lua,luac')
-assert.equal(withLuaChannels('cpu,LUA', 'noc'), 'cpu,LUA', '自定义里已经勾了 lua 不重复')
+assert.equal(withLuaChannels('cpu,gpu,frame', true), 'cpu,gpu,frame,lua,luac,counters', 'Lua 计数器要 counters 通道')
+assert.equal(withLuaChannels('cpu,LUA,counters', 'noc'), 'cpu,LUA,counters', '自定义里已经勾了 lua 不重复')
+assert.equal(withLuaChannels('cpu,lua', false), 'cpu,lua,counters', '自定义里勾了 lua 也补 counters')
 assert.equal(withLuaChannels('cpu', false), 'cpu')
 assert.equal(withoutLuaChannels('cpu,lua,luac,frame'), 'cpu,frame')
 assert.equal(parseLuaTrace('noc'), 'noc')

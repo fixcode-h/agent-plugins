@@ -4,11 +4,11 @@ import { cmpVersion } from '../semver.ts'
 import type { UeProject } from '../types.ts'
 
 /**
- * trace 里一起录 Lua（Lua 性能分析 Insights 化设计稿 5.1、9.1）：UELink 2.8.0 起有两个 Trace 通道，
+ * trace 里一起录 Lua（Lua 性能分析 Insights 化设计稿 5.1、9.1）：UELink 2.9.0 起有两个 Trace 通道，
  * lua 是 Lua 函数，luac 是 C 函数（UnLua 导出的 UE 接口、Lua 库函数）单独成块，只在 lua 也开着时生效。
  * Lua 是和预设叠加的开关，不另加「含 Lua」预设；网页和 Agent 不给时跟项目设置走，没设置过时装了 UnLua 就开。
  */
-export const LUA_TRACE_BRIDGE = '2.8.0'
+export const LUA_TRACE_BRIDGE = '2.9.0'
 
 /** true = lua,luac；'noc' = 只要 lua（C 函数的时间算进调用它的 Lua 函数）；false = 不录 Lua */
 export type LuaTrace = boolean | 'noc'
@@ -40,14 +40,20 @@ export async function luaTraceDefault(p: UeProject): Promise<LuaTrace> {
   return s?.c === false ? 'noc' : true
 }
 
-/** 通道串追加 Lua 的通道并去重（大小写不敏感，保留先出现的写法） */
+/**
+ * 通道串追加 Lua 的通道并去重（大小写不敏感，保留先出现的写法）。
+ * 只要最后含 lua（开关打开或自定义里勾了）就补上 counters：Lua 的每帧计数器（Lua/FrameMs 等）走引擎的计数器宏，
+ * counters 通道没开时一个都不写
+ */
 export function withLuaChannels(channels: string, lua: LuaTrace) {
   const extra = lua === true ? ['lua', 'luac'] : lua === 'noc' ? ['lua'] : []
   const out: string[] = []
-  for (const c of [...channels.split(','), ...extra]) {
+  const add = (c: string) => {
     const k = c.trim()
     if (k && !out.some((x) => x.toLowerCase() === k.toLowerCase())) out.push(k)
   }
+  for (const c of [...channels.split(','), ...extra]) add(c)
+  if (out.some((x) => x.toLowerCase() === 'lua')) add('counters')
   return out.join(',')
 }
 

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { h, t } from '../../host.ts'
 import { LuaChip, useLuaTrace, type LuaTrace } from './LuaChip.tsx'
+import { PresetPicker } from './PresetPicker.tsx'
 import type { Active } from './types.ts'
 
 export type RecordKind = 'trace' | 'csv'
@@ -17,14 +18,8 @@ export interface StartOpts {
   lua?: LuaTrace
 }
 
-/** 录制预设（设计 3.4，默认「标准」）：键和服务端 perf.ts 的 TRACE_PRESETS 一致；custom 是自己勾通道 */
-export const PRESETS = [
-  { value: 'standard', label: () => t('标准') },
-  { value: 'named', label: () => t('标准 + 命名事件') },
-  { value: 'loading', label: () => t('加载') },
-  { value: 'memtag', label: () => t('内存标签') },
-  { value: 'custom', label: () => t('自定义…') },
-]
+/** 录制预设和下拉在 PresetPicker.tsx（详情条按预设键显示名字，从这里转出去） */
+export { PRESETS } from './PresetPicker.tsx'
 
 /**
  * 自定义录制能勾的通道（服务端 perf.ts 的 TRACE_CHANNELS）。名字是引擎 Trace 通道名，说明写给人看：
@@ -55,7 +50,7 @@ const CHANNELS: { key: string; label: () => string; note?: () => string; group: 
   { key: 'animation', label: () => t('动画'), note: () => t('Animation Insights'), group: () => t('其他') },
   { key: 'rhicommands', label: () => t('RHI 命令'), note: () => t('开销大'), group: () => t('其他') },
   { key: 'rendercommands', label: () => t('渲染命令'), note: () => t('开销大'), group: () => t('其他') },
-  { key: 'lua', label: () => t('Lua 函数'), note: () => t('要 UELink 2.8 和 UnLua'), group: () => t('脚本') },
+  { key: 'lua', label: () => t('Lua 函数'), note: () => t('要 UELink 2.9 和 UnLua'), group: () => t('脚本') },
   { key: 'luac', label: () => t('C 函数'), note: () => t('单独成块，要同时勾 lua'), group: () => t('脚本') },
   { key: 'memtag', label: () => t('内存标签'), note: () => t('UE 要用 -llm 启动'), group: () => t('内存') },
   {
@@ -165,15 +160,12 @@ export function RecordControls({
         ]}
       />
       {kind === 'trace' && (
-        <ui.Select
-          size="sm"
-          className="ue:w-40"
+        <PresetPicker
           value={preset}
-          onChange={(e: { target: { value: string } }) => {
-            setPreset(e.target.value)
-            if (e.target.value === 'custom') setPanel(true)
+          onChange={(v) => {
+            setPreset(v)
+            if (v === 'custom') setPanel(true)
           }}
-          options={PRESETS.map((p) => ({ value: p.value, label: p.label() }))}
         />
       )}
       {kind === 'trace' && <LuaChip lua={lua} />}
