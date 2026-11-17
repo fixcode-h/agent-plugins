@@ -572,7 +572,10 @@ namespace AgentPanel
 			}
 			else if (Args.IsValid() && Args->Type == EJson::Object)
 			{
-				V = Args->AsObject()->TryGetField(P->GetName());
+				if (const TSharedPtr<FJsonObject> ArgsObj = Args->AsObject())
+				{
+					V = ArgsObj->TryGetField(P->GetName());
+				}
 			}
 			++Index;
 			if (!V.IsValid() || V->IsNull())

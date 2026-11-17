@@ -1,12 +1,5 @@
 #include "AgentPanelBridge.h"
-#include "Runtime/Launch/Resources/Version.h"
-
-// 5.8 起 FCoreDelegates::OnPostEngineInit 弃用，改用 GetOnPostEngineInit()；更早的版本只有前者
-#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
-#define AGENT_PANEL_POST_ENGINE_INIT FCoreDelegates::GetOnPostEngineInit()
-#else
-#define AGENT_PANEL_POST_ENGINE_INIT FCoreDelegates::OnPostEngineInit
-#endif
+#include "UELinkCompat.h"
 
 #include "AgentPanelLog.h"
 #include "UELinkVersion.h"
@@ -15,6 +8,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/Parse.h"
+#include "UObject/GarbageCollection.h"
 #include "Misc/DateTime.h"
 #include "HttpServerModule.h"
 #include "HttpServerRequest.h"
@@ -49,6 +43,85 @@ FAgentPanelBridge& FAgentPanelBridge::Get()
 void FAgentPanelBridge::AddOp(const FString& Name, FAgentPanelOp Op)
 {
 	Ops.Add(Name, MoveTemp(Op));
+}
+
+bool FAgentPanelBridge::AddExtensionOp(const FString& Name, FAgentPanelOp Op)
+{
+	// 前缀把扩展的操作和 UELink 自己的分开：以后 UELink 加操作不会撞上扩展，客户端看名字就知道归谁
+	int32 Dot = INDEX_NONE;
+	if (!Name.FindChar(TEXT('.'), Dot) || Dot == 0)
+	{
+		UE_LOG(LogAgentPanelBridge, Error, TEXT("UELink：扩展操作 %s 没有带「前缀.」，没有登记"), *Name);
+		return false;
+	}
+	if (Ops.Contains(Name))
+	{
+		UE_LOG(LogAgentPanelBridge, Error, TEXT("UELink：操作 %s 已经有了，扩展不能覆盖，没有登记"), *Name);
+		return false;
+	}
+	Ops.Add(Name, MoveTemp(Op));
+	return true;
+}
+
+void FAgentPanelBridge::RemoveOp(const FString& Name)
+{
+	Ops.Remove(Name);
+}
+
+void FAgentPanelBridge::PublishEvent(const FString& Topic, const TSharedRef<FJsonObject>& Event)
+{
+	// 主题和操作名同一套前缀规则：没有前缀的主题会和 UELink 自己的 log / tests / liveCoding 混在一起
+	int32 Dot = INDEX_NONE;
+	if (!Topic.FindChar(TEXT('.'), Dot) || Dot <= 0 || Dot == Topic.Len() - 1)
+	{
+		UE_LOG(LogAgentPanelBridge, Warning, TEXT("UELink：推送事件的主题要带「前缀.」：%s"), *Topic);
+		return;
+	}
+	EventDelegate.Broadcast(Topic, Event);
+}
+
+TArray<TSharedPtr<FJsonValue>> FAgentPanelBridge::ExtensionsJson() const
+{
+	TArray<TSharedPtr<FJsonValue>> Arr;
+	for (const TPair<FString, FString>& E : Extensions)
+	{
+		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+		O->SetStringField(TEXT("name"), E.Key);
+		O->SetStringField(TEXT("version"), E.Value);
+		Arr.Add(MakeShared<FJsonValueObject>(O));
+	}
+	return Arr;
+}
+
+void FAgentPanelBridge::RegisterExtension(const FString& Name, const FString& Version)
+{
+	TPair<FString, FString>* Found = Extensions.FindByPredicate([&](const TPair<FString, FString>& E) { return E.Key == Name; });
+	if (Found)
+	{
+		Found->Value = Version;
+	}
+	else
+	{
+		Extensions.Emplace(Name, Version);
+	}
+	UpdateExtensionsCard();
+}
+
+void FAgentPanelBridge::UnregisterExtension(const FString& Name)
+{
+	Extensions.RemoveAll([&](const TPair<FString, FString>& E) { return E.Key == Name; });
+	UpdateExtensionsCard();
+}
+
+void FAgentPanelBridge::UpdateExtensionsCard()
+{
+	CardExtra.Add(TEXT("extensions"), MakeShared<FJsonValueArray>(ExtensionsJson()));
+	// 扩展模块可能比 HTTP 服务先起也可能后起。还没有身份（服务和推送通道都没起）时只记下，等 Start 写名片时带上；
+	// 不在这里 EnsureIdentity：那会把进程类型先定成 editor，游戏进程里就写错了
+	if (!Token.IsEmpty())
+	{
+		WriteCard();
+	}
 }
 
 static FString ToJsonString(const TSharedPtr<FJsonObject>& Obj)
@@ -132,7 +205,8 @@ UWorld* FAgentPanelBridge::ResolveWorld(const FString& WorldIdIn, FString& Error
 	for (const FWorldContext& C : GEngine->GetWorldContexts())
 	{
 		UWorld* W = C.World();
-		if (!W)
+		// 停止 PIE 的那一帧世界还在列表里但正在拆：当它已经没了，操作不去碰正在销毁的 Actor 和组件
+		if (!W || !IsValid(W) || W->bIsTearingDown)
 		{
 			continue;
 		}
@@ -184,13 +258,22 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Info() const
 	O->SetStringField(TEXT("kind"), Kind);
 	O->SetNumberField(TEXT("pid"), FPlatformProcess::GetCurrentProcessId());
 	O->SetStringField(TEXT("log"), FAgentPanelLog::Get().FilePath());
+	O->SetArrayField(TEXT("extensions"), ExtensionsJson());
+	// 2.7：编辑器就绪（编辑器模块写进名片字段的 ready / readyAt），客户端不用再读一次名片
+	for (const TCHAR* Key : {TEXT("ready"), TEXT("readyAt")})
+	{
+		if (const TSharedPtr<FJsonValue>* V = CardExtra.Find(Key))
+		{
+			O->SetField(Key, *V);
+		}
+	}
 	TArray<TSharedPtr<FJsonValue>> Worlds;
 	if (GEngine)
 	{
 		for (const FWorldContext& C : GEngine->GetWorldContexts())
 		{
 			UWorld* W = C.World();
-			if (!W || (C.WorldType != EWorldType::Editor && C.WorldType != EWorldType::PIE && C.WorldType != EWorldType::Game))
+			if (!W || !IsValid(W) || W->bIsTearingDown || (C.WorldType != EWorldType::Editor && C.WorldType != EWorldType::PIE && C.WorldType != EWorldType::Game))
 			{
 				continue;
 			}
@@ -223,6 +306,15 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	{
 		return ErrorObject(TEXT("请求里没有 op"));
 	}
+	// 引擎在退出、或正在回收垃圾时不执行任何操作：这时对象随时会被销毁，读写都可能踩到野指针
+	if (IsEngineExitRequested())
+	{
+		return ErrorObject(TEXT("编辑器正在退出，不再执行操作"));
+	}
+	if (IsGarbageCollecting())
+	{
+		return ErrorObject(TEXT("引擎正在回收垃圾，稍后再试"));
+	}
 	FAgentPanelOp* Fn = Ops.Find(Op);
 	if (!Fn)
 	{
@@ -235,6 +327,12 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	if (!(*Fn)(Args, Out, Error))
 	{
 		return ErrorObject(Error.IsEmpty() ? TEXT("执行失败") : Error);
+	}
+	// 操作可能把 Out 换成一个取不到的对象（如 GetObjectField 缺字段时返回空指针），
+	// 这里兜底成空对象，免得扩展的一处疏忽直接让编辑器崩溃
+	if (!Out.IsValid())
+	{
+		Out = MakeShared<FJsonObject>();
 	}
 	Out->SetBoolField(TEXT("ok"), true);
 	return Out;
@@ -393,7 +491,7 @@ public:
 		{
 			return;
 		}
-		PostInit = AGENT_PANEL_POST_ENGINE_INIT.AddLambda([]()
+		PostInit = UELINK_POST_ENGINE_INIT.AddLambda([]()
 		{
 			const FString Kind = GIsEditor && !IsRunningGame() ? TEXT("editor") : IsRunningDedicatedServer() ? TEXT("server") : TEXT("game");
 			FAgentPanelBridge::Get().Start(Kind);
@@ -403,7 +501,9 @@ public:
 
 	virtual void ShutdownModule() override
 	{
-		AGENT_PANEL_POST_ENGINE_INIT.Remove(PostInit);
+		UELINK_POST_ENGINE_INIT.Remove(PostInit);
+		AgentPanelUnregisterEmmyValues();
+		AgentPanelUnregisterLuaTrace();
 		FAgentPanelBridge::Get().Stop();
 	}
 

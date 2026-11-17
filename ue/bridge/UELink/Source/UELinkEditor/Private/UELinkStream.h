@@ -67,6 +67,8 @@ private:
 		bool bLog = false;
 		bool bTests = false;
 		bool bLiveCoding = false;
+		/** 扩展的主题（带「前缀.」的，如 forge.job、gt.record） */
+		TSet<FString> ExtTopics;
 		bool bDead = false;
 		int64 Dropped = 0;
 	};
@@ -103,6 +105,8 @@ private:
 	void Enqueue(FSubscriber& Sub, const FString& JsonLine);
 	void Broadcast(const FString& JsonLine, bool bTestsTopic, bool bLiveCodingTopic);
 	void BroadcastLogs(const FString& LinesJson, int32 LineCount, int64 Dropped);
+	/** 扩展经 FAgentPanelBridge::PublishEvent 推来的事件：转给订阅了这个主题的客户端 */
+	void OnExtensionEvent(const FString& Topic, const TSharedRef<FJsonObject>& Event);
 	void Flush(FSubscriber& Sub);
 	bool WantsLogs() const;
 	void ProcessLogs(const TArray<FAgentPanelLog::FEntry>& Entries, int64 Dropped);
@@ -128,6 +132,7 @@ private:
 	TArray<FClient> Clients;
 	TArray<FSubscriber> Subscribers;
 	FTSTicker::FDelegateHandle TickHandle;
+	FDelegateHandle ExtensionEventHandle;
 	/** 从日志缓冲取到哪了；日志行里的时间按 StartSeconds 换成相对秒数（和 UEToVSLink 一样） */
 	uint64 LogCursor = 0;
 	double StartSeconds = 0.0;

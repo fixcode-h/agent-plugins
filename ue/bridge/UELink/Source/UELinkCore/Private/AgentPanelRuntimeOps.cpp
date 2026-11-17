@@ -2,6 +2,10 @@
 // 日志、截图。编辑器专用的（资源写入保存、PIE、Live Coding、编辑器视口截图）在编辑器模块里登记。
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
+#include "AgentPanelBlueprintComps.h"
+#include "AgentPanelOutliner.h"
+#include "AgentPanelAssetTree.h"
+#include "UELinkConfigOps.h"
 #include "AgentPanelGMLibrary.h"
 #include "AgentPanelLog.h"
 #include "AgentPanelLuaOps.h"
@@ -36,6 +40,25 @@
 #include "UnrealClient.h"
 
 using namespace AgentPanel;
+
+// 按名字或 /Script 路径找类；assets 和 assets.children（AgentPanelAssetTree.cpp）共用
+UClass* AgentPanel::FindClassByName(const FString& Name)
+{
+	if (Name.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (Name.StartsWith(TEXT("/")))
+	{
+		return FindObject<UClass>(nullptr, *Name);
+	}
+	UClass* C = FindFirstObject<UClass>(*Name, EFindFirstObjectOptions::NativeFirst);
+	if (!C && !Name.EndsWith(TEXT("_C")))
+	{
+		C = FindFirstObject<UClass>(*(Name + TEXT("_C")), EFindFirstObjectOptions::None);
+	}
+	return C;
+}
 
 namespace
 {
@@ -150,24 +173,6 @@ namespace
 		O->SetBoolField(TEXT("server"), F->HasAnyFunctionFlags(FUNC_NetServer));
 		O->SetArrayField(TEXT("params"), ParamsOf(F));
 		return O;
-	}
-
-	UClass* FindClassByName(const FString& Name)
-	{
-		if (Name.IsEmpty())
-		{
-			return nullptr;
-		}
-		if (Name.StartsWith(TEXT("/")))
-		{
-			return FindObject<UClass>(nullptr, *Name);
-		}
-		UClass* C = FindFirstObject<UClass>(*Name, EFindFirstObjectOptions::NativeFirst);
-		if (!C && !Name.EndsWith(TEXT("_C")))
-		{
-			C = FindFirstObject<UClass>(*(Name + TEXT("_C")), EFindFirstObjectOptions::None);
-		}
-		return C;
 	}
 
 	FViewport* GameViewport(UWorld* World)
@@ -587,6 +592,12 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			}
 			O->SetStringField(TEXT("created"), Created);
 			Items.Add(Obj(O));
+		}
+		// 蓝图资源（类默认值）：CDO 上只有 C++ 组件，补上蓝图组件列表里的（2.2.0 起）。scs 告诉网页已经补过，旧桥接没有它时网页自己用 bp.outline 补
+		if (Act->HasAnyFlags(RF_ClassDefaultObject))
+		{
+			AddBlueprintComponents(Act, Items);
+			Out->SetBoolField(TEXT("scs"), true);
 		}
 		Out->SetArrayField(TEXT("items"), Items);
 		return true;
@@ -1403,5 +1414,8 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 	// ---------- Lua（项目里有 UnLua 才编进来，见 AgentPanelLua.cpp） ----------
 	AgentPanelRegisterLuaOps(*this);
 	RegisterUmgOps(*this);
+	RegisterOutlinerOps(*this);
+	RegisterAssetTreeOps(*this);
 	RegisterPerfOps(*this);
+	RegisterConfigOps(*this);
 }

@@ -2,7 +2,7 @@
 // 旧版本只在版本控制里，不在 Content 下，所以面板把那一版的字节写成临时文件交过来：这里给临时目录挂一个独立的
 // 挂载点，按包加载、导出文本、卸载、撤掉挂载点，不碰项目里同名的资源，也不进资源注册表。
 // 文本按行比较，所以要求「同一内容给同样的文本」：子对象按路径排序，临时包名换回原来的包名，不带加载状态和时间。
-#include "AgentPanelCompat.h"
+#include "UELinkCompat.h"
 #include "AgentPanelEditorShared.h"
 
 #include "EdGraph/EdGraph.h"
@@ -174,7 +174,7 @@ namespace
 		Out += TEXT("\n== 属性\n");
 		AddObject(Out, Asset);
 		TArray<UObject*> Subs;
-		GetObjectsWithOuter(Asset, Subs, AGENT_PANEL_OUTER_NESTED(true));
+		GetObjectsWithOuter(Asset, Subs, UELINK_OUTER_NESTED(true));
 		Subs.RemoveAll([](const UObject* S) { return !S || S->HasAnyFlags(RF_Transient); });
 		SortByPath(Subs);
 		for (UObject* S : Subs)
@@ -191,7 +191,7 @@ namespace
 			return Obj;
 		}
 		TArray<UObject*> Objs;
-		GetObjectsWithOuter(Pkg, Objs, AGENT_PANEL_OUTER_NESTED(false));
+		GetObjectsWithOuter(Pkg, Objs, UELINK_OUTER_NESTED(false));
 		for (UObject* Obj : Objs)
 		{
 			if (Obj && Obj->IsAsset())

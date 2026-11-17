@@ -29,7 +29,13 @@ bool FAgentPanelLua::IsCompiledIn()
 
 #if !AGENT_PANEL_WITH_LUA
 
-void AgentPanelRegisterLuaOps(FAgentPanelBridge&) {}
+void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
+{
+	AgentPanelRegisterLuaDevOps(B);
+	AgentPanelRegisterLuaDebugOps(B);
+	AgentPanelRegisterEmmyValues();
+	AgentPanelRegisterLuaTrace();
+}
 void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>&) {}
 
 #else
@@ -41,6 +47,8 @@ void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>&) {}
 #include "Modules/ModuleManager.h"
 #include "UObject/UObjectArray.h"
 #include "lua.hpp"
+#include "AgentPanelLuaShared.h"
+#include "UELinkCompat.h"
 
 #if (AGENT_PANEL_UNLUA_ENV_BY_OBJECT || AGENT_PANEL_UNLUA_ENV) && __has_include("IUnLuaModule.h") && __has_include("LuaEnv.h")
 #include "IUnLuaModule.h"
@@ -62,13 +70,8 @@ void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>&) {}
 
 using namespace AgentPanel;
 
-namespace
+namespace AgentPanelLuaImpl
 {
-	/** 一层表最多列多少项（再多的分页取）；扫描超过这么多项只排前面这些 */
-	constexpr int32 MaxScan = 5000;
-	/** 字符串值最多回多少字符 */
-	constexpr int32 MaxStr = 2000;
-
 	FString FromUtf8(const char* S, size_t N)
 	{
 		if (!S)
@@ -84,15 +87,6 @@ namespace
 		FTCHARToUTF8 U(*S);
 		lua_pushlstring(L, U.Get(), U.Length());
 	}
-
-	/** 退出作用域时把 Lua 栈恢复原样：中途出错 return 也不会留垃圾在 UnLua 的主线程栈上 */
-	struct FTop
-	{
-		lua_State* L;
-		int Top;
-		explicit FTop(lua_State* InL) : L(InL), Top(lua_gettop(InL)) {}
-		~FTop() { lua_settop(L, Top); }
-	};
 
 	/** UObject 指针还活着：UnLua 在对象销毁时会从表里删掉，这里再校验一次，免得改过的分支漏删时读到野指针 */
 	UObject* LiveObject(const void* P)
@@ -261,115 +255,6 @@ namespace
 		}
 		return false;
 	}
-
-	/** 一次请求里用到的 Lua 上下文：对象表、值→对象、模块表→模块名的反查（按需建一次） */
-	struct FLuaCtx
-	{
-		lua_State* L = nullptr;
-		int Map = 0;
-		bool bRev = false;
-		TMap<const void*, const void*> Rev;
-		bool bMods = false;
-		TMap<const void*, FString> Mods;
-
-		bool Open(UObject* Context, FString& Error)
-		{
-			L = StateFor(Context, Error);
-			if (!L)
-			{
-				return false;
-			}
-			if (PushObjectMap(L))
-			{
-				Map = lua_gettop(L);
-			}
-			return true;
-		}
-
-		/** 表 / userdata 是哪个 UObject 的（对象表里反查） */
-		UObject* ObjectOf(int Idx)
-		{
-			if (!Map)
-			{
-				return nullptr;
-			}
-			if (!bRev)
-			{
-				bRev = true;
-				int32 N = 0;
-				lua_pushnil(L);
-				while (lua_next(L, Map))
-				{
-					const int VT = lua_type(L, -1);
-					if (lua_type(L, -2) == LUA_TLIGHTUSERDATA && (VT == LUA_TTABLE || VT == LUA_TUSERDATA))
-					{
-						Rev.Add(lua_topointer(L, -1), lua_touserdata(L, -2));
-					}
-					lua_pop(L, 1);
-					if (++N >= 500000)
-					{
-						lua_pop(L, 1);
-						break;
-					}
-				}
-			}
-			const void* const* P = Rev.Find(lua_topointer(L, Idx));
-			return P ? LiveObject(*P) : nullptr;
-		}
-
-		FString ModuleOfTable(const void* P)
-		{
-			if (!bMods)
-			{
-				bMods = true;
-				lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
-				if (lua_istable(L, -1))
-				{
-					lua_pushnil(L);
-					while (lua_next(L, -2))
-					{
-						if (lua_type(L, -2) == LUA_TSTRING && lua_istable(L, -1))
-						{
-							size_t N = 0;
-							const char* S = lua_tolstring(L, -2, &N);
-							Mods.Add(lua_topointer(L, -1), FromUtf8(S, N));
-						}
-						lua_pop(L, 1);
-					}
-				}
-				lua_pop(L, 1);
-			}
-			const FString* Name = Mods.Find(P);
-			return Name ? *Name : FString();
-		}
-
-		/** 实例表的模块名：元表本身、元表的 __index、元表的元表，哪个在 package.loaded 里就是哪个 */
-		FString ModuleOf(int Idx)
-		{
-			FTop Guard(L);
-			if (!lua_getmetatable(L, Idx))
-			{
-				return FString();
-			}
-			const int MT = lua_gettop(L);
-			FString Name = ModuleOfTable(lua_topointer(L, MT));
-			if (Name.IsEmpty())
-			{
-				lua_pushstring(L, "__index");
-				lua_rawget(L, MT);
-				if (lua_istable(L, -1))
-				{
-					Name = ModuleOfTable(lua_topointer(L, -1));
-				}
-				lua_pop(L, 1);
-			}
-			if (Name.IsEmpty() && lua_getmetatable(L, MT))
-			{
-				Name = ModuleOfTable(lua_topointer(L, -1));
-			}
-			return Name;
-		}
-	};
 
 	/** 实现了 UnLuaInterface 的对象：按反射调 GetModuleName（蓝图里填的模块名） */
 	FString InterfaceModule(UObject* Obj)
@@ -847,6 +732,52 @@ namespace
 		}
 	}
 
+	/** 任意 JSON → Lua（2.4 起 lua.set、lua.call 用）：对象转成键是字符串的表，数组转成从 1 开始的序列，标量同 PushJsonValue */
+	bool PushJsonAny(lua_State* L, const TSharedPtr<FJsonValue>& V, int32 Depth, FString& Error)
+	{
+		if (!V.IsValid() || (V->Type != EJson::Array && V->Type != EJson::Object))
+		{
+			return PushJsonValue(L, V, false, Error);
+		}
+		if (Depth <= 0)
+		{
+			Error = TEXT("JSON 嵌套太深（最多 16 层）");
+			return false;
+		}
+		luaL_checkstack(L, 4, "AgentPanel PushJsonAny");
+		if (V->Type == EJson::Array)
+		{
+			const TArray<TSharedPtr<FJsonValue>>& Arr = V->AsArray();
+			lua_createtable(L, Arr.Num(), 0);
+			for (int32 I = 0; I < Arr.Num(); ++I)
+			{
+				if (!PushJsonAny(L, Arr[I], Depth - 1, Error))
+				{
+					lua_pop(L, 1);
+					return false;
+				}
+				lua_rawseti(L, -2, I + 1);
+			}
+			return true;
+		}
+		const TSharedPtr<FJsonObject> Obj = V->AsObject();
+		lua_createtable(L, 0, Obj.IsValid() ? Obj->Values.Num() : 0);
+		if (Obj.IsValid())
+		{
+			for (const auto& Pair : Obj->Values)
+			{
+				PushStr(L, UELINK_JSON_KEY(Pair.Key));
+				if (!PushJsonAny(L, Pair.Value, Depth - 1, Error))
+				{
+					lua_pop(L, 2);
+					return false;
+				}
+				lua_rawset(L, -3);
+			}
+		}
+		return true;
+	}
+
 	/** 标量的 JSON（改前值、撤回用）；表、函数这些返回空 */
 	TSharedPtr<FJsonValue> ScalarJson(lua_State* L, int Idx)
 	{
@@ -903,6 +834,14 @@ namespace
 		}
 	}
 
+	void RestoreHookAfterTimeout(lua_State* L, lua_Hook OldHook, int OldMask, int OldCount)
+	{
+		if (lua_gethook(L) == &TimeoutHook)
+		{
+			lua_sethook(L, OldHook, OldMask, OldCount);
+		}
+	}
+
 	/** 执行期间 print 往这里收；执行完置空。Lua 代码可能把 print 存起来以后再调，那时只写日志，不碰已经释放的数组 */
 	TArray<FString>* GPrintSink = nullptr;
 
@@ -945,8 +884,11 @@ namespace
 	}
 }
 
+
 void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>& Info)
 {
+	// 只在函数里打开内部命名空间：单体编译时不漏到同一编译单元后面的文件里
+	using namespace AgentPanelLuaImpl;
 	TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 	FString Error;
 	FString Ignore;
@@ -963,6 +905,7 @@ void AgentPanelLuaInfo(const TSharedPtr<FJsonObject>& Info)
 
 void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 {
+	using namespace AgentPanelLuaImpl;
 	B.AddOp(TEXT("lua.status"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 	{
 		FLuaCtx C;
@@ -1125,7 +1068,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		return true;
 	});
 
-	// 改：只改原值是 nil / 布尔 / 数字 / 字符串的字段，新值也只能是这几种（表、函数不在网页上改，用执行 Lua）
+	// 改：原值是 nil / 布尔 / 数字 / 字符串的字段（可撤回）；2.4 起新值也可以是表（JSON 对象 / 数组），原值是表时能整个换掉但不能撤回
 	B.AddOp(TEXT("lua.set"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 	{
 		const TArray<TSharedPtr<FJsonValue>> Keys = KeysOf(A);
@@ -1164,14 +1107,18 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		}
 		const int Prev = lua_gettop(L);
 		TSharedPtr<FJsonValue> PrevJson = ScalarJson(L, Prev);
-		if (!PrevJson.IsValid())
+		const TSharedPtr<FJsonValue> NewJson = A->TryGetField(TEXT("value"));
+		const bool bNewTable = NewJson.IsValid() && (NewJson->Type == EJson::Array || NewJson->Type == EJson::Object);
+		// 2.4 起：新值可以是表（JSON 对象 / 数组）；原值是表时也能整个换掉，但没法撤回（不回 prev）。函数、userdata 仍然不在这里改
+		if (!PrevJson.IsValid() && !(bNewTable && lua_istable(L, Prev)))
 		{
-			Error = FString::Printf(TEXT("%s 现在是 %s：只能改数字、字符串、布尔或 nil 的字段，表和函数请用执行 Lua"), *KeyText(Keys.Last()), UTF8_TO_TCHAR(lua_typename(L, lua_type(L, Prev))));
+			Error = FString::Printf(TEXT("%s 现在是 %s：只能改数字、字符串、布尔、nil 或表的字段，函数和对象请用执行 Lua"), *KeyText(Keys.Last()), UTF8_TO_TCHAR(lua_typename(L, lua_type(L, Prev))));
 			return false;
 		}
 		const bool bPrevFloat = lua_type(L, Prev) == LUA_TNUMBER && !lua_isinteger(L, Prev);
 		PushJsonKey(L, Keys.Last());
-		if (!PushJsonValue(L, A->TryGetField(TEXT("value")), bPrevFloat, Error) || !PSet(L, Parent, Error))
+		const bool bPushed = bNewTable ? PushJsonAny(L, NewJson, 16, Error) : PushJsonValue(L, NewJson, bPrevFloat, Error);
+		if (!bPushed || !PSet(L, Parent, Error))
 		{
 			return false;
 		}
@@ -1180,7 +1127,20 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		{
 			return false;
 		}
-		Out->SetField(TEXT("prev"), PrevJson);
+		if (PrevJson.IsValid())
+		{
+			Out->SetField(TEXT("prev"), PrevJson);
+		}
+		else
+		{
+			Out->SetBoolField(TEXT("undoable"), false);
+		}
+		if (lua_istable(L, -1))
+		{
+			TSharedPtr<FJsonObject> D = MakeShared<FJsonObject>();
+			Describe(C, -1, D);
+			Out->SetObjectField(TEXT("table"), D);
+		}
 		TSharedPtr<FJsonValue> Now = ScalarJson(L, -1);
 		Out->SetField(TEXT("value"), Now.IsValid() ? Now : MakeShared<FJsonValueNull>());
 		Out->SetStringField(TEXT("type"), UTF8_TO_TCHAR(lua_typename(L, lua_type(L, -1))));
@@ -1254,7 +1214,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		const double Start = FPlatformTime::Seconds();
 		const int Status = lua_pcall(L, 1, LUA_MULTRET, Msgh);
 		const double Ms = (FPlatformTime::Seconds() - Start) * 1000.0;
-		lua_sethook(L, OldHook, OldMask, OldCount);
+		RestoreHookAfterTimeout(L, OldHook, OldMask, OldCount);
 		GPrintSink = nullptr;
 		lua_pushstring(L, "print");
 		lua_pushvalue(L, OldPrint);
@@ -1294,6 +1254,12 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		Out->SetNumberField(TEXT("ms"), Ms);
 		return true;
 	});
+
+	// 2.4 起的各组 Lua 操作各在自己的文件里登记
+	AgentPanelRegisterLuaDevOps(B);
+	AgentPanelRegisterLuaDebugOps(B);
+	AgentPanelRegisterEmmyValues();
+	AgentPanelRegisterLuaTrace();
 }
 
 #endif
