@@ -2504,5 +2504,10 @@
   "步骤（JSON）": "Step (JSON)",
   "字段见 GameTest 的动作表；选择器不会写时，在游戏里对着控件用「检视」或从别的步骤复制": "Fields follow GameTest's action table; for selectors, inspect the widget in game or copy from another step",
   "删除步骤": "Delete step",
-  "删除第 {n} 步（{a}）？直接改场景文件，用 git、P4 管着的可以从版本库找回。": "Delete step {n} ({a})? This edits the scenario file directly; recover it from git or P4 if versioned."
+  "删除第 {n} 步（{a}）？直接改场景文件，用 git、P4 管着的可以从版本库找回。": "Delete step {n} ({a})? This edits the scenario file directly; recover it from git or P4 if versioned.",
+  "界面": "Screen",
+  "「>」之后从这个嵌套界面自己的控件树根开始找": "After \">\", the path starts at this nested widget's own root",
+  "进入": "Enter",
+  "按位置写的：容器里顺序变了会指到别的控件": "Position-based: points to another widget if the container order changes",
+  "第 {n} 个": "#{n}"
 }

@@ -9,6 +9,7 @@ import { evidenceOf, GtEvidence, type GtEvidenceData } from './GtEvidence.tsx'
 import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
 import { stepTitle } from './gt-step-title.ts'
 import { GtMatchMode } from './GtMatchMode.tsx'
+import { GtSelectorTree } from './GtSelectorTree.tsx'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -313,6 +314,16 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 
 function Pair({ k, v }: { k: string; v: unknown }) {
   const mono = k === 'target' || typeof v !== 'string'
+  // 控件选择器（target、拖动的 toTarget）一长串路径不好读：按树一层一行
+  if ((k === 'target' || k === 'toTarget') && typeof v === 'string' && v && !v.startsWith('@'))
+    return (
+      <>
+        <dt className="ue:font-mono ue:text-subtle">{k}</dt>
+        <dd className="ue:min-w-0">
+          <GtSelectorTree target={v} />
+        </dd>
+      </>
+    )
   return (
     <>
       <dt className="ue:font-mono ue:text-subtle">{k}</dt>
