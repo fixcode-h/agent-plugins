@@ -32,7 +32,7 @@ export const LUA_TABS: LuaTab[] = [
   { id: 'modules', order: 30, label: () => t('模块'), View: LuaModules },
   { id: 'errors', order: 40, label: () => t('报错'), View: LuaErrors, useBadge: useErrorsBadge },
   { id: 'build', order: 50, label: () => t('编译'), View: LuaBuild, useBadge: useBuildBadge, offline: true },
-  // 快照点、性能采样、持有的已销毁对象（设计稿四.4，要 UELink 2.4）
+  // 快照点、持有的已销毁对象（设计稿四.4，要 UELink 2.4），性能采样换成去性能页录含 Lua 的 trace 的入口
   { id: 'debug', order: 55, label: () => t('调试'), View: LuaDebug },
   // 片段存在本机：UE 没运行时也能看、能改，只是不能执行
   { id: 'exec', order: 60, label: () => t('执行'), View: LuaExec, offline: true },

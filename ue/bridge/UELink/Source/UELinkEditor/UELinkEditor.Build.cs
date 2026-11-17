@@ -16,7 +16,13 @@ public class UELinkEditor : ModuleRules
 			// trace 分析（性能页二期）：Unreal Insights 读 trace 用的同一套模块
 			"TraceAnalysis", "TraceServices",
 			// 推送通道（从 UEToVSLink 合进来）：本机 TCP 服务、在内容浏览器里定位资源
-			"Sockets", "Networking", "ContentBrowser"
+			"Sockets", "Networking", "ContentBrowser",
+			// 编辑器选中同步（2.4）：读蓝图编辑器里选中的节点（FBlueprintEditor）
+			"Kismet",
+			// 后台生成 Lua 声明（2.5）：找 UnLua 插件目录拷它自带的静态声明
+			"Projects",
+			// 编辑器就绪（2.7）：主窗口建好没有（IMainFrameModule）
+			"MainFrame"
 		});
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{

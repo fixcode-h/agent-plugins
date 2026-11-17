@@ -9,7 +9,17 @@ import {
   type Capture,
   type CaptureKind,
 } from './captures.ts'
-import { BridgeError } from './instances.ts'
+import { BridgeError, liveCards, pickCard } from './instances.ts'
+import {
+  bridgeHasLuaTrace,
+  hasLuaChannel,
+  hasUnLua,
+  LUA_TRACE_BRIDGE,
+  luaTraceDefault,
+  parseLuaTrace,
+  withLuaChannels,
+  withoutLuaChannels,
+} from './perf/lua-trace.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import type { Actor, UeProject } from './types.ts'
 import { c, now, readJson, t, uid, writeJson } from './util.ts'
@@ -29,6 +39,8 @@ export interface ActiveCapture {
   /** trace：录制预设（TRACE_PRESETS 的键或 custom）和开了命名事件没有（停的时候要关回去） */
   preset?: string
   named?: boolean
+  /** trace：录了 Lua 通道（录制中显示「含 Lua」，停止后记进抓取登记） */
+  lua?: boolean
   /** trace：期望写出的文件（绝对路径） */
   file?: string
   label: string
@@ -95,18 +107,28 @@ export const TRACE_CHANNELS = [
   'memory',
   'screenshot',
   'contextswitch',
+  // UELink 2.9 起：Lua 函数、C 函数单独成块（luac 要和 lua 一起开），见 perf/lua-trace.ts
+  'lua',
+  'luac',
 ] as const
 
 /**
- * trace 录制预设（性能页设计 3.4，默认「标准」）。命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，
- * 开销大一些所以单独一档。内存标签要 UE 用 -llm 启动才有数据。
+ * trace 录制预设（性能页设计 3.4，默认「标准」；2026-11-17 照 Unreal Insights 常用组合补齐，网页 PresetPicker.tsx 同一份键）。
+ * 命名事件靠 stat namedevents：蓝图函数、Actor / 组件 Tick 带上具体名字，开销大一些所以单独一档。
+ * 内存标签要 UE 用 -llm 启动才有数据；rhicommands / rendercommands 开销大；contextswitch 要管理员权限。
+ * 旧键（standard / named / loading / memtag）不改名，Agent 和用户的提示词里写死了它们。Lua 不进预设，是叠加的 lua 参数
  */
 const STANDARD = 'cpu,gpu,frame,bookmark,counters,log'
 export const TRACE_PRESETS: Record<string, { channels: string; named?: boolean }> = {
   standard: { channels: STANDARD },
   named: { channels: STANDARD, named: true },
-  loading: { channels: `${STANDARD},loadtime,assetloadtime` },
+  gpu: { channels: `${STANDARD},rhicommands,rendercommands` },
+  loading: { channels: `${STANDARD},loadtime,assetloadtime,file` },
   memtag: { channels: `${STANDARD},memtag` },
+  net: { channels: `${STANDARD},net` },
+  animation: { channels: `${STANDARD},animation` },
+  task: { channels: `${STANDARD},task,contextswitch` },
+  object: { channels: `${STANDARD},object` },
 }
 
 function traceChannels(preset: string, custom: string, namedEvents?: boolean) {
@@ -118,8 +140,43 @@ function traceChannels(preset: string, custom: string, namedEvents?: boolean) {
   }
   const p = TRACE_PRESETS[preset]
   if (!p)
-    throw new BridgeError(t('不认识的录制预设：{p}（standard / named / loading / memtag / custom）', { p: preset }))
+    throw new BridgeError(
+      t('不认识的录制预设：{p}（可选：{list} / custom）', { p: preset, list: Object.keys(TRACE_PRESETS).join(' / ') }),
+    )
   return { channels: p.channels, named: !!p.named }
+}
+
+/**
+ * trace 的 Lua 通道（Lua 性能分析设计稿 5.1、9.3）：和预设、自定义通道合并去重；arg 没给时跟项目设置。
+ * 项目没装 UnLua、目标进程的 UELink 低于 2.9 时去掉 Lua 通道照常录 UE 部分，返回一句说明（网页和 Agent 都看得到）
+ */
+async function luaChannels(
+  ctx: OpCtx,
+  channels: string,
+  arg: unknown,
+): Promise<{ channels: string; lua: boolean; luaNote?: string }> {
+  const p = ctx.project
+  const ch = withLuaChannels(channels, parseLuaTrace(arg) ?? (await luaTraceDefault(p)))
+  if (!hasLuaChannel(ch)) return { channels: ch, lua: false }
+  // 去掉 Lua 时从原来的通道串去（不带为 Lua 补的 counters）
+  const drop = (luaNote: string) => ({ channels: withoutLuaChannels(channels), lua: false, luaNote })
+  if (!(await hasUnLua(p.root))) return drop(t('项目没装 UnLua，没录 Lua，只录 UE 部分'))
+  // 和 runOp 选进程的规则一致（运行时操作不发给后台编辑器）；选不到时交给后面的 runOp 报错
+  const target = ctx.target ?? { instance: p.target.kind || undefined }
+  let card: { bridge?: string } | undefined
+  try {
+    card = pickCard(await liveCards(p.root), target.instance ? target : undefined, 'editor', true)
+  } catch {
+    card = undefined
+  }
+  if (card && !bridgeHasLuaTrace(card.bridge))
+    return drop(
+      t('UE 进程里的 UELink 是 {v}，录 Lua 要 {min} 起：去 UE 页「UE 插件」升级。这次只录 UE 部分', {
+        v: card.bridge || '?',
+        min: LUA_TRACE_BRIDGE,
+      }),
+    )
+  return { channels: ch, lua: true }
 }
 
 /**
@@ -193,7 +250,16 @@ const elapsedOf = (startedAt: string) => Math.round((Date.now() - Date.parse(sta
 
 export async function startCapture(
   ctx: OpCtx,
-  a: { kind?: string; seconds?: unknown; label?: string; preset?: string; channels?: string; named?: boolean },
+  a: {
+    kind?: string
+    seconds?: unknown
+    label?: string
+    preset?: string
+    channels?: string
+    named?: boolean
+    /** trace 带不带 Lua：true / false / 'noc'，没给按项目设置（perf/lua-trace.ts） */
+    lua?: unknown
+  },
 ) {
   const kind = String(a.kind || 'csv')
   if (kind === 'memreport') return memreport(ctx, a.label)
@@ -215,7 +281,7 @@ export async function startCapture(
   const seconds = secondsOf(a.seconds)
   const label = (a.label || '').trim() || `${kind}-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
   if (kind === 'trace')
-    return startTrace(ctx, label, seconds, String(a.preset || 'standard'), String(a.channels || ''), a.named)
+    return startTrace(ctx, label, seconds, String(a.preset || 'standard'), String(a.channels || ''), a.named, a.lua)
   const run = await allow(
     ctx,
     t('Agent 要开始性能抓取'),
@@ -382,20 +448,20 @@ async function startTrace(
   preset: string,
   custom: string,
   namedEvents?: boolean,
+  luaArg?: unknown,
 ) {
   const p = ctx.project
-  const { channels, named } = traceChannels(preset, custom, namedEvents)
+  const base = traceChannels(preset, custom, namedEvents)
+  const { channels, lua, luaNote } = await luaChannels(ctx, base.channels, luaArg)
+  const named = base.named
   const run = await allow(
     ctx,
     t('Agent 要开始录 trace'),
-    t(
-      'Unreal Insights 同款录制（通道 {ch}{named}），{limit}；文件写在项目的 Saved/Profiling/AgentPanel',
-      {
-        ch: channels,
-        named: named ? t('，开命名事件') : '',
-        limit: limitText(seconds),
-      },
-    ),
+    t('Unreal Insights 同款录制（通道 {ch}{named}），{limit}；文件写在项目的 Saved/Profiling/AgentPanel', {
+      ch: channels,
+      named: named ? t('，开命名事件') : '',
+      limit: limitText(seconds),
+    }),
   )
   const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
   // 相对路径：引擎把它放在 Saved/Profiling 下（绝对路径里有空格时控制台参数会被切开）
@@ -411,6 +477,7 @@ async function startTrace(
     kind: 'trace',
     preset,
     named,
+    ...(lua ? { lua: true } : {}),
     file,
     label,
     startedAt: now(),
@@ -429,6 +496,8 @@ async function startTrace(
     kind: 'trace',
     preset,
     channels,
+    lua,
+    ...(luaNote ? { luaNote } : {}),
     label,
     seconds,
     pid,
@@ -460,6 +529,7 @@ async function stopTrace(ctx: OpCtx, item: ActiveCapture, auto: boolean) {
     marks: item.marks,
     pid: item.pid,
     preset: item.preset,
+    ...(item.lua ? { lua: true } : {}),
   })
   return {
     stopped: true,

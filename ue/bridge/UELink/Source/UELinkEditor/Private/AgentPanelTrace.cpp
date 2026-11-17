@@ -4,15 +4,24 @@
 // 放在编辑器模块：后台编辑器（-run=AgentPanel）和编辑器都加载它，游戏进程不加载，分析不拖慢要测的帧率。
 //
 // 只用最基础的几个接口（线程列表、时间线进出事件、计时器名字、帧、书签、计数器、日志），
-// TraceServices 的类型一律写全名（TraceServices::FFrame 等）：UObject 也有 FFrame（蓝图调用栈），只写短名在 5.8 上会撞名。
+// TraceServices 的类型一律写全名（TraceServices::FFrame 等）：UObject 也有 FFrame（蓝图调用栈），只写短名会撞名。
+// using namespace TraceServices 只能放在本文件自己的具名命名空间里（UELinkTrace），不能放文件作用域：
+// 单体构建（unity）把同模块的 .cpp 拼成一个编译单元，文件作用域的 using 会漏进后面的文件，
+// 后面 include 的 ContentBrowserData 等引擎头里写的短名 FFrame 就变成「不明确的符号」（5.4 上实际报过 C2872）。
 // 计时器汇总和调用树都在这里自己按进出事件算，不用 CreateAggregation 之类各版本签名不一样的接口。
+// 2.9.0 起 Lua 相关的查询（luainfo、tree、timers 的 lua / mergeC）在 AgentPanelTraceLua.cpp，共用的结构在 AgentPanelTraceShared.h。
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
 #include "AgentPanelEditorShared.h"
+#include "UELinkCompat.h"
 
+#include "CoreGlobals.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "GenericPlatform/GenericPlatformFile.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformFileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -25,33 +34,162 @@
 #include "TraceServices/Model/Log.h"
 #include "TraceServices/Model/Threads.h"
 #include "TraceServices/Model/TimingProfiler.h"
+#include "Trace/DataStream.h"
+
+// 和 AgentPanelTraceLua.cpp 共用的结构和函数（计时器名字、走泳道、调用树）
+#include "AgentPanelTraceShared.h"
+
+#include <atomic>
 
 using namespace AgentPanel;
+
+namespace UELinkTrace
+{
 using namespace TraceServices;
 
 namespace
 {
 	/** 时间轴一次最多回这么多块（设计 6）：再多网页画不过来，也说明范围太大、该放大了 */
 	constexpr int32 MaxBlocks = 20000;
-	/** GPU 泳道在请求里的编号（CPU 泳道用线程 id） */
-	constexpr int32 GpuLane = -1;
+
+	/**
+	 * 一份 trace 的读取进度，分析线程（写）和查询（游戏线程，读）共用，所以全是原子量。
+	 * 录制中（面板说这份文件还在录）读到文件末尾不结束，等新数据接着读，这样只分析一遍、一直追到最新，
+	 * 不像以前文件一变就从头重新分析（录制中文件每秒都在变，网页就永远停在「正在分析」）。
+	 */
+	struct FTraceFollow
+	{
+		/** 已经交给分析器的字节数 */
+		std::atomic<int64> ReadBytes{ 0 };
+		/** 上次看到的文件大小 */
+		std::atomic<int64> FileBytes{ 0 };
+		/** 读到了文件当前的末尾，在等新数据（录制中「已经追上」） */
+		std::atomic<bool> bAtEnd{ false };
+		/** 跟到这个时间（FPlatformTime::Seconds）为止：网页看着时每次查询续一下，没人看了就读完现有数据收尾 */
+		std::atomic<double> FollowUntil{ 0.0 };
+		/** 会话被丢弃 / 编辑器退出：马上结束读取，分析线程才能退出 */
+		std::atomic<bool> bStop{ false };
+
+		bool Following() const { return !bStop.load() && FPlatformTime::Seconds() < FollowUntil.load(); }
+	};
+	using FFollowRef = TSharedRef<FTraceFollow, ESPMode::ThreadSafe>;
+
+	/** 没人查了还跟多久：网页录制中每 1.5–3 秒问一次 info，留足余量；过了就把现有数据读完、分析结束 */
+	constexpr double FollowGrace = 30.0;
+
+	/**
+	 * 给分析器的数据流：从文件读，读到末尾时按 FTraceFollow 决定结束还是等新数据。
+	 * 在分析线程里调用，可以阻塞（Insights 看实时会话也是这样等数据的）；等的时候每 0.1 秒看一眼，停止标志一设就返回。
+	 * 文件句柄的大小在 Windows 上是打开时记下的，追新数据要重新打开才能看到新长度。
+	 */
+	class FFollowStream final : public UE::Trace::IInDataStream
+	{
+	public:
+		FFollowStream(const FString& InPath, FFollowRef InState) : Path(InPath), State(InState) {}
+
+		virtual int32 Read(void* Data, uint32 Size) override
+		{
+			for (;;)
+			{
+				if (State->bStop.load() || IsEngineExitRequested())
+				{
+					return 0;
+				}
+				if (Pos >= Known && !Refresh())
+				{
+					return 0;
+				}
+				if (Pos < Known)
+				{
+					const int64 N = FMath::Min<int64>(Known - Pos, static_cast<int64>(Size));
+					if (!Handle->Read(static_cast<uint8*>(Data), N))
+					{
+						return 0;
+					}
+					Pos += N;
+					State->ReadBytes.store(Pos);
+					State->bAtEnd.store(false);
+					return static_cast<int32>(N);
+				}
+				State->bAtEnd.store(true);
+				if (!State->Following())
+				{
+					return 0;
+				}
+				FPlatformProcess::Sleep(0.1f);
+			}
+		}
+
+		virtual void Close() override { Handle.Reset(); }
+
+	private:
+		/** 重新打开文件拿到最新长度；文件没了（被删）返回 false 结束分析 */
+		bool Refresh()
+		{
+			// 第二个参数 bAllowWrite：引擎还在写这个文件，要允许别人写才打得开
+			Handle.Reset(FPlatformFileManager::Get().GetPlatformFile().OpenRead(*Path, true));
+			if (!Handle.IsValid() || !Handle->Seek(Pos))
+			{
+				return false;
+			}
+			Known = Handle->Size();
+			State->FileBytes.store(Known);
+			return true;
+		}
+
+		FString Path;
+		FFollowRef State;
+		TUniquePtr<IFileHandle> Handle;
+		int64 Pos = 0;
+		int64 Known = 0;
+	};
 
 	struct FEntry
 	{
 		TSharedPtr<const IAnalysisSession> Session;
-		int64 Size = 0;
-		FDateTime Stamp;
+		TSharedPtr<FTraceFollow, ESPMode::ThreadSafe> Follow;
 		double LastUse = 0;
 	};
 
-	/** 分析过的会话：留最近两个（网页来回切两份 trace 时不用重分析），文件变了（还在写）就重新分析 */
-	TMap<FString, FEntry>& Sessions()
+	/** 分析过的会话：留最近两个（网页来回切两份 trace 时不用重分析）。编辑器退出时先叫停读取，分析线程才退得出来 */
+	struct FSessionCache
 	{
-		static TMap<FString, FEntry> Map;
-		return Map;
+		TMap<FString, FEntry> Map;
+		~FSessionCache()
+		{
+			for (TPair<FString, FEntry>& P : Map)
+			{
+				Drop(P.Value);
+			}
+		}
+		static void Drop(FEntry& E)
+		{
+			if (E.Follow.IsValid())
+			{
+				E.Follow->bStop.store(true);
+			}
+		}
+		void Remove(const FString& File)
+		{
+			if (FEntry* E = Map.Find(File))
+			{
+				Drop(*E);
+				Map.Remove(File);
+			}
+		}
+	};
+
+	FSessionCache& Sessions()
+	{
+		static FSessionCache Cache;
+		return Cache;
 	}
 
-	TSharedPtr<const IAnalysisSession> SessionFor(const FString& File, FString& Error)
+	/**
+	 * bLive：面板说这份文件还在录。录制中一直跟着读（只分析一遍，查询时拿到的是已经分析到的部分）；
+	 * 不在录了就读完现有数据收尾。分析完以后文件又变了（换了文件、或者录制中没人看超过 FollowGrace 又打开）才从头再分析。
+	 */
+	TSharedPtr<const IAnalysisSession> SessionFor(const FString& File, bool bLive, FEntry*& OutEntry, FString& Error)
 	{
 		IFileManager& FM = IFileManager::Get();
 		const int64 Size = FM.FileSize(*File);
@@ -60,18 +198,19 @@ namespace
 			Error = FString::Printf(TEXT("trace 文件不存在或是空的：%s"), *File);
 			return nullptr;
 		}
-		const FDateTime Stamp = FM.GetTimeStamp(*File);
-		TMap<FString, FEntry>& Map = Sessions();
-		if (FEntry* Hit = Map.Find(File))
+		FSessionCache& Cache = Sessions();
+		const double Now = FPlatformTime::Seconds();
+		if (FEntry* Hit = Cache.Map.Find(File))
 		{
-			// 文件长了（录制还在写）而上次已经分析完：重新分析一遍；还在分析就继续等它
-			const bool bChanged = Hit->Size != Size || Hit->Stamp != Stamp;
-			if (!bChanged || !Hit->Session->IsAnalysisComplete())
+			Hit->Follow->FollowUntil.store(bLive ? Now + FollowGrace : 0.0);
+			const bool bChanged = Hit->Follow->ReadBytes.load() != Size;
+			if (!Hit->Session->IsAnalysisComplete() || !bChanged)
 			{
-				Hit->LastUse = FPlatformTime::Seconds();
+				Hit->LastUse = Now;
+				OutEntry = Hit;
 				return Hit->Session;
 			}
-			Map.Remove(File);
+			Cache.Remove(File);
 		}
 		ITraceServicesModule& Module = FModuleManager::LoadModuleChecked<ITraceServicesModule>(TEXT("TraceServices"));
 		TSharedPtr<IAnalysisService> Service = Module.GetAnalysisService();
@@ -80,18 +219,23 @@ namespace
 			Error = TEXT("这个引擎的 TraceServices 没有提供分析服务");
 			return nullptr;
 		}
-		// StartAnalysis 在自己的线程里分析，马上返回；查询时没分析完就回 analyzing，网页过一会儿再来
-		TSharedPtr<const IAnalysisSession> Session = Service->StartAnalysis(*File);
+		FFollowRef Follow = MakeShared<FTraceFollow, ESPMode::ThreadSafe>();
+		Follow->FollowUntil.store(bLive ? Now + FollowGrace : 0.0);
+		Follow->FileBytes.store(Size);
+		// StartAnalysis 在自己的线程里分析，马上返回；查询时没分析完就回 analyzing 和已经分析到的部分。
+		// 数据流自己给（不用按文件路径的重载）：那样录制中读到末尾能等新数据，还知道读到了第几个字节
+		TUniquePtr<UE::Trace::IInDataStream> Stream(new FFollowStream(File, Follow));
+		TSharedPtr<const IAnalysisSession> Session = Service->StartAnalysis(0u, *File, MoveTemp(Stream));
 		if (!Session.IsValid())
 		{
 			Error = FString::Printf(TEXT("打不开这份 trace（不是 .utrace，或者是更新版本的引擎录的）：%s"), *File);
 			return nullptr;
 		}
-		while (Map.Num() >= 2)
+		while (Cache.Map.Num() >= 2)
 		{
 			FString Oldest;
 			double OldestUse = TNumericLimits<double>::Max();
-			for (const TPair<FString, FEntry>& P : Map)
+			for (const TPair<FString, FEntry>& P : Cache.Map)
 			{
 				if (P.Value.LastUse < OldestUse)
 				{
@@ -99,15 +243,18 @@ namespace
 					Oldest = P.Key;
 				}
 			}
-			Map.Remove(Oldest);
+			Cache.Remove(Oldest);
 		}
-		FEntry& E = Map.Add(File);
+		FEntry& E = Cache.Map.Add(File);
 		E.Session = Session;
-		E.Size = Size;
-		E.Stamp = Stamp;
-		E.LastUse = FPlatformTime::Seconds();
+		E.Follow = Follow;
+		E.LastUse = Now;
+		OutEntry = &E;
 		return Session;
 	}
+} // 匿名命名空间
+
+	// ---------- 和 AgentPanelTraceLua.cpp 共用的（声明在 AgentPanelTraceShared.h，不能放匿名命名空间） ----------
 
 	double Num(const TSharedPtr<FJsonObject>& A, const TCHAR* Key, double Default)
 	{
@@ -148,50 +295,6 @@ namespace
 		});
 		return Out;
 	}
-
-	inline const ITimingProfilerTimerReader* AsReader(const ITimingProfilerTimerReader& R) { return &R; }
-	inline const ITimingProfilerTimerReader* AsReader(const ITimingProfilerTimerReader* R) { return R; }
-
-	/** 计时器 id → 名字。带元数据的计时器（id 最高位是 1）换成原始计时器，和 Insights 一样合在一起算 */
-	struct FTimers
-	{
-		const ITimingProfilerTimerReader* Reader = nullptr;
-
-		explicit FTimers(const ITimingProfilerProvider& TP)
-		{
-#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
-			// 5.8 起 ReadTimers 弃用，改 GetTimerReader()；返回引用还是指针都接得住
-			Reader = AsReader(TP.GetTimerReader());
-#else
-			TP.ReadTimers([this](const ITimingProfilerTimerReader& R) { Reader = &R; });
-#endif
-		}
-
-		uint32 Resolve(uint32 Index) const
-		{
-			if (Reader && static_cast<int32>(Index) < 0)
-			{
-				return Reader->GetOriginalTimerIdFromMetadata(Index);
-			}
-			return Index;
-		}
-
-		FString Name(uint32 Id) const
-		{
-			const TraceServices::FTimingProfilerTimer* T = Reader ? Reader->GetTimer(Id) : nullptr;
-			return T && T->Name ? FString(T->Name) : FString::Printf(TEXT("<timer %u>"), Id);
-		}
-	};
-
-	/** 一块（一次作用域）走完时的回调：开始、结束（秒）、深度、计时器 id、它外面的调用栈（从根往里，不含自己） */
-	struct FOpen
-	{
-		uint32 Timer;
-		double Start;
-		double Child;	// 子块的包含时间之和（算独占时间）
-	};
-	using FBlockFn = TFunctionRef<void(double Start, double End, int32 Depth, uint32 Timer, double ChildTime, const TArray<FOpen>& Parents)>;
-
 	/**
 	 * 按进出事件走一条泳道 [T0, T1]，自己维护调用栈。范围外开始、范围内还没结束的块也会给（时间按真实的）。
 	 * 返回 false 表示这条泳道不存在
@@ -243,15 +346,6 @@ namespace
 		return true;
 	}
 
-	/**
-	 * 无穷大 / NaN 换成 0：UE 的 JSON 写出来是 inf / nan，不是合法 JSON，面板整个回复都解析不了。
-	 * 录制停在半帧时最后一帧的 EndTime 就是无穷大（帧条一直显示加载，就是这一帧把 frames 的回复弄坏了）
-	 */
-	inline double Fin(double X)
-	{
-		return FMath::IsFinite(X) ? X : 0.0;
-	}
-
 	TSharedPtr<FJsonValue> NumArr(const TArray<double>& V)
 	{
 		TArray<TSharedPtr<FJsonValue>> Out;
@@ -268,7 +362,46 @@ namespace
 	{
 		return Fin(FMath::RoundToDouble(Seconds * 1000000.0) / 1000.0);
 	}
+	/** 树转 JSON：每层按包含时间倒序，最多 MaxKids 个、MaxDepth 层，其余的合进「其他」的计数里 */
+	TSharedPtr<FJsonObject> TreeJson(uint32 Id, const FNode& N, const FTimers& Timers, int32 Depth)
+	{
+		constexpr int32 MaxKids = TreeMaxKids;
+		constexpr int32 MaxDepth = TreeMaxDepth;
+		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+		O->SetNumberField(TEXT("id"), Id);
+		O->SetStringField(TEXT("name"), Timers.Name(Id));
+		O->SetNumberField(TEXT("count"), static_cast<double>(N.Count));
+		O->SetNumberField(TEXT("incl"), Ms(N.Incl));
+		O->SetNumberField(TEXT("excl"), Ms(N.Excl));
+		if (Depth >= MaxDepth || N.Kids.Num() == 0)
+		{
+			if (N.Kids.Num() > 0)
+			{
+				O->SetNumberField(TEXT("more"), N.Kids.Num());
+			}
+			return O;
+		}
+		TArray<TPair<uint32, const FNode*>> Sorted;
+		for (const TPair<uint32, TUniquePtr<FNode>>& P : N.Kids)
+		{
+			Sorted.Add({ P.Key, P.Value.Get() });
+		}
+		Sorted.Sort([](const TPair<uint32, const FNode*>& X, const TPair<uint32, const FNode*>& Y) { return X.Value->Incl > Y.Value->Incl; });
+		TArray<TSharedPtr<FJsonValue>> Kids;
+		for (int32 i = 0; i < Sorted.Num() && i < MaxKids; ++i)
+		{
+			Kids.Add(MakeShared<FJsonValueObject>(TreeJson(Sorted[i].Key, *Sorted[i].Value, Timers, Depth + 1)));
+		}
+		O->SetArrayField(TEXT("children"), Kids);
+		if (Sorted.Num() > MaxKids)
+		{
+			O->SetNumberField(TEXT("more"), Sorted.Num() - MaxKids);
+		}
+		return O;
+	}
 
+namespace
+{
 	// ---------- 各个查询 ----------
 
 	void QueryInfo(const IAnalysisSession& S, TSharedPtr<FJsonObject>& Out)
@@ -298,8 +431,25 @@ namespace
 			Threads.Add(MakeShared<FJsonValueObject>(O));
 		});
 		Out->SetArrayField(TEXT("threads"), Threads);
+		// 2.9.0：有没有 Lua 计时器（录制时开了 lua 通道），面板给抓取列表打「Lua」标签
+		Out->SetBoolField(TEXT("lua"), TP && HasLuaTimers(*TP));
 		const IFrameProvider& FP = ReadFrameProvider(S);
 		Out->SetNumberField(TEXT("frames"), static_cast<double>(FP.GetFrameCount(TraceFrameType_Game)));
+	}
+
+	/** 第一个游戏帧的开始时间（秒）；还没有帧时是 0 */
+	double FirstFrameTime(const IAnalysisSession& S)
+	{
+		const IFrameProvider& FP = ReadFrameProvider(S);
+		double T = 0;
+		if (FP.GetFrameCount(TraceFrameType_Game) > 0)
+		{
+			FP.EnumerateFrames(TraceFrameType_Game, uint64(0), uint64(1), [&](const TraceServices::FFrame& F)
+			{
+				T = Fin(F.StartTime);
+			});
+		}
+		return T;
 	}
 
 	void QueryFrames(const IAnalysisSession& S, TSharedPtr<FJsonObject>& Out)
@@ -392,162 +542,6 @@ namespace
 		Out->SetBoolField(TEXT("cut"), bCut);
 		return true;
 	}
-
-	struct FAgg
-	{
-		int64 Count = 0;
-		double Incl = 0;
-		double InclMax = 0;
-		double Excl = 0;
-		bool bGpu = false;
-	};
-
-	void QueryTimers(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out)
-	{
-		const double T0 = Num(A, TEXT("t0"), 0);
-		const double T1 = Num(A, TEXT("t1"), S.GetDurationSeconds());
-		const FString Filter = Str(A, TEXT("filter"));
-		const int32 Top = FMath::Clamp(Int(A, TEXT("top"), 200), 1, 2000);
-		TArray<int32> Want = Lanes(A);
-		if (Want.Num() == 0)
-		{
-			Want = AllLanes(S, TP);
-		}
-		FTimers Timers(TP);
-		TMap<uint32, FAgg> Agg;
-		for (int32 Lane : Want)
-		{
-			// 同一个计时器递归套自己时，包含时间只算最外层，免得翻倍（和 Insights 一致）
-			TMap<uint32, int32> Depths;
-			Walk(TP, Timers, Lane, T0, T1, [&](double Start, double End, int32, uint32 Timer, double Child, const TArray<FOpen>& Parents)
-			{
-				// 只算落在范围内的那部分
-				const double S0 = FMath::Max(Start, T0);
-				const double S1 = FMath::Min(End, T1);
-				if (S1 <= S0)
-				{
-					return;
-				}
-				FAgg& G = Agg.FindOrAdd(Timer);
-				G.bGpu |= Lane == GpuLane;
-				++G.Count;
-				bool bNested = false;
-				for (const FOpen& P : Parents)
-				{
-					bNested |= P.Timer == Timer;
-				}
-				const double Dur = S1 - S0;
-				if (!bNested)
-				{
-					G.Incl += Dur;
-				}
-				G.InclMax = FMath::Max(G.InclMax, End - Start);
-				G.Excl += FMath::Max(0.0, Dur - Child * (Dur / FMath::Max(End - Start, 1e-12)));
-			});
-		}
-		struct FRow
-		{
-			uint32 Id;
-			FString Name;
-			FAgg G;
-		};
-		TArray<FRow> Rows;
-		for (const TPair<uint32, FAgg>& P : Agg)
-		{
-			FString Name = Timers.Name(P.Key);
-			if (!Filter.IsEmpty() && !Name.Contains(Filter))
-			{
-				continue;
-			}
-			Rows.Add({ P.Key, MoveTemp(Name), P.Value });
-		}
-		const FString Sort = Str(A, TEXT("sort"), TEXT("excl"));
-		Rows.Sort([&](const FRow& X, const FRow& Y)
-		{
-			if (Sort == TEXT("incl")) return X.G.Incl > Y.G.Incl;
-			if (Sort == TEXT("count")) return X.G.Count > Y.G.Count;
-			if (Sort == TEXT("max")) return X.G.InclMax > Y.G.InclMax;
-			return X.G.Excl > Y.G.Excl;
-		});
-		TArray<TSharedPtr<FJsonValue>> Items;
-		for (int32 i = 0; i < Rows.Num() && i < Top; ++i)
-		{
-			const FRow& R = Rows[i];
-			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
-			O->SetNumberField(TEXT("id"), R.Id);
-			O->SetStringField(TEXT("name"), R.Name);
-			O->SetNumberField(TEXT("count"), static_cast<double>(R.G.Count));
-			O->SetNumberField(TEXT("incl"), Ms(R.G.Incl));
-			O->SetNumberField(TEXT("inclMax"), Ms(R.G.InclMax));
-			O->SetNumberField(TEXT("excl"), Ms(R.G.Excl));
-			if (R.G.bGpu)
-			{
-				O->SetBoolField(TEXT("gpu"), true);
-			}
-			Items.Add(MakeShared<FJsonValueObject>(O));
-		}
-		Out->SetArrayField(TEXT("items"), Items);
-		Out->SetNumberField(TEXT("total"), Rows.Num());
-		Out->SetNumberField(TEXT("seconds"), T1 - T0);
-	}
-
-	/** 调用树的一个节点：按计时器 id 合并同一路径上的调用 */
-	struct FNode
-	{
-		int64 Count = 0;
-		double Incl = 0;
-		double Excl = 0;
-		TMap<uint32, TUniquePtr<FNode>> Kids;
-
-		FNode& Kid(uint32 Id)
-		{
-			TUniquePtr<FNode>& P = Kids.FindOrAdd(Id);
-			if (!P)
-			{
-				P = MakeUnique<FNode>();
-			}
-			return *P;
-		}
-	};
-
-	/** 树转 JSON：每层按包含时间倒序，最多 MaxKids 个、MaxDepth 层，其余的合进「其他」的计数里 */
-	TSharedPtr<FJsonObject> TreeJson(uint32 Id, const FNode& N, const FTimers& Timers, int32 Depth)
-	{
-		constexpr int32 MaxKids = 30;
-		constexpr int32 MaxDepth = 16;
-		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
-		O->SetNumberField(TEXT("id"), Id);
-		O->SetStringField(TEXT("name"), Timers.Name(Id));
-		O->SetNumberField(TEXT("count"), static_cast<double>(N.Count));
-		O->SetNumberField(TEXT("incl"), Ms(N.Incl));
-		O->SetNumberField(TEXT("excl"), Ms(N.Excl));
-		if (Depth >= MaxDepth || N.Kids.Num() == 0)
-		{
-			if (N.Kids.Num() > 0)
-			{
-				O->SetNumberField(TEXT("more"), N.Kids.Num());
-			}
-			return O;
-		}
-		TArray<TPair<uint32, const FNode*>> Sorted;
-		for (const TPair<uint32, TUniquePtr<FNode>>& P : N.Kids)
-		{
-			Sorted.Add({ P.Key, P.Value.Get() });
-		}
-		Sorted.Sort([](const TPair<uint32, const FNode*>& X, const TPair<uint32, const FNode*>& Y) { return X.Value->Incl > Y.Value->Incl; });
-		TArray<TSharedPtr<FJsonValue>> Kids;
-		for (int32 i = 0; i < Sorted.Num() && i < MaxKids; ++i)
-		{
-			Kids.Add(MakeShared<FJsonValueObject>(TreeJson(Sorted[i].Key, *Sorted[i].Value, Timers, Depth + 1)));
-		}
-		O->SetArrayField(TEXT("children"), Kids);
-		if (Sorted.Num() > MaxKids)
-		{
-			O->SetNumberField(TEXT("more"), Sorted.Num() - MaxKids);
-		}
-		return O;
-	}
-
 	/**
 	 * 调用者 / 被调用者（Insights 的 Butterfly）：选中计时器的每一次调用，
 	 * 往外的调用栈并进「调用者」树（自己在根，往下是父、祖父…），往里的子调用并进「被调用者」树。
@@ -897,17 +891,24 @@ namespace
 		Out->SetArrayField(TEXT("items"), Items);
 	}
 }
+} // namespace UELinkTrace
 
 namespace AgentPanelEd
 {
 	void RegisterTraceOps()
 	{
+		// 块作用域的 using 不会漏到别的文件（见文件头）
+		using namespace UELinkTrace;
+		using namespace TraceServices;
 		FAgentPanelBridge::Get().AddOp(TEXT("trace.query"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 		{
 			const FString File = FPaths::ConvertRelativePathToFull(Str(A, TEXT("file")));
 			const FString What = Str(A, TEXT("what"), TEXT("info"));
-			TSharedPtr<const IAnalysisSession> Session = SessionFor(File, Error);
-			if (!Session.IsValid())
+			bool bLive = false;
+			A->TryGetBoolField(TEXT("live"), bLive);
+			FEntry* Entry = nullptr;
+			TSharedPtr<const IAnalysisSession> Session = SessionFor(File, bLive, Entry, Error);
+			if (!Session.IsValid() || !Entry)
 			{
 				return false;
 			}
@@ -917,6 +918,20 @@ namespace AgentPanelEd
 			const bool bDone = S.IsAnalysisComplete();
 			Out->SetBoolField(TEXT("analyzing"), !bDone);
 			Out->SetNumberField(TEXT("duration"), S.GetDurationSeconds());
+			// 读取进度（2.8.1）：没分析完时网页显示「已读 X / Y MB」，录制中追上了（caughtUp）就先把已有的部分显示出来
+			Out->SetNumberField(TEXT("readBytes"), static_cast<double>(Entry->Follow->ReadBytes.load()));
+			Out->SetNumberField(TEXT("fileBytes"), static_cast<double>(Entry->Follow->FileBytes.load()));
+			if (!bDone && Entry->Follow->Following())
+			{
+				Out->SetBoolField(TEXT("live"), true);
+			}
+			if (Entry->Follow->bAtEnd.load())
+			{
+				Out->SetBoolField(TEXT("caughtUp"), true);
+			}
+			// 第一帧的开始时间（2.8.1）：trace 的时间从进程启动算，录制中途才开始时第一帧在几百上千秒处，
+			// 面板按它把时间换成「从录制开始算」（以前网页的「已分析到第 1700 秒」其实是编辑器开了 28 分钟）
+			Out->SetNumberField(TEXT("origin"), FirstFrameTime(S));
 			if (What == TEXT("info"))
 			{
 				QueryInfo(S, Out);
@@ -969,7 +984,17 @@ namespace AgentPanelEd
 			{
 				return QueryInstances(S, *TP, A, Out, Error);
 			}
-			Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / instances / counters / log / bookmarks）"), *What);
+			// 2.9.0：Lua 计时器的文件和行号、自上而下的调用树（AgentPanelTraceLua.cpp）
+			if (What == TEXT("luainfo"))
+			{
+				QueryLuaInfo(*TP, Out);
+				return true;
+			}
+			if (What == TEXT("tree"))
+			{
+				return QueryTree(S, *TP, A, Out, Error);
+			}
+			Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / instances / tree / luainfo / counters / log / bookmarks）"), *What);
 			return false;
 		});
 	}

@@ -132,6 +132,11 @@ export function Sessions({
                     onChange={() => onPick(c)}
                   />
                   <Badge tone={KIND[c.kind].tone}>{KIND[c.kind].label()}</Badge>
+                  {c.lua && (
+                    <Badge tone="run" title={t('这份 trace 带 Lua 函数')}>
+                      Lua
+                    </Badge>
+                  )}
                   <span className="ue:min-w-0 ue:flex-1 ue:truncate" title={c.file}>
                     {nameOf(c)}
                   </span>

@@ -31,29 +31,6 @@ export interface Snap {
   captures?: SnapCapture[]
 }
 
-export interface ProfItem {
-  fn: string
-  src: string
-  file?: string
-  line: number
-  /** C 函数（UnLua 导出的 UE 接口） */
-  c: boolean
-  calls: number
-  totalMs: number
-  selfMs: number
-}
-
-export interface ProfResult {
-  running: boolean
-  remaining?: number
-  startedAt?: string
-  seconds?: number
-  events?: number
-  total?: number
-  items?: ProfItem[]
-  report?: string
-}
-
 export type LeakKind = 'destroyed' | 'stale' | 'garbage' | 'noworld'
 export interface LeakItem {
   kind: LeakKind

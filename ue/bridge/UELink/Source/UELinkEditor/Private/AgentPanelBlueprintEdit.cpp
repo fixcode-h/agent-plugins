@@ -1,7 +1,7 @@
 // 蓝图写入：bp.node_search（能放哪些节点，和编辑器右键菜单同一个来源）、bp.edit（操作列表，整批在一个事务里）、bp.compile。
 // 不提供整张图替换：整图替换会丢掉没读到的部分，一处写错全图报废（设计稿「蓝图读写 · 写」）。
 // 任何一步失败整批取消；dryRun 照常执行和编译，拿到结果后取消，不留改动。
-#include "AgentPanelCompat.h"
+#include "UELinkCompat.h"
 #include "AgentPanelEditorShared.h"
 
 #include "BlueprintActionDatabase.h"
@@ -622,7 +622,7 @@ namespace
 				Error = FString::Printf(TEXT("没有 spawner %s（键来自 node_search 的结果；编辑器重启或蓝图结构变了以后要重新查）"), *Key);
 				return nullptr;
 			}
-			// Invoke 到 5.8 一直收 FVector2D（没换成 FVector2f），所以这里不走 AgentPanelCompat.h 的坐标宏
+			// Invoke 到 5.8 一直收 FVector2D（没换成 FVector2f），所以这里不走 UELinkCompat.h 的坐标宏
 			N = Sp->Invoke(G, IBlueprintNodeBinder::FBindingSet(), FVector2D(0, 0));
 			if (!N)
 			{
@@ -778,7 +778,7 @@ namespace
 			const UEdGraphSchema* Schema = G->GetSchema();
 			for (const auto& Pair : (*Pins)->Values)
 			{
-				UEdGraphPin* P = FindPin(N, AGENT_PANEL_JSON_KEY(Pair.Key), Error);
+				UEdGraphPin* P = FindPin(N, UELINK_JSON_KEY(Pair.Key), Error);
 				if (!P)
 				{
 					return nullptr;

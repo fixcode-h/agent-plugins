@@ -12,6 +12,9 @@ class UWorld;
 /** 一个操作：args 是请求里的 args，往 Out 里写结果字段；出错时返回 false 并写 Error（原样显示给用户和 Agent） */
 using FAgentPanelOp = TFunction<bool(const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error)>;
 
+/** 扩展发出的推送事件：主题（forge.job、gt.record……）和事件内容。推送通道收到后转给订阅了这个主题的客户端 */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnAgentPanelEvent, const FString& /*Topic*/, const TSharedRef<FJsonObject>& /*Event*/);
+
 class UELINKCORE_API FAgentPanelBridge
 {
 public:
@@ -19,6 +22,29 @@ public:
 
 	/** 登记操作（同名的后登记的覆盖前面的：编辑器模块用它接管编辑器世界的截图等） */
 	void AddOp(const FString& Name, FAgentPanelOp Op);
+
+	/**
+	 * UEKit 扩展插件（AssetForge、GameTest……）登记自己：名片和 /info 的 extensions 里列出名字和版本，
+	 * 客户端据此知道这个进程里装了哪些扩展、什么版本（装了没重编时磁盘上的版本和这里不同）。
+	 * 同名的再登记一次只更新版本。扩展模块在 StartupModule 里调。
+	 */
+	void RegisterExtension(const FString& Name, const FString& Version);
+	void UnregisterExtension(const FString& Name);
+
+	/**
+	 * 扩展登记操作：名字必须带「前缀.」（forge.import、gt.run），和已有操作重名时拒绝并返回 false，
+	 * 不覆盖 UELink 自己的操作（AddOp 是给 UELink 内部模块接管用的，扩展不要用它）。
+	 */
+	bool AddExtensionOp(const FString& Name, FAgentPanelOp Op);
+	void RemoveOp(const FString& Name);
+
+	/**
+	 * 扩展推一条事件（作业进度、录制到的一步……）：主题必须带「前缀.」，和操作名同一个前缀。
+	 * 推送通道在编辑器里才有；没人订阅时什么都不做，所以每帧推也很便宜。
+	 * 这样客户端拿实时状态不用轮询 *.job；作业的最终结果仍然能用 *.job 查（客户端可能中途才连上）。
+	 */
+	void PublishEvent(const FString& Topic, const TSharedRef<FJsonObject>& Event);
+	FOnAgentPanelEvent& OnEvent() { return EventDelegate; }
 
 	/** 起服务、写名片；Kind 是 editor / game / server / background。已经起过就什么都不做 */
 	bool Start(const FString& Kind);
@@ -38,6 +64,12 @@ public:
 	 */
 	void SetCardField(const FString& Name, const TSharedPtr<FJsonValue>& Value);
 
+	/**
+	 * 只记下名片字段、不写名片（2.7）：给引擎初始化前就要定下的字段用（编辑器的 ready: false），
+	 * 等 Start 第一次写名片时一起带上。不在这里定进程类型，免得游戏进程被写成 editor
+	 */
+	void PresetCardField(const FString& Name, const TSharedPtr<FJsonValue>& Value) { CardExtra.Add(Name, Value); }
+
 	/** 本次启动的令牌（推送通道用同一个令牌认新客户端） */
 	const FString& GetToken() const { return Token; }
 
@@ -49,7 +81,12 @@ private:
 	FString StartedAt;
 	TArray<FString> CardFiles;
 	TMap<FString, TSharedPtr<FJsonValue>> CardExtra;
+	/** 扩展名 → 版本，按登记顺序 */
+	TArray<TPair<FString, FString>> Extensions;
+	TArray<TSharedPtr<FJsonValue>> ExtensionsJson() const;
+	void UpdateExtensionsCard();
 	double LastRequest = 0;
+	FOnAgentPanelEvent EventDelegate;
 
 	void WriteCard();
 	/** 令牌、启动时间、进程类型：HTTP 服务和推送通道谁先起谁生成，之后不变（客户端读到的令牌一直有效） */

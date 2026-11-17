@@ -14,7 +14,9 @@ public class UELinkCore : ModuleRules
 		{
 			"HTTPServer", "Json", "JsonUtilities", "AssetRegistry", "ImageCore", "UMG", "Slate", "SlateCore",
 			// 实时性能读数（AgentPanelPerf.cpp）：stat unit 用的线程时间在 RenderCore，GPU 时间和 Draw Calls 在 RHI
-			"RenderCore", "RHI"
+			"RenderCore", "RHI",
+			// GameplayTag 浏览（UELinkConfigOps.cpp）：引擎运行时模块，不是插件，每个项目都有
+			"GameplayTags"
 		});
 		// Shipping 里一律不编进去：.uplugin 已经拦了加载，这里再保证代码不在
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)

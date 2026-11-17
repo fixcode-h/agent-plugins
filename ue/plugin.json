@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -132,6 +132,50 @@
       "min": 0,
       "max": 3600,
       "unit": "秒"
+    },
+    {
+      "key": "perfShareLow",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "中性色以下",
+      "desc": "调用树和火焰图里占根不到这个比例的行用很淡的中性色",
+      "default": 5,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareMid",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "强调色到",
+      "desc": "从上一档到这个比例用强调色，再往上用警告色",
+      "default": 20,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareHigh",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "危险色起",
+      "desc": "占根到这个比例以上用危险色（红），最重的几支一眼能看出来",
+      "default": 50,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "key": "perfShareStrength",
+      "type": "number",
+      "group": "性能：占比配色",
+      "label": "颜色强度",
+      "desc": "占比底条的浓淡：100 是默认，调小更淡、调大更浓（文字始终在上面，不会被盖住）",
+      "default": 100,
+      "min": 25,
+      "max": 300,
+      "unit": "%"
     },
     {
       "key": "dangerous",

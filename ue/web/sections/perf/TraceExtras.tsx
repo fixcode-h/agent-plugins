@@ -1,5 +1,5 @@
 import { Copy, Crosshair, Filter, LineChart as ChartIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -7,6 +7,7 @@ import { ErrorText, SearchBox } from '../../ui.tsx'
 import { LineChart } from './charts.tsx'
 import { copyText, openMenu } from '../../menu.tsx'
 import { Empty, Skeleton, fmtAt } from './parts.tsx'
+import { luaCounterLabel } from './lua-trace.ts'
 import { traceQuery, useDebounced, type Range, type TraceBase } from './trace.ts'
 
 /**
@@ -15,7 +16,18 @@ import { traceQuery, useDebounced, type Range, type TraceBase } from './trace.ts
  */
 
 /** 计数器：列出全部，勾上的在上面画走势（范围内，每段取最大值） */
-export function Counters({ id, range, duration }: { id: string; range?: Range; duration: number }) {
+export function Counters({
+  id,
+  range,
+  duration,
+  defaults,
+}: {
+  id: string
+  range?: Range
+  duration: number
+  /** 默认勾上的计数器（trace 含 Lua 时是三个 Lua 计数器），这份 trace 里没有的不勾 */
+  defaults?: string[]
+}) {
   const { project } = useUe()
   const { cn } = h()
   const [filter, setFilter] = useState('')
@@ -24,6 +36,16 @@ export function Counters({ id, range, duration }: { id: string; range?: Range; d
     () => traceQuery<TraceBase & { counters: { name: string }[] }>(project.id, id, { what: 'counters' }),
     [project.id, id],
   )
+  // 列表到了再勾默认的：只勾这份 trace 里有的，用户之后勾掉就不再管
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (seeded.current || !defaults?.length || !list.data) return
+    seeded.current = true
+    const have = new Set(list.data.counters.map((c) => c.name))
+    const pick = defaults.filter((n) => have.has(n))
+    if (pick.length) setOn(pick)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- defaults 每次渲染是新数组，只看列表到没到
+  }, [list.data, defaults?.length])
   const series = useDebounced(
     on.length
       ? () =>
@@ -67,7 +89,15 @@ export function Counters({ id, range, duration }: { id: string; range?: Range; d
               }
             >
               <div className="ue:mb-1 ue:flex ue:gap-2 ue:text-caption ue:text-subtle">
-                <span className="ue:min-w-0 ue:flex-1 ue:truncate">{s.name}</span>
+                <span className="ue:min-w-0 ue:flex-1 ue:truncate">
+                  {luaCounterLabel(s.name) ? (
+                    <>
+                      <span className="ue:text-fg">{luaCounterLabel(s.name)}</span> {s.name}
+                    </>
+                  ) : (
+                    s.name
+                  )}
+                </span>
                 {sorted.length > 0 && (
                   <span className="ue:shrink-0 ue:font-mono">
                     {fmtNum(sorted[0])} – {fmtNum(sorted.at(-1)!)}
@@ -102,7 +132,10 @@ export function Counters({ id, range, duration }: { id: string; range?: Range; d
             )}
           >
             <input type="checkbox" className="ue:accent-(--accent)" checked={on.includes(n)} onChange={() => toggle(n)} />
-            <span className="ue:truncate">{n}</span>
+            <span className="ue:truncate">
+              {luaCounterLabel(n) && <span className="ue:mr-1.5 ue:text-fg">{luaCounterLabel(n)}</span>}
+              {n}
+            </span>
           </label>
         ))}
       </div>

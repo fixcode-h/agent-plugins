@@ -17,12 +17,7 @@
 #endif
 #include "UObject/UObjectArray.h"
 
-// Draw Calls / 图元数的全局数组在 5.4–5.6 一直在；之后的版本 RHI 统计在改，没在真实引擎验证过的版本先不读，网页显示「—」
-#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 6
-#define AGENT_PANEL_DRAW_STATS 1
-#else
-#define AGENT_PANEL_DRAW_STATS 0
-#endif
+#include "UELinkCompat.h"
 
 using namespace AgentPanel;
 
@@ -129,7 +124,7 @@ namespace
 			MO->SetNumberField(TEXT("availablePhysicalMB"), ToMB(M.AvailablePhysical));
 			MO->SetNumberField(TEXT("totalPhysicalMB"), ToMB(M.TotalPhysical));
 			R->SetObjectField(TEXT("memory"), MO);
-			R->SetBoolField(TEXT("drawStats"), AGENT_PANEL_DRAW_STATS != 0);
+			R->SetBoolField(TEXT("drawStats"), UELINK_DRAW_STATS != 0);
 			return R;
 		}
 
@@ -173,7 +168,7 @@ namespace
 			S.Draw = (float)FPlatformTime::ToMilliseconds(GRenderThreadTime);
 			S.RHIT = (float)FPlatformTime::ToMilliseconds(GRHIThreadTime);
 			S.GPU = (float)FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles(0));
-#if AGENT_PANEL_DRAW_STATS
+#if UELINK_DRAW_STATS
 			S.Draws = GNumDrawCallsRHI[0];
 			S.Prims = GNumPrimitivesDrawnRHI[0];
 #endif

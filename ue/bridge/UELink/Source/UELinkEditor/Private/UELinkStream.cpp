@@ -3,6 +3,7 @@
 #include "UELinkStreamJson.h"
 #include "UELinkVersion.h"
 #include "AgentPanelBridge.h"
+#include "AgentPanelLua.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Common/TcpListener.h"
@@ -23,6 +24,8 @@
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 #include "SocketSubsystem.h"
 #include "Sockets.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -101,7 +104,14 @@ FUELinkStream& FUELinkStream::Get()
 
 TArray<FString> FUELinkStream::Features()
 {
-	TArray<FString> Out = {TEXT("log"), TEXT("tests")};
+	// extEvents：订阅时可以带扩展的主题（forge.job、gt.record……），见协议文档「扩展插件」
+	// selection：uelink.selection 事件（2.4）；luaDecl：uelink.luadecl 事件（2.5）；luaErrors：uelink.luaErrors 事件（2.4，编进 Lua 支持时才有）
+	// editorReady：名片 ready 字段和 uelink.ready 事件（2.7）
+	TArray<FString> Out = {TEXT("log"), TEXT("tests"), TEXT("extEvents"), TEXT("selection"), TEXT("luaDecl"), TEXT("editorReady")};
+	if (FAgentPanelLua::IsCompiledIn())
+	{
+		Out.Add(TEXT("luaErrors"));
+	}
 #if AGENT_PANEL_LIVE_CODING
 	Out.Add(TEXT("liveCoding"));
 #endif
@@ -149,6 +159,8 @@ void FUELinkStream::Start()
 	TestStartHandle = Framework.OnTestStartEvent.AddRaw(this, &FUELinkStream::OnTestStart);
 	TestEndHandle = Framework.OnTestEndEvent.AddRaw(this, &FUELinkStream::OnTestEnd);
 
+	ExtensionEventHandle = FAgentPanelBridge::Get().OnEvent().AddRaw(this, &FUELinkStream::OnExtensionEvent);
+
 	PublishPort();
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FUELinkStream::Tick), 0.05f);
 	UE_LOG(LogUELinkStream, Log, TEXT("UELink %s 推送通道：127.0.0.1:%d（协议 %d）"), UELINK_VERSION, Port, UELINK_STREAM_PROTOCOL);
@@ -169,6 +181,11 @@ void FUELinkStream::Stop()
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
 		TickHandle.Reset();
+	}
+	if (ExtensionEventHandle.IsValid())
+	{
+		FAgentPanelBridge::Get().OnEvent().Remove(ExtensionEventHandle);
+		ExtensionEventHandle.Reset();
 	}
 	if (!Listener.IsValid())
 	{
@@ -479,6 +496,48 @@ void FUELinkStream::ApplyTopics(FSubscriber& Sub, const TArray<FString>& Topics)
 	Sub.bLog = Topics.Contains(TEXT("log"));
 	Sub.bTests = Topics.Contains(TEXT("tests"));
 	Sub.bLiveCoding = Topics.Contains(TEXT("liveCoding"));
+	Sub.ExtTopics.Reset();
+	for (const FString& Topic : Topics)
+	{
+		if (Topic.Contains(TEXT(".")))
+		{
+			Sub.ExtTopics.Add(Topic);
+		}
+	}
+}
+
+void FUELinkStream::OnExtensionEvent(const FString& Topic, const TSharedRef<FJsonObject>& Event)
+{
+	// 先看有没有人要，没人订阅就不序列化（扩展可能每帧都推）
+	bool bWanted = false;
+	for (const FSubscriber& Sub : Subscribers)
+	{
+		bWanted |= !Sub.bDead && Sub.ExtTopics.Contains(Topic);
+	}
+	if (!bWanted)
+	{
+		return;
+	}
+	const TSharedRef<FJsonObject> Line = MakeShared<FJsonObject>();
+	Line->SetStringField(TEXT("event"), Topic);
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : Event->Values)
+	{
+		if (Field.Key != TEXT("event"))
+		{
+			Line->SetField(Field.Key, Field.Value);
+		}
+	}
+	FString Json;
+	const TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
+	FJsonSerializer::Serialize(Line, Writer);
+	for (FSubscriber& Sub : Subscribers)
+	{
+		if (Sub.ExtTopics.Contains(Topic))
+		{
+			Enqueue(Sub, Json);
+		}
+	}
 }
 
 void FUELinkStream::HandleSubscriberLine(FSubscriber& Sub, const FString& Line)

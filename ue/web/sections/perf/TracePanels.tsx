@@ -32,6 +32,10 @@ export interface PanelActions {
   setRange: (r: Range) => void
   /** 选中时间轴上的一块（看它的调用堆栈） */
   pickBlock: (b: PickedBlock) => void
+  /** 只选中计时器、不换右栏下半的页签（火焰图里点一格用：点完还留在火焰图） */
+  selectTimer: (id: number, name: string) => void
+  /** 打开火焰图，从这个计时器往下看 */
+  flame: (id: number, name: string) => void
 }
 
 /** 计时器的通用右键项：调用树、最慢一次、复制名字 */

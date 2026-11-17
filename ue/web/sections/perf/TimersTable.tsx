@@ -4,6 +4,9 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText, SearchBox } from '../../ui.tsx'
 import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { readTheme, useThemeTick } from './canvas.ts'
+import { luaColor, luaFullSource, luaOf, luaSource, useLuaTrace, type LuaTimer } from './lua-trace.ts'
+import { Chip } from './LuaToggles.tsx'
 import { Empty, Skeleton, fmtMs } from './parts.tsx'
 import { traceQuery, useDebounced, type Range, type TimerRow, type TraceBase } from './trace.ts'
 
@@ -47,7 +50,18 @@ export function TimersTable({
   const [show, setShow] = useState({ gpu: true, cpu: true })
   const [cols, setCols] = useState<Col[]>([])
   const [closed, setClosed] = useState<string[]>([])
-  const key = `${id}|${range?.t0}|${range?.t1}|${filter}|${sort}|${range ? '' : rev}`
+  // Lua（Lua 性能 Insights 化设计 5.4）：只看 Lua 让桥接只回 Lua 计时器（含 C 函数），C 函数并进调用者和时间轴共用一个开关
+  const lua = useLuaTrace()
+  const hasLua = lua.info.lua
+  const [onlyLua, setOnlyLua] = useState(false)
+  const luaArgs = hasLua ? { lua: onlyLua || undefined, mergeC: lua.mergeC || undefined } : {}
+  const theme = useThemeTick()
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- theme 变了重读主题
+  const dark = useMemo(() => readTheme().dark, [theme])
+  /** 行上带的来源优先，旧回包没有时查 luainfo */
+  const luaRow = (x: TimerRow): LuaTimer | undefined =>
+    x.file !== undefined ? { file: x.file, line: x.line ?? 0, c: x.c } : luaOf(lua, x.id)
+  const key = `${id}|${range?.t0}|${range?.t1}|${filter}|${sort}|${range ? '' : rev}|${hasLua && onlyLua}|${hasLua && lua.mergeC}`
   const res = useDebounced(
     () =>
       traceQuery<TraceBase & { items: TimerRow[]; total: number; seconds: number }>(project.id, id, {
@@ -56,6 +70,7 @@ export function TimersTable({
         filter: filter || undefined,
         sort,
         top: 200,
+        ...luaArgs,
       }),
     key,
     80,
@@ -67,14 +82,17 @@ export function TimersTable({
   )
   const groups = useMemo(() => {
     if (group === 'none') return [{ key: 'all', label: '', list: items }]
+    const isLua = (x: TimerRow) => !x.gpu && !!luaRow(x)
     const gpu = items.filter((x) => x.gpu)
-    const cpu = items.filter((x) => !x.gpu)
+    const cpu = items.filter((x) => !x.gpu && !isLua(x))
     return [
+      { key: 'lua', label: 'Lua', list: items.filter(isLua) },
       { key: 'gpu', label: 'GPU', list: gpu },
       { key: 'cpu', label: 'CPU', list: cpu },
     ].filter((g) => g.list.length)
-  }, [items, group])
-  const grid = `minmax(0,1fr) 56px 64px 64px${cols.includes('avg') ? ' 60px' : ''}${cols.includes('max') ? ' 64px' : ''}`
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- luaRow 只读 lua.info
+  }, [items, group, lua.info])
+  const grid = `minmax(0,1fr)${hasLua ? ' 92px' : ''} 56px 64px 64px${cols.includes('avg') ? ' 60px' : ''}${cols.includes('max') ? ' 64px' : ''}`
   const toggleCol = (c: Col) => setCols((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]))
 
   const sortItems: MenuItem[] = [
@@ -93,6 +111,15 @@ export function TimersTable({
     { label: t('单次最长'), checked: cols.includes('max'), onClick: () => toggleCol('max') },
     'sep',
     { label: t('按类型分组'), checked: group === 'type', onClick: () => setGroup(group === 'type' ? 'none' : 'type') },
+    ...(hasLua
+      ? [
+          {
+            label: t('C 函数并进调用者'),
+            checked: lua.mergeC,
+            onClick: () => lua.setMergeC(!lua.mergeC),
+          },
+        ]
+      : []),
   ]
   const rowMenu = (e: MouseEvent, x: TimerRow) =>
     openMenu(e, [
@@ -159,6 +186,11 @@ export function TimersTable({
             busy={res.loading}
           />
         </div>
+        {hasLua && (
+          <Chip on={onlyLua} onClick={() => setOnlyLua(!onlyLua)} title={t('只列 Lua 计时器（含 C 函数）')}>
+            {t('只看 Lua')}
+          </Chip>
+        )}
         {(['gpu', 'cpu'] as const).map((k) => (
           <button
             key={k}
@@ -196,6 +228,7 @@ export function TimersTable({
             {range ? t('区间 {ms}', { ms: fmtMs(span) }) : t('整段')}
           </span>
         </span>
+        {hasLua && <span className="ue:truncate">{t('来源')}</span>}
         {head('count', t('次数'))}
         {head('incl', t('包含'))}
         {head('excl', t('独占'))}
@@ -231,6 +264,7 @@ export function TimersTable({
                     {g.label}
                     <span className="ue:font-normal ue:text-subtle">({g.list.length})</span>
                   </span>
+                  {hasLua && <span />}
                   <span className={cn(num, 'ue:relative')}>{sum((x) => x.count).toLocaleString()}</span>
                   <span className={cn(num, 'ue:relative')}>{fmtMs(sum((x) => x.incl))}</span>
                   <span className={cn(num, 'ue:relative')}>{fmtMs(sum((x) => x.excl))}</span>
@@ -242,6 +276,7 @@ export function TimersTable({
                 <div className="ue:motion-safe:animate-rise">
                   {g.list.map((x) => {
                     const pct = (x.excl / Math.max(span, 1e-6)) * 100
+                    const lx = x.gpu ? undefined : luaRow(x)
                     return (
                       <button
                         key={x.id}
@@ -251,11 +286,14 @@ export function TimersTable({
                         onContextMenu={(e) => rowMenu(e, x)}
                         title={[
                           x.name,
-                          `${x.gpu ? 'GPU' : 'CPU'} · ${t('次数')} ${x.count.toLocaleString()}`,
+                          luaFullSource(lx),
+                          `${lx ? 'Lua' : x.gpu ? 'GPU' : 'CPU'} · ${t('次数')} ${x.count.toLocaleString()}`,
                           `${t('包含')} ${fmtMs(x.incl)} · ${t('独占')} ${fmtMs(x.excl)}（${pct.toFixed(1)}%）`,
                           `${t('平均')} ${fmtMs(x.incl / Math.max(1, x.count))} · ${t('单次最长')} ${fmtMs(x.inclMax)}`,
                           t('双击找最慢的一次，右键更多'),
-                        ].join('\n')}
+                        ]
+                          .filter(Boolean)
+                          .join('\n')}
                         className={cn(
                           'ue:relative ue:grid ue:w-full ue:items-center ue:gap-2 ue:px-3 ue:py-[3px] ue:text-left ue:text-footnote ue:transition-colors',
                           picked === x.id ? 'ue:bg-sel' : 'ue:hover:bg-hover',
@@ -269,13 +307,19 @@ export function TimersTable({
                           style={{ width: `${Math.min(100, pct)}%` }}
                         />
                         <span className="ue:relative ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:pl-4">
-                          {x.gpu ? (
+                          {lx ? (
+                            <span
+                              className="ue:h-2.5 ue:w-2.5 ue:shrink-0 ue:rounded-[2px]"
+                              style={{ background: luaColor(x.name, dark, lx.c) }}
+                            />
+                          ) : x.gpu ? (
                             <Layers className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-run" />
                           ) : (
                             <Cpu className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-subtle" />
                           )}
                           <span className="ue:truncate ue:text-fg">{x.name}</span>
                         </span>
+                        {hasLua && <SourceCell name={x.name} x={lx} open={lua.open} />}
                         <span className={cn(num, 'ue:relative ue:text-subtle')}>{x.count.toLocaleString()}</span>
                         <span className={cn(num, 'ue:relative ue:text-muted')}>{fmtMs(x.incl)}</span>
                         <span className={cn(num, 'ue:relative ue:text-fg')}>{fmtMs(x.excl)}</span>
@@ -302,5 +346,27 @@ export function TimersTable({
         )}
       </div>
     </div>
+  )
+}
+
+/** 来源格：Lua 函数是可点的「文件:行」（打开 .lua），C 函数写「C · UE 接口 / Lua 库」，UE 计时器空着 */
+function SourceCell({ name, x, open }: { name: string; x?: LuaTimer; open: (file: string, line?: number) => void }) {
+  if (!x) return <span />
+  if (x.c) return <span className="ue:relative ue:truncate ue:text-caption ue:text-subtle">{luaSource(name, x)}</span>
+  return (
+    <span
+      role="link"
+      tabIndex={-1}
+      title={t('在编辑器里打开 {f}', { f: luaFullSource(x) })}
+      onClick={(e) => {
+        // 行本身点了是选中计时器：这里只打开文件
+        e.stopPropagation()
+        open(x.file, x.line)
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className="ue:relative ue:truncate ue:font-mono ue:text-caption ue:text-accent-text ue:hover:underline"
+    >
+      {luaSource(name, x)}
+    </span>
   )
 }

@@ -19,6 +19,28 @@ public:
 	 */
 	static void SetStateProvider(TFunction<lua_State*(UObject* Context)> Provider);
 
+	/**
+	 * 2.4：项目自己的热重载（lua.reload 优先用它）。UnLua 二次开发版的热重载入口各家不同，桥接不猜：
+	 * 项目有热重载时在自己的模块里接上，返回 false 并写 Error 表示没重载成功（原样显示给用户和 Agent）。
+	 * 没接时桥接用「清 package.loaded 再 require，把新函数拷回旧模块表」兜底。
+	 * 例：FAgentPanelLua::SetReloader([](lua_State* L, const FString& Module, FString& Error) { return MyHotReload(L, Module, Error); });
+	 */
+	static void SetReloader(TFunction<bool(lua_State* L, const FString& Module, FString& Error)> Reloader);
+
+	/**
+	 * 2.4：把一次 Lua 报错交给面板（lua.errors 的 capture 来源）。在项目的 Lua 报错处理函数里调（这时出错的栈还在，
+	 * 能记下出错那一帧的局部变量和完整调用栈）；不调时桥接从日志里认报错，只是没有局部变量。
+	 * 官方 UnLua 可以在 FUnLuaDelegates::ReportLuaCallError 里调；二次开发版按自己的报错入口接，接完记得照常打日志。
+	 */
+	static void CaptureError(lua_State* L, const FString& Message);
+
+	/**
+	 * 2.8：读一个对象的 Lua 实例表上**自己的**字段（不走元表、不调函数，只用 lua_next 原样读），给 GameTest 挑列表条目的标识用。
+	 * 返回 JSON 对象：标量照原样（数字、字符串、布尔），子表展开成对象（键是字符串或整数下标），最多 MaxDepth 层、
+	 * 一共 MaxFields 个字段（超过的不读，返回里带 "__more": true）；函数、userdata、协程跳过。
+	 * 对象没绑 Lua、Lua 环境没建好、桥接没编进 Lua 支持时返回空并写 Error（都是正常情况，调用方当作「没有 Lua 字段」）。
+	 */
+	static TSharedPtr<class FJsonObject> ReadFields(UObject* Obj, int32 MaxDepth, int32 MaxFields, FString& Error);
 	/** 这个桥接编进了 Lua 支持（项目里有 UnLua） */
 	static bool IsCompiledIn();
 };

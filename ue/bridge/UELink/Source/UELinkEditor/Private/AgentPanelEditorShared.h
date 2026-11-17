@@ -93,4 +93,18 @@ namespace AgentPanelEd
 	void RegisterTraceOps();
 	/** 推送通道那边的 HTTP 操作：tests.run、tests.status、livecoding.status（UELinkStreamOps.cpp） */
 	void RegisterStreamOps();
+	/** 编辑器小工具（UELinkEditorToolsOps.cpp）：asset.redirectors、editor.spawn、editor.destroy */
+	void RegisterEditorToolsOps();
+	/** 世界里的 Actor 增删、挂接、换文件夹时推 uelink.outliner 事件（UELinkOutlinerPush.cpp），网页的大纲据此重读，不轮询 */
+	void StartOutlinerPush();
+	void StopOutlinerPush();
+	/** 2.4：编辑器选中同步（UELinkSelectionOps.cpp）：editor.selection / editor.select，选中变化推 uelink.selection */
+	void RegisterSelectionOps();
+	void StartSelectionPush();
+	void StopSelectionPush();
+	/** 2.7：编辑器就绪（UELinkEditorReady.cpp）：名片 ready 字段、uelink.ready 事件、editor.ready 操作 */
+	void PresetEditorReady();
+	void RegisterEditorReadyOps();
+	void StartEditorReady();
+	void StopEditorReady();
 }
