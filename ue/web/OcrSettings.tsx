@@ -9,8 +9,9 @@ import { fmtSize } from './ui.tsx'
  * 设置 → 插件 → UE 的「OCR」：GameTest 录完认截图里按钮上的字（PP-OCRv5）。
  * 运行时和模型约 70 MB，在这里下载、不进插件包；下载进度由服务端推送（ue-ocr），页面不轮询。
  */
-export function OcrSettings() {
-  const { ui, toast, events } = h()
+/** bare：放进插件设置页的卡片里（卡片有标题），不画自己的小标题和边框 */
+export function OcrSettings({ bare }: { bare?: boolean } = {}) {
+  const { ui, toast, events, cn } = h()
   const [s, setS] = useState<OcrState>()
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -30,8 +31,13 @@ export function OcrSettings() {
   const pct = busy ? Math.min(100, Math.round((busy.done / Math.max(1, busy.total)) * 100)) : 0
   return (
     <section aria-label="OCR" className="ue:flex ue:flex-col ue:gap-2">
-      <span className="ue:text-footnote ue:text-subtle">{t('OCR（认录制截图里的字）')}</span>
-      <div className="ue:flex ue:flex-col ue:gap-2 ue:border ue:border-line ue:bg-card ue:px-3.5 ue:py-2.5">
+      {!bare && <span className="ue:text-footnote ue:text-subtle">{t('OCR（认录制截图里的字）')}</span>}
+      <div
+        className={cn(
+          'ue:flex ue:flex-col ue:gap-2',
+          bare ? 'ue:px-4 ue:py-3' : 'ue:border ue:border-line ue:bg-card ue:px-3.5 ue:py-2.5',
+        )}
+      >
         <div className="ue:flex ue:items-center ue:gap-3">
           <div className="ue:min-w-0 ue:flex-1">
             <div className="ue:text-body ue:text-fg">

@@ -12,6 +12,7 @@ import { CardsSection } from './plugins/CardsSection.tsx'
 import { JobBar, useJob } from './plugins/JobBar.tsx'
 import { extView, isStale, upgradePlan, uelinkView, type ExtList, type PluginView } from './plugins/model.ts'
 import { NotesModal } from './plugins/NotesModal.tsx'
+import { isSettingsPlugin, PluginSettings } from './plugins/PluginSettings.tsx'
 import { StatusStrip } from './plugins/StatusStrip.tsx'
 import { Todos } from './plugins/Todos.tsx'
 
@@ -29,9 +30,17 @@ export interface PluginActions {
   open: (v: PluginView) => void
   uninstall: (v: PluginView) => void
   notes: (v: PluginView) => void
+  /** 打开这个插件自己的设置页 */
+  settings: (v: PluginView) => void
 }
 
+/** 地址 plugins/<插件名> 是那个插件的设置页，其余是插件列表 */
 export function Plugins() {
+  const { sub } = useUe()
+  return isSettingsPlugin(sub) ? <PluginSettings name={sub} /> : <PluginList />
+}
+
+function PluginList() {
   const { project, state, reload, go } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
@@ -86,6 +95,7 @@ export function Plugins() {
     open: (v) => go(v.name === 'AssetForge' ? 'assetforge' : 'gametest'),
     uninstall: setRemoving,
     notes: setNotesOf,
+    settings: (v) => go('plugins', v.name),
   }
   const build = (opts?: 'force' | 'kill') =>
     run('build', async () => {
