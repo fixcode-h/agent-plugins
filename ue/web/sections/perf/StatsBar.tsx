@@ -11,6 +11,10 @@ export interface StatItem {
   level?: Level
   spark?: number[]
   title?: string
+  /** 点读数时做的事（trace 摘要里「Lua 每帧」= 跳到 Lua 最慢的那帧） */
+  onClick?: () => void
+  /** 值里有两个数（「平均 / 最慢」）：格子放宽一些，不折行 */
+  wide?: boolean
 }
 
 const VALUE: Record<Level, string> = {
@@ -29,7 +33,12 @@ export function StatsBar({ items, badge }: { items: StatItem[]; badge?: string }
         <div
           key={x.key}
           title={x.title}
-          className="ue:min-w-24 ue:flex-1 ue:border-r ue:border-line ue:px-3.5 ue:pt-2 ue:pb-1.5 ue:last:border-r-0"
+          onClick={x.onClick}
+          className={cn(
+            x.wide ? 'ue:min-w-36' : 'ue:min-w-24',
+            'ue:flex-1 ue:border-r ue:border-line ue:px-3.5 ue:pt-2 ue:pb-1.5 ue:last:border-r-0',
+            x.onClick && 'ue:cursor-pointer ue:transition-colors ue:hover:bg-hover',
+          )}
         >
           <div className="ue:flex ue:items-center ue:gap-1.5 ue:text-caption ue:whitespace-nowrap ue:text-subtle">
             {x.label}
