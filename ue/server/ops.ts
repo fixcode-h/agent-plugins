@@ -106,6 +106,7 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'gt.step':
     case 'gt.record.start':
     case 'gt.record.mark':
+    case 'gt.record.move':
     case 'gt.record.stop':
       return 'runtime'
     // AssetForge：导入把配置写成资产并保存（演练只读），导出把资产写回配置文件
@@ -235,6 +236,8 @@ function describe(op: string, args: Record<string, unknown>) {
       return `GameTest ${t('开始录制')} ${args.name ?? ''}`.trim()
     case 'gt.record.mark':
       return `GameTest ${t('检查点')} ${args.text ?? ''}`.trim()
+    case 'gt.record.move':
+      return `GameTest ${t('录制快捷动作')} ${args.phase ?? 'toggle'}`
     case 'gt.record.stop':
       return `GameTest ${t('停止录制')}${args.save === false ? ` · ${t('不保存')}` : ''}`
     case 'pie':

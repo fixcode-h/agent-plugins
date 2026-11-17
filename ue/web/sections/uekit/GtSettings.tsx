@@ -8,6 +8,7 @@ import { useSearchIndex } from '../../jump/index-data.ts'
 import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
+import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
 /**
@@ -35,6 +36,8 @@ interface GtRunConfig {
   setup?: Record<string, unknown>[]
   /** 开跑前固定引擎全局随机（GameTest 1.2.5） */
   randomSeed?: number
+  /** move 步骤和录制快捷键（GameTest 1.3.0） */
+  move?: GtMoveConfig
 }
 
 interface ConfigReply {
@@ -72,6 +75,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
   const [rules, setRules] = useState<GtBlockerRule[]>([])
   const [setup, setSetup] = useState('')
   const [seed, setSeed] = useState('')
+  const [move, setMove] = useState<GtMoveConfig>({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   // 阻挡界面的 WBP 候选：跳转弹窗同一份本地索引，打开设置时取一次（没变只回 same），打字只在网页里筛
@@ -87,6 +91,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
         setClickVia(r.config.clickVia ?? 'code')
         setSetup(setupText(r.config.setup))
         setSeed(r.config.randomSeed === undefined ? '' : String(r.config.randomSeed))
+        setMove(r.config.move ?? {})
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -122,6 +127,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
         blockers: rules.filter((r) => r.widget.trim()).map((r) => ({ ...r, widget: r.widget.trim() })),
         ...(setupParsed.steps?.length ? { setup: setupParsed.steps } : {}),
         ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
+        ...(tidyMove(move) ? { move: tidyMove(move) } : {}),
       }
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
@@ -240,6 +246,8 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
             onChange={(e: { target: { value: string } }) => setSeed(e.target.value)}
           />
         </ui.Field>
+
+        <GtMoveSettings value={move} onChange={setMove} />
 
         <section className="ue:flex ue:flex-col ue:gap-2">
           <div className="ue:flex ue:items-center ue:gap-2">

@@ -123,10 +123,13 @@ export function GameTest() {
       }
     } else if (e.event === 'gt.record') {
       const r = e as unknown as RecordStatus & { phase?: string }
-      setRec((old) => ({
-        ...r,
-        last: r.phase === 'started' ? [] : [...(old?.last ?? []), ...(r.last ?? [])].slice(-200),
-      }))
+      setRec((old) => {
+        if (r.phase === 'started') return { ...r, last: [] }
+        // 事件里的 last 只有最新一步；录移动每秒、快捷动作改状态（GameTest 1.3.0）也会推，步数没涨就不追加，免得一步显示几遍
+        const added = (r.steps ?? 0) - (old?.steps ?? 0)
+        const fresh = added > 0 ? (r.last ?? []).slice(-added) : []
+        return { ...r, last: [...(old?.last ?? []), ...fresh].slice(-200) }
+      })
       if (r.phase === 'stopped') reload()
     }
   })

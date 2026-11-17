@@ -62,7 +62,8 @@ function widgetText(h: GtHint) {
  */
 export function humanStep(def?: Record<string, unknown>): string | undefined {
   const h = hintOf(def)
-  if (!def || !h) return undefined
+  // move 的 hint 记的是录制时的起点和用时（GameTest 1.3.0），不是控件
+  if (!def || !h || def.action === 'move') return undefined
   const what = widgetText(h) || t('控件')
   const where = assetName(h.asset)
   const str = (k: string) => (typeof def[k] === 'string' ? (def[k] as string) : '')

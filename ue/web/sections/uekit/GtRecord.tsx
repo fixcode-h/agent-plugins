@@ -5,12 +5,14 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Note } from '../../ui.tsx'
 import { humanStep } from './gt-steps.ts'
+import { moveLine } from './gt-move.ts'
+import { GtRecordQuick, type RecordQuick } from './GtRecordQuick.tsx'
 
 /**
  * 录制中的界面（效果图 5）：顶上红点、名字、时长和步数，检查点 / 截图检查点 / 停止并保存；
  * 下面是录到的步骤，最新一步高亮。步骤靠 gt.record 推送事件追加。
  */
-export interface RecordStatus {
+export interface RecordStatus extends RecordQuick {
   recording: boolean
   name?: string
   steps?: number
@@ -34,6 +36,7 @@ export function HitPathNote() {
 
 /** 录到的一步写成一行：有 hint 的 UI 步骤用人话（选择器放后面），其余列出参数 */
 function describe(s: Record<string, unknown>) {
+  if (s.action === 'move') return moveLine(s)
   const human = humanStep(s)
   if (human) return [human, s.target as string | undefined].filter(Boolean).join(' · ')
   const rest = Object.entries(s)
@@ -99,10 +102,11 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: () 
             <Square className="ue:h-3.5 ue:w-3.5" /> {t('停止并保存')}
           </ui.Button>
         </div>
+        <GtRecordQuick status={status} />
       </div>
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
-          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。编辑器其他面板上的操作不录。停止后存到场景根下的 recorded/。',
+          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。游戏窗口右上角也有这条工具栏，鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
         )}
       </p>
       {status.handlerSource === 'hitPath' && (
