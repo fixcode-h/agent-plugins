@@ -209,7 +209,7 @@ export function UiDesignList() {
             <CopyPlus className="ud:h-4 ud:w-4" />
             {t('创建副本')}
           </ContextMenuItem>
-          {projects.length > 1 && (
+          {projects.length > 1 && !owner && (
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <FolderInput className="ud:h-4 ud:w-4" />
@@ -237,138 +237,166 @@ export function UiDesignList() {
     )
   }
 
+  // 按项目用时（UI 设计 1.4.0，项目工具里打开）：不再分 UI 项目，这个项目的设计直接按最近改动列出来，像对话列表一样
+  const mine = owner
+    ? list.flatMap((p) => byProject.get(p.id) ?? []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    : []
   return (
     <div className="ud:scroll-fade ud:flex ud:min-h-0 ud:flex-1 ud:flex-col ud:overflow-y-auto ud:px-2.5 ud:pb-2">
-      <div className="ud:mb-1.5 ud:flex ud:h-6 ud:shrink-0 ud:items-center ud:pr-1 ud:pl-2">
-        {/* 顶上的卡片是面板项目，这里列的是它下面的 UI 项目，标题写全免得混 */}
-        <p className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>
-          {owner ? t('UI 项目') : t('项目')}
-        </p>
-        <IconButton icon={Plus} label={t('新建 UI 项目')} onClick={() => setEditing(null)} />
-      </div>
-      {!projects.length && (
-        <EmptyPanel as="div" size="md" className="ud:mx-0.5 ud:mt-1 ud:flex ud:flex-col ud:items-center ud:gap-2">
-          <Palette className="ud:h-5 ud:w-5 ud:text-subtle" strokeWidth={2} />
-          <p className="ud:text-xs ud:leading-relaxed ud:text-subtle">
-            {owner
-              ? t('这个项目里还没有 UI 项目。设计放在 UI 项目里，一般一个游戏一个。')
-              : t('还没有 UI 项目。UI 设计的项目和 Agent 的项目是分开的。')}
-          </p>
-          <Button variant="link" onClick={() => setEditing(null)} className="ud:text-xs ud:font-medium">
-            {t('新建 UI 项目')}
-          </Button>
-        </EmptyPanel>
-      )}
-      {list.map((p) => {
-        const ds = byProject.get(p.id) ?? []
-        const open = !folded.has(p.id)
-        const on = route.page === 'design' && route.id === DESIGN_HOME && route.sub === p.id
-        return (
-          <section key={p.id} className="ud:mb-1 ud:flex ud:flex-col">
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
-                {/* 整行只是排成一行的容器：点空白处不展开也不打开，展开 / 打开各有自己的按钮；
+      {owner ? (
+        <>
+          <div className="ud:mb-1.5 ud:flex ud:h-6 ud:shrink-0 ud:items-center ud:pr-1 ud:pl-2">
+            <p className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>{t('设计')}</p>
+            <IconButton
+              icon={Settings2}
+              label={t('UI 设计设置：美术提示词、导出目录')}
+              title={t('UI 设计设置')}
+              onClick={() => (setSection('general'), setEditing(projects[0] ?? null))}
+            />
+          </div>
+          {!mine.length && (
+            <EmptyPanel as="div" size="md" className="ud:mx-0.5 ud:mt-1 ud:flex ud:flex-col ud:items-center ud:gap-2">
+              <Palette className="ud:h-5 ud:w-5 ud:text-subtle" strokeWidth={2} />
+              <p className="ud:text-xs ud:leading-relaxed ud:text-subtle">
+                {t('这个项目还没有设计，点上面的「新建设计」开始。')}
+              </p>
+            </EmptyPanel>
+          )}
+          <div className="ud:flex ud:flex-col ud:gap-px">{mine.map(designRow)}</div>
+        </>
+      ) : (
+        <>
+          <div className="ud:mb-1.5 ud:flex ud:h-6 ud:shrink-0 ud:items-center ud:pr-1 ud:pl-2">
+            {/* 上面的下拉已经写了是 UI 设计，分组标题只写「项目」（照设计稿） */}
+            <p className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>{t('项目')}</p>
+            <IconButton icon={Plus} label={t('新建 UI 项目')} onClick={() => setEditing(null)} />
+          </div>
+          {!projects.length && (
+            <EmptyPanel as="div" size="md" className="ud:mx-0.5 ud:mt-1 ud:flex ud:flex-col ud:items-center ud:gap-2">
+              <Palette className="ud:h-5 ud:w-5 ud:text-subtle" strokeWidth={2} />
+              <p className="ud:text-xs ud:leading-relaxed ud:text-subtle">
+                {t('还没有 UI 项目。UI 设计的项目和 Agent 的项目是分开的。')}
+              </p>
+              <Button variant="link" onClick={() => setEditing(null)} className="ud:text-xs ud:font-medium">
+                {t('新建 UI 项目')}
+              </Button>
+            </EmptyPanel>
+          )}
+          {list.map((p) => {
+            const ds = byProject.get(p.id) ?? []
+            const open = !folded.has(p.id)
+            const on = route.page === 'design' && route.id === DESIGN_HOME && route.sub === p.id
+            return (
+              <section key={p.id} className="ud:mb-1 ud:flex ud:flex-col">
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    {/* 整行只是排成一行的容器：点空白处不展开也不打开，展开 / 打开各有自己的按钮；
                     折叠箭头在卡片外，和 Agent 侧栏的项目卡片一样（照设计稿 Workspace 侧栏） */}
-                <div className="ud:group/proj ud:flex ud:items-center ud:gap-1">
-                  <button
-                    // 折叠只由这个箭头按钮触发：以前整行可点、靠冒泡折叠，点项目名打不开主页
-                    onClick={() => toggleFold(p.id)}
-                    // 界面检查按项目定位这个按钮：侧栏里 Agent 项目行也有同名「收起」按钮，不能靠 DOM 顺序取第一个
-                    data-fold={p.id}
-                    aria-expanded={open}
-                    aria-label={open ? t('收起') : t('展开')}
-                    disabled={!ds.length}
-                    className={cn(
-                      'ud:grid ud:h-6 ud:w-3 ud:shrink-0 ud:cursor-pointer ud:place-items-center ud:rounded-md ud:text-subtle ud:transition-colors ud:hover:text-fg',
-                      !ds.length && 'ud:invisible',
-                    )}
-                  >
-                    <ChevronRight
-                      className={cn('ud:h-3 ud:w-3 ud:transition-transform', open && 'ud:rotate-90')}
-                      strokeWidth={2.3}
-                    />
-                  </button>
-                  <div className={cn(PROJECT_CARD, on ? PROJECT_CARD_ON : PROJECT_CARD_OFF)}>
-                    <button
-                      onClick={() => go(designHomeRoute(p.id))}
-                      aria-label={t('打开项目「{name}」，右键查看更多操作', { name: p.name })}
-                      title={t('打开项目「{name}」，右键查看更多操作', { name: p.name })}
-                      className="ud:flex ud:min-w-0 ud:flex-1 ud:cursor-pointer ud:items-center ud:gap-2 ud:text-left"
-                    >
-                      <SidebarProjectName open={open} on={on} name={p.name} />
-                    </button>
-                    {ds.length > 0 && <SidebarCount n={ds.length} on={on} className="ud:group-hover/proj:hidden" />}
-                    <IconButton
-                      icon={Plus}
-                      onClick={() => go({ page: 'design', id: 'new', sub: p.id })}
-                      label={t('在「{name}」新建设计', { name: p.name })}
-                      title={t('新建设计')}
-                      className={cn(
-                        ds.length ? 'ud:hidden' : 'ud:opacity-60',
-                        'ud:group-hover/proj:grid ud:group-hover/proj:opacity-100',
-                      )}
-                    />
-                  </div>
-                </div>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => go({ page: 'design', id: 'new', sub: p.id })}>
-                  <Plus className="ud:h-4 ud:w-4" />
-                  {t('新建设计')}
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => (setSection('general'), setEditing(p))}>
-                  <Settings2 className="ud:h-4 ud:w-4" />
-                  {t('项目设置')}
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => (setSection('prompts'), setEditing(p))}>
-                  <Palette className="ud:h-4 ud:w-4" />
-                  {t('美术提示词')}
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem danger onSelect={() => setRemovingProject(p)}>
-                  <Trash2 className="ud:h-4 ud:w-4" />
-                  {t('删除项目')}
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-            {open && ds.length > 0 && (
-              <SidebarTaskBlock>
-                {/* 同一个项目里游戏 UI 和网页 UI 分开列，各自可以收起 */}
-                {KINDS.filter((k) => ds.some((d) => designKind(d) === k.id)).map((k) => {
-                  const list = ds.filter((d) => designKind(d) === k.id)
-                  const key = kindFoldKey(p.id, k.id)
-                  const kOpen = !folded.has(key)
-                  return (
-                    <div key={k.id} className="ud:flex ud:flex-col ud:gap-px">
+                    <div className="ud:group/proj ud:flex ud:items-center ud:gap-1">
                       <button
-                        data-kind={k.id}
-                        onClick={() => toggleFold(key)}
-                        aria-expanded={kOpen}
-                        className="ud:ml-1 ud:flex ud:h-7 ud:cursor-pointer ud:items-center ud:gap-1.5 ud:rounded-lg ud:pr-2 ud:pl-[9px] ud:text-footnote ud:text-subtle ud:transition-colors ud:hover:bg-sel ud:hover:text-fg"
+                        // 折叠只由这个箭头按钮触发：以前整行可点、靠冒泡折叠，点项目名打不开主页
+                        onClick={() => toggleFold(p.id)}
+                        // 界面检查按项目定位这个按钮：侧栏里 Agent 项目行也有同名「收起」按钮，不能靠 DOM 顺序取第一个
+                        data-fold={p.id}
+                        aria-expanded={open}
+                        aria-label={open ? t('收起') : t('展开')}
+                        disabled={!ds.length}
+                        className={cn(
+                          'ud:grid ud:h-6 ud:w-3 ud:shrink-0 ud:cursor-pointer ud:place-items-center ud:rounded-md ud:text-subtle ud:transition-colors ud:hover:text-fg',
+                          !ds.length && 'ud:invisible',
+                        )}
                       >
                         <ChevronRight
-                          className={cn('ud:h-3 ud:w-3 ud:shrink-0 ud:transition-transform', kOpen && 'ud:rotate-90')}
+                          className={cn('ud:h-3 ud:w-3 ud:transition-transform', open && 'ud:rotate-90')}
+                          strokeWidth={2.3}
                         />
-                        <k.icon className="ud:h-3.5 ud:w-3.5 ud:shrink-0" />
-                        <span className="ud:min-w-0 ud:flex-1 ud:truncate ud:text-left">{kindLabel(k.id)}</span>
-                        <span className="ud:shrink-0 ud:text-caption ud:tabular-nums">{list.length}</span>
                       </button>
-                      {kOpen && <div className="ud:ml-2 ud:flex ud:flex-col ud:gap-px">{list.map(designRow)}</div>}
+                      <div className={cn(PROJECT_CARD, on ? PROJECT_CARD_ON : PROJECT_CARD_OFF)}>
+                        <button
+                          onClick={() => go(designHomeRoute(p.id))}
+                          aria-label={t('打开项目「{name}」，右键查看更多操作', { name: p.name })}
+                          title={t('打开项目「{name}」，右键查看更多操作', { name: p.name })}
+                          className="ud:flex ud:min-w-0 ud:flex-1 ud:cursor-pointer ud:items-center ud:gap-2 ud:text-left"
+                        >
+                          <SidebarProjectName open={open} on={on} name={p.name} />
+                        </button>
+                        {ds.length > 0 && <SidebarCount n={ds.length} on={on} className="ud:group-hover/proj:hidden" />}
+                        <IconButton
+                          icon={Plus}
+                          onClick={() => go({ page: 'design', id: 'new', sub: p.id })}
+                          label={t('在「{name}」新建设计', { name: p.name })}
+                          title={t('新建设计')}
+                          className={cn(
+                            ds.length ? 'ud:hidden' : 'ud:opacity-60',
+                            'ud:group-hover/proj:grid ud:group-hover/proj:opacity-100',
+                          )}
+                        />
+                      </div>
                     </div>
-                  )
-                })}
-              </SidebarTaskBlock>
-            )}
-          </section>
-        )
-      })}
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => go({ page: 'design', id: 'new', sub: p.id })}>
+                      <Plus className="ud:h-4 ud:w-4" />
+                      {t('新建设计')}
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => (setSection('general'), setEditing(p))}>
+                      <Settings2 className="ud:h-4 ud:w-4" />
+                      {t('项目设置')}
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => (setSection('prompts'), setEditing(p))}>
+                      <Palette className="ud:h-4 ud:w-4" />
+                      {t('美术提示词')}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem danger onSelect={() => setRemovingProject(p)}>
+                      <Trash2 className="ud:h-4 ud:w-4" />
+                      {t('删除项目')}
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+                {open && ds.length > 0 && (
+                  <SidebarTaskBlock>
+                    {/* 同一个项目里游戏 UI 和网页 UI 分开列，各自可以收起 */}
+                    {KINDS.filter((k) => ds.some((d) => designKind(d) === k.id)).map((k) => {
+                      const list = ds.filter((d) => designKind(d) === k.id)
+                      const key = kindFoldKey(p.id, k.id)
+                      const kOpen = !folded.has(key)
+                      return (
+                        <div key={k.id} className="ud:flex ud:flex-col ud:gap-px">
+                          <button
+                            data-kind={k.id}
+                            onClick={() => toggleFold(key)}
+                            aria-expanded={kOpen}
+                            className="ud:ml-1 ud:flex ud:h-7 ud:cursor-pointer ud:items-center ud:gap-1.5 ud:rounded-lg ud:pr-2 ud:pl-[9px] ud:text-footnote ud:text-subtle ud:transition-colors ud:hover:bg-sel ud:hover:text-fg"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                'ud:h-3 ud:w-3 ud:shrink-0 ud:transition-transform',
+                                kOpen && 'ud:rotate-90',
+                              )}
+                            />
+                            <k.icon className="ud:h-3.5 ud:w-3.5 ud:shrink-0" />
+                            <span className="ud:min-w-0 ud:flex-1 ud:truncate ud:text-left">{kindLabel(k.id)}</span>
+                            <span className="ud:shrink-0 ud:text-caption ud:tabular-nums">{list.length}</span>
+                          </button>
+                          {kOpen && <div className="ud:ml-2 ud:flex ud:flex-col ud:gap-px">{list.map(designRow)}</div>}
+                        </div>
+                      )
+                    })}
+                  </SidebarTaskBlock>
+                )}
+              </section>
+            )
+          })}
+        </>
+      )}
       {owner && others.length > 0 && <OtherProjects list={others} owner={owner} />}
       <DesignProjectDialog
         open={editing !== undefined}
         onOpenChange={(o) => !o && setEditing(undefined)}
         project={editing ?? undefined}
         section={editing ? section : 'general'}
-        onSaved={(np) => !editing && go({ page: 'design', id: 'new', sub: np.id })}
+        onSaved={(np) => !editing && !owner && go({ page: 'design', id: 'new', sub: np.id })}
       />
       <ConfirmDialog
         open={!!removingProject}

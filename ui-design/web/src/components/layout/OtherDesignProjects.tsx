@@ -10,8 +10,8 @@ import { IconButton } from '@/components/ui/icon-button'
 import { SIDEBAR_GROUP_LABEL } from '@/components/ui/sidebar'
 
 /**
- * UI 设计页左栏底下的「其他 UI 项目」（1.4.0 起 UI 项目归在面板项目下）：升级时按 id、目录没归上的，
- * 或者归属的面板项目已经删了的 UI 项目。默认收起，点行尾的按钮归到当前项目，之后就在上面的列表里了
+ * UI 设计页左栏底下的「其他设计」（1.4.0 起设计归在面板项目下）：升级时按 id、目录没归上的 UI 项目，
+ * 或者归属的面板项目已经删了的，按原来的 UI 项目分组列出。默认收起，点行尾的按钮把整组归到当前项目，之后就在上面的列表里了
  */
 export function OtherProjects({ list, owner }: { list: DesignProject[]; owner: string }) {
   const { designs, setDesignProjects } = useDesignData()
@@ -35,7 +35,9 @@ export function OtherProjects({ list, owner }: { list: DesignProject[]; owner: s
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title={t('还没归到项目的 UI 项目（升级前建的，或原来的项目已删除）')}
+        title={t(
+          '升级前建的、还没归到项目的设计（或原来的项目已删除），按原来的分组列出；点行尾的按钮把整组归到这个项目',
+        )}
         className="ud:flex ud:h-6 ud:cursor-pointer ud:items-center ud:gap-1 ud:rounded-md ud:pr-1 ud:pl-0.5 ud:text-left ud:hover:text-fg"
       >
         <ChevronRight
@@ -43,9 +45,12 @@ export function OtherProjects({ list, owner }: { list: DesignProject[]; owner: s
           strokeWidth={2.3}
         />
         <span className={cn('ud:flex-1 ud:font-semibold ud:tracking-[0.08em]', SIDEBAR_GROUP_LABEL)}>
-          {t('其他 UI 项目')}
+          {t('其他设计')}
         </span>
-        <span className="ud:shrink-0 ud:text-caption ud:text-subtle ud:tabular-nums">{list.length}</span>
+        {/* 数的是设计，不是分组：界面上已经不讲 UI 项目这一层 */}
+        <span className="ud:shrink-0 ud:text-caption ud:text-subtle ud:tabular-nums">
+          {designs.filter((d) => list.some((p) => p.id === d.projectId)).length}
+        </span>
       </button>
       {open &&
         list.map((p) => {

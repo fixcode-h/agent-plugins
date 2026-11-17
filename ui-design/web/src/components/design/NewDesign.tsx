@@ -4,7 +4,7 @@ import { t } from '@shared/i18n'
 import { toast } from '@/lib/toast'
 import { api } from '@/lib/api'
 import { artToPng, restoreApi } from '@/lib/api-restore'
-import { useNav } from '@/lib/data'
+import { useData, useNav } from '@/lib/data'
 import { useDesignData } from '@/lib/design-store'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/input'
@@ -32,8 +32,10 @@ const WEB_SIZES = [
 ]
 
 export function NewDesign({ projectId }: { projectId?: string }) {
-  const { designProjects: projects, owner, setDesigns } = useDesignData()
+  const { designProjects: projects, owner, setDesigns, setDesignProjects } = useDesignData()
   const { go } = useNav()
+  // 按项目用时（UI 设计 1.4.0）不选 UI 项目：设计直接放进当前项目，项目里还没有 UI 项目就建一个同名的（界面上看不到这一层）
+  const host = useData().projects.find((p) => p.id === owner)
   const [creatingProject, setCreatingProject] = useState(false)
   const [pid, setPid] = useState(projectId || projects[0]?.id || '')
   const [title, setTitle] = useState('')
@@ -56,8 +58,14 @@ export function NewDesign({ projectId }: { projectId?: string }) {
     const [X, Y] = size.split('x').map(Number)
     setBusy(true)
     try {
+      let projectId = pid
+      if (!projectId && owner) {
+        const np = await api.createDesignProject({ name: host?.name ?? 'UI', path: host?.path ?? '', owner })
+        setDesignProjects((l) => [...l, np])
+        projectId = np.id
+      }
       const d = await api.createDesign({
-        projectId: pid,
+        projectId,
         kind,
         title: title.trim() || t('未命名界面'),
         designSize: { X, Y },
@@ -100,11 +108,9 @@ export function NewDesign({ projectId }: { projectId?: string }) {
               )}
         </p>
         <DesignProjectDialog open={creatingProject} onOpenChange={setCreatingProject} onSaved={(p) => setPid(p.id)} />
-        {!projects.length ? (
+        {!projects.length && !owner ? (
           <div className="ud:mt-8 ud:rounded-xl ud:bg-panel ud:p-5 ud:text-body ud:text-muted">
-            {owner
-              ? t('设计放在 UI 项目里，这个项目里还没有。先建一个吧，一般一个游戏一个，美术提示词也设在 UI 项目上。')
-              : t('设计放在 UI 项目里（和 Agent 的项目分开）。先建一个项目吧，一般一个游戏一个项目。')}
+            {t('设计放在 UI 项目里（和 Agent 的项目分开）。先建一个项目吧，一般一个游戏一个项目。')}
             <Button className="ud:mt-3" onClick={() => setCreatingProject(true)}>
               <Plus className="ud:h-4 ud:w-4" />
               {t('新建 UI 项目')}
@@ -118,7 +124,7 @@ export function NewDesign({ projectId }: { projectId?: string }) {
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !busy && pid && void create()}
+                onKeyDown={(e) => e.key === 'Enter' && !busy && (pid || owner) && void create()}
                 placeholder={kind === 'web' ? t('例如：首页、登录页、商品详情') : t('例如：主菜单、背包、战斗 HUD')}
               />
             </label>
@@ -208,18 +214,20 @@ export function NewDesign({ projectId }: { projectId?: string }) {
               )}
             </div>
             <div className="ud:grid ud:grid-cols-1 ud:gap-4 ud:sm:grid-cols-2">
-              <div className="ud:flex ud:flex-col ud:gap-1.5">
-                <span className="ud:text-body ud:font-medium">{owner ? t('UI 项目') : t('项目')}</span>
-                <Select
-                  aria-label={owner ? t('UI 项目') : t('项目')}
-                  value={pid}
-                  onChange={(e) => (e.target.value === '+new' ? setCreatingProject(true) : setPid(e.target.value))}
-                  options={[
-                    ...projects.map((p) => ({ value: p.id, label: p.name })),
-                    { value: '+new', label: t('新建 UI 项目…') },
-                  ]}
-                />
-              </div>
+              {!owner && (
+                <div className="ud:flex ud:flex-col ud:gap-1.5">
+                  <span className="ud:text-body ud:font-medium">{t('项目')}</span>
+                  <Select
+                    aria-label={t('项目')}
+                    value={pid}
+                    onChange={(e) => (e.target.value === '+new' ? setCreatingProject(true) : setPid(e.target.value))}
+                    options={[
+                      ...projects.map((p) => ({ value: p.id, label: p.name })),
+                      { value: '+new', label: t('新建 UI 项目…') },
+                    ]}
+                  />
+                </div>
+              )}
               <div className="ud:flex ud:flex-col ud:gap-1.5">
                 <span className="ud:text-body ud:font-medium">{t('设计尺寸')}</span>
                 <Select
@@ -231,7 +239,7 @@ export function NewDesign({ projectId }: { projectId?: string }) {
               </div>
             </div>
             <div className="ud:flex ud:justify-end">
-              <Button onClick={() => void create()} disabled={busy || !pid || (restore && !art)}>
+              <Button onClick={() => void create()} disabled={busy || !(pid || owner) || (restore && !art)}>
                 {kind === 'web' ? <Globe className="ud:h-4 ud:w-4" /> : <Gamepad2 className="ud:h-4 ud:w-4" />}
                 {restore ? t('开始还原') : t('开始设计')}
               </Button>
