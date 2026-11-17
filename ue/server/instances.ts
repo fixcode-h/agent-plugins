@@ -25,7 +25,16 @@ export interface Card {
   features?: string[]
   /** 这个进程里实际加载了的 UELink 扩展（AssetForge、GameTest） */
   extensions?: { name: string; version: string }[]
+  /**
+   * 编辑器可用了没有（UELink 2.7 起，UEKit docs/protocol.md 第 1 节）：主窗口建好、资源注册表扫完、没有异步加载。
+   * 只有编辑器进程有这个字段；旧 UELink、后台编辑器、游戏进程没有，名片出现就算可用（用 cardReady 判断）
+   */
+  ready?: boolean
+  readyAt?: string
 }
+
+/** 名片代表的进程能用了没有：没有 ready 字段（旧 UELink、非编辑器进程）时名片出现就算 */
+export const cardReady = (card: Pick<Card, 'ready'>) => card.ready !== false
 
 const cardDirs = (root: string) => [
   path.join(root, 'Saved', 'UELink', 'instances'),
@@ -84,7 +93,8 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
     const paused = card.project ? await vsBreakNote(rootOfCard(card.project), card.project) : undefined
     if (paused) throw new BridgeError(paused)
     throw new BridgeError(
-      err.name === 'TimeoutError'
+      // fetch failed：游戏线程卡住时排队的连接满了被拒绝，进程活着就和超时一样是在忙（见 info）
+      err.name === 'TimeoutError' || err.message === 'fetch failed'
         ? t('UE 进程 {pid} 在 {s} 秒内没有回应（可能卡在断点、加载或长帧里）', { pid: card.pid, s: timeoutMs / 1000 })
         : t('连不上 UE 进程 {pid} 的桥接（端口 {port}）：{msg}', { pid: card.pid, port: card.port, msg: err.message }),
     )
@@ -145,6 +155,7 @@ export async function info(card: Card): Promise<Instance> {
     return {
       ...base,
       online: true,
+      ready: (body as { ready?: boolean }).ready ?? card.ready,
       log: body.log,
       worlds: body.worlds ?? [],
       lua: body.lua,
@@ -155,7 +166,10 @@ export async function info(card: Card): Promise<Instance> {
     const err = e as Error
     // 连上了却等不到回应：UELink 在游戏线程上回请求，游戏线程卡在同步加载里时就是这样（进程活着，liveCards 已经按 PID 筛过）。
     // 当成「忙」而不是断开，网页不提示再启动一个编辑器（用户 2026-11-16）
-    if (err.name === 'TimeoutError' || err.name === 'AbortError')
+    // 连接直接失败（fetch failed：ECONNREFUSED / ECONNRESET）也一样：UE 的 HTTP 服务在游戏线程上接新连接，
+    // 卡住时排队的连接满了 Windows 直接拒绝。进程还活着（liveCards 按 PID 筛过）就当忙，
+    // 不判成连不上（用户 2026-11-17：启动卡在某处一会儿，目标卡显示「1 个进程连不上」「fetch failed」）
+    if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.message === 'fetch failed')
       return {
         ...base,
         busy: { since: markBusy(card.pid) },

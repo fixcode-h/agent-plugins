@@ -1257,7 +1257,6 @@
   "世界里的 Actor 和 UObject；点属性里的引用就在这里往下看，资源会标成「资源」": "Actors and UObjects in the world; click a reference in the properties to drill down here, assets are marked \"Asset\"",
   "在左边选一个对象，在这里看和改属性": "Pick an object on the left to view and edit its properties here",
   "编辑器启动后退出了（退出码 {code}），看 Saved/Logs 里的日志": "The editor exited during startup (exit code {code}); check the log in Saved/Logs",
-  "等了 20 分钟编辑器还没连上，不再跟进度": "The editor still hasn't connected after 20 minutes; stopped tracking progress",
   "编辑器启动进度": "Editor startup progress",
   "编辑器启动失败": "Editor failed to start",
   "等你在 UE 弹窗里确认编译": "Confirm the rebuild in UE's dialog",
@@ -2463,5 +2462,17 @@
   "自动起后台编辑器（不开窗口）": "Start the background editor automatically (no window)",
   "AssetForge · 按配置预览": "AssetForge · Config preview",
   "按配置预览，只读：要改就改配置，导入后在真实资源上改": "Preview from the config, read-only: edit the config, or edit the real asset after importing",
-  "编辑器没开，状态未知": "Editor not running, state unknown"
+  "编辑器没开，状态未知": "Editor not running, state unknown",
+  "没有匹配的，保存时照填的用": "No match. The typed text is saved as is",
+  "没有候选，可以直接填": "No suggestions. You can type it in",
+  "还有 {n} 个，多打几个字": "{n} more, keep typing to narrow down",
+  "来自 UEToVS 索引 · 控件蓝图 {n} 个": "From the UEToVS index · {n} widget blueprints",
+  "索引里没找到控件蓝图，可以直接填类名或资产路径": "No widget blueprints in the index. Type a class name or asset path",
+  "读索引失败：{e}": "Failed to read the index: {e}",
+  "正在读资源索引…": "Reading the asset index…",
+  "{src} · 控件蓝图 {n} 个": "{src} · {n} widget blueprints",
+  "来自 UEToVS 索引": "From the UEToVS index",
+  "扫磁盘": "Disk scan",
+  "等了 60 分钟编辑器还没就绪，不再跟进度": "Waited 60 minutes and the editor is still not ready; stopped tracking progress",
+  "编辑器启动中…": "Editor starting…"
 }
