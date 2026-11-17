@@ -2525,5 +2525,9 @@
   "前置步骤不是合法的 JSON：{e}": "Setup steps are not valid JSON: {e}",
   "前置步骤要写成数组：[ {\"action\": ...}, ... ]": "Setup steps must be an array: [ {\"action\": ...}, ... ]",
   "前置步骤第 {n} 条要是对象并且有 action": "Setup step {n} must be an object with an action",
-  "随机种子要填整数，不固定就空着": "Random seed must be an integer, or leave it empty"
+  "随机种子要填整数，不固定就空着": "Random seed must be an integer, or leave it empty",
+  "UI 操作间隔（秒）": "UI action gap (seconds)",
+  "回放时相邻两个 UI 操作（点击、拖动、输入、选择……）之间至少隔多久，和录制时点得多快无关；中间等待步骤用掉的时间也算。0 是不隔，空着按 1 秒。需要 GameTest 1.2.6。": "Minimum time between two consecutive UI actions (click, drag, type, select…) during playback, regardless of how fast they were recorded; time spent in wait steps in between counts. 0 means no gap; empty means 1 second. Requires GameTest 1.2.6.",
+  "1（默认）": "1 (default)",
+  "UI 操作间隔要填 0 到 60 之间的秒数，0 是不隔": "UI action gap must be 0–60 seconds; 0 means no gap"
 }

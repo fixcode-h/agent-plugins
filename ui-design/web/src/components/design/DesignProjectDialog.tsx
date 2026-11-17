@@ -154,7 +154,11 @@ function Body({
   // 新建时照当前面板项目填好（1.4.0 起 UI 项目归在面板项目下）：项目里第一个 UI 项目默认同名，目录默认是项目目录
   const host = useData().projects.find((p) => p.id === owner)
   const [section, setSection] = useState<DesignProjectSection>(initial)
-  const [name, setName] = useState(project?.name ?? (designProjects.length ? '' : (host?.name ?? '')))
+  // 按项目用时（owner 有值）不再显示 UI 项目这一层：名字跟着面板项目，界面上不让改也不让删
+  const scoped = !!owner
+  const [name, setName] = useState(
+    project?.name ?? (scoped || !designProjects.length ? (host?.name ?? (scoped ? 'UI' : '')) : ''),
+  )
   const [dir, setDir] = useState(project?.path ?? host?.path ?? '')
   const [prompts, setPrompts] = useState<ProjectPrompt[]>(project?.prompts ?? [])
   const [saving, setSaving] = useState(false)
@@ -233,7 +237,7 @@ function Body({
     <>
       <ModalHeader
         icon={FolderCog}
-        title={project ? t('项目设置 · {name}', { name: project.name }) : t('新建 UI 项目')}
+        title={scoped ? t('UI 设计设置') : project ? t('项目设置 · {name}', { name: project.name }) : t('新建 UI 项目')}
       />
       <div className="ud:flex ud:min-h-0 ud:flex-1 ud:flex-col ud:md:flex-row">
         <nav
@@ -262,19 +266,21 @@ function Body({
                 void save()
               }}
             >
-              <FormSection title={t('基本信息')}>
-                <p className="ud:-mt-2 ud:text-footnote ud:leading-relaxed ud:text-muted">
-                  {t('UI 设计的项目和 Agent 的项目分开管理。一个项目对应一个游戏，里面放它的各个界面。')}
-                </p>
-                <Field label={t('项目名称')} error={name.trim() ? undefined : t('名称不能为空')}>
-                  <Input
-                    autoFocus={!project}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('例如：暗夜远征')}
-                  />
-                </Field>
-              </FormSection>
+              {!scoped && (
+                <FormSection title={t('基本信息')}>
+                  <p className="ud:-mt-2 ud:text-footnote ud:leading-relaxed ud:text-muted">
+                    {t('UI 设计的项目和 Agent 的项目分开管理。一个项目对应一个游戏，里面放它的各个界面。')}
+                  </p>
+                  <Field label={t('项目名称')} error={name.trim() ? undefined : t('名称不能为空')}>
+                    <Input
+                      autoFocus={!project}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('例如：暗夜远征')}
+                    />
+                  </Field>
+                </FormSection>
+              )}
               <FormSection title={t('本地目录')}>
                 <DirPicker
                   value={dir}
@@ -290,7 +296,7 @@ function Body({
         </div>
       </div>
       <footer className="ud:flex ud:shrink-0 ud:items-center ud:gap-2 ud:border-t ud:bg-panel/60 ud:px-6 ud:py-3.5">
-        {project && (
+        {project && !scoped && (
           <Button
             variant="ghost"
             className="ud:text-danger ud:hover:bg-danger/10 ud:hover:text-danger"

@@ -26,6 +26,8 @@ export interface GtBlockerRule {
 
 interface GtRunConfig {
   uiWaitTimeoutMs?: number
+  /** 相邻两个 UI 操作之间至少隔多久（GameTest 1.2.6，毫秒）；没写按 1000 */
+  uiStepGapMs?: number
   /** click 没写 via 时的点击方式（GameTest 1.2.0-beta.7）：code 不动鼠标（默认），pointer 真实鼠标 */
   clickVia?: 'code' | 'pointer'
   blockers: GtBlockerRule[]
@@ -65,6 +67,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
   const { ui, cn } = h()
   const [reply, setReply] = useState<ConfigReply>()
   const [wait, setWait] = useState('')
+  const [gap, setGap] = useState('')
   const [clickVia, setClickVia] = useState<'code' | 'pointer'>('code')
   const [rules, setRules] = useState<GtBlockerRule[]>([])
   const [setup, setSetup] = useState('')
@@ -79,6 +82,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
       .then((r) => {
         setReply(r)
         setWait(r.config.uiWaitTimeoutMs === undefined ? '' : String(r.config.uiWaitTimeoutMs / 1000))
+        setGap(r.config.uiStepGapMs === undefined ? '' : String(r.config.uiStepGapMs / 1000))
         setRules(r.config.blockers ?? [])
         setClickVia(r.config.clickVia ?? 'code')
         setSetup(setupText(r.config.setup))
@@ -95,6 +99,11 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
       setError(t('等待上限要填不小于 0 的秒数，0 是不限'))
       return
     }
+    const gapSeconds = gap.trim() === '' ? undefined : Number(gap)
+    if (gapSeconds !== undefined && (!Number.isFinite(gapSeconds) || gapSeconds < 0 || gapSeconds > 60)) {
+      setError(t('UI 操作间隔要填 0 到 60 之间的秒数，0 是不隔'))
+      return
+    }
     const setupParsed = parseSetup(setup)
     const seedParsed = parseSeed(seed)
     if (setupParsed.error || seedParsed.error) {
@@ -106,6 +115,7 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
     try {
       const config: GtRunConfig = {
         ...(seconds === undefined ? {} : { uiWaitTimeoutMs: Math.round(seconds * 1000) }),
+        ...(gapSeconds === undefined ? {} : { uiStepGapMs: Math.round(gapSeconds * 1000) }),
         // 默认就是 code：只在改成真实鼠标时写进文件，文件里不留没意义的默认值
         ...(clickVia === 'pointer' ? { clickVia } : {}),
         // 空行不存：点了「添加」没填的不该让整份配置保存失败
@@ -163,6 +173,22 @@ export function GtSettings({ onClose }: { onClose: () => void }) {
             placeholder={t('默认')}
             value={wait}
             onChange={(e: { target: { value: string } }) => setWait(e.target.value)}
+          />
+        </ui.Field>
+
+        <ui.Field
+          label={t('UI 操作间隔（秒）')}
+          hint={t(
+            '回放时相邻两个 UI 操作（点击、拖动、输入、选择……）之间至少隔多久，和录制时点得多快无关；中间等待步骤用掉的时间也算。0 是不隔，空着按 1 秒。需要 GameTest 1.2.6。',
+          )}
+        >
+          <ui.Input
+            size="sm"
+            className="ue:w-32"
+            inputMode="decimal"
+            placeholder={t('1（默认）')}
+            value={gap}
+            onChange={(e: { target: { value: string } }) => setGap(e.target.value)}
           />
         </ui.Field>
 
