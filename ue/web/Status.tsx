@@ -2,7 +2,6 @@ import { RefreshCw } from 'lucide-react'
 import type { PluginConfig } from '../../sdk/server.ts'
 import { h, t } from './host.ts'
 import { canUpgrade } from '../server/semver.ts'
-import { OcrSettings } from './OcrSettings.tsx'
 
 interface S {
   projects?: number
@@ -11,7 +10,10 @@ interface S {
   error?: string
 }
 
-/** 设置 → 插件页上参数表单下面的运行状态（图 8）：接入了几个项目、各自的桥接版本和运行中的进程；下面是 OCR 的下载 */
+/**
+ * 设置 → 插件页上参数表单下面的运行状态（图 8）：接入了几个项目、各自的桥接版本和运行中的进程。
+ * OCR 的下载原来也在这里，2026-11-17 挪进 GameTest 自己的设置页（UE 插件页卡片上的「设置」）
+ */
 export function Status({
   status,
   reload,
@@ -55,7 +57,9 @@ export function Status({
           </ui.Button>
         </li>
       </ul>
-      <OcrSettings />
+      <p className="ue:text-footnote ue:text-subtle">
+        {t('UELink、AssetForge、GameTest 各自的设置（含 GameTest 的 OCR 下载）在 UE 页 →「UE 插件」→ 卡片上的「设置」')}
+      </p>
     </section>
   )
 }

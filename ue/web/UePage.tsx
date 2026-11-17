@@ -165,7 +165,8 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   }, [project?.id])
   // 记下每个分区最后停在哪（选中的对象、资源）：从左栏切回来时回到原处，不是回到空白页
   useEffect(() => {
-    if (project) keep(`${project.id}/sub/${sectionId}`, sub || undefined)
+    // UE 插件页的子地址是某个插件的设置页：不记，点左栏「UE 插件」回到插件列表
+    if (project) keep(`${project.id}/sub/${sectionId}`, (sectionId !== 'plugins' && sub) || undefined)
   }, [project, sectionId, sub])
   // 旧地址 actors/… 改成 objects/…，浏览栏切到「大纲」
   useEffect(() => {

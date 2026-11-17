@@ -21,7 +21,7 @@ const STRUCTURE_MAX = 12000
 const RECENT_RUNS = 30
 
 /** 项目设置 → 插件 → Game Test 的两项（config=Game, defaultconfig，写在 Config/DefaultGame.ini） */
-async function settings(root: string) {
+export async function gtRootsFromSetting(root: string) {
   const ini = await readIni(path.join(root, 'Config', 'DefaultGame.ini'))
   const get = (key: string) =>
     (ini?.get(SECTION) ?? [])
@@ -41,7 +41,7 @@ const slash = (p: string) => p.replace(/\\/g, '/')
 
 /** 场景根：设置了按设置（相对项目根），没设置时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest */
 export async function scenarioRoot(root: string) {
-  const { scenarioRootDir } = await settings(root)
+  const { scenarioRootDir } = await gtRootsFromSetting(root)
   if (scenarioRootDir) return path.resolve(root, scenarioRootDir)
   const sibling = path.resolve(root, '..', 'ProjectDoc', 'docs')
   return path.join((await exists(sibling)) ? sibling : path.join(root, 'docs'), 'GameTest')
@@ -49,7 +49,7 @@ export async function scenarioRoot(root: string) {
 
 /** 产物根：Saved/<OutputDir>（默认 Saved/GameTest），报告、截图、history.json 都在这 */
 export async function outputRoot(root: string) {
-  const { outputDir } = await settings(root)
+  const { outputDir } = await gtRootsFromSetting(root)
   return path.resolve(root, 'Saved', outputDir || 'GameTest')
 }
 

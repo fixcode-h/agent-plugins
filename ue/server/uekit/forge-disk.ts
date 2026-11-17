@@ -23,7 +23,7 @@ const isDir = (p: string) =>
   )
 
 /** 项目设置 → 插件 → Asset Forge → 配置根目录（config=Editor, defaultconfig：Config/DefaultEditor.ini，FDirectoryPath 写成 (Path="...")） */
-async function configRootSetting(root: string) {
+export async function forgeRootFromSetting(root: string) {
   const ini = await readIni(path.join(root, 'Config', 'DefaultEditor.ini'))
   const raw =
     (ini?.get(SECTION) ?? [])
@@ -37,7 +37,7 @@ async function configRootSetting(root: string) {
 
 /** 配置根：设置了按设置（相对项目根，也接受绝对路径），没设置时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge */
 export async function forgeConfigRoot(root: string) {
-  const set = await configRootSetting(root)
+  const set = await forgeRootFromSetting(root)
   if (set) return path.resolve(root, set)
   const sibling = path.resolve(root, '..', 'ProjectDoc', 'docs')
   return path.join((await isDir(sibling)) ? sibling : path.join(root, 'docs'), 'AssetForge')

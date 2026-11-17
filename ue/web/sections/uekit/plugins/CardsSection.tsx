@@ -10,6 +10,7 @@ import {
   Hammer,
   Link,
   Loader2,
+  Settings2,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -20,10 +21,12 @@ import { openMenu } from '../../../menu.tsx'
 import type { InstallMode, PluginActions } from '../Plugins.tsx'
 import { cardState, isStale, type PluginView } from './model.ts'
 import { PluginCard } from './PluginCard.tsx'
+import { isSettingsPlugin } from './PluginSettings.tsx'
 
 /**
  * UE 插件页的卡片区：标题行（全部 / 已装 / 可装）+ 卡片网格（宽屏 3 列）。
  * 每张卡底栏的主按钮跟着状态变：安装、升级到 x、编译；「⋯」里放换安装方式、卸载（被依赖时置灰并说先卸谁）。
+ * 底栏右边的「设置」打开这个插件自己的设置页（plugins/PluginSettings.tsx）：没装的也给，更新源这类装之前就要配。
  */
 const ICONS: Record<string, LucideIcon> = { UELink: Link, AssetForge: FileCode2, GameTest: FlaskConical }
 type Filter = 'all' | 'installed' | 'available'
@@ -165,11 +168,18 @@ export function CardsSection({
                 linkVersion={link.installed?.version}
                 footer={footer(v)}
                 aside={
-                  v.offer?.notes && (
-                    <ui.Button size="sm" variant="ghost" onClick={() => actions.notes(v)}>
-                      {t('更新说明')}
-                    </ui.Button>
-                  )
+                  <>
+                    {v.offer?.notes && (
+                      <ui.Button size="sm" variant="ghost" onClick={() => actions.notes(v)}>
+                        {t('更新说明')}
+                      </ui.Button>
+                    )}
+                    {isSettingsPlugin(v.name) && (
+                      <ui.Button size="sm" variant="ghost" onClick={() => actions.settings(v)}>
+                        <Settings2 className="ue:h-3.5 ue:w-3.5" /> {t('设置')}
+                      </ui.Button>
+                    )}
+                  </>
                 }
                 onMore={v.installed ? more(v) : undefined}
                 extra={

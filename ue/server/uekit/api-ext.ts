@@ -12,6 +12,7 @@ import { configBaseline } from './forge-baseline.ts'
 import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
 import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
 import { forgeWatch } from './forge-watch.ts'
+import { extPaths } from './ext-paths.ts'
 import { installExtension, uninstallExtension } from './install-ext.ts'
 import { EXT_EVENT, watch } from './stream.ts'
 import { upgradeAll, type UpgradePlan } from './upgrade-all.ts'
@@ -66,6 +67,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
       const job = await uninstallExtension(p, String(b.name))
       return { job: job.id, ok: job.status === 'done' }
     }
+    case 'GET ext/paths':
+      // 插件设置页的「目录」：配置根、场景根、产物目录实际在哪（ext-paths.ts）
+      return extPaths(p.root)
     case 'POST ext/watch':
       return watch(p, String(b.conn ?? ''))
     case 'POST ext/baseline':
