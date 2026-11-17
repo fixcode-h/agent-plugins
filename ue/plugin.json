@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -59,6 +59,55 @@
       "label": "UEKit 插件目录",
       "desc": "装 AssetForge、GameTest 这些 UELink 扩展时去哪查。留空用 GitHub（fixcode-h/UEKit 的 catalog.json）；公司内网可以填镜像地址（放着 catalog.json 和源码包的网址）或本机目录",
       "default": ""
+    },
+    {
+      "key": "gtShots",
+      "type": "boolean",
+      "group": "GameTest 录制",
+      "label": "录制时截图",
+      "desc": "每次点界面截一小块（被点的控件描红框），用来认按钮上的字、给 AI 整理看；存在项目的 Saved/GameTest/shots，不进版本库",
+      "default": true
+    },
+    {
+      "key": "gtShotPad",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "往外多截",
+      "desc": "按控件的宽高往外扩这么多比例，带上周围的界面",
+      "default": 50,
+      "min": 0,
+      "max": 300,
+      "unit": "%"
+    },
+    {
+      "key": "gtShotPadMax",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "外扩上限",
+      "desc": "大控件按比例外扩太多时，每边最多扩这么多",
+      "default": 160,
+      "min": 0,
+      "max": 1000,
+      "unit": "像素"
+    },
+    {
+      "key": "gtShotMaxWidth",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "截图最大宽度",
+      "desc": "截下的区域比这宽就整张等比缩小（不裁掉），高度上限按 16:9 跟着算",
+      "default": 640,
+      "min": 160,
+      "max": 4096,
+      "unit": "像素"
+    },
+    {
+      "key": "gtOcrAuto",
+      "type": "boolean",
+      "group": "GameTest 录制",
+      "label": "录完自动认按钮上的字",
+      "desc": "停止录制后用 OCR 认截图里红框中的字，补进步骤名（不影响回放怎么找控件）；要先在下面下载 OCR",
+      "default": true
     },
     {
       "key": "dangerous",

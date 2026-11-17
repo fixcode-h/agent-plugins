@@ -19,6 +19,15 @@ export interface GtHint {
   ambiguous?: string | boolean
   /** GameTest 1.2.4：按位置写的选择器只按序号点，不按文字在同容器里找回 */
   byIndex?: boolean
+  /** GameTest 1.3.2 录制截图：被点控件那一块（相对项目根），红框在图里的位置 [x, y, w, h] */
+  shot?: string
+  shotBox?: number[]
+  /** 顶层界面变了时存的整屏缩略图 */
+  screen?: string
+  /** 点完 2 秒内新打开的顶层界面（类名） */
+  opened?: string[]
+  /** 面板 OCR 从截图红框里认出的字：只显示和给 AI 参考，回放不用（回放按 text 比较） */
+  ocr?: string
 }
 
 /**
@@ -53,7 +62,9 @@ function kindOf(cls?: string) {
 /** 按钮「确定」：称呼 + 文字；都没有时空串 */
 function widgetText(h: GtHint) {
   const kind = kindOf(h.class)
-  const text = h.text ? t('「{s}」', { s: h.text.length > 24 ? `${h.text.slice(0, 24)}…` : h.text }) : ''
+  // 控件里取不到字时用录制截图 OCR 出的字（hint.ocr）
+  const raw = h.text || h.ocr
+  const text = raw ? t('「{s}」', { s: raw.length > 24 ? `${raw.slice(0, 24)}…` : raw }) : ''
   return `${kind}${text}`
 }
 

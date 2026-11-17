@@ -6,6 +6,7 @@ import { c, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { tidyAction } from './gt-tidy.ts'
+import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { configBaseline } from './forge-baseline.ts'
 import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
@@ -85,6 +86,12 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/tidy':
       // 「AI 整理」：整理稿的路径、差异、保存（原场景备份成 .json.bak）、放弃、恢复原录制（gt-tidy.ts）
       return tidyAction(p.root, b)
+    case 'POST ext/gt/ocr':
+      // 录完停止后、或步骤列表「识别截图文字」：给截图补 hint.ocr（gt-shots.ts）
+      return ocrScenario(p.root, b)
+    case 'POST ext/gt/shots':
+      // 删除录制截图：一个场景的或全部；action=size 只看占用
+      return b.action === 'size' ? shotsSize(p.root) : deleteShots(p.root, b)
     case 'POST ext/forge/file':
       // AssetForge 页的右键菜单：在文件夹中显示、用编辑器打开（只认配置根里的）
       return forgeFileAction(p.root, b)

@@ -185,7 +185,13 @@ export function GtRun({
   const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
   const toWidget = useToWidget({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
   const stepEdit = useStepEdit({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
-  const tidy = useGtTidy({ project: project.id, root, path: scenario.relativePath, live: !offline, onSaved: onChanged })
+  const tidy = useGtTidy({
+    project: project.id,
+    root,
+    path: scenario.relativePath,
+    name: scenario.name,
+    onSaved: onChanged,
+  })
 
   const stepMenu = (e: React.MouseEvent, r: StepRow) => {
     const s = rowSummary(r)
@@ -260,7 +266,6 @@ export function GtRun({
             onClick={runCheck}
           />
         </header>
-        {tidy.bar}
         {check && (
           <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote">
             <ScanSearch className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />

@@ -2,7 +2,7 @@ import { Copy, CopyPlus, Download, FileJson, FolderOpen, Layers, Pencil, Play, T
 import { useState, type MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
 import { Confirm } from '../../ui.tsx'
 import type { GtRunSummary } from './GtRun.tsx'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
@@ -36,6 +36,8 @@ export function useScenarioMenus(o: {
   /** 批量运行几份场景（文件夹右键「运行这里的全部场景」）；旧 GameTest 不支持批量时不给 */
   runBatch?: (paths: string[], label: string) => void
   scenarios: Scenario[]
+  /** 录制截图的两项（GtShotMenus.tsx）：识别截图文字、删除录制截图 */
+  shotItems?: (s: Scenario) => MenuItem[]
 }) {
   const { ui, toast } = h()
   const [renaming, setRenaming] = useState<Scenario>()
@@ -94,6 +96,7 @@ export function useScenarioMenus(o: {
       { label: t('复制路径'), icon: Copy, hint: t('相对场景根'), onClick: () => copyText(s.relativePath) },
       { label: t('复制完整路径'), icon: Copy, onClick: () => copyText(fullPath(s.relativePath)) },
       { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => void fileOp(s.relativePath, 'reveal') },
+      ...(o.shotItems ? ['sep' as const, ...o.shotItems(s)] : []),
       'sep',
       { label: t('删除…'), icon: Trash2, danger: true, onClick: () => setDeleting(s) },
     ])
