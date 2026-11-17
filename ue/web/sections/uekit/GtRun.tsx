@@ -24,6 +24,7 @@ import { TidyButtons, useGtTidy } from './GtTidy.tsx'
 import type { GtBatch } from './GtBatch.tsx'
 import { GtStepRow } from './GtStepRow.tsx'
 import { GtSetupRows } from './GtSetupRows.tsx'
+import type { GtHistoryRun } from './GtStepHistory.tsx'
 import {
   StepDetail,
   StepIcon,
@@ -104,8 +105,8 @@ export function GtRun({
   /** 这次运行是从场景第几步开始的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行 */
   offset?: number
   onStop: () => void
-  /** 从第 i 步开始跑（右键菜单）：父组件拿场景文件里的步骤去 gt.run */
-  onRunFrom?: (file: GtScenarioFile, i: number) => void
+  /** 从第 i 步开始跑（右键菜单）、only 时只跑这一步：父组件拿场景文件里的步骤去 gt.run */
+  onRunFrom?: (file: GtScenarioFile, i: number, only?: boolean) => void
   /** 场景文件被面板改过（转成控件步骤）：父组件重新要场景列表，步数变了这里会重新读文件 */
   onChanged: () => void
   /** 编辑器没连上（没开或正忙）：报告从磁盘读，核对选择器不能用 */
@@ -124,6 +125,18 @@ export function GtRun({
   const report = useLoad(
     () => (!running && last ? loadReport(project.id, last.runId, !!offline) : Promise.resolve(undefined)),
     [last?.runId, running, offline],
+  )
+  // 这个场景最近 10 次运行（gt.history，跨编辑器会话）：步骤详情里看这一步过没过；旧 GameTest 没有这个操作时不显示
+  const history = useLoad(
+    () =>
+      op<{ runs?: GtHistoryRun[] }>(project.id, 'gt.history', {
+        scenario: scenario.relativePath,
+        ...(offline ? { disk: true } : {}),
+      }).then(
+        (r) => r.runs ?? [],
+        () => undefined,
+      ),
+    [project.id, scenario.relativePath, last?.runId, offline],
   )
   const allResults = running ? (job?.steps ?? []) : (report.data ?? [])
   // 前置步骤（运行配置的 setup）不占场景的步骤序号：单独显示在列表上方，不按 index 对到场景步骤上
@@ -179,6 +192,14 @@ export function GtRun({
     const coord = file.data && coordClickAt(file.data.steps, r.i)
     openMenu(e, [
       { title: t('第 {n} 步 · {a}', { n: r.i + 1, a: r.def?.action || r.res?.action || '?' }) },
+      onRunFrom &&
+        file.data &&
+        r.def && {
+          label: t('只跑这一步'),
+          icon: Play,
+          disabled: running,
+          onClick: () => onRunFrom(file.data!, r.i, true),
+        },
       onRunFrom &&
         file.data &&
         r.def && {
@@ -324,7 +345,20 @@ export function GtRun({
       </section>
       <section className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:lg:flex-1">
         {row ? (
-          <StepDetail row={row} live={row.i === liveRow} scenario={scenario} root={root} onChanged={onChanged} />
+          <StepDetail
+            row={row}
+            live={row.i === liveRow}
+            scenario={scenario}
+            root={root}
+            onChanged={onChanged}
+            history={history.data}
+            tools={{
+              running,
+              onRunOne: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row.i, true) : undefined,
+              onRunFrom: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row.i) : undefined,
+              onEdit: row.def && !scenario.parseError ? () => stepEdit.startEdit(row.i, row.def!) : undefined,
+            }}
+          />
         ) : null}
       </section>
       {tidy.dialogs}

@@ -3,10 +3,12 @@ import { GtBatchBar, type GtBatch } from './GtBatch.tsx'
 import { GtEvidence } from './GtEvidence.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtStepRow } from './GtStepRow.tsx'
+import { GtStepHistory } from './GtStepHistory.tsx'
+import { GtStepExec } from './GtStepExec.tsx'
 import type { StepRow } from './GtStepDetail.tsx'
 
 /**
- * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的失败证据。
+ * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的最近几次、执行方式、失败证据。
  * 全是假数据，不连 UE（设置页里没有 UE 页的上下文），所以证据的截图不显示、「看前后日志」是灰的
  */
 const BATCH: GtBatch = {
@@ -77,6 +79,43 @@ export function GtSpecimen() {
         {STEPS.map((r) => (
           <GtStepRow key={r.i} row={r} selected={r.i === 1} live={r.i === 3} dim={r.i > 3} onClick={noop} />
         ))}
+      </div>
+      <div className="ue:grid ue:gap-4 ue:rounded-lg ue:border ue:border-line ue:p-4 ue:text-footnote ue:md:grid-cols-2">
+        <GtStepHistory
+          index={5}
+          revision={3}
+          runs={[
+            {
+              runId: 'r9',
+              succeeded: false,
+              failedStep: 6,
+              message: '等待超时：WBP_Shop:BtnBuy 被挡住',
+              startedAtUtc: '2026-11-16T12:03:01Z',
+              durationMs: 12100,
+              revision: 3,
+            },
+            { runId: 'r8', succeeded: true },
+            { runId: 'r7', succeeded: false, failedStep: 2 },
+            {
+              runId: 'r6',
+              succeeded: false,
+              failedStep: 6,
+              message: '没找到 WBP_Shop:BtnBuy',
+              startedAtUtc: '2026-11-15T09:40:00Z',
+              revision: 2,
+            },
+            { runId: 'r5', succeeded: true },
+          ]}
+        />
+        <GtStepExec
+          project=""
+          root=""
+          path=""
+          index={0}
+          locked
+          def={{ action: 'click', target: 'WBP_Shop:BtnBuy', via: 'pointer', timeoutMs: 15000 }}
+          onChanged={noop}
+        />
       </div>
       <div className="ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
         <GtBatchBar batch={BATCH} onStop={noop} />

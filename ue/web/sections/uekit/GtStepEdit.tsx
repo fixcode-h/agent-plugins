@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUpToLine, Trash2 } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { ppost, useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
@@ -26,12 +26,13 @@ const templates = (current: StepDef): { id: string; label: string; step: Record<
 const pretty = (v: unknown) => JSON.stringify(v, null, 2)
 
 /**
- * GameTest 步骤右键的「在上面 / 下面插入一步」「删除这一步」。改场景文件走 ext/gt/file replace：
+ * GameTest 步骤右键的「在上面 / 下面插入一步」「编辑这一步」「删除这一步」。改场景文件走 ext/gt/file replace：
  * 带上网页看到的原步骤核对，文件在这期间被重新录制或 Agent 改过就报错让刷新，不按行号硬改
  */
 export function useStepEdit(o: { project: string; root: string; path: string; onDone: () => void }) {
   const { busy, run } = useAction()
-  const [inserting, setInserting] = useState<{ index: number; def: StepDef; below: boolean }>()
+  // edit：同一个弹窗改这一步本身（不给模板，直接改 JSON）
+  const [inserting, setInserting] = useState<{ index: number; def: StepDef; below: boolean; edit?: boolean }>()
   const [tpl, setTpl] = useState('click')
   const [text, setText] = useState('')
   const [error, setError] = useState('')
@@ -46,6 +47,11 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
     setText(pretty(first.step))
     setError('')
     setInserting({ index, def, below })
+  }
+  const startEdit = (index: number, def: StepDef) => {
+    setText(pretty(def))
+    setError('')
+    setInserting({ index, def, below: false, edit: true })
   }
   const pickTpl = (id: string) => {
     if (!inserting) return
@@ -73,12 +79,14 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
       setError(t('要写成一个对象，并且有 action 字段'))
       return
     }
-    const { index, def, below } = inserting
+    const { index, def, below, edit } = inserting
     void run('insert', async () => {
       const added = step as Record<string, unknown>
-      await replace(index, def, below ? [def, added] : [added, def])
+      await replace(index, def, edit ? [added] : below ? [def, added] : [added, def])
       setInserting(undefined)
-      h().toast.success(t('已插入为第 {n} 步', { n: below ? index + 2 : index + 1 }))
+      h().toast.success(
+        edit ? t('已保存第 {n} 步', { n: index + 1 }) : t('已插入为第 {n} 步', { n: below ? index + 2 : index + 1 }),
+      )
       o.onDone()
     })
   }
@@ -111,6 +119,12 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
             onClick: () => startInsert(index, def, true),
           },
           {
+            label: t('编辑这一步…'),
+            icon: Pencil,
+            disabled: locked,
+            onClick: () => startEdit(index, def),
+          },
+          {
             label: t('删除这一步'),
             icon: Trash2,
             danger: true,
@@ -127,9 +141,11 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
         open={!!inserting}
         onOpenChange={(v: boolean) => !v && setInserting(undefined)}
         title={
-          inserting?.below
-            ? t('在第 {n} 步下面插入', { n: (inserting?.index ?? 0) + 1 })
-            : t('在第 {n} 步上面插入', { n: (inserting?.index ?? 0) + 1 })
+          inserting?.edit
+            ? t('编辑第 {n} 步', { n: (inserting?.index ?? 0) + 1 })
+            : inserting?.below
+              ? t('在第 {n} 步下面插入', { n: (inserting?.index ?? 0) + 1 })
+              : t('在第 {n} 步上面插入', { n: (inserting?.index ?? 0) + 1 })
         }
         footer={
           <>
@@ -137,25 +153,27 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
               {t('取消')}
             </ui.Button>
             <ui.Button variant="primary" disabled={!!busy} onClick={insert}>
-              {t('插入')}
+              {inserting?.edit ? t('保存') : t('插入')}
             </ui.Button>
           </>
         }
       >
         <div className="ue:flex ue:flex-col ue:gap-3">
-          <ui.Field label={t('从哪个写法开始')}>
-            <ui.Select
-              value={tpl}
-              onChange={(e: { target: { value: string } }) => pickTpl(e.target.value)}
-              options={inserting ? templates(inserting.def).map((x) => ({ value: x.id, label: x.label })) : []}
-            />
-          </ui.Field>
+          {!inserting?.edit && (
+            <ui.Field label={t('从哪个写法开始')}>
+              <ui.Select
+                value={tpl}
+                onChange={(e: { target: { value: string } }) => pickTpl(e.target.value)}
+                options={inserting ? templates(inserting.def).map((x) => ({ value: x.id, label: x.label })) : []}
+              />
+            </ui.Field>
+          )}
           <ui.Field
             label={t('步骤（JSON）')}
             hint={t('字段见 GameTest 的动作表；选择器不会写时，在游戏里对着控件用「检视」或从别的步骤复制')}
           >
             <ui.Textarea
-              rows={10}
+              rows={inserting?.edit ? 16 : 10}
               className="ue:font-mono"
               value={text}
               onChange={(e: { target: { value: string } }) => {
@@ -183,5 +201,5 @@ export function useStepEdit(o: { project: string; root: string; path: string; on
     </>
   )
 
-  return { menuItems, dialogs }
+  return { menuItems, dialogs, startEdit }
 }
