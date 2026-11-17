@@ -4,6 +4,8 @@ import { getCapture, type Capture } from './captures.ts'
 import { autoBackground, ensureBackground, noBackgroundMsg } from './editor.ts'
 import { BridgeError, liveCards, rpc, type Card } from './instances.ts'
 import type { OpCtx } from './ops.ts'
+import { isRecordingTrace } from './perf.ts'
+import { shiftArgs, shiftResult } from './perf/trace-origin.ts'
 import type { UeProject } from './types.ts'
 import { c, exists, t } from './util.ts'
 
@@ -41,7 +43,13 @@ async function analysisCard(p: UeProject): Promise<Card> {
 
 export interface TraceRes extends Record<string, unknown> {
   analyzing: boolean
+  /** 秒，从录制开始算（桥接 2.8.0 起；旧桥接从进程启动算） */
   duration: number
+  /** 桥接 2.8.0 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
+  readBytes?: number
+  fileBytes?: number
+  caughtUp?: boolean
+  live?: boolean
 }
 
 async function traceCapture(p: UeProject, id: string): Promise<Capture> {
@@ -50,19 +58,48 @@ async function traceCapture(p: UeProject, id: string): Promise<Capture> {
   return cap
 }
 
-/** 网页和 Agent 共用：what 见桥接 AgentPanelTrace.cpp（info / frames / timing / timers / butterfly / stack / counters / log / bookmarks） */
+/** 每份 trace 第一帧的时间（见 perf/trace-origin.ts）：带时间参数的查询要先知道它才能换算 */
+const origins = new Map<string, number>()
+
+/**
+ * 网页和 Agent 共用：what 见桥接 AgentPanelTrace.cpp（info / frames / timing / timers / butterfly / stack / counters / log / bookmarks）。
+ * 这份文件还在录时带 live：桥接跟着文件往下读，没分析完也能查已经分析到的部分（2.8.0 之前每次都从头重新分析）。
+ */
 export async function traceQuery(ctx: OpCtx, id: string, args: Record<string, unknown>): Promise<TraceRes> {
   const cap = await traceCapture(ctx.project, id)
   const card = await analysisCard(ctx.project)
+  const live = await isRecordingTrace(ctx.project.id, cap.file)
+  const call = async (a: Record<string, unknown>) => {
+    const { ok: _ok, ...res } = await rpc(card, 'trace.query', { ...a, file: cap.file, live }, 60000)
+    if (typeof res.origin === 'number' && res.origin > 0) {
+      if (origins.size > 50) origins.clear()
+      origins.set(cap.file, res.origin)
+    }
+    return res
+  }
   try {
-    const { ok: _ok, ...res } = await rpc(card, 'trace.query', { ...args, file: cap.file }, 60000)
-    return res as TraceRes
+    const what = String(args.what ?? 'info')
+    let origin = origins.get(cap.file)
+    if (origin === undefined && (args.t0 !== undefined || args.t1 !== undefined || args.time !== undefined)) {
+      await call({ what: 'info' })
+      origin = origins.get(cap.file)
+    }
+    const res = await call(shiftArgs(args, origin ?? 0))
+    return shiftResult(what, res, origin ?? (typeof res.origin === 'number' ? res.origin : 0)) as TraceRes
   } catch (e) {
     const msg = (e as Error).message
     if (/trace\.query/.test(msg))
       throw new BridgeError(t('这个进程的桥接还没有 trace 分析：更新桥接插件到 {min} 以上', { min: TRACE_BRIDGE }))
     throw e
   }
+}
+
+/** 分析进度：桥接 2.8.0 起按字节，旧桥接只有分析到的秒数 */
+export function progressText(res: TraceRes) {
+  const mb = (n: number) => (n / 1048576).toFixed(n >= 1048576 * 100 ? 0 : 1)
+  if (res.fileBytes)
+    return t('已读 {a} / {b} MB', { a: mb(res.readBytes ?? 0), b: mb(res.fileBytes) })
+  return t('已经分析到第 {s} 秒', { s: Math.round(res.duration * 100) / 100 })
 }
 
 // ---------- 给 Agent 的摘要和下钻（结果限长，不把整份 trace 塞进上下文） ----------
@@ -108,12 +145,16 @@ function worstFrames(f: Frames, top: number) {
 const ANALYZING = (res: TraceRes) => ({
   analyzing: true,
   analyzedSeconds: r2(res.duration),
-  next: t('还在分析（已经分析到第 {s} 秒），过几秒再查', { s: r2(res.duration) }),
+  next: t('还在分析（{p}），过几秒再查', { p: progressText(res) }),
 })
+
+/** 还要等：没分析完，而且不是「录制中、已经追上最新」（那时已有的部分就能查，后面的还在录） */
+const waiting = (res: TraceRes) => res.analyzing && !(res.live && res.caughtUp)
+const RECORDING = { recording: true, note: '这份 trace 还在录，结果只含已经录下的部分；停止录制后再查是完整的' }
 
 export async function traceSummary(ctx: OpCtx, id: string) {
   const info = await traceQuery(ctx, id, { what: 'info' })
-  if (info.analyzing) return ANALYZING(info)
+  if (waiting(info)) return ANALYZING(info)
   const frames = (await traceQuery(ctx, id, { what: 'frames' })) as TraceRes & Frames
   const timers = (await traceQuery(ctx, id, { what: 'timers', top: 15 })) as TraceRes & { items: TimerRow[] }
   const marks = (await traceQuery(ctx, id, { what: 'bookmarks' })) as TraceRes & {
@@ -121,6 +162,7 @@ export async function traceSummary(ctx: OpCtx, id: string) {
   }
   const threads = (info.threads as { id: number; name: string; group: string }[]) ?? []
   return {
+    ...(info.live ? RECORDING : {}),
     seconds: r2(info.duration),
     frames: frameStats(frames),
     worstFrames: worstFrames(frames, 8),
@@ -237,7 +279,7 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
   const range = clean(await rangeOf(ctx, id, q))
   const wrap = async (args: Record<string, unknown>) => {
     const res = await traceQuery(ctx, id, args)
-    if (res.analyzing) throw new BridgeError(ANALYZING(res).next)
+    if (waiting(res)) throw new BridgeError(ANALYZING(res).next)
     return res
   }
   switch (what) {

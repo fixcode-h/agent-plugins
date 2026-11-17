@@ -16,6 +16,7 @@ import { CallTree, InstancesView, StackView, type PanelActions } from './TracePa
 import {
   orderLanes,
   traceQuery,
+  progressNote,
   useDebounced,
   useTraceInfo,
   type Bookmark,
@@ -38,7 +39,7 @@ const BUDGET = { target: 33.9, unacceptable: 50 }
  */
 export function TraceView({ capture, onAgent }: { capture: Capture; onAgent?: (extra: string) => void }) {
   const { project } = useUe()
-  const { info, error, ready } = useTraceInfo(project.id, capture.id)
+  const { info, error, ready, rev } = useTraceInfo(project.id, capture.id)
   if (error)
     return (
       <div className="ue:p-5">
@@ -52,24 +53,35 @@ export function TraceView({ capture, onAgent }: { capture: Capture; onAgent?: (e
           rows={5}
           note={
             info
-              ? t('正在分析 trace（已分析到第 {s} 秒）…', { s: info.duration.toFixed(1) })
+              ? progressNote(info)
               : t('正在分析 trace…第一次要启动后台编辑器，可能要一两分钟（编辑器开着时用编辑器分析，快得多）')
           }
         />
       </div>
     )
-  return <TraceBody capture={capture} duration={info!.duration} threads={info!.threads} onAgent={onAgent} />
+  return (
+    <TraceBody
+      capture={capture}
+      duration={info!.duration}
+      threads={info!.threads}
+      growing={info!.analyzing ? { rev, live: !!info!.live, note: progressNote(info!) } : undefined}
+      onAgent={onAgent}
+    />
+  )
 }
 
 function TraceBody({
   capture,
   duration,
   threads,
+  growing,
   onAgent,
 }: {
   capture: Capture
   duration: number
   threads: { id: number; name: string; group: string }[]
+  /** 还在分析（录制中跟着读，或第一次分析还没读完）：先显示已有的部分，rev 一变就刷新帧条、书签和末尾的时间轴 */
+  growing?: { rev: number; live: boolean; note: string }
   onAgent?: (extra: string) => void
 }) {
   const { project } = useUe()
@@ -79,7 +91,15 @@ function TraceBody({
   const setView = useCallback((r: Range) => setViewState(r), [])
   // 帧条自己的缩放窗口（和时间轴的 view 分开）：默认整段，换了 trace 回到整段
   const [strip, setStrip] = useState<Range>(() => ({ t0: 0, t1: duration }))
-  useEffect(() => setStrip({ t0: 0, t1: duration }), [id, duration])
+  // 换了 trace 回到整段；数据还在长时，帧条原来看到末尾的就跟着往后伸（像 Insights 看实时会话），放大看中间的不动
+  const lastDur = useRef(duration)
+  useEffect(() => setStrip({ t0: 0, t1: lastDur.current }), [id])
+  useEffect(() => {
+    const prev = lastDur.current
+    lastDur.current = duration
+    setStrip((s) => (s.t1 >= prev - 1e-6 ? { t0: s.t0, t1: duration } : s))
+  }, [duration])
+  const rev = growing?.rev ?? -1
   const [picked, setPicked] = useState<PickedBlock>()
   const [timer, setTimer] = useState<{ id: number; name: string }>()
   const [tab, setTab] = useState<'timers' | 'counters' | 'log'>('timers')
@@ -89,23 +109,34 @@ function TraceBody({
   const paneRef = useRef<HTMLElement>(null)
 
   // 帧和书签取不到时要把错误显示出来：以前只显示加载占位，桥接回了坏 JSON 时就一直「在加载」
-  const frames = useLoad(() => traceQuery<TraceFrames>(project.id, id, { what: 'frames' }), [project.id, id])
+  const frames = useLoad(() => traceQuery<TraceFrames>(project.id, id, { what: 'frames' }), [project.id, id, rev])
   const marks = useLoad(
     () => traceQuery<TraceBase & { items: Bookmark[] }>(project.id, id, { what: 'bookmarks' }),
-    [project.id, id],
+    [project.id, id, rev],
   )
   const { main, workers } = useMemo(() => orderLanes(threads), [threads])
   const lanes = useMemo(() => [...main, ...(showWorkers ? workers : [])].map((l) => l.id), [main, workers, showWorkers])
   const w = useRef(1200)
+  // 还在长的 trace：看的这段超过了上次取到的数据末尾，就跟着 rev 再取（看前面已经分析完的部分不重复取）
+  const timingEnd = useRef(Infinity)
+  const tail = growing && view.t1 > timingEnd.current ? rev : -1
   const timing = useDebounced(
-    () => traceQuery<Timing>(project.id, id, { what: 'timing', t0: view.t0, t1: view.t1, px: w.current, lanes }),
-    `${view.t0.toFixed(6)}|${view.t1.toFixed(6)}|${lanes.join(',')}`,
+    () =>
+      traceQuery<Timing>(project.id, id, { what: 'timing', t0: view.t0, t1: view.t1, px: w.current, lanes }).then(
+        (r) => {
+          timingEnd.current = r.analyzing ? r.duration : Infinity
+          return r
+        },
+      ),
+    `${view.t0.toFixed(6)}|${view.t1.toFixed(6)}|${lanes.join(',')}|${tail}`,
   )
 
-  // 一打开先看最慢的那一帧：比从第 0 秒开始看更有用
+  // 一打开先看最慢的那一帧：比从第 0 秒开始看更有用。数据还在长时只跳一次，不然每次刷新都把用户拽回去
   const f = frames.data
+  const jumped = useRef('')
   useEffect(() => {
-    if (!f?.ms.length) return
+    if (!f?.ms.length || jumped.current === id) return
+    jumped.current = id
     let worst = 0
     for (let i = 1; i < f.ms.length; i++) if (f.ms[i] > f.ms[worst]) worst = i
     const s = f.start[worst]
@@ -160,6 +191,13 @@ function TraceBody({
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-fade">
       <StatsBar items={items} badge={range ? t('区间') : 'trace'} />
+      {growing && (
+        <Note tone="info">
+          {growing.live
+            ? t('还在录制：先显示已经录下的部分，新数据每隔几秒自动补上；停止录制后是完整结果')
+            : growing.note}
+        </Note>
+      )}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:lg:flex-row">
         <div className="ue:flex ue:min-h-[420px] ue:min-w-0 ue:flex-1 ue:flex-col">
           <Section
@@ -273,6 +311,8 @@ function TraceBody({
                   id={id}
                   range={range}
                   seconds={r.t1 - r.t0}
+                  // 整段统计要扫全部事件，桥接在编辑器游戏线程上算：录制中每多录 10 秒才重算一次，别拖慢被测的编辑器
+                  rev={growing ? Math.floor(rev / 10) : -1}
                   picked={timer?.id}
                   actions={{ onPick: (x) => pickTimer(x.id, x.name), onSlowest: (x) => actions.slowest(x.id, x.name) }}
                 />

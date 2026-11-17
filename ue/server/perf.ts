@@ -48,6 +48,16 @@ const activeFile = (project: string) => path.join(c().dataDir, 'captures', `${en
 const readActive = (project: string) => readJson<ActiveCapture[]>(activeFile(project), [])
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/** 这份 trace 文件是不是还在录（面板发起、还没停的录制）：分析时据此让桥接跟着文件往下读 */
+export async function isRecordingTrace(project: string, file: string) {
+  const norm = (f: string) => {
+    const r = path.resolve(f)
+    return process.platform === 'win32' ? r.toLowerCase() : r
+  }
+  const want = norm(file)
+  return (await readActive(project)).some((x) => x.kind === 'trace' && !!x.file && norm(x.file) === want)
+}
+
 export const DEFAULT_SECONDS = 30
 
 /** 时长：明确给 0 = 不限；没给（Agent 忘了写）按默认；其余按给的，不设上限 */
