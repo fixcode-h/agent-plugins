@@ -9,6 +9,7 @@ import { evidenceOf, GtEvidence, type GtEvidenceData } from './GtEvidence.tsx'
 import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
 import { stepTitle } from './gt-step-title.ts'
 import { GtMatchMode } from './GtMatchMode.tsx'
+import { GtMoveView } from './GtMoveView.tsx'
 import { GtSelectorTree } from './GtSelectorTree.tsx'
 
 /**
@@ -100,7 +101,7 @@ export function rowSummary(r: StepRow) {
   const note = r.res?.note ?? (typeof r.def?.note === 'string' ? r.def.note : undefined)
   const params = r.def ? paramsOf(r.def) : []
   const brief = params
-    .filter(([k]) => k !== 'target' && k !== 'note' && k !== 'hint')
+    .filter(([k]) => k !== 'target' && k !== 'note' && k !== 'hint' && !(r.def?.action === 'move' && MOVE_DRAWN.has(k)))
     .map(([k, v]) => `${k}=${show(v)}`)
     .join(' ')
   return {
@@ -139,15 +140,16 @@ export function StepDetail({
   const fileUrl = (p: string) => api.url(`/p/${encodeURIComponent(project.id)}/ext/file?path=${encodeURIComponent(p)}`)
   const action = def?.action || res?.action || '?'
   // note 已经是标题、hint 在「控件」里分项列，参数里不再重复
+  const isMove = action === 'move'
   const params = def
-    ? paramsOf(def).filter(([k]) => k !== 'note' && k !== 'hint')
+    ? paramsOf(def).filter(([k]) => k !== 'note' && k !== 'hint' && !(isMove && MOVE_DRAWN.has(k)))
     : ([
         ['target', res?.target],
         ['note', res?.note],
       ].filter(([, v]) => v) as [string, unknown][])
   const title = stepTitle(def, res?.action, res?.target)
   const human = humanStep(def)
-  const hint = hintOf(def)
+  const hint = isMove ? undefined : hintOf(def)
   const ambiguous = ambiguousOf(def)
   const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
   // GameTest 1.2.5：等它可操作时自动滚过的列表、滚动框；真实鼠标被挡住改用代码点击的原因
@@ -208,6 +210,19 @@ export function StepDetail({
               )}
             </Note>
           )}
+        </Block>
+      )}
+      {isMove && (
+        <Block title={t('移动')}>
+          <GtMoveView
+            def={def}
+            payload={res?.payload}
+            edit={
+              def && scenario && root !== undefined && onChanged && !live
+                ? { project: project.id, root, path: scenario.relativePath, index: row.i, onChanged }
+                : undefined
+            }
+          />
         </Block>
       )}
       {blockers.length > 0 && (
@@ -306,6 +321,9 @@ function agentText(row: StepRow, e: GtEvidenceData, scenario?: { name: string; r
     `请先读这些文件，结合场景文件 ${scenario?.relativePath ?? ''}（场景根下）找出失败原因，告诉我是测试写得不对还是游戏有问题、该怎么改；需要时用 ue_gametest resolve 核对选择器、step 单步复现。`,
   ].join('\n')
 }
+
+/** move 步骤画进俯视图的参数：一长串坐标，参数表里不再列 */
+const MOVE_DRAWN = new Set(['path', 'jumps', 'fly'])
 
 const statusText = (s: string) =>
   s === 'succeeded' ? t('通过') : s === 'failed' ? t('失败') : s === 'skipped' ? t('跳过') : t('进行中')

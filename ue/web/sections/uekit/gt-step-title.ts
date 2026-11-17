@@ -1,5 +1,6 @@
 import { t } from '../../host.ts'
 import { hintOf, type GtHint } from './gt-steps.ts'
+import { moveTitle } from './gt-move.ts'
 
 /**
  * GameTest 步骤列表每一行的一句中文：只说「这一步在干什么」，选择器、hint、参数原文都留给右边的详情。
@@ -85,6 +86,8 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
       return t('关掉{w}', { w })
     case 'actor.get':
       return t('查找 Actor {c}', { c: lastPart(s('class') || s('tag')) })
+    case 'move':
+      return moveTitle(def)
     case 'net.compare':
       return t('核对服务器和客户端的位置一致')
     case 'stack.push':

@@ -2,6 +2,7 @@ import {
   Camera,
   CheckSquare,
   Clock,
+  Footprints,
   Keyboard,
   type LucideIcon,
   MousePointer2,
@@ -58,6 +59,8 @@ function actionIcon(a?: string): LucideIcon {
       return Terminal
     case 'mark':
       return ScrollText
+    case 'move':
+      return Footprints
     default:
       return Zap
   }
