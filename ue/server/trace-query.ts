@@ -6,6 +6,7 @@ import { BridgeError, liveCards, rpc, type Card } from './instances.ts'
 import type { OpCtx } from './ops.ts'
 import { isRecordingTrace } from './perf.ts'
 import { shiftArgs, shiftResult } from './perf/trace-origin.ts'
+import { trimTree, type TreeNode } from './perf/trace-trim.ts'
 import type { UeProject } from './types.ts'
 import { c, exists, t } from './util.ts'
 
@@ -117,6 +118,10 @@ interface TimerRow {
   inclMax: number
   excl: number
   gpu?: boolean
+  /** Lua 计时器（UELink 2.8 起）：.lua 文件和定义行；C 函数 file 是 <lua:C>、c=true */
+  file?: string
+  line?: number
+  c?: boolean
 }
 
 const pct = (sorted: number[], q: number) =>
@@ -170,8 +175,19 @@ export async function traceSummary(ctx: OpCtx, id: string) {
     topTimers: timers.items.map(brief),
     bookmarks: marks.items.slice(0, 30).map((m) => ({ at: r2(m.t), name: m.text })),
     next: 'query what=timers（from/to 或 frame 限定范围）→ what=butterfly timer=<名字或 id> 看调用者 / 被调用者 → what=stack lane=<泳道> time=<秒> 看那一刻的调用堆栈',
+    // 录了 Lua 的 trace（UELink 2.8 起 info 带 lua）：提示怎么只看 Lua
+    ...(info.lua
+      ? {
+          lua: true,
+          luaNext:
+            'Lua 热点：what=timers lua=true（mergeC=true 把 C 函数并进调用者）→ what=tree luaOnly=true 看 Lua 调用关系 → 按 src 的 文件:行 读源码',
+        }
+      : {}),
   }
 }
+
+const NO_LUA =
+  '没有 Lua 计时器：这份 trace 没录 Lua（ue_perf action=start lua=true），或者分析用的 UELink 低于 2.8.0（去 UE 页「UE 插件」升级）'
 
 const brief = (x: TimerRow) => ({
   id: x.id,
@@ -181,6 +197,9 @@ const brief = (x: TimerRow) => ({
   exclMs: x.excl,
   maxMs: x.inclMax,
   ...(x.gpu ? { gpu: true } : {}),
+  // Lua 计时器带 文件:行（Agent 直接拿去读源码）；C 函数没有源码，只标 c
+  ...(x.file && !x.c ? { src: x.line ? `${x.file}:${x.line}` : x.file } : {}),
+  ...(x.c ? { c: true } : {}),
 })
 
 /** from / to：秒数，或书签名；frame：只看这一帧 */
@@ -293,12 +312,17 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
       return { stats: frameStats(f), worst: list.slice(0, top) }
     }
     case 'timers': {
+      // lua：只要 Lua 计时器（含 C 函数）；mergeC：C 函数的时间并进调用它的 Lua 函数（UELink 2.8 起，设计稿 9.2）
+      const lua = q.lua === true || q.lua === 'true'
+      const mergeC = q.mergeC === true || q.mergeC === 'true'
       const res = (await wrap({
         what: 'timers',
         ...range,
         filter: q.name ? String(q.name) : undefined,
         sort: q.sort,
         top,
+        ...(lua ? { lua: true } : {}),
+        ...(mergeC ? { mergeC: true } : {}),
       })) as TraceRes & {
         items: TimerRow[]
         total: number
@@ -308,6 +332,38 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
         range: { from: range.t0 ?? 0, to: range.t1 ?? res.duration },
         total: res.total,
         items: res.items.map(brief),
+        ...(lua && res.items.length && !res.items.some((x) => x.file) ? { note: NO_LUA } : {}),
+      }
+    }
+    case 'tree': {
+      // 自上而下调用树：root 从某个计时器往下看，luaOnly 从最外层的 Lua 函数开始（跳过上面的 UE 作用域、各线程合并）
+      const rootArg = q.root ?? q.timer
+      const root = rootArg !== undefined && rootArg !== '' ? await timerId(ctx, id, rootArg) : undefined
+      let res: TraceRes & { root?: TreeNode }
+      try {
+        // 直接调 traceQuery（不经 wrap）：只有桥接报的错补升级提示，还在分析的提示原样给
+        res = (await traceQuery(ctx, id, {
+          what: 'tree',
+          ...range,
+          ...(root !== undefined ? { root } : {}),
+          ...(q.luaOnly === true || q.luaOnly === 'true' ? { luaOnly: true } : {}),
+          ...(q.mergeC === true || q.mergeC === 'true' ? { mergeC: true } : {}),
+        })) as TraceRes & { root?: TreeNode }
+      } catch (e) {
+        if (e instanceof BridgeError && /UELink|桥接/.test(e.message)) throw e
+        throw new BridgeError(
+          t('{msg}（what=tree 要分析用的编辑器里 UELink 是 {min} 起，去 UE 页「UE 插件」升级）', {
+            msg: (e as Error).message,
+            min: '2.8.0',
+          }),
+        )
+      }
+      if (res.analyzing) throw new BridgeError(ANALYZING(res).next)
+      if (!res.root) throw new BridgeError(t('分析用的 UELink 没返回调用树：要 {min} 起', { min: '2.8.0' }))
+      return {
+        range: { from: range.t0 ?? 0, to: range.t1 ?? res.duration },
+        root: trimTree(res.root),
+        note: '时间单位毫秒；每层只留最热的几支（按包含时间），more 是没列出的子节点数；要看某一支往下就用它的 id 当 root 再查',
       }
     }
     case 'butterfly': {
@@ -372,7 +428,9 @@ export async function traceAgentQuery(ctx: OpCtx, id: string, q: Record<string, 
     }
     default:
       throw new BridgeError(
-        t('trace 的 what：frames / timers / butterfly / instances / stack / threads / log / bookmarks / counters'),
+        t(
+          'trace 的 what：frames / timers / tree / butterfly / instances / stack / threads / log / bookmarks / counters',
+        ),
       )
   }
 }

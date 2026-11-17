@@ -26,6 +26,9 @@ action=start  开始抓取
   kind=trace      Unreal Insights 同款 trace：每个线程每一层作用域（函数调用堆栈）、计时器、帧、书签、计数器、日志。seconds 同下
                   preset=standard（默认：cpu,gpu,frame,bookmark,counters,log）/ named（再开 stat namedevents，能看到蓝图函数名，开销大些）/
                   loading（加 loadtime,assetloadtime，查切关和加载慢）/ memtag（加 memtag，UE 要用 -llm 启动）/ custom（channels 写逗号分隔的通道，可选：${TRACE_CHANNELS.join(' ')}；named=true 同时开命名事件）
+                  lua=true / "noc" / false：和 preset 叠加，一起录 Lua 函数（UnLua 项目，UELink 2.8 起）。true 是 Lua 函数 + C 函数（UE.GetVelocity 这类 UE 接口）单独成块，
+                  "noc" 不单独录 C 函数（时间算进调用它的 Lua 函数，trace 更小）。不给按项目设置（装了 UnLua 默认 true）；UELink 太旧或没装 UnLua 时只录 UE 部分，结果里 luaNote 说明。
+                  录 Lua 时 Lua 会变慢一些，看占比不看绝对值；IDE 的 Lua 调试器连着时录不到 Lua
   kind=csv        CSV Profiler：每帧的帧时间、各线程时间和各项统计。seconds 是时长上限（不给默认 ${DEFAULT_SECONDS} 秒自动停；0 = 不限时长，测完一定要 stop）
   kind=memreport  执行 memreport -full，马上得到一份内存报告（游戏会卡几秒），不用 stop
   label           给这份抓取起个名字，之后可以用名字代替 id
@@ -35,6 +38,7 @@ action=status 看有没有正在进行的抓取
 
 怎么选：
 - 卡顿、帧率低、要知道慢在哪个函数：kind=trace。start → 用 ue_gm / ue_console 触发场景（前后各 mark 一下）→ stop → ue_capture summary → query what=timers / butterfly / stack。
+- Lua 慢（哪一帧、哪个 Lua 函数、从哪个 UE 回调进来）：kind=trace lua=true，之后 query what=timers lua=true、what=tree luaOnly=true。ue_lua action=profile 只有平铺的总表，看不出帧和调用关系。
 - 长时间看走势（跑一整局）、对比两个版本：kind=csv，文件小，能录很久。
 - 内存高、怀疑泄漏：kind=memreport。在同一个场景进出一次，前后各抓一份，用 ue_capture compare 看哪些类只涨不回。
 - 先看大概：action=live，看帧率、哪个线程最慢、内存多少，不留文件。
@@ -68,6 +72,9 @@ memreport 的 what：
 trace 的 what（时间单位：范围是秒，耗时是毫秒）：
   frames     帧统计和最慢的帧（每帧带开始时间，可以接着用 frame=<帧号> 查那一帧）。thresholdMs 只列超过门槛的
   timers     计时器表：每个作用域的次数、包含时间、独占时间、单次最长，默认按独占时间倒序（sort=incl / count / max）；name 按名字筛
+             lua=true 只看 Lua 计时器（含 C 函数，c=true），mergeC=true 把 C 函数的时间并进调用它的 Lua 函数；Lua 行带 src（文件:行）
+  tree       自上而下的调用树（火焰图同一份数据）：root 写计时器名字或 id 只看它往下，luaOnly=true 从最外层的 Lua 函数开始（各线程合并），mergeC 同上；
+             每层只留最热的几支，more 是没列出的个数，要细看某一支就拿它的 id 当 root 再查（timers 的 lua / mergeC 和 tree 要 UELink 2.8 起）
   butterfly  调用者 / 被调用者：timer 写计时器的名字或 id，callers 是谁调了它，callees 是它里面调了谁
   instances  一个计时器每次调用的统计（次数、最短 / 平均 / 中位 / 最长）和最慢的几次在哪（timer 同上）：区分「每次都慢」和「偶尔一次特别慢」
   stack      某一刻的调用堆栈：lane 写线程名（默认 GameThread）或泳道 id，time 写秒（或给 frame 取那一帧开头）；depth 选中某一层，children 是那一层的直接子调用
@@ -81,7 +88,7 @@ trace 的 what（时间单位：范围是秒，耗时是毫秒）：
 export const PERF_DEFS = [
   tool(
     'ue_perf',
-    '性能和内存抓取（对着正在运行的 UE）。action=live 看最近几秒的实时读数（seconds，和 stat unit 同源，不留文件）；action=start 开始：kind=trace 录 Unreal Insights 同款 trace（每个线程的函数调用堆栈和计时器，preset 选通道组合，custom 时 channels 自选通道，seconds 时长上限，0 不限），kind=csv 是 CSV Profiler（每帧耗时），kind=memreport 抓一份内存报告（马上完成）；action=mark 打书签（name）；action=stop 停止 trace / CSV 并返回抓取 id；action=status 看进行中的抓取；action=help 看用法和怎么选。抓到的文件用 ue_capture 分析。',
+    '性能和内存抓取（对着正在运行的 UE）。action=live 看最近几秒的实时读数（seconds，和 stat unit 同源，不留文件）；action=start 开始：kind=trace 录 Unreal Insights 同款 trace（每个线程的函数调用堆栈和计时器，preset 选通道组合，custom 时 channels 自选通道，lua 叠加录 Lua 函数，seconds 时长上限，0 不限），kind=csv 是 CSV Profiler（每帧耗时），kind=memreport 抓一份内存报告（马上完成）；action=mark 打书签（name）；action=stop 停止 trace / CSV 并返回抓取 id；action=status 看进行中的抓取；action=help 看用法和怎么选。抓到的文件用 ue_capture 分析。',
     {
       action: { type: 'string', enum: ['live', 'start', 'stop', 'mark', 'status', 'help'] },
       kind: { type: 'string', enum: ['trace', 'csv', 'memreport'] },
@@ -89,6 +96,7 @@ export const PERF_DEFS = [
       channels: { type: 'string' },
       seconds: { type: 'number' },
       named: { type: 'boolean' },
+      lua: { type: ['boolean', 'string'], enum: [true, false, 'noc'] },
       label: { type: 'string' },
       name: { type: 'string' },
       id: { type: 'string' },
@@ -108,6 +116,7 @@ export const PERF_DEFS = [
               preset: str(a.preset),
               channels: str(a.channels),
               named: a.named === true,
+              lua: a.lua,
             }),
           )
         case 'stop':
@@ -123,7 +132,7 @@ export const PERF_DEFS = [
   ),
   tool(
     'ue_capture',
-    '分析性能和内存抓取文件（UE 不在运行也能用）。action=list 列出抓取；summary 看一份的摘要（id）；query 下钻（id + what，trace：frames / timers / butterfly / instances / stack / threads / log / bookmarks / counters，CSV：hitches / columns / column / frame / segment，memreport：objects / section / textures 等）；compare 对比两份同类抓取（id 先抓的、other 后抓的，查内存泄漏用两份 memreport）；import 登记外部文件（path）；delete 删除（每次请用户确认）；action=help 看每种 what 的参数。结果先摘要再细节，不会返回整份文件。',
+    '分析性能和内存抓取文件（UE 不在运行也能用）。action=list 列出抓取；summary 看一份的摘要（id）；query 下钻（id + what，trace：frames / timers（lua=true 只看 Lua）/ tree（调用树，luaOnly）/ butterfly / instances / stack / threads / log / bookmarks / counters，CSV：hitches / columns / column / frame / segment，memreport：objects / section / textures 等）；compare 对比两份同类抓取（id 先抓的、other 后抓的，查内存泄漏用两份 memreport）；import 登记外部文件（path）；delete 删除（每次请用户确认）；action=help 看每种 what 的参数。结果先摘要再细节，不会返回整份文件。',
     {
       action: { type: 'string', enum: ['list', 'summary', 'query', 'compare', 'import', 'delete', 'help'] },
       id: { type: 'string' },
@@ -138,6 +147,10 @@ export const PERF_DEFS = [
       contains: { type: 'string' },
       thresholdMs: { type: 'number' },
       timer: { type: ['number', 'string'] },
+      root: { type: ['number', 'string'] },
+      lua: { type: 'boolean' },
+      luaOnly: { type: 'boolean' },
+      mergeC: { type: 'boolean' },
       lane: { type: ['number', 'string'] },
       time: { type: 'number' },
       depth: { type: 'number' },

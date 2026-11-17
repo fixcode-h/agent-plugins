@@ -53,6 +53,11 @@ export interface UeProject {
   target: { kind: string; world: string }
   /** Lua 页「编译」的设置（server/lua-build/config.ts），没配过为空 */
   luaBuild?: LuaBuildConfig
+  /**
+   * 性能页录 trace 时带不带 Lua（server/perf/lua-trace.ts）：用户在录制控件上改过才有，没有时装了 UnLua 就带。
+   * c=false 是 C 函数不单独成块（只录 lua 通道，时间算进调用它的 Lua 函数）
+   */
+  perfLua?: { on?: boolean; c?: boolean }
   addedAt: string
 }
 

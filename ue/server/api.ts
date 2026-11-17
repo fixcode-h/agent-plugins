@@ -117,7 +117,7 @@ export async function handle(req: Request): Promise<Response> {
         return json(await projectState(project))
       case 'POST settings': {
         const patch: Partial<UeProject> = {}
-        for (const k of ['perms', 'gmStore', 'favStore', 'buildCmd', 'engineDir', 'target', 'name'] as const)
+        for (const k of ['perms', 'gmStore', 'favStore', 'buildCmd', 'engineDir', 'target', 'name', 'perfLua'] as const)
           if (k in b) (patch as Record<string, unknown>)[k] = b[k]
         if ('engineDir' in b) {
           const det = await detect(project.root, String(b.engineDir ?? ''))

@@ -627,6 +627,62 @@ try {
   assert.match(text(await call('ue_capture', { action: 'help' })), /hitches/)
   await api('POST', '/p/p1/settings', { perms: permsBefore })
 
+  // trace 带 Lua（Lua 性能分析设计稿 9.3）：和预设叠加、去重；没装 UnLua、UELink 低于 2.8 时只录 UE 部分并说明原因
+  {
+    const traceStart = async (args) => {
+      const r = await call('ue_perf', { action: 'start', kind: 'trace', seconds: 0, ...args })
+      assert.ok(!r.isError, text(r))
+      const res = JSON.parse(text(r))
+      const st = JSON.parse(text(await call('ue_perf', { action: 'status' })))
+      // 假桥接不写 .utrace：替它把文件放到期望的位置再停
+      const file = st.active[0].file
+      mkdirSync(path.dirname(file), { recursive: true })
+      writeFileSync(file, 'utrace')
+      const stopped = JSON.parse(text(await call('ue_perf', { action: 'stop' })))
+      return {
+        res,
+        active: st.active[0],
+        stopped,
+        cmd: bridge.state.calls.filter((x) => x.startsWith('Trace.File')).at(-1),
+      }
+    }
+    // 没装 UnLua：默认不录 Lua；明确要也去掉，说明原因
+    let r = await traceStart({ label: 'noLuaDefault' })
+    assert.ok(!/\blua\b/.test(r.cmd), r.cmd)
+    r = await traceStart({ label: 'noUnLua', lua: true })
+    assert.ok(!/\blua\b/.test(r.cmd) && /UnLua/.test(r.res.luaNote), JSON.stringify(r.res))
+    mkdirSync(path.join(proj, 'Plugins', 'UnLua'), { recursive: true })
+    writeFileSync(path.join(proj, 'Plugins', 'UnLua', 'UnLua.uplugin'), '{}')
+    // 装了 UnLua 但假桥接的名片是 1.0.0：照常只录 UE 部分，提示升级 UELink
+    r = await traceStart({ label: 'oldBridge' })
+    assert.ok(!/\blua\b/.test(r.cmd) && /2\.8\.0/.test(r.res.luaNote), JSON.stringify(r.res))
+    const cardDir = path.join(proj, 'Saved', 'UELink', 'instances')
+    const cardFile = path.join(
+      cardDir,
+      readdirSync(cardDir).find((f) => f.endsWith('.json')),
+    )
+    const card = JSON.parse(readFileSync(cardFile, 'utf8'))
+    writeFileSync(cardFile, JSON.stringify({ ...card, bridge: '2.8.0' }))
+    // 默认（装了 UnLua）：lua,luac 追加在预设后面，和自定义通道去重；记进抓取登记
+    r = await traceStart({ label: 'withLua', preset: 'custom', channels: 'cpu,frame,lua' })
+    assert.match(r.cmd, / cpu,frame,lua,luac$/)
+    assert.equal(r.active.lua, true)
+    assert.equal(r.res.lua, true)
+    const luaCap = JSON.parse(text(await call('ue_capture', { action: 'list', kind: 'trace' }))).items.find(
+      (x) => x.label === 'withLua',
+    )
+    assert.equal(luaCap?.lua, true, JSON.stringify(luaCap))
+    r = await traceStart({ label: 'noc', lua: 'noc' })
+    assert.match(r.cmd, /,lua$/)
+    // 项目设置关掉后默认不录
+    await api('POST', '/p/p1/settings', { perfLua: { on: false, c: true } })
+    r = await traceStart({ label: 'off' })
+    assert.ok(!/\blua\b/.test(r.cmd), r.cmd)
+    await api('POST', '/p/p1/settings', { perfLua: null })
+    writeFileSync(cardFile, JSON.stringify(card))
+    rmSync(path.join(proj, 'Plugins', 'UnLua'), { recursive: true, force: true })
+  }
+
   // 保存和编译拆成单独的工具，带面板接口 3 的作用声明：编译报验证结论，保存报写回了哪些文件
   assert.equal(tools.ue_save.effect, 'edit')
   assert.equal(tools.ue_compile.effect, 'verify')

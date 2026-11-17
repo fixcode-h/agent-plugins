@@ -1,12 +1,11 @@
-import { ArrowDown, SquarePen } from 'lucide-react'
-import { useState } from 'react'
-import { h, t } from '../../host.ts'
+import { SquarePen } from 'lucide-react'
+import { t } from '../../host.ts'
 import { luaText } from '../../Lua.tsx'
 import { Badge, Term, fmtTime, type Tone } from '../../ui.tsx'
-import { shortFile, type LeakItem, type LeakKind, type OpenAt, type ProfItem, type SnapCapture } from './debug-types.ts'
+import { shortFile, type LeakItem, type LeakKind, type OpenAt, type SnapCapture } from './debug-types.ts'
 
 /**
- * Lua「调试」页签的三块结果视图（采样表、快照记录、持有的 UObject）：只吃数据不取数，
+ * Lua「调试」页签的结果视图（快照记录、持有的 UObject）：只吃数据不取数，
  * 页签（Debug.tsx）和设置里的组件示例（DebugSpecimen.tsx）共用
  */
 
@@ -24,67 +23,6 @@ export function SrcLink({ file, src, line, onOpen }: { file?: string; src: strin
       <span className="ue:truncate">{label}</span>
       <SquarePen className="ue:h-3 ue:w-3 ue:shrink-0" />
     </button>
-  )
-}
-
-type SortKey = 'selfMs' | 'totalMs' | 'calls'
-const NUM = 'ue:px-3 ue:py-1.5 ue:text-right ue:font-mono ue:text-footnote ue:tabular-nums ue:text-fg'
-
-/** 性能采样结果：按自身用时 / 总用时 / 次数排，自身用时画一条比例条，一眼看出谁最重 */
-export function ProfileTable({ items, onOpen }: { items: ProfItem[]; onOpen: OpenAt }) {
-  const { cn } = h()
-  const [sort, setSort] = useState<SortKey>('selfMs')
-  const rows = [...items].sort((a, b) => b[sort] - a[sort])
-  const max = Math.max(...items.map((x) => x.selfMs), 0.001)
-  const th = (k: SortKey, label: string) => (
-    <th
-      className={cn(
-        'ue:cursor-pointer ue:px-3 ue:py-1.5 ue:text-right ue:text-caption ue:font-medium ue:select-none ue:hover:text-fg',
-        sort === k ? 'ue:text-fg' : 'ue:text-subtle',
-      )}
-      onClick={() => setSort(k)}
-    >
-      {label}
-      {sort === k && <ArrowDown className="ue:ml-0.5 ue:inline ue:h-3 ue:w-3" />}
-    </th>
-  )
-  return (
-    <table className="ue:w-full ue:border-collapse">
-      <thead className="ue:sticky ue:top-0 ue:bg-card">
-        <tr className="ue:border-b ue:border-line">
-          <th className="ue:px-3 ue:py-1.5 ue:text-left ue:text-caption ue:font-medium ue:text-subtle">{t('函数')}</th>
-          {th('selfMs', t('自身 ms'))}
-          {th('totalMs', t('总计 ms'))}
-          {th('calls', t('次数'))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={`${r.src}:${r.line}:${r.fn}:${i}`} className="ue:border-b ue:border-line/60 ue:hover:bg-hover">
-            <td className="ue:w-full ue:max-w-0 ue:px-3 ue:py-1.5">
-              <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
-                <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg" title={r.fn}>
-                  {r.fn}
-                </span>
-                {r.c && <Badge>C</Badge>}
-                <span className="ue:ml-auto ue:min-w-0">
-                  <SrcLink file={r.file} src={r.src} line={r.line || undefined} onOpen={onOpen} />
-                </span>
-              </div>
-              <div className="ue:mt-1 ue:h-1 ue:rounded-full ue:bg-hover">
-                <div
-                  className="ue:h-1 ue:rounded-full ue:bg-accent"
-                  style={{ width: `${Math.max(1, (r.selfMs / max) * 100)}%` }}
-                />
-              </div>
-            </td>
-            <td className={NUM}>{r.selfMs.toFixed(2)}</td>
-            <td className={NUM}>{r.totalMs.toFixed(2)}</td>
-            <td className={NUM}>{r.calls.toLocaleString()}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   )
 }
 

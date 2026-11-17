@@ -62,7 +62,7 @@ export const UE_GUIDES: Record<string, Guide> = {
       '执行 Lua、检查语法、重载模块、看 Lua 报错、调 Lua 函数，在本机跑项目配好的 Lua 增量 / 全编译；快照点、性能采样、查 Lua 持有的已销毁对象',
     useWhen:
       'UnLua 项目里改完 .lua 要验证时按 check（或 compile 跑项目配好的编译）→ reload → 触发 → errors 走一遍，按返回的 文件:行 修；要调一个 Lua 函数用 action=call；ue_get / ue_set 做不到的复杂读写才用 exec；' +
-      '要看某行执行时的局部变量用 snap（不暂停游戏），Lua 卡顿找热点用 profile，界面关了对象释放不掉用 leaks；用户批准过的常用代码用 exec 带 snippet，不用确认',
+      '要看某行执行时的局部变量用 snap（不暂停游戏），Lua 卡顿粗看热点用 profile（要看哪一帧慢、从哪个 UE 回调进来，用 ue_perf kind=trace lua=true），界面关了对象释放不掉用 leaks；用户批准过的常用代码用 exec 带 snippet，不用确认',
     avoidWhen:
       '只读字段用 ue_get（functions=true 看函数），改简单字段用 ue_set（能撤回）；exec 每次都要用户确认，能用 call 就别用 exec',
     confirms: true,
@@ -146,14 +146,16 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_perf: {
     title: '性能抓取',
     summary: '看实时帧耗时，录 Insights trace、CSV Profiler，抓内存报告',
-    useWhen: '用户说卡顿、掉帧、内存涨时：先 live 看一眼，再按需要录 trace / CSV / memreport',
+    useWhen:
+      '用户说卡顿、掉帧、内存涨时：先 live 看一眼，再按需要录 trace / CSV / memreport；UnLua 项目的 Lua 慢也录 trace（lua=true，和 UE 作用域录在一起）',
     avoidWhen: '分析已经抓好的文件用 ue_capture',
     group: PERF,
   },
   ue_capture: {
     title: '分析抓取',
     summary: '对抓到的 trace、CSV、内存报告做摘要、下钻和两份对比',
-    useWhen: '有了抓取文件要找热点、卡顿帧或内存泄漏时；UE 不在运行也能用',
+    useWhen:
+      '有了抓取文件要找热点、卡顿帧或内存泄漏时；UE 不在运行也能用。含 Lua 的 trace 用 query what=timers lua=true、what=tree luaOnly=true',
     avoidWhen: 'delete 会请用户确认，确实不要了才删',
     confirms: true,
     group: PERF,

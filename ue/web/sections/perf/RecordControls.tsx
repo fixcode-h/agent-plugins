@@ -2,6 +2,7 @@ import { Bookmark, Circle, SlidersHorizontal, Square } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { h, t } from '../../host.ts'
+import { LuaChip, useLuaTrace, type LuaTrace } from './LuaChip.tsx'
 import type { Active } from './types.ts'
 
 export type RecordKind = 'trace' | 'csv'
@@ -12,6 +13,8 @@ export interface StartOpts {
   seconds: number
   channels?: string
   named?: boolean
+  /** trace 带不带 Lua（LuaChip.tsx）：和预设叠加 */
+  lua?: LuaTrace
 }
 
 /** 录制预设（设计 3.4，默认「标准」）：键和服务端 perf.ts 的 TRACE_PRESETS 一致；custom 是自己勾通道 */
@@ -40,13 +43,20 @@ const CHANNELS: { key: string; label: () => string; note?: () => string; group: 
   { key: 'stats', label: () => t('stat 统计'), note: () => t('stat 命令里的数值'), group: () => t('事件') },
   { key: 'screenshot', label: () => t('截图'), note: () => t('Trace.Screenshot 截的图'), group: () => t('事件') },
   { key: 'loadtime', label: () => t('加载'), note: () => t('包加载、异步加载'), group: () => t('加载与 IO') },
-  { key: 'assetloadtime', label: () => t('资源加载'), note: () => t('每个资源的加载耗时'), group: () => t('加载与 IO') },
+  {
+    key: 'assetloadtime',
+    label: () => t('资源加载'),
+    note: () => t('每个资源的加载耗时'),
+    group: () => t('加载与 IO'),
+  },
   { key: 'file', label: () => t('文件读写'), group: () => t('加载与 IO') },
   { key: 'net', label: () => t('网络'), note: () => t('Networking Insights'), group: () => t('加载与 IO') },
   { key: 'object', label: () => t('对象'), group: () => t('其他') },
   { key: 'animation', label: () => t('动画'), note: () => t('Animation Insights'), group: () => t('其他') },
   { key: 'rhicommands', label: () => t('RHI 命令'), note: () => t('开销大'), group: () => t('其他') },
   { key: 'rendercommands', label: () => t('渲染命令'), note: () => t('开销大'), group: () => t('其他') },
+  { key: 'lua', label: () => t('Lua 函数'), note: () => t('要 UELink 2.8 和 UnLua'), group: () => t('脚本') },
+  { key: 'luac', label: () => t('C 函数'), note: () => t('单独成块，要同时勾 lua'), group: () => t('脚本') },
   { key: 'memtag', label: () => t('内存标签'), note: () => t('UE 要用 -llm 启动'), group: () => t('内存') },
   {
     key: 'memory',
@@ -105,6 +115,7 @@ export function RecordControls({
   const [panel, setPanel] = useState(false)
   const anchor = useRef<HTMLSpanElement>(null)
   const [mark, setMark] = useState('')
+  const lua = useLuaTrace()
   const updateCustom = (v: { channels: string[]; named: boolean }) => {
     setCustom(v)
     saveCustom(v)
@@ -165,6 +176,7 @@ export function RecordControls({
           options={PRESETS.map((p) => ({ value: p.value, label: p.label() }))}
         />
       )}
+      {kind === 'trace' && <LuaChip lua={lua} />}
       {isCustom && (
         <span ref={anchor} className="ue:relative">
           <ui.Button size="sm" variant="secondary" onClick={() => setPanel((p) => !p)}>
@@ -185,6 +197,7 @@ export function RecordControls({
             kind,
             preset,
             seconds: 0,
+            ...(kind === 'trace' ? { lua: lua.value } : {}),
             ...(isCustom ? { channels: custom.channels.join(','), named: custom.named } : {}),
           })
         }
@@ -299,7 +312,9 @@ function ChannelPanel({
             onChange={() => onChange({ ...value, named: !value.named })}
           />
           {t('命名事件')}
-          <span className="ue:text-caption ue:text-subtle">{t('stat namedevents：蓝图函数、Tick 带具体名字，开销大些')}</span>
+          <span className="ue:text-caption ue:text-subtle">
+            {t('stat namedevents：蓝图函数、Tick 带具体名字，开销大些')}
+          </span>
         </label>
         <span className="ue:ml-auto">
           <ui.Button size="sm" variant="secondary" onClick={() => onChange({ channels: DEFAULT_CUSTOM, named: false })}>
@@ -328,6 +343,7 @@ export function RecordingPill({ active }: { active: Active }) {
         {mm}:{ss}
         {active.seconds ? ` / ${active.seconds} s` : ''}
       </span>
+      {active.lua && <span>· {t('含 Lua')}</span>}
       {!!active.seconds && (
         <span className="ue:h-1 ue:w-20 ue:overflow-hidden ue:rounded-full ue:bg-danger/15">
           <span

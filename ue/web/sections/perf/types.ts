@@ -12,11 +12,15 @@ export interface Capture {
   marks?: { at: number; name: string }[]
   imported?: boolean
   preset?: string
+  /** trace 录了 Lua 通道 */
+  lua?: boolean
 }
 export interface Active {
   id: string
   kind: 'csv' | 'trace'
   preset?: string
+  /** trace 录着 Lua 通道（页头显示「含 Lua」） */
+  lua?: boolean
   label: string
   seconds: number
   elapsed: number

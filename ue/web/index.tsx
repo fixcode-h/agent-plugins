@@ -137,10 +137,10 @@ const activate: ActivateWeb = (host) => {
       { id: 'link-diagnose', label: t('UE · 连接诊断'), tune: ['row', 'button'], Specimen: DiagSpecimen },
       // 配置页一个键的各层写法：跟面板「徽标」「行」的调节项
       { id: 'config-key', label: t('UE · 配置的分层'), tune: ['badge', 'row'], Specimen: ConfigKeySpecimen },
-      // Lua 页「调试」页签：采样表、快照记录、持有的已销毁对象，跟面板「行」「徽标」的调节项
+      // Lua 页「调试」页签：快照记录、持有的已销毁对象，跟面板「行」「徽标」的调节项
       {
         id: 'lua-debug',
-        label: t('Lua · 采样 · 快照 · 已销毁对象'),
+        label: t('Lua · 快照 · 已销毁对象'),
         tune: ['row', 'badge'],
         Specimen: LuaDebugSpecimen,
       },

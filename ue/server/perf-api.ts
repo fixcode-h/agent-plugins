@@ -27,6 +27,8 @@ export async function perfRoute(ctx: OpCtx, key: string, b: Record<string, unkno
         preset: s(b.preset),
         channels: s(b.channels),
         named: b.named === true,
+        // 网页上的 Lua 开关：true / false / 'noc'，没给时服务端按项目设置
+        lua: b.lua,
       })
     case 'POST perf/stop':
       return stopCapture(ctx, s(b.id) || undefined)
