@@ -136,7 +136,11 @@ export function connLine(s: ProjectState | undefined) {
   // 忙着的（同步加载等，进程活着只是不回应）不算连不上，单独显示
   const bad = live.filter((i) => !i.online && !i.busy)
   if (bad.length) return { tone: 'danger' as const, text: t('{n} 个进程连不上', { n: bad.length }) }
-  return busyConn(s) ?? { tone: 'ok' as const, text: t('已连接') }
+  const busy = busyConn(s)
+  if (busy) return busy
+  // UELink 2.7：连上了但编辑器还没就绪（主窗口没出来、在扫资源），读写可能卡住或拿到不全的结果
+  if (live.some((i) => i.online && i.ready === false)) return { tone: 'warn' as const, text: t('编辑器启动中…') }
+  return { tone: 'ok' as const, text: t('已连接') }
 }
 
 /**

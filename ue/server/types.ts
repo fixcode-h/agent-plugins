@@ -148,6 +148,8 @@ export interface Instance {
    * since 是第一次没回应的时间（毫秒时间戳）；kind / detail / line 是从日志尾部认出的在忙什么，quietSec 是日志多久没动
    */
   busy?: { since: number; kind?: string; detail?: string; line?: string; quietSec?: number }
+  /** 编辑器可用了没有（UELink 2.7 起）：false 表示连上了但还在启动（主窗口没出来、在扫资源）；旧 UELink 和非编辑器进程没有 */
+  ready?: boolean
   error?: string
   log?: string
   worlds: World[]

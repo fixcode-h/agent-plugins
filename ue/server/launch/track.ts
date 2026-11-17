@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { liveCards } from '../instances.ts'
+import { cardReady, liveCards } from '../instances.ts'
 import { logFile } from '../logs.ts'
 import type { LaunchProgress, UeProject } from '../types.ts'
 import { c, readJson, t, writeJson } from '../util.ts'
@@ -9,7 +9,8 @@ import { STAGES, estimate, scanLines, type LogScan } from './stages.ts'
 
 /**
  * 面板点「启动编辑器」之后跟着启动进度：每秒读一次项目日志新增的部分认阶段（stages.ts），
- * 编辑器的 UELink 写出名片（连上了）就算完成，进程中途退出算失败。
+ * 编辑器的 UELink 写出名片、并且名片说编辑器已就绪（UELink 2.7 的 ready；旧 UELink 没有这个字段，名片出现就算）才算完成，
+ * 进程中途退出算失败。进程活着就不判失败：启动时卡在加载、编着色器里一会儿很常见（用户 2026-11-17）。
  * 进度用插件推送通道推给网页（事件 ue-launch），网页不用轮询；刷新页面时从项目状态里取当前这一份。
  */
 export const LAUNCH_EVENT = 'ue-launch'
@@ -31,7 +32,8 @@ interface Track {
 const tracks = new Map<string, Track>()
 /** 完成 / 失败后在项目状态里留一会儿，刚刷新的页面也看得到结果 */
 const KEEP_MS = 8000
-const TIMEOUT_MS = 20 * 60 * 1000
+/** 进程活着但这么久还没就绪就不再跟进度（只是不跟了，不算失败：大项目首次编着色器可能要很久） */
+const TIMEOUT_MS = 60 * 60 * 1000
 /** 引擎初始化完了还等不到名片多久，就提示 UELink 没连上 */
 const NO_LINK_MS = 90 * 1000
 
@@ -101,15 +103,21 @@ async function tick(tr: Track) {
     (x) =>
       x.kind === 'editor' && (x.pid === tr.progress.pid || Date.parse(x.startedAt) >= tr.progress.startedAt - 5000),
   )
-  if (card) {
+  if (card && cardReady(card)) {
     await saveTime(tr.p.id, elapsed).catch(() => undefined)
     return finish(tr, 'ready')
   }
   await readNew(tr).catch(() => undefined)
   if (tr.exited !== undefined)
     return finish(tr, 'failed', t('编辑器启动后退出了（退出码 {code}），看 Saved/Logs 里的日志', { code: tr.exited }))
-  if (elapsed > TIMEOUT_MS) return finish(tr, 'failed', t('等了 20 分钟编辑器还没连上，不再跟进度'))
+  if (elapsed > TIMEOUT_MS) return finish(tr, 'failed', t('等了 60 分钟编辑器还没就绪，不再跟进度'))
   const { scan } = tr
+  // 名片出来了（UELink 连上）但编辑器还没就绪：至少走到最后一段，也不再提示 UELink 没连上
+  if (card)
+    scan.stage = Math.max(
+      scan.stage,
+      STAGES.findIndex((s) => s.id === 'final'),
+    )
   if (scan.stage >= STAGES.findIndex((s) => s.id === 'engine')) tr.engineDoneAt ??= Date.now()
   tr.progress = {
     ...tr.progress,
@@ -120,7 +128,7 @@ async function tick(tr: Track) {
     waiting:
       scan.rebuildAt !== undefined
         ? 'rebuild'
-        : tr.engineDoneAt && Date.now() - tr.engineDoneAt > NO_LINK_MS
+        : !card && tr.engineDoneAt && Date.now() - tr.engineDoneAt > NO_LINK_MS
           ? 'link'
           : undefined,
   }
