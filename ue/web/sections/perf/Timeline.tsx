@@ -1,8 +1,10 @@
-import { ChevronRight, Copy, Crosshair, GitFork, Highlighter, Layers, Maximize2, Scan, Search, X, ZoomIn } from 'lucide-react'
+import { ChevronRight, Copy, Crosshair, ExternalLink, Flame, GitFork, Highlighter, Layers, Maximize2, Scan, Search, X, ZoomIn } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
 import { readTheme, setup, tickLabel, tickStep, useThemeTick, useWidth } from './canvas.ts'
 import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { luaFullSource, luaOf, useLuaTrace } from './lua-trace.ts'
+import { luaFill } from './lua-paint.ts'
 import { fmtAt, fmtMs } from './parts.tsx'
 import type { PanelActions } from './TracePanels.tsx'
 import {
@@ -89,6 +91,9 @@ export function Timeline({
   const [sel, setSel] = useState<{ a: number; b: number }>()
   const viewRef = useRef(view)
   viewRef.current = view
+  // Lua 一层：Lua 块用蓝紫配色、只看 Lua 时别的块变淡、C 函数并进调用者时不画 C 函数块（lua-paint.ts）
+  const lua = useLuaTrace()
+  const hiddenC = (timerId: number) => lua.mergeC && !!luaOf(lua, timerId)?.c
 
   const byLane = useMemo(() => new Map((timing?.lanes ?? []).map((l) => [l.id, l])), [timing])
   const layout = useMemo(() => {
@@ -204,7 +209,10 @@ export function Timeline({
         const bw = Math.max(1, Math.min(w + 1, x1) - bx)
         const by = y0 + d * ROW
         const name = timing?.names[String(b.t[i])] ?? ''
-        g.fillStyle = blockColor(name, th.dark)
+        if (hiddenC(b.t[i])) continue
+        const lx = luaOf(lua, b.t[i])
+        g.globalAlpha = lua.luaOnly && !lx ? 0.28 : 1
+        g.fillStyle = lx ? luaFill(g, name, th.dark, lx.c) : blockColor(name, th.dark)
         g.fillRect(bx, by, bw, ROW - 1)
         if (b.ms[i] > budget) {
           g.strokeStyle = th.danger
@@ -226,6 +234,7 @@ export function Timeline({
           g.fillText(bw > 90 ? `${name} (${fmtMs(b.ms[i])})` : name, Math.max(bx, 0) + 3, by + ROW / 2)
           g.restore()
         }
+        g.globalAlpha = 1
       }
     }
     // 选中的块
@@ -286,7 +295,7 @@ export function Timeline({
       g.fillText(label, mid - lw / 2 + 5, (RULER - FRAME_ROW) / 2)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- xOf 由 view / w 算出，列它们就够
-  }, [w, layout, timing, view, range, sel, frames, marks, budget, timer, picked, theme, showWorkers])
+  }, [w, layout, timing, view, range, sel, frames, marks, budget, timer, picked, theme, showWorkers, lua])
 
   // ---------- 交互 ----------
   /** 鼠标下是哪一块 */
@@ -300,7 +309,7 @@ export function Timeline({
     // 最小点中宽度 2 像素：很窄的块也点得到
     const slack = (2 / Math.max(w, 1)) * span
     for (let i = 0; i < b.s.length; i++) {
-      if (b.d[i] !== depth) continue
+      if (b.d[i] !== depth || hiddenC(b.t[i])) continue
       const e = b.s[i] + b.ms[i] / 1000
       if (b.s[i] - slack <= s && s <= e + slack)
         return {
@@ -356,11 +365,20 @@ export function Timeline({
   }
 
   // ---------- 右键菜单 ----------
-  const blockMenu = (b: PickedBlock): MenuItem[] => {
+  const blockMenu = (b: PickedBlock): Parameters<typeof openMenu>[1] => {
     const e = b.time + b.ms / 1000
     const lane = [...main, ...workers].find((l) => l.id === b.lane)?.name ?? ''
+    const lx = luaOf(lua, b.timer)
     return [
       { title: `${b.name} · ${fmtMs(b.ms)}` },
+      lx &&
+        !lx.c && {
+          label: t('打开 Lua 源码'),
+          icon: ExternalLink,
+          hint: luaFullSource(lx).split('/').pop(),
+          onClick: () => lua.open(lx.file, lx.line),
+        },
+      { label: t('火焰图：从它往下'), icon: Flame, onClick: () => actions.flame(b.timer, b.name) },
       { label: t('看调用堆栈'), icon: Layers, onClick: () => onPick(b) },
       { label: t('缩放到这一块'), icon: ZoomIn, hint: 'F', onClick: () => zoomTo(b.time, e) },
       { label: t('设为分析范围'), icon: Scan, hint: t('双击'), onClick: () => onRange({ t0: b.time, t1: e }) },
@@ -501,6 +519,7 @@ export function Timeline({
           b={hover.b}
           ctx={blockContext(byLane.get(hover.b.lane), hover.i, timing?.names ?? {})}
           lane={[...main, ...workers].find((l) => l.id === hover.b.lane)?.name ?? ''}
+          source={luaFullSource(luaOf(lua, hover.b.timer)) || (luaOf(lua, hover.b.timer)?.c ? 'C' : '')}
           budget={budget}
           left={Math.min(hover.x + 14, Math.max(0, w - 300))}
           top={hover.y - (scroller.current?.scrollTop ?? 0) + 16}
@@ -554,6 +573,7 @@ function BlockTip({
   b,
   ctx,
   lane,
+  source,
   budget,
   left,
   top,
@@ -561,6 +581,8 @@ function BlockTip({
   b: PickedBlock
   ctx?: BlockCtx
   lane: string
+  /** Lua 计时器的来源（文件:行），C 函数是「C」 */
+  source?: string
   budget: number
   left: number
   top: number
@@ -568,6 +590,7 @@ function BlockTip({
   const { cn } = h()
   const pct = (v: number, of: number) => `${((v / Math.max(of, 1e-9)) * 100).toFixed(2)}%`
   const rows: [string, ReactNode][] = []
+  if (source) rows.push([t('来源'), <span className="ue:text-accent-text">{source === 'C' ? t('C 函数') : source}</span>])
   if (ctx?.parent)
     rows.push([
       t('占父'),

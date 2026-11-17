@@ -53,6 +53,10 @@ export interface TimerRow {
   inclMax: number
   excl: number
   gpu?: boolean
+  /** Lua 计时器的来源（桥接 2.8.0 起，接口约定 9.2）：.lua 完整路径和定义行；C 函数文件是 `<lua:C>`、带 c */
+  file?: string
+  line?: number
+  c?: boolean
 }
 export interface StackRow {
   id: number

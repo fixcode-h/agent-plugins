@@ -25,6 +25,8 @@ export interface CaptureMeta {
   pid?: number
   /** trace 的录制预设 */
   preset?: string
+  /** trace 录制时带了 Lua 通道（抓取列表据此打「Lua」标签；开始录制时记） */
+  lua?: boolean
 }
 
 export interface Capture extends CaptureMeta {
@@ -200,6 +202,7 @@ const brief = (cap: Capture) => ({
   marks: cap.marks?.length ? cap.marks : undefined,
   imported: cap.imported,
   preset: cap.preset,
+  lua: cap.lua || undefined,
 })
 
 export async function captureList(p: UeProject, kind?: string, limit = 30) {

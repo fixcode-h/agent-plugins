@@ -1,18 +1,22 @@
-import { Maximize2, MessageSquare } from 'lucide-react'
+import { Maximize2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { SplitHandle, usePane } from '../../split.tsx'
 import { ErrorText, LinkBtn, Note } from '../../ui.tsx'
-import { FrameStrip } from './FrameStrip.tsx'
-import { Empty, Section, Skeleton, Tabs, fmtAt, fmtMs } from './parts.tsx'
-import { StatsBar, type StatItem } from './StatsBar.tsx'
+import { useOpenLua } from '../lua/open-file.ts'
+import { FramesSection } from './FramesSection.tsx'
+import { LUA_COUNTERS, LuaTraceCtx, useLuaFrames, useLuaInfo, type LuaTrace } from './lua-trace.ts'
+import { LuaToggles } from './LuaToggles.tsx'
+import { LowerPane, type Lower } from './LowerPane.tsx'
+import { Section, Skeleton, Tabs, fmtMs } from './parts.tsx'
+import { StatsBar } from './StatsBar.tsx'
 import { Timeline } from './Timeline.tsx'
-import { ZoomControls } from './ZoomControls.tsx'
 import { TimersTable } from './TimersTable.tsx'
 import { Counters, TraceLog } from './TraceExtras.tsx'
-import { CallTree, InstancesView, StackView, type PanelActions } from './TracePanels.tsx'
+import type { PanelActions } from './TracePanels.tsx'
+import { BUDGET, traceSummary } from './trace-summary.ts'
 import {
   orderLanes,
   traceQuery,
@@ -27,9 +31,6 @@ import {
   type TraceFrames,
 } from './trace.ts'
 import type { Capture } from './types.ts'
-
-/** stat unit 的默认阈值（t.TargetFrameTimeThreshold / t.UnacceptableFrameTimeThreshold），trace 里读不到项目改过的值 */
-const BUDGET = { target: 33.9, unacceptable: 50 }
 
 /**
  * 一份 trace 的详情（性能页设计 4、效果图 2）：顶上摘要读数条，下面帧条（拖选分析范围）、时间轴（函数调用堆栈），
@@ -103,7 +104,17 @@ function TraceBody({
   const [picked, setPicked] = useState<PickedBlock>()
   const [timer, setTimer] = useState<{ id: number; name: string }>()
   const [tab, setTab] = useState<'timers' | 'counters' | 'log'>('timers')
-  const [lower, setLower] = useState<'stack' | 'tree' | 'inst'>('tree')
+  const [lower, setLower] = useState<Lower>('tree')
+  const [selFrame, setSelFrame] = useState<number>()
+  // Lua 一层（Lua 性能 Insights 化设计 5）：luainfo 认 Lua 计时器，三个计数器按帧对齐；没有 Lua 时都是空的，界面和以前一样
+  const luaInfo = useLuaInfo(project.id, id, growing ? Math.floor(rev / 10) : -1)
+  const [luaOnly, setLuaOnly] = useState(false)
+  const [mergeC, setMergeC] = useState(false)
+  const openLua = useOpenLua()
+  const lua: LuaTrace = useMemo(
+    () => ({ info: luaInfo, luaOnly, setLuaOnly, mergeC, setMergeC, open: openLua }),
+    [luaInfo, luaOnly, mergeC, openLua],
+  )
   const [showWorkers, setShowWorkers] = useState(false)
   const pane = usePane('perf-trace', '38%', 300)
   const paneRef = useRef<HTMLElement>(null)
@@ -133,6 +144,7 @@ function TraceBody({
 
   // 一打开先看最慢的那一帧：比从第 0 秒开始看更有用。数据还在长时只跳一次，不然每次刷新都把用户拽回去
   const f = frames.data
+  const luaFrames = useLuaFrames(project.id, id, f?.start, duration, luaInfo.lua)
   const jumped = useRef('')
   useEffect(() => {
     if (!f?.ms.length || jumped.current === id) return
@@ -167,8 +179,19 @@ function TraceBody({
     const pad = Math.max((t1 - t0) * 0.08, 1e-6)
     setViewState({ t0: Math.max(0, t0 - pad), t1: t1 + pad })
   }
+  // 选中一帧（帧条单击、按 Lua 用时挑一帧）：时间轴跳过去
+  const pickFrame = (i: number) => {
+    if (!f || f.start[i] === undefined) return
+    setSelFrame(i)
+    zoom(f.start[i], f.start[i] + f.ms[i] / 1000)
+  }
   const actions: PanelActions = {
     pickTimer,
+    selectTimer: (tid, name) => setTimer({ id: tid, name }),
+    flame: (tid, name) => {
+      setTimer({ id: tid, name })
+      setLower('flame')
+    },
     slowest: (tid, name) => {
       setTimer({ id: tid, name })
       setLower('inst')
@@ -183,12 +206,21 @@ function TraceBody({
   const laneName = (lane: number) => threads.find((x) => x.id === lane)?.name ?? String(lane)
 
   const items = useMemo(
-    () => summary(f, duration, threads.length, marks.data?.items.length ?? 0, range),
-    [f, duration, threads.length, marks.data, range],
+    () =>
+      traceSummary(f, duration, threads.length, marks.data?.items.length ?? 0, range, luaFrames, () => {
+        if (!f || !luaFrames) return
+        let worst = 0
+        for (let i = 1; i < luaFrames.ms.length; i++) if (luaFrames.ms[i] > luaFrames.ms[worst]) worst = i
+        pickRange({ t0: f.start[worst], t1: f.start[worst] + f.ms[worst] / 1000 })
+        setSelFrame(worst)
+      }),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- pickRange 只用 setter
+    [f, duration, threads.length, marks.data, range, luaFrames],
   )
   const r = range ?? { t0: 0, t1: duration }
 
   return (
+    <LuaTraceCtx.Provider value={lua}>
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-fade">
       <StatsBar items={items} badge={range ? t('区间') : 'trace'} />
       {growing && (
@@ -200,60 +232,30 @@ function TraceBody({
       )}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:lg:flex-row">
         <div className="ue:flex ue:min-h-[420px] ue:min-w-0 ue:flex-1 ue:flex-col">
-          <Section
-            title={t('帧')}
-            aside={
-              <span className="ue:flex ue:items-center ue:gap-2 ue:text-caption ue:text-subtle">
-                {range ? (
-                  <>
-                    <span className="ue:font-mono">
-                      {fmtAt(range.t0)} – {fmtAt(range.t1)} · {fmtMs((range.t1 - range.t0) * 1000)}
-                    </span>
-                    <LinkBtn onClick={() => pickRange(undefined)}>{t('整段')}</LinkBtn>
-                  </>
-                ) : (
-                  <span>
-                    {t('拖选一段设为分析范围')}
-                    <span className="ue:hidden ue:xl:inline"> · {t('滚轮缩放 · 右键拖动平移')}</span>
-                  </span>
-                )}
-                <ZoomControls win={strip} duration={duration} onWin={setStrip} />
-              </span>
-            }
-          >
-            <div className="ue:px-3 ue:py-2">
-              {frames.error ? (
-                <div className="ue:flex ue:items-center ue:gap-2">
-                  <div className="ue:min-w-0 ue:flex-1">
-                    <ErrorText>{t('读不到帧：{msg}', { msg: frames.error })}</ErrorText>
-                  </div>
-                  <LinkBtn onClick={() => void frames.reload()}>{t('重试')}</LinkBtn>
-                </div>
-              ) : f ? (
-                <FrameStrip
-                  start={f.start}
-                  ms={f.ms}
-                  duration={duration}
-                  range={range}
-                  view={view}
-                  win={strip}
-                  onWin={setStrip}
-                  marks={marks.data?.items ?? []}
-                  budget={BUDGET}
-                  onRange={pickRange}
-                  onZoom={(x) => zoom(x.t0, x.t1)}
-                />
-              ) : (
-                <Skeleton rows={2} />
-              )}
-            </div>
-          </Section>
+          <FramesSection
+            frames={f}
+            error={frames.error}
+            onRetry={() => void frames.reload()}
+            duration={duration}
+            range={range}
+            view={view}
+            strip={strip}
+            setStrip={setStrip}
+            marks={marks.data?.items ?? []}
+            budget={BUDGET}
+            lua={luaFrames}
+            selected={selFrame}
+            onSelect={pickFrame}
+            onRange={pickRange}
+            onZoom={(x) => zoom(x.t0, x.t1)}
+          />
           <Section
             className="ue:min-h-0 ue:flex-1 ue:border-t ue:border-line"
             title={t('时间轴')}
             aside={
               <span className="ue:flex ue:items-center ue:gap-3 ue:text-caption ue:text-subtle">
-                <span className="ue:hidden ue:xl:inline">
+                <LuaToggles />
+                <span className={luaInfo.lua ? 'ue:hidden ue:min-[1900px]:inline' : 'ue:hidden ue:xl:inline'}>
                   {t('滚轮缩放 · 拖动平移 · 刻度条上拖选范围 · F 缩放到选中 · 右键更多')}
                 </span>
                 <span className="ue:font-mono">{fmtMs((view.t1 - view.t0) * 1000)}</span>
@@ -317,7 +319,14 @@ function TraceBody({
                   actions={{ onPick: (x) => pickTimer(x.id, x.name), onSlowest: (x) => actions.slowest(x.id, x.name) }}
                 />
               )}
-              {tab === 'counters' && <Counters id={id} range={range} duration={duration} />}
+              {tab === 'counters' && (
+                <Counters
+                  id={id}
+                  range={range}
+                  duration={duration}
+                  defaults={luaInfo.lua ? [...LUA_COUNTERS] : undefined}
+                />
+              )}
               {tab === 'log' && (
                 <TraceLog
                   id={id}
@@ -330,76 +339,25 @@ function TraceBody({
               )}
             </div>
           </div>
-          <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:border-t ue:border-line">
-            {timer && (
-              <Tabs
-                value={lower === 'stack' && !picked ? 'tree' : lower}
-                onChange={setLower}
-                items={[
-                  { key: 'tree', label: t('调用者 / 被调用者') },
-                  ...(picked ? [{ key: 'stack' as const, label: t('调用堆栈') }] : []),
-                  { key: 'inst', label: t('每次调用') },
-                ]}
-              />
-            )}
-            <div
-              key={`${lower}-${timer?.id}`}
-              className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-fade"
-            >
-              {lower === 'stack' && picked ? (
-                <StackView
-                  key={`${picked.lane}-${picked.time}`}
-                  id={id}
-                  block={picked}
-                  laneName={laneName(picked.lane)}
-                  onDepth={(d) => setPicked({ ...picked, depth: d })}
-                  actions={actions}
-                />
-              ) : lower === 'inst' && timer ? (
-                <InstancesView
-                  id={id}
-                  range={range}
-                  timer={timer.id}
-                  name={timer.name}
-                  laneName={laneName}
-                  actions={actions}
-                />
-              ) : timer ? (
-                <CallTree id={id} range={range} timer={timer.id} name={timer.name} actions={actions} />
-              ) : (
-                <Empty>
-                  {t(
-                    '选一段时间（帧条或时间轴刻度条上拖），再在计时器表里点一行看调用者 / 被调用者；在时间轴上点一块看它的调用堆栈',
-                  )}
-                </Empty>
-              )}
-            </div>
-            {onAgent && (
-              <div className="ue:border-t ue:border-line ue:px-3 ue:py-2">
-                <LinkBtn
-                  onClick={() =>
-                    onAgent(
-                      [
-                        `分析范围：${fmtAt(r.t0)} – ${fmtAt(r.t1)}（ue_capture 的 from=${r.t0.toFixed(4)} to=${r.t1.toFixed(4)}）`,
-                        timer ? `我在看的计时器：${timer.name}（id ${timer.id}）` : '',
-                        picked
-                          ? `点中的块：${laneName(picked.lane)} 线程 ${fmtAt(picked.time)}，${picked.name} ${fmtMs(picked.ms)}`
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join('\n'),
-                    )
-                  }
-                >
-                  <MessageSquare className="ue:h-3.5 ue:w-3.5" /> {t('让 Agent 分析这段')}
-                </LinkBtn>
-              </div>
-            )}
-          </div>
+          <LowerPane
+            id={id}
+            range={range}
+            whole={r}
+            timer={timer}
+            picked={picked}
+            setPicked={setPicked}
+            lower={lower}
+            setLower={setLower}
+            hasLua={luaInfo.lua}
+            laneName={laneName}
+            actions={actions}
+            onAgent={onAgent}
+          />
         </aside>
       </div>
       {f && f.total > f.start.length && <Note tone="info">{t('帧太多，只读了前 {n} 帧', { n: f.start.length })}</Note>}
     </div>
+    </LuaTraceCtx.Provider>
   )
 }
 
@@ -415,61 +373,4 @@ function WidthProbe({ onWidth }: { onWidth: (w: number) => void }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 只挂一次，回调只写 ref
   }, [])
   return <div ref={ref} className="ue:h-0 ue:w-full" />
-}
-
-/** 摘要读数条：帧数、平均 / P95 / 最慢、FPS、卡顿帧数、时长、线程、书签 */
-function summary(
-  f: TraceFrames | undefined,
-  duration: number,
-  threads: number,
-  marks: number,
-  range?: Range,
-): StatItem[] {
-  // 有分析范围时只算和范围有重叠的帧（一帧比范围还长时也算上它）
-  const ms =
-    range && f ? f.ms.filter((m, i) => f.start[i] < range.t1 && f.start[i] + m / 1000 > range.t0) : (f?.ms ?? [])
-  const sorted = [...ms].sort((a, b) => a - b)
-  const avg = ms.length ? ms.reduce((s, x) => s + x, 0) / ms.length : undefined
-  const p95 = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : undefined
-  const max = sorted.at(-1)
-  const hitches = ms.filter((x) => x > BUDGET.unacceptable).length
-  const lv = (v?: number) =>
-    (v === undefined
-      ? 'none'
-      : v > BUDGET.unacceptable
-        ? 'bad'
-        : v > BUDGET.target
-          ? 'warn'
-          : 'ok') as StatItem['level']
-  // 走势线：按 60 段取最大值
-  const spark = (() => {
-    if (ms.length < 2) return []
-    const n = Math.min(60, ms.length)
-    const out: number[] = []
-    for (let i = 0; i < n; i++) {
-      const a = Math.floor((i * ms.length) / n)
-      const b = Math.max(a + 1, Math.floor(((i + 1) * ms.length) / n))
-      out.push(Math.max(...ms.slice(a, b)))
-    }
-    return out
-  })()
-  return [
-    { key: 'avg', label: t('平均帧'), value: avg?.toFixed(1), unit: 'ms', level: lv(avg), spark },
-    { key: 'p95', label: 'P95', value: p95?.toFixed(1), unit: 'ms', level: lv(p95) },
-    { key: 'max', label: t('最慢'), value: max?.toFixed(1), unit: 'ms', level: lv(max) },
-    { key: 'fps', label: 'FPS', value: avg ? (1000 / avg).toFixed(0) : undefined },
-    {
-      key: 'hitch',
-      label: t('卡顿帧'),
-      value: f ? String(hitches) : undefined,
-      level: hitches ? 'bad' : 'ok',
-      title: t('超过 {n} ms 的帧', { n: BUDGET.unacceptable }),
-    },
-    { key: 'frames', label: t('帧数'), value: f ? (range ? ms.length : f.total).toLocaleString() : undefined },
-    range
-      ? { key: 'dur', label: t('区间'), value: fmtMs((range.t1 - range.t0) * 1000) }
-      : { key: 'dur', label: t('时长'), value: duration.toFixed(1), unit: 's' },
-    { key: 'threads', label: t('线程'), value: String(threads) },
-    { key: 'marks', label: t('书签'), value: String(marks) },
-  ]
 }

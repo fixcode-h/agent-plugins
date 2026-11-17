@@ -12,6 +12,8 @@ export interface Capture {
   marks?: { at: number; name: string }[]
   imported?: boolean
   preset?: string
+  /** 录制时带了 Lua 通道 */
+  lua?: boolean
 }
 export interface Active {
   id: string
