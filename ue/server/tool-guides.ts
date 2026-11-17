@@ -129,9 +129,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_editor: {
     title: '编辑器控制',
-    summary: '启动编辑器、开停 PIE、Live Coding、后台编辑器，在关卡里放和删 Actor',
+    summary: '启动编辑器并等它可用、开停 PIE、Live Coding、后台编辑器，在关卡里放和删 Actor',
     useWhen:
-      '要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时；用户让你在关卡里摆测试场景、放或删某个 Actor 时用 spawn / destroy',
+      '启动编辑器后（start_editor，或 ue_vs_debug / UEToVS 的 start）要等它能用时调 wait_ready，不要用 sleep 或调试器的 wait 干等；要运行游戏复现问题（pie_start）、改了 C++ 要热重载（livecoding）、编辑器没开但要读资源时；用户让你在关卡里摆测试场景、放或删某个 Actor 时用 spawn / destroy',
     avoidWhen:
       '完整编译 C++ 用面板的 request_build，结果会推回来；新建资源（蓝图、DataTable）用 ue_asset create，不是 spawn；运行中的游戏里生成对象用 ue_call / ue_gm；要写进测试场景、能回放的开停 PIE 用 ue_gametest 的 pie.start / pie.stop 步骤',
     confirms: true,

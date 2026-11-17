@@ -36,7 +36,7 @@ export const VS_TOOLS = [
       'stop 停止调试并结束 UE（detach=true 只断开、UE 继续跑）；restart 重启调试；attach 附加到已在跑的 UE（pid，或 name 默认 UnrealEditor）；' +
       'build 只编译启动项目（之后 wait 看 buildDone / buildFailed 和 buildErrors）；pause 全部中断；continue 继续（waitMs>0 等下一次停下）；' +
       'step 单步（kind=into / over / out / toLine，toLine 给 file+line；默认等到停下返回新位置）；wait 等到停下 / 退出 / 编译完（timeoutMs 最多 120000，默认 30000）。' +
-      'VS 没开时 start / attach / build 会先打开 VS 和解决方案（最多等 3 分钟）。start / restart 前会先关掉后台编辑器（同时只开一个编辑器）。stop / restart 会请用户确认。',
+      'VS 没开时 start / attach / build 会先打开 VS 和解决方案（最多等 3 分钟）。start / restart 前会先关掉后台编辑器（同时只开一个编辑器）；启动后等编辑器能用调 ue_editor action=wait_ready，不要用 wait 干等。stop / restart 会请用户确认。',
     {
       action: { type: 'string', enum: [...SESSION_OPS] },
       configuration: {
