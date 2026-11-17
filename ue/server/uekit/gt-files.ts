@@ -83,7 +83,7 @@ async function writeWithName(abs: string, doc: Record<string, unknown>, name: st
 }
 
 /**
- * 把第 index 步起的几步换成新的步骤（GameTest 页「转成控件步骤」）。expect 是网页看到的原步骤：文件在这期间被改过
+ * 把第 index 步起的几步换成新的步骤（GameTest 页「转成控件步骤」、步骤右键的插入和删除、「回放怎么认」）。expect 是网页看到的原步骤：文件在这期间被改过
  * （重新录制、Agent 改了）就对不上，报错让用户刷新，不按行号硬改。
  * 新步骤是 GameTest 1.1 的写法（click 走真实指针）：schemaVersion 1 的文件顺带升到 2，并给原有没写 via 的
  * click / type 补上 via:"code"——和 GameTest 读 v1 文件时做的一样，旧步骤行为不变
@@ -93,7 +93,8 @@ async function replaceSteps(abs: string, rel: string, doc: Record<string, unknow
   const index = Number(b.index)
   const expect = Array.isArray(b.expect) ? b.expect : []
   const next = Array.isArray(b.steps) ? (b.steps as Record<string, unknown>[]) : []
-  if (!Number.isInteger(index) || index < 0 || !expect.length || !next.length)
+  // steps 可以是空数组：步骤右键「删除这一步」；插入新步骤是把原步骤换成 [新步骤, 原步骤] 或 [原步骤, 新步骤]
+  if (!Number.isInteger(index) || index < 0 || !expect.length || !Array.isArray(b.steps))
     throw new BridgeError(t('替换步骤缺参数：index、expect、steps'))
   // 网页拿到的步骤经过 readScenario 的整理（action 排在最前），这里照样整理再比，字段顺序不同不算改过
   const same = (x: unknown) => JSON.stringify(x && typeof x === 'object' ? { action: '', ...x } : x)

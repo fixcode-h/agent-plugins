@@ -8,6 +8,7 @@ import { Note, Term } from '../../ui.tsx'
 import { evidenceOf, GtEvidence, type GtEvidenceData } from './GtEvidence.tsx'
 import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
 import { stepTitle } from './gt-step-title.ts'
+import { GtMatchMode } from './GtMatchMode.tsx'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -117,10 +118,15 @@ export function StepDetail({
   row,
   live,
   scenario,
+  root,
+  onChanged,
 }: {
   row: StepRow
   live?: boolean
   scenario?: { name: string; relativePath: string }
+  /** 场景根（相对项目）：给了它和 onChanged 才能在详情里改这一步（「回放怎么认」） */
+  root?: string
+  onChanged?: () => void
 }) {
   const { project } = useUe()
   const { api } = h()
@@ -174,6 +180,16 @@ export function StepDetail({
       {(hint || ambiguous) && (
         <Block title={t('控件')}>
           {hint && <HintFields hint={hint} />}
+          {def && scenario && root !== undefined && onChanged && !live && (
+            <GtMatchMode
+              project={project.id}
+              root={root}
+              path={scenario.relativePath}
+              index={row.i}
+              def={def}
+              onChanged={onChanged}
+            />
+          )}
           {ambiguous && (
             <Note>
               {t(
