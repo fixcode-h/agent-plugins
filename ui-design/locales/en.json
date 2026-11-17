@@ -929,5 +929,13 @@
   "鼠标悬停": "On hover",
   "（空）": "(empty)",
   "，修改意见写在右边的对话框里发送": ", and write your notes in the chat on the right",
-  "只在 UI 设计页的 AI 对话里（每轮一个会话，只能改这份设计）": "Only in AI conversations on the UI Design page (one session per turn, limited to this design)"
+  "只在 UI 设计页的 AI 对话里（每轮一个会话，只能改这份设计）": "Only in AI conversations on the UI Design page (one session per turn, limited to this design)",
+  "设计放在 UI 项目里，这个项目里还没有。先建一个吧，一般一个游戏一个，美术提示词也设在 UI 项目上。": "Designs live in UI projects, and this project has none yet. Create one first — usually one per game; art prompts are set on the UI project too.",
+  "「{name}」已归到这个项目": "\"{name}\" now belongs to this project",
+  "还没归到项目的 UI 项目（升级前建的，或原来的项目已删除）": "UI projects not assigned to a project (created before the upgrade, or their project was deleted)",
+  "其他 UI 项目": "Other UI projects",
+  "把「{name}」归到这个项目": "Move \"{name}\" into this project",
+  "归到这个项目": "Move into this project",
+  "UI 项目": "UI projects",
+  "这个项目里还没有 UI 项目。设计放在 UI 项目里，一般一个游戏一个。": "No UI projects in this project yet. Designs live in UI projects, usually one per game."
 }

@@ -2509,5 +2509,21 @@
   "「>」之后从这个嵌套界面自己的控件树根开始找": "After \">\", the path starts at this nested widget's own root",
   "进入": "Enter",
   "按位置写的：容器里顺序变了会指到别的控件": "Position-based: points to another widget if the container order changes",
-  "第 {n} 个": "#{n}"
+  "第 {n} 个": "#{n}",
+  "前置步骤": "Setup steps",
+  "每次从场景文件跑都先跑这几步（写法和场景步骤一样），用来清引导、重置任务、发道具，让回放从同一个存档状态开始。场景写 \"setup\": false 的跳过；「从这一步开始运行」不跑。需要 GameTest 1.2.5。": "Run before every scenario file (same format as scenario steps) to reset tutorials, quests or items so each replay starts from the same save state. Scenarios with \"setup\": false skip them; \"Run from this step\" doesn't run them. Requires GameTest 1.2.5.",
+  "随机种子": "Random seed",
+  "填整数时每次开跑前固定引擎的全局随机（蓝图 Random 节点、FMath::Rand）；游戏自己的随机流、Lua 的 math.random 管不到，用前置步骤里的 GM 固定。空着不固定。": "An integer fixes the engine's global random (Blueprint Random nodes, FMath::Rand) before each run; the game's own random streams and Lua math.random aren't affected, fix those with a GM in setup steps. Leave empty to not fix it.",
+  "不固定": "Not fixed",
+  "前置步骤 {n} 步": "{n} setup steps",
+  "有失败，场景没开始": "Failed, scenario didn't start",
+  "都完成了": "All done",
+  "前置第 {n} 步": "Setup step {n}",
+  "自动滚动：{r}": "Auto-scrolled: {r}",
+  "录制分辨率": "Recorded resolution",
+  "GM：重置状态": "GM: reset state",
+  "前置步骤不是合法的 JSON：{e}": "Setup steps are not valid JSON: {e}",
+  "前置步骤要写成数组：[ {\"action\": ...}, ... ]": "Setup steps must be an array: [ {\"action\": ...}, ... ]",
+  "前置步骤第 {n} 条要是对象并且有 action": "Setup step {n} must be an object with an action",
+  "随机种子要填整数，不固定就空着": "Random seed must be an integer, or leave it empty"
 }

@@ -5,11 +5,12 @@ import type { ActivateServer } from '../../sdk/server.ts'
 import type { Project } from '../shared/schema.ts'
 import { DATA_DIR, dataPath, readJson } from './store.ts'
 import { designsApi, setDesignsDir } from './designs.ts'
+import { adoptOwnersOnce } from './design-owners.ts'
 import { TOOLS } from './design-mcp.ts'
 import { DESIGN_GUIDES, DESIGN_SUMMARY } from './design-tool-guides.ts'
 
 /**
- * UI 设计插件的服务端入口（面板插件接口 4，ADR 0059）：设计的全部接口挂在 /api/plugins/ui-design/api/designs/ 下，
+ * UI 设计插件的服务端入口（面板插件接口 4，ADR 0059；1.4.0 起按项目启用，UI 项目归到面板项目，见 design-owners.ts）：设计的全部接口挂在 /api/plugins/ui-design/api/designs/ 下，
  * AI 改设计用的 design 工具走面板的插件 MCP（design-mcp.ts）。
  *
  * 数据：插件自己的数据目录 plugin-data/ui-design/designs/。以前面板自带 UI 设计时数据在数据目录的 designs/，
@@ -52,7 +53,21 @@ const activate: ActivateServer = async (ctx) => {
   const dir = path.join(ctx.dataDir, 'designs')
   await migrate(dir, ctx.log.info)
   setDesignsDir(dir)
-  const designs = designsApi({ projects })
+  const enable = async (id: string) => {
+    try {
+      await ctx.projects.enable(id)
+    } catch (e) {
+      // 面板项目已经删了时不报错，UI 项目照旧在「其他 UI 项目」里
+      ctx.log.warn('UI 设计：在项目里打开插件失败', { project: id, error: (e as Error).message })
+    }
+  }
+  const designs = designsApi({
+    projects,
+    enable,
+    adopt: (list) => adoptOwnersOnce(list, { dataDir: ctx.dataDir, panel: projects.list, enable, log: ctx.log.info }),
+  })
+  // 按项目启用（1.4.0）：启动时就归一次，不然没在任何项目里打开时页面进不去、永远轮不到归属
+  void designs.loadProjects().catch((e) => ctx.log.warn('UI 设计：读 UI 项目失败', { error: (e as Error).message }))
   const app = new Hono().route('/designs', designs.routes)
   return {
     fetch: (req) => app.fetch(req),

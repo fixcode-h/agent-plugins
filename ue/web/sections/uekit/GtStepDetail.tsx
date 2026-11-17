@@ -24,6 +24,8 @@ export interface GtStep {
   note?: string
   payload?: Record<string, unknown>
   durationMs?: number
+  /** 运行配置里的前置步骤（GameTest 1.2.5）：index 是它在前置步骤里的序号，不对应场景的步骤 */
+  setup?: boolean
 }
 
 export interface StepDef {
@@ -148,6 +150,9 @@ export function StepDetail({
   const hint = hintOf(def)
   const ambiguous = ambiguousOf(def)
   const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
+  // GameTest 1.2.5：等它可操作时自动滚过的列表、滚动框；真实鼠标被挡住改用代码点击的原因
+  const scrolled = typeof res?.payload?.scrolled === 'string' ? res.payload.scrolled : undefined
+  const fallback = typeof res?.payload?.fallback === 'string' ? res.payload.fallback : undefined
   // GameTest 1.2.0-beta.6 起：这一步期间按运行配置自动关掉的阻挡界面
   const blockers = Array.isArray(res?.payload?.blockers) ? (res.payload.blockers as GtBlockerEvent[]) : []
   const shot = [res?.payload?.path, res?.payload?.screenshot, res?.payload?.annotated].find(
@@ -177,6 +182,8 @@ export function StepDetail({
           <p className="ue:text-subtle">{live ? t('等前面的步骤跑完') : t('这一步还没跑过')}</p>
         )}
         {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
+        {scrolled && <p className="ue:text-subtle">{t('自动滚动：{r}', { r: scrolled })}</p>}
+        {fallback && <p className="ue:text-warning">{fallback}</p>}
       </Block>
       {(hint || ambiguous) && (
         <Block title={t('控件')}>
@@ -349,6 +356,7 @@ function HintFields({ hint }: { hint: GtHint }) {
           h: pc(rect[3]),
         }),
     ],
+    [t('录制分辨率'), hint.vp?.length === 2 ? `${hint.vp[0]} × ${hint.vp[1]}` : undefined],
     [t('回放怎么挑'), hint.pick],
   ]
   return (
