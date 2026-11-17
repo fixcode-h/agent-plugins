@@ -140,7 +140,7 @@ export function GtSpecimen() {
   )
 }
 
-/** 录制截图的示例图：按钮描红框、按下处画十字，和 GameTest 1.3.1 截的样子一样（示例数据，不翻译） */
+/** 录制截图的示例图：按钮描红框、按下处画十字，和 GameTest 1.3.2 截的样子一样（示例数据，不翻译） */
 const SHOT = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="120"><rect width="260" height="120" fill="#2b2f36"/>' +
     '<text x="8" y="20" fill="#c9ced6" font-size="13">背包 (12/40)</text>' +

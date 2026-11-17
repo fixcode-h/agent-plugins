@@ -6,7 +6,7 @@ import { patchStep } from './gt-step-patch.ts'
 import type { StepDef } from './GtStepDetail.tsx'
 
 /**
- * 步骤详情里「录制时」一块（GameTest 1.3.1 录制截图）：被点控件那一块截图（红框是被点的控件），
+ * 步骤详情里「录制时」一块（GameTest 1.3.2 录制截图）：被点控件那一块截图（红框是被点的控件），
  * 有整屏缩略图时可以切过去看在哪个界面上；OCR 认出的字可以改，改了写进步骤的 note（步骤标题优先用 note），
  * 不改 hint.ocr / hint.text（回放按 text 找控件，不能被手改的名字带偏）。
  */

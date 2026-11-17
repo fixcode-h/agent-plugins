@@ -8,7 +8,7 @@ import { outputRoot } from './gt-disk.ts'
 import { insideProject, scenarioFile, within } from './gt-paths.ts'
 
 /**
- * GameTest 录制截图（GameTest 1.3.1 写进步骤的 hint.shot / hint.screen）在面板这边的事：
+ * GameTest 录制截图（GameTest 1.3.2 写进步骤的 hint.shot / hint.screen）在面板这边的事：
  * - 录完对每张截图跑 OCR，挑出红框里的字写进 hint.ocr（只显示和给 AI 参考，不写 hint.text：回放按 text 比较，认错一个字就找不回控件）；
  * - 删除截图：一个场景引用的，或这个项目的全部（Saved/<输出目录>/shots）。
  * 截图在 UE 的后台线程里存盘，刚停止录制时最后几张可能还没写完，所以缺图时等一会儿再看。

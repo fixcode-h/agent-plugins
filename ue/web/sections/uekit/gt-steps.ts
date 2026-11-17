@@ -19,7 +19,7 @@ export interface GtHint {
   ambiguous?: string | boolean
   /** GameTest 1.2.4：按位置写的选择器只按序号点，不按文字在同容器里找回 */
   byIndex?: boolean
-  /** GameTest 1.3.1 录制截图：被点控件那一块（相对项目根），红框在图里的位置 [x, y, w, h] */
+  /** GameTest 1.3.2 录制截图：被点控件那一块（相对项目根），红框在图里的位置 [x, y, w, h] */
   shot?: string
   shotBox?: number[]
   /** 顶层界面变了时存的整屏缩略图 */

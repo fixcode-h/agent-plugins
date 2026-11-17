@@ -7,7 +7,7 @@ import { ocrScenario } from './gt-ocr.ts'
 import type { Scenario } from './GtMenus.tsx'
 
 /**
- * 录制截图的菜单项（GameTest 1.3.1 起录制时截图，存在项目 Saved/GameTest/shots）：
+ * 录制截图的菜单项（GameTest 1.3.2 起录制时截图，存在项目 Saved/GameTest/shots）：
  * 场景右键「识别截图文字」「删除这个场景的录制截图」，左栏底部显示占用并能一键删全部。
  * 删除只删图片，场景里的 hint.shot 留着（步骤详情显示「截图已删」），回放不受影响。
  */
