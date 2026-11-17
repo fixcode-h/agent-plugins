@@ -226,10 +226,15 @@ export function GameTest() {
           }),
       },
     ])
-  const runFrom = (s: Scenario, file: GtScenarioFile, i: number) =>
+  /** 从第 i 步跑到底；only 时只跑这一步（临时运行，不跑前置步骤、不记进场景的运行历史） */
+  const runFrom = (s: Scenario, file: GtScenarioFile, i: number, only?: boolean) =>
     startRun(
       s.name,
-      { name: s.name, steps: legacySteps(file.steps, file.schemaVersion ?? 1).slice(i), stepDelayMs: file.stepDelayMs },
+      {
+        name: s.name,
+        steps: legacySteps(file.steps, file.schemaVersion ?? 1).slice(i, only ? i + 1 : undefined),
+        stepDelayMs: file.stepDelayMs,
+      },
       i,
     )
   /**
@@ -435,7 +440,9 @@ export function GameTest() {
             last={lastOf(selected)}
             offset={offsets[(running ? job?.runId : lastOf(selected)?.runId) ?? ''] ?? 0}
             onStop={() => void stop()}
-            onRunFrom={!live || running || recording ? undefined : (file, i) => void runFrom(selected, file, i)}
+            onRunFrom={
+              !live || running || recording ? undefined : (file, i, only) => void runFrom(selected, file, i, only)
+            }
             onChanged={reload}
             offline={!live}
           />

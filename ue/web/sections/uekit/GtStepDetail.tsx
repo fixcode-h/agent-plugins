@@ -11,6 +11,9 @@ import { stepTitle } from './gt-step-title.ts'
 import { GtMatchMode } from './GtMatchMode.tsx'
 import { GtMoveView } from './GtMoveView.tsx'
 import { GtSelectorTree } from './GtSelectorTree.tsx'
+import { GtStepTools, type StepToolProps } from './GtStepTools.tsx'
+import { GtStepExec } from './GtStepExec.tsx'
+import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -124,13 +127,19 @@ export function StepDetail({
   scenario,
   root,
   onChanged,
+  tools,
+  history,
 }: {
   row: StepRow
   live?: boolean
-  scenario?: { name: string; relativePath: string }
-  /** 场景根（相对项目）：给了它和 onChanged 才能在详情里改这一步（「回放怎么认」） */
+  scenario?: { name: string; relativePath: string; revision?: number }
+  /** 场景根（相对项目）：给了它和 onChanged 才能在详情里改这一步（「回放怎么认」「执行方式」） */
   root?: string
   onChanged?: () => void
+  /** 头部按钮（只跑这一步、框出控件、打开 WBP、编辑）；不给就不显示 */
+  tools?: StepToolProps
+  /** 这个场景最近几次运行（gt.history）：给了才显示「最近几次」 */
+  history?: GtHistoryRun[]
 }) {
   const { project } = useUe()
   const { api } = h()
@@ -174,6 +183,7 @@ export function StepDetail({
         {human && typeof def?.note === 'string' && def.note.trim() && (
           <p className="ue:text-footnote ue:text-muted">{human}</p>
         )}
+        {tools && <GtStepTools row={row} {...tools} />}
       </header>
       <Block title={t('结果')}>
         {res ? (
@@ -225,6 +235,19 @@ export function StepDetail({
           />
         </Block>
       )}
+      {def && scenario && root !== undefined && onChanged && !live && (
+        <Block title={t('执行方式')}>
+          <GtStepExec
+            project={project.id}
+            root={root}
+            path={scenario.relativePath}
+            index={row.i}
+            def={def}
+            locked={tools?.running}
+            onChanged={onChanged}
+          />
+        </Block>
+      )}
       {blockers.length > 0 && (
         <Block title={t('自动处理的阻挡界面')}>
           {blockers.map((b, k) => (
@@ -256,6 +279,11 @@ export function StepDetail({
           <p className="ue:text-subtle">{t('这一步没有参数')}</p>
         )}
       </Block>
+      {history && def && (
+        <Block title={t('最近几次')}>
+          <GtStepHistory runs={history} index={row.i} revision={scenario?.revision} />
+        </Block>
+      )}
       {row.check?.length ? (
         <Block title={t('选择器核对')}>
           {row.check.map((c, k) => (
