@@ -8,9 +8,9 @@ import { t } from '../../host.ts'
  */
 export interface TraceBase {
   analyzing: boolean
-  /** 秒，从录制开始算（桥接 2.8.0 起，服务端按第一帧换算过） */
+  /** 秒，从录制开始算（桥接 2.8.1 起，服务端按第一帧换算过） */
   duration: number
-  /** 桥接 2.8.0 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
+  /** 桥接 2.8.1 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
   readBytes?: number
   fileBytes?: number
   caughtUp?: boolean
@@ -137,7 +137,7 @@ export function useTraceInfo(project: string, id: string) {
   return { info, error, ready, rev: info?.analyzing ? info.duration : -1 }
 }
 
-/** 分析进度的说明：桥接 2.8.0 起按字节，旧桥接只有分析到的秒数 */
+/** 分析进度的说明：桥接 2.8.1 起按字节，旧桥接只有分析到的秒数 */
 export function progressNote(info: TraceBase) {
   if (info.fileBytes) {
     const mb = (n: number) => (n / 1048576).toFixed(n >= 1048576 * 100 ? 0 : 1)

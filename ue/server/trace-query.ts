@@ -43,9 +43,9 @@ async function analysisCard(p: UeProject): Promise<Card> {
 
 export interface TraceRes extends Record<string, unknown> {
   analyzing: boolean
-  /** 秒，从录制开始算（桥接 2.8.0 起；旧桥接从进程启动算） */
+  /** 秒，从录制开始算（桥接 2.8.1 起；旧桥接从进程启动算） */
   duration: number
-  /** 桥接 2.8.0 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
+  /** 桥接 2.8.1 起：已交给分析器的字节数 / 文件大小、读到了文件末尾、正在跟着录制往下读 */
   readBytes?: number
   fileBytes?: number
   caughtUp?: boolean
@@ -63,7 +63,7 @@ const origins = new Map<string, number>()
 
 /**
  * 网页和 Agent 共用：what 见桥接 AgentPanelTrace.cpp（info / frames / timing / timers / butterfly / stack / counters / log / bookmarks）。
- * 这份文件还在录时带 live：桥接跟着文件往下读，没分析完也能查已经分析到的部分（2.8.0 之前每次都从头重新分析）。
+ * 这份文件还在录时带 live：桥接跟着文件往下读，没分析完也能查已经分析到的部分（2.8.1 之前每次都从头重新分析）。
  */
 export async function traceQuery(ctx: OpCtx, id: string, args: Record<string, unknown>): Promise<TraceRes> {
   const cap = await traceCapture(ctx.project, id)
@@ -94,7 +94,7 @@ export async function traceQuery(ctx: OpCtx, id: string, args: Record<string, un
   }
 }
 
-/** 分析进度：桥接 2.8.0 起按字节，旧桥接只有分析到的秒数 */
+/** 分析进度：桥接 2.8.1 起按字节，旧桥接只有分析到的秒数 */
 export function progressText(res: TraceRes) {
   const mb = (n: number) => (n / 1048576).toFixed(n >= 1048576 * 100 ? 0 : 1)
   if (res.fileBytes)
