@@ -1,5 +1,5 @@
 import { CircleAlert, CircleCheck, Loader2, Save, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { parseDoc } from './forge-doc.ts'
@@ -39,11 +39,13 @@ export function ForgeConfigEdit({
       })
       .catch((e: Error) => setErr(e.message))
   }, [project, configRoot, path])
-  const check = useMemo(() => (orig ? parseDoc(text) : undefined), [text, orig])
+  // 大配置整份解析要几毫秒到几十毫秒：检查跟着延后的文本走，打字先响应，空下来再标错
+  const checked = useDeferredValue(text)
+  const check = useMemo(() => (orig ? parseDoc(checked) : undefined), [checked, orig])
   const dirty = !!orig && text !== orig.text
 
   const save = async () => {
-    if (!orig || !dirty || !check?.ok || saving) return
+    if (!orig || !dirty || !check?.ok || checked !== text || saving) return
     setSaving(true)
     setErr('')
     try {
@@ -102,7 +104,11 @@ export function ForgeConfigEdit({
           <ui.Button size="sm" variant="secondary" onClick={onDone}>
             <X className="ue:h-3.5 ue:w-3.5" /> {dirty ? t('放弃修改') : t('不改了')}
           </ui.Button>
-          <ui.Button size="sm" disabled={!dirty || !check?.ok || saving} onClick={() => void save()}>
+          <ui.Button
+            size="sm"
+            disabled={!dirty || !check?.ok || checked !== text || saving}
+            onClick={() => void save()}
+          >
             {saving ? (
               <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
             ) : (
