@@ -46,7 +46,8 @@ function describe(s: Record<string, unknown>) {
   return [s.target as string | undefined, s.note as string | undefined, rest].filter(Boolean).join(' · ')
 }
 
-export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: () => void }) {
+/** onDone：停止了；保存了时带上场景路径（相对场景根），父组件接着认截图里的字 */
+export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (saved?: string) => void }) {
   const { project } = useUe()
   const { ui, cn, toast } = h()
   const { busy, run } = useAction()
@@ -64,7 +65,7 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: () 
     run('stop', async () => {
       const r = await op<{ path?: string; steps?: number }>(project.id, 'gt.record.stop', { save })
       if (save && r.path) toast.success(t('已保存 {n} 步到 {p}', { n: r.steps ?? 0, p: r.path }))
-      onDone()
+      onDone(save ? r.path : undefined)
     })
 
   return (

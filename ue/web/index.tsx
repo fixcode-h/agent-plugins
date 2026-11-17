@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react'
 import { TableBindDialogSpecimen } from './sections/gm/TableBindDialog.tsx'
 import { TablePickSpecimen } from './sections/gm/TablePick.tsx'
 import type { ActivateWeb, Task } from '../../sdk/web.ts'
@@ -17,6 +18,8 @@ import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
+import { GtTidyReport } from './sections/uekit/GtTidyReport.tsx'
+import { TIDY_LANG } from '../server/uekit/gt-tidy-plan.ts'
 import { DiagSpecimen } from './sections/uekit/LinkDiagnose.tsx'
 import { PluginCardSpecimen } from './sections/uekit/plugins/Specimen.tsx'
 import { ConfigKeySpecimen } from './sections/config/parts.tsx'
@@ -61,6 +64,17 @@ const activate: ActivateWeb = (host) => {
     // 对话里的文件标记、文件浏览页点 .uasset：弹窗里看 DataTable、DataAsset、蓝图默认值（旧面板没有这一项，照旧交给系统打开）
     fileViewers: [{ id: 'asset', exts: ['uasset'], icon: GamepadIcon, Viewer: AssetFile }],
     Status,
+    // AI 分析窗口右侧的应用面板（插件接口 6）：GameTest「AI 整理」回复里的 gametest-tidy 代码块，逐条勾选后写回场景
+    reports: [
+      {
+        id: 'gametest-tidy',
+        lang: TIDY_LANG,
+        title: t('GameTest 整理'),
+        desc: t('AI 看截图、读项目代码给出的步骤改动，逐条勾选，应用后写回场景（原录制备份）'),
+        icon: Sparkles,
+        Report: ({ task, messageId, text }) => <GtTidyReport task={task} messageId={messageId} text={text} />,
+      },
+    ],
     // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
     specimens: [
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },

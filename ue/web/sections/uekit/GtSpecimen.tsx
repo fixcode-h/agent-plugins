@@ -1,6 +1,7 @@
 import { t } from '../../host.ts'
 import { GtBatchBar, type GtBatch } from './GtBatch.tsx'
 import { GtEvidence } from './GtEvidence.tsx'
+import { GtRecordShot } from './GtRecordShot.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtStepRow } from './GtStepRow.tsx'
 import { GtStepHistory } from './GtStepHistory.tsx'
@@ -8,7 +9,7 @@ import { GtStepExec } from './GtStepExec.tsx'
 import type { StepRow } from './GtStepDetail.tsx'
 
 /**
- * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的最近几次、执行方式、失败证据。
+ * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的最近几次、执行方式、失败证据、录制截图。
  * 全是假数据，不连 UE（设置页里没有 UE 页的上下文），所以证据的截图不显示、「看前后日志」是灰的
  */
 const BATCH: GtBatch = {
@@ -132,6 +133,20 @@ export function GtSpecimen() {
           onAgent={noop}
         />
       </div>
+      <div className="ue:max-w-md ue:rounded-lg ue:border ue:border-line ue:p-4 ue:text-footnote">
+        <GtRecordShot hint={{ shot: 'shot.svg', ocr: '桌面摆件2', opened: ['WBP_Decor_C'] }} imageUrl={() => SHOT} />
+      </div>
     </div>
   )
 }
+
+/** 录制截图的示例图：按钮描红框、按下处画十字，和 GameTest 1.3.1 截的样子一样（示例数据，不翻译） */
+const SHOT = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="120"><rect width="260" height="120" fill="#2b2f36"/>' +
+    '<text x="8" y="20" fill="#c9ced6" font-size="13">背包 (12/40)</text>' +
+    '<rect x="70" y="40" width="120" height="40" rx="6" fill="#4a5568"/>' +
+    '<text x="130" y="66" fill="#fff" font-size="16" text-anchor="middle">桌面摆件2</text>' +
+    '<rect x="69" y="39" width="122" height="42" fill="none" stroke="#000" stroke-width="1"/>' +
+    '<rect x="70" y="40" width="120" height="40" fill="none" stroke="#ff3b30" stroke-width="2"/>' +
+    '<path d="M150 54v12M144 60h12" stroke="#ff3b30" stroke-width="2"/></svg>',
+)}`

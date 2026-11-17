@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import type { PluginConfig } from '../../sdk/server.ts'
 import { h, t } from './host.ts'
 import { canUpgrade } from '../server/semver.ts'
+import { OcrSettings } from './OcrSettings.tsx'
 
 interface S {
   projects?: number
@@ -10,7 +11,7 @@ interface S {
   error?: string
 }
 
-/** 设置 → 插件页上参数表单下面的运行状态（图 8）：接入了几个项目、各自的桥接版本和运行中的进程 */
+/** 设置 → 插件页上参数表单下面的运行状态（图 8）：接入了几个项目、各自的桥接版本和运行中的进程；下面是 OCR 的下载 */
 export function Status({
   status,
   reload,
@@ -54,6 +55,7 @@ export function Status({
           </ui.Button>
         </li>
       </ul>
+      <OcrSettings />
     </section>
   )
 }

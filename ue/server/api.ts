@@ -24,6 +24,7 @@ import { json, now, t } from './util.ts'
 import { enableFor } from './capability.ts'
 import { searchIndexRoute } from './search-index/index.ts'
 import { vsDebugRoute } from './vs-debug/api.ts'
+import { ocrRoute } from './ocr/install.ts'
 
 /**
  * 网页用的接口（挂在 /api/plugins/ue/ 下）。你在网页上的操作记成 actor=user，不受 Agent 权限限制，
@@ -98,6 +99,11 @@ export async function handle(req: Request): Promise<Response> {
     if (parts[0] === 'jobs' && parts[1]) {
       const job = getJob(parts[1])
       return job ? json(job) : json({ error: t('作业不存在（面板重启后作业记录会清空）') }, 404)
+    }
+    if (parts[0] === 'ocr') {
+      // 设置 → 插件 → UE 的 OCR 一栏（ocr/install.ts）
+      const r = await ocrRoute(req.method, parts.slice(1).join('/'))
+      if (r) return json(r)
     }
     if (parts[0] !== 'p' || !parts[1]) return json({ error: 'not found' }, 404)
 

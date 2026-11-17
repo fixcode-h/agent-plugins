@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { h, t } from '../../host.ts'
 import { copyText } from '../../menu.tsx'
 import { ErrorText, Note, Term } from '../../ui.tsx'
+import { ShotImage } from './GtRecordShot.tsx'
 
 /**
  * 一步失败时 GameTest 自动留下的证据（1.2 起，报告里那一步的 payload.evidence）：都是相对项目根的路径，
@@ -33,11 +34,14 @@ export function GtEvidence({
   imageUrl,
   loadText,
   onAgent,
+  recorded,
 }: {
   e: GtEvidenceData
   imageUrl?: (path: string) => string
   loadText?: (path: string) => Promise<{ text: string; truncated?: boolean }>
   onAgent?: () => void
+  /** 这一步录制时的截图（hint.shot）：有的话和失败截图并排，一眼看出是界面变了还是没找到 */
+  recorded?: string
 }) {
   const { ui } = h()
   const [log, setLog] = useState<{ text: string; truncated?: boolean }>()
@@ -86,7 +90,18 @@ export function GtEvidence({
           </Note>
         )
       )}
-      {e.screenshot && imageUrl ? (
+      {e.screenshot && imageUrl && recorded ? (
+        <div className="ue:grid ue:grid-cols-1 ue:gap-2 ue:sm:grid-cols-2">
+          <figure className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1">
+            <figcaption className="ue:text-subtle">{t('录制时')}</figcaption>
+            <ShotImage src={imageUrl(recorded)} alt={t('录制时的截图')} />
+          </figure>
+          <figure className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1">
+            <figcaption className="ue:text-subtle">{t('失败时')}</figcaption>
+            <ShotImage src={imageUrl(e.screenshot)} alt={t('失败时的截图')} />
+          </figure>
+        </div>
+      ) : e.screenshot && imageUrl ? (
         <img alt={t('失败时的截图')} src={imageUrl(e.screenshot)} className="ue:rounded-lg ue:border ue:border-line" />
       ) : (
         e.screenshotError && <p className="ue:text-subtle">{t('没截到图：{e}', { e: e.screenshotError })}</p>

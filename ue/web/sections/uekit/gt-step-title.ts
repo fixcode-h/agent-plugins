@@ -175,6 +175,8 @@ function kindOf(cls?: string) {
 export function widgetLabel(h: GtHint | undefined, target?: string) {
   const kind = kindOf(h?.class)
   if (h?.text) return t('「{s}」{k}', { s: clip(h.text), k: kind })
+  // 控件里取不到字（字画在贴图里）时用录制截图认出来的字
+  if (h?.ocr) return t('「{s}」{k}', { s: clip(h.ocr), k: kind })
   const name = nameOfTarget(target) || lastPart(h?.asset)
   if (name) return ` ${name} `
   return kind || t('控件')

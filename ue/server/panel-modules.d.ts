@@ -17,3 +17,17 @@ declare module '@panel/web/src/lib/api' {
 declare module '@panel/shared/pinyin' {
   export function pinyinInitials(s: string): string
 }
+
+/**
+ * 网页：在项目里开一个 AI 分析对话跑一段提示词（插件接口 6 开放）。GameTest「AI 整理」用：
+ * 每一轮说完把最后一条回复交给 resolve，返回 error 时让对话自己修正一次
+ */
+declare module '@panel/web/src/lib/assist-conv' {
+  export function runPromptInProject(opts: {
+    projectId: string
+    title: string
+    prompt: () => Promise<string>
+    analysis?: 'init' | 'run' | string
+    resolve: (reply: string) => Promise<{ error?: string }>
+  }): void
+}

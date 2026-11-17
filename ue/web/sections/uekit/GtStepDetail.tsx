@@ -10,6 +10,7 @@ import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
 import { stepTitle } from './gt-step-title.ts'
 import { GtMatchMode } from './GtMatchMode.tsx'
 import { GtMoveView } from './GtMoveView.tsx'
+import { GtRecordShot } from './GtRecordShot.tsx'
 import { GtSelectorTree } from './GtSelectorTree.tsx'
 import { GtStepTools, type StepToolProps } from './GtStepTools.tsx'
 import { GtStepExec } from './GtStepExec.tsx'
@@ -222,6 +223,19 @@ export function StepDetail({
           )}
         </Block>
       )}
+      {hint && (hint.shot || hint.screen) && (
+        <Block title={t('录制时')}>
+          <GtRecordShot
+            hint={hint}
+            imageUrl={fileUrl}
+            edit={
+              def && scenario && root !== undefined && onChanged && !live
+                ? { project: project.id, root, path: scenario.relativePath, index: row.i, def, onChanged }
+                : undefined
+            }
+          />
+        </Block>
+      )}
       {isMove && (
         <Block title={t('移动')}>
           <GtMoveView
@@ -312,6 +326,7 @@ export function StepDetail({
         <GtEvidence
           e={evidence}
           imageUrl={fileUrl}
+          recorded={hint?.shot}
           loadText={(file) => ppost<{ text: string; truncated?: boolean }>(project.id, 'ext/gt/text', { file })}
           onAgent={chat.available ? () => chat.send(agentText(row, evidence, scenario)) : undefined}
         />

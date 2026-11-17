@@ -20,6 +20,8 @@ import { GtBatchBar } from './GtBatch.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtOfflineBar } from './GtOffline.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
+import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
+import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
 import { GtSettings } from './GtSettings.tsx'
@@ -250,8 +252,10 @@ export function GameTest() {
         reload()
       }
     })
+  const shots = useShotMenus({ project: project.id, root: list?.absoluteRootDir ?? '', reload })
   const menus = useScenarioMenus({
     project: project.id,
+    shotItems: shots.items,
     root: list?.absoluteRootDir ?? '',
     rootLabel: list?.rootDir ?? '',
     locked: !live || running || recording || !!busy,
@@ -267,6 +271,7 @@ export function GameTest() {
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
         name: recName.trim() || t('新录制'),
         keepPace,
+        shots: shotsArg(),
       })
       setRec({ ...r, last: [] })
     })
@@ -332,9 +337,12 @@ export function GameTest() {
           />
         }
         footer={
-          <span>
-            {t('场景根')} <code className="ue:font-mono ue:text-muted">{list?.rootDir || '…'}</code>
-          </span>
+          <>
+            <span>
+              {t('场景根')} <code className="ue:font-mono ue:text-muted">{list?.rootDir || '…'}</code>
+            </span>
+            {shots.footer}
+          </>
         }
       >
         {error ? (
@@ -426,7 +434,14 @@ export function GameTest() {
           />
         )}
         {recording && rec ? (
-          <GtRecord status={rec} onDone={() => setRec(undefined)} />
+          <GtRecord
+            status={rec}
+            onDone={(saved) => {
+              setRec(undefined)
+              shots.refresh()
+              if (saved) void ocrAfterRecord(project.id, list?.absoluteRootDir ?? '', saved, reload)
+            }}
+          />
         ) : selected ? (
           <GtRun
             key={selected.relativePath}
@@ -454,6 +469,7 @@ export function GameTest() {
         )}
       </main>
       {menus.dialogs}
+      {shots.dialog}
       {settings && <GtSettings onClose={() => setSettings(false)} />}
       <MenuHost />
       <Confirm
