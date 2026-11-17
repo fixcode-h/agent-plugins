@@ -16,7 +16,10 @@ public class UELinkCore : ModuleRules
 			// 实时性能读数（AgentPanelPerf.cpp）：stat unit 用的线程时间在 RenderCore，GPU 时间和 Draw Calls 在 RHI
 			"RenderCore", "RHI",
 			// GameplayTag 浏览（UELinkConfigOps.cpp）：引擎运行时模块，不是插件，每个项目都有
-			"GameplayTags"
+			"GameplayTags",
+			// Lua 函数进 trace（AgentPanelLuaTrace.cpp）：自定义 Trace 通道（UE_TRACE_CHANNEL_DEFINE）的 FChannel::Setup 在 TraceLog 模块里，
+			// Core 只是把它当私有依赖用，不传给我们，不加这一行 5.8 上链接报 LNK2019（2.9.0 实际报过）；5.4 起都有这个模块
+			"TraceLog"
 		});
 		// Shipping 里一律不编进去：.uplugin 已经拦了加载，这里再保证代码不在
 		if (Target.Configuration == UnrealTargetConfiguration.Shipping)
