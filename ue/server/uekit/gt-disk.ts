@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { readIni } from '../editor-tools/config-layers.ts'
 import { t } from '../util.ts'
+import { SCHEMA_VERSION } from '../../shared/gt-script/script.ts'
 
 /**
  * 编辑器没开时 GameTest 的只读操作（gt.scenarios / gt.runs / gt.history / gt.report）直接读磁盘：
@@ -14,7 +15,8 @@ import { t } from '../util.ts'
 // 出错抛普通 Error（消息照样原样显示）：不 import instances.ts，单测不用拉上面板模块
 const SECTION = '/Script/GameTest.GameTestSettings'
 const KIND = 'gametest-scenario'
-const SUPPORTED_SCHEMA = 2
+// 和 UE 的 GameTestScenario::SupportedSchemaVersion 同一个数，取脚本格式的那份常量，免得 UE 升了格式这里落下（1.9 起是 3，这里曾漏成 2，离线时 v3 场景全标「解析失败」）
+const SUPPORTED_SCHEMA = SCHEMA_VERSION
 /** 和 UE 的上限一致：默认 4000 字，读结构的 12000 字 */
 const STRUCTURE_MAX = 12000
 /** 「最近运行」最多列几次：UE 只在内存里留本次会话的，磁盘上按产物目录的时间取最新的这么多 */

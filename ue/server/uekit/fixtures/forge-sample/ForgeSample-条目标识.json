@@ -1,0 +1,57 @@
+{
+  "kind": "gametest-scenario",
+  "schemaVersion": 3,
+  "name": "AssetForge 示例界面：按条目标识点列表",
+  "_note": "配套「列表条目」页（AssetForge 1.4.0 起），要 GameTest 1.9.0 起。三种容器写成一张数据表，用 loop in 逐行点、逐行核对状态栏：加一种条目只加一行。手动录制时点这页条目上的按钮：仓库按 ItemId 自动认，邮件和技能栏会暂停游戏、在面板上弹窗问用哪个字段认。",
+  "revision": 2,
+  "tags": ["sample", "assetforge", "item-key"],
+  "stepDelayMs": 300,
+  "vars": {
+    "crumb": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb",
+    "status": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/StatusChip/Status",
+    "cases": [
+      {
+        "name": "仓库：按 ItemId 认，第 30 格没滚到先滚过去",
+        "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Lists/ListsBody/BagCard/BagCol/ItemList[ItemId=1030]>SlotBg/SlotCol/BtnUse",
+        "expect": "ItemId 1030"
+      },
+      {
+        "name": "邮件：按发送时间认第 6 封",
+        "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Lists/ListsBody/ListsRight/MailCard/MailCol/MailList[SentAt=202611101400]>RowPad/RowBg/RowCols/BtnClaim",
+        "expect": "11-10 14:00"
+      },
+      {
+        "name": "技能栏：两个字段一起才唯一，2 级治疗",
+        "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Lists/ListsBody/ListsRight/SkillCard/SkillCol/SkillBar[SkillType=13,Level=2]>CellBg/CellWidth/CellCol/BtnCast",
+        "expect": "SkillType 13"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "open", "action": "group", "name": "进图，打开列表条目页",
+      "do": [
+        { "id": "pie", "action": "pie.start", "map": "/Game/AgentTest/AssetForge/Map_ForgeSample" },
+        { "id": "waitUi", "action": "wait", "until": "widget", "target": "$crumb", "note": "等示例界面出来" },
+        { "id": "goLists", "action": "click", "target": "WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Lists__Nav" },
+        { "id": "atLists", "action": "assert", "expr": "text($crumb) == '列表条目'" }
+      ]
+    },
+    {
+      "id": "cases", "action": "loop", "in": "$cases", "as": "row", "max": 20,
+      "note": "每行：按条目标识点按钮，状态栏写出点到的是哪一条",
+      "do": [
+        { "id": "clickRow", "action": "click", "target": "$row.target" },
+        { "id": "checkRow", "action": "assert", "expr": "contains(text($status), $row.expect)" }
+      ]
+    },
+    {
+      "id": "close", "action": "group", "name": "截图收尾",
+      "do": [
+        { "id": "shot", "action": "screenshot", "name": "forge-sample-lists" },
+        { "id": "stop", "action": "pie.stop" },
+        { "id": "stopped", "action": "wait", "until": "pieStopped" }
+      ]
+    }
+  ]
+}
