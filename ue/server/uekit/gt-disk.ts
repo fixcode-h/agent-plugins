@@ -105,11 +105,10 @@ async function scenarios(root: string, args: Record<string, unknown>) {
   const rootAbs = await scenarioRoot(root)
   const files: string[] = []
   await walkJson(rootAbs, files)
-  // 场景根下的 _settings.json 是运行配置（阻挡界面规则等，GameTest 1.2.0-beta.6），不是场景，和 UE 那边一样跳过
-  const settingsFile = path.join(rootAbs, '_settings.json')
+  // _ 开头的是场景根的配置和生成物（_settings.json 运行配置、_vars.json 常用名、_api.json 接口库），不是场景（设计稿 12.1）
   const all = await Promise.all(
     files
-      .filter((f) => f !== settingsFile)
+      .filter((f) => !path.basename(f).startsWith('_'))
       .map(async (abs) => {
         const relativePath = slash(path.relative(rootAbs, abs))
         const fallback = path.basename(abs, path.extname(abs))

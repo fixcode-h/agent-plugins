@@ -1,6 +1,7 @@
 import { ChevronRight, Folder, FolderOpen, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { h } from '../../host.ts'
+import { useTreeDnd, type DragSrc } from './tree-dnd.ts'
 
 /**
  * AssetForge、GameTest 左栏的文件树：样子和表格插件的文件树一样（用户 2026-11-15「类似表格的 UI」）——
@@ -49,9 +50,24 @@ function dirPaths<T>(nodes: Node<T>[], out: string[] = []) {
   return out
 }
 
-function build<T>(items: TreeLeaf<T>[]): Node<T>[] {
+function build<T>(items: TreeLeaf<T>[], folders: string[] = []): Node<T>[] {
   const root: Node<T> = { path: '', name: '', children: [], leaves: [] }
   const dirs = new Map<string, Node<T>>([['', root]])
+  // 磁盘上的空文件夹（GameTest 场景库新建的）：没有叶子也要有一行，先把这些目录建出来
+  for (const f of folders) {
+    const parts = f.split('/').filter(Boolean)
+    let parent = root
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts.slice(0, i + 1).join('/')
+      let d = dirs.get(p)
+      if (!d) {
+        d = { path: p, name: parts[i], children: [], leaves: [] }
+        dirs.set(p, d)
+        parent.children.push(d)
+      }
+      parent = d
+    }
+  }
   for (const it of items) {
     const parts = it.path.split('/').filter(Boolean)
     let parent = root
@@ -93,6 +109,10 @@ export function FileTree<T>({
   picked,
   onPick,
   expand,
+  folders,
+  activeFolder,
+  onFolderClick,
+  onMove,
   label,
   empty,
 }: {
@@ -120,12 +140,21 @@ export function FileTree<T>({
   onPick?: (path: string, data: T, e: MouseEvent, visible: TreeLeaf<T>[]) => void
   /** 展开全部 / 收起全部（标题行、右键菜单发的信号） */
   expand?: ExpandSignal
+  /** 磁盘上的全部文件夹（空的也显示一行，GameTest 场景库）；不传时只按叶子的路径推出文件夹 */
+  folders?: string[]
+  /** 选中的文件夹（「新建」建在它里面）：和选中的叶子一样的底色 */
+  activeFolder?: string
+  /** 点了文件夹（除了展开 / 收起，外面记下选中的是哪个） */
+  onFolderClick?: (path: string) => void
+  /** 拖动移动：给了才能拖（tree-dnd.ts），toDir 是放进的文件夹，'' 是根 */
+  onMove?: (src: DragSrc<T>, toDir: string) => void
   label: string
   empty: ReactNode
 }) {
   const { cn } = h()
-  const tree = useMemo(() => build(items), [items])
+  const tree = useMemo(() => build(items, folders), [items, folders])
   const [opened, setOpened] = useState<Set<string>>(() => new Set())
+  const dnd = useTreeDnd(onMove, (dir) => setOpened((s) => (s.has(dir) ? s : new Set(s).add(dir))))
   // 只有一个顶层目录时展开它；选中项的上级目录跟着展开（从别处跳过来时看得到它在哪）
   const single = tree.length === 1 && !tree[0].leaf ? tree[0].path : ''
   useEffect(() => {
@@ -152,7 +181,7 @@ export function FileTree<T>({
     // 只在信号变了时执行；树变了不重新展开
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [expand?.n])
-  if (!items.length) return <>{empty}</>
+  if (!items.length && !folders?.length) return <>{empty}</>
 
   const visible: TreeLeaf<T>[] = []
 
@@ -166,6 +195,7 @@ export function FileTree<T>({
       const meta = leaf !== undefined ? leafIcon(leaf) : custom
       const Icon = meta?.icon ?? (open ? FolderOpen : Folder)
       const isPicked = leaf !== undefined && !!picked?.has(n.path)
+      const isDrop = leaf === undefined && dnd?.over === n.path
       rows.push(
         <button
           key={n.path}
@@ -173,19 +203,22 @@ export function FileTree<T>({
           role="treeitem"
           aria-level={depth + 1}
           aria-expanded={leaf !== undefined ? undefined : open}
-          aria-selected={n.path === active}
+          aria-selected={leaf !== undefined ? n.path === active : n.path === activeFolder}
           title={n.path}
-          onClick={(e) =>
-            leaf !== undefined
-              ? onPick && (e.ctrlKey || e.metaKey || e.shiftKey)
-                ? onPick(n.path, leaf, e, visible)
-                : onOpen(n.path, leaf)
-              : setOpened((s) => {
-                  const next = new Set(s)
-                  if (!next.delete(n.path)) next.add(n.path)
-                  return next
-                })
-          }
+          {...dnd?.row({ path: n.path, dir: leaf === undefined, data: leaf }, !open)}
+          onClick={(e) => {
+            if (leaf !== undefined) {
+              if (onPick && (e.ctrlKey || e.metaKey || e.shiftKey)) onPick(n.path, leaf, e, visible)
+              else onOpen(n.path, leaf)
+              return
+            }
+            onFolderClick?.(n.path)
+            setOpened((s) => {
+              const next = new Set(s)
+              if (!next.delete(n.path)) next.add(n.path)
+              return next
+            })
+          }}
           onContextMenu={(e) =>
             leaf !== undefined ? onLeafMenu?.(e, n.path, leaf) : onFolderMenu?.(e, n.path, n.leaves)
           }
@@ -194,9 +227,9 @@ export function FileTree<T>({
             'ue:flex ue:h-7 ue:w-full ue:shrink-0 ue:cursor-pointer ue:select-none ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:pr-2 ue:text-left ue:text-body ue:transition-colors ue:hover:bg-sel/60',
             leaf !== undefined
               ? 'ue:text-fg ue:aria-selected:bg-sel ue:aria-selected:font-semibold'
-              : 'ue:font-medium ue:text-muted',
+              : 'ue:font-medium ue:text-muted ue:aria-selected:bg-sel',
             leaf !== undefined && leafDim?.(leaf) && 'ue:text-subtle',
-            isPicked && 'ue:bg-accent-soft ue:hover:bg-accent-soft',
+            (isPicked || isDrop) && 'ue:bg-accent-soft ue:hover:bg-accent-soft',
           )}
         >
           <ChevronRight
@@ -229,7 +262,13 @@ export function FileTree<T>({
       role="tree"
       aria-label={label}
       aria-multiselectable={onPick ? true : undefined}
-      className="ue:flex ue:flex-col ue:gap-px"
+      {...dnd?.root}
+      className={cn(
+        'ue:flex ue:flex-col ue:gap-px ue:rounded-(--c-row-radius)',
+        // 能拖动时撑满左栏，拖到列表下面的空白处就是移到根；悬停在根上时整块淡 accent 底
+        dnd && 'ue:min-h-full ue:pb-6',
+        dnd?.over === '' && 'ue:bg-accent-soft/50',
+      )}
     >
       {rows}
     </div>

@@ -1,9 +1,8 @@
-import { Copy, CopyPlus, Download, FileJson, FolderOpen, Layers, Pencil, Play, Trash2 } from 'lucide-react'
-import { useState, type MouseEvent } from 'react'
+import { Copy, CopyPlus, Download, FileJson, FolderOpen, Pencil, Play, Trash2 } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
-import { Confirm } from '../../ui.tsx'
 import type { GtRunSummary } from './GtRun.tsx'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 
@@ -19,31 +18,28 @@ export interface Scenario {
 }
 
 /**
- * GameTest 页左栏的右键菜单：场景（运行、改名、复制一份、复制路径、在文件夹中显示、删除）、文件夹（复制路径、在文件夹中显示）、
- * 最近运行（打开场景、再跑一次、复制 runId 和输出目录）。改名、删除要弹窗，弹窗也在这里（dialogs 挂进页面）。
+ * GameTest 页左栏的右键菜单：场景（运行、改名、复制一份、复制路径、在文件夹中显示、删除）、
+ * 最近运行（打开场景、再跑一次、复制 runId 和输出目录）。文件夹的菜单、改名和删除（先看谁在 call）在场景库整理里（GtLibrary.tsx）。
  * 文件操作由面板直接做（ext/gt/file），做完 reload 重新向 UE 要场景列表
  */
 export function useScenarioMenus(o: {
   project: string
-  /** 场景根的绝对路径（gt.scenarios 的 absoluteRootDir）和给人看的写法（rootDir） */
+  /** 场景根的绝对路径（gt.scenarios 的 absoluteRootDir） */
   root: string
-  rootLabel: string
   /** 正在跑或在录制：这时不让再起一个 run */
   locked: boolean
   reload: () => void
   open: (s: Scenario) => void
   /** ignoreSkipIf：全部照做，忽略步骤上的「已达成就跳过」（GameTest 1.7.0） */
   runScenario: (s: Scenario, ignoreSkipIf?: boolean) => void
-  /** 批量运行几份场景（文件夹右键「运行这里的全部场景」）；旧 GameTest 不支持批量时不给 */
-  runBatch?: (paths: string[], label: string) => void
   scenarios: Scenario[]
   /** 录制截图的两项（GtShotMenus.tsx）：识别截图文字、删除录制截图 */
   shotItems?: (s: Scenario) => MenuItem[]
+  /** 改名、删除：场景库整理的同一套流程（先列出谁在 call 它，GtLibrary.tsx） */
+  rename: (s: Scenario) => void
+  remove: (s: Scenario) => void
 }) {
-  const { ui, toast } = h()
-  const [renaming, setRenaming] = useState<Scenario>()
-  const [newName, setNewName] = useState('')
-  const [deleting, setDeleting] = useState<Scenario>()
+  const { toast } = h()
 
   const fileOp = async (path: string, action: string, extra: Record<string, unknown> = {}) => {
     try {
@@ -81,10 +77,7 @@ export function useScenarioMenus(o: {
       {
         label: t('改名…'),
         icon: Pencil,
-        onClick: () => {
-          setNewName(s.name)
-          setRenaming(s)
-        },
+        onClick: () => o.rename(s),
       },
       {
         label: t('复制一份'),
@@ -109,27 +102,7 @@ export function useScenarioMenus(o: {
       { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => void fileOp(s.relativePath, 'reveal') },
       ...(o.shotItems ? ['sep' as const, ...o.shotItems(s)] : []),
       'sep',
-      { label: t('删除…'), icon: Trash2, danger: true, onClick: () => setDeleting(s) },
-    ])
-
-  const folderMenu = (e: MouseEvent, path: string, leaves: Scenario[]) =>
-    openMenu(e, [
-      { title: t('{p}（{n} 个场景）', { p: path, n: leaves.length }) },
-      o.runBatch && {
-        label: t('运行这里的全部场景'),
-        icon: Layers,
-        hint: t('一个接一个'),
-        disabled: o.locked || !leaves.some((s) => !s.parseError),
-        onClick: () =>
-          o.runBatch!(
-            leaves.filter((s) => !s.parseError).map((s) => s.relativePath),
-            path,
-          ),
-      },
-      o.runBatch && 'sep',
-      { label: t('复制路径'), icon: Copy, hint: t('相对场景根'), onClick: () => copyText(path) },
-      { label: t('复制完整路径'), icon: Copy, onClick: () => copyText(fullPath(path)) },
-      { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => void fileOp(path, 'reveal') },
+      { label: t('删除…'), icon: Trash2, danger: true, onClick: () => o.remove(s) },
     ])
 
   const runMenu = (e: MouseEvent, r: GtRunSummary) => {
@@ -152,60 +125,5 @@ export function useScenarioMenus(o: {
     ])
   }
 
-  const rename = async () => {
-    const s = renaming
-    const name = newName.trim()
-    setRenaming(undefined)
-    if (!s || !name || name === s.name) return
-    const r = await fileOp(s.relativePath, 'rename', { name })
-    if (!r) return
-    o.reload()
-    o.open({ ...s, name, relativePath: r.path })
-  }
-  const remove = async () => {
-    const s = deleting
-    setDeleting(undefined)
-    if (!s || !(await fileOp(s.relativePath, 'delete'))) return
-    toast.success(t('已删除 {p}', { p: s.relativePath }))
-    o.reload()
-  }
-
-  const dialogs = (
-    <>
-      <Confirm
-        open={!!renaming}
-        title={t('改名')}
-        okText={t('改名')}
-        onOk={() => void rename()}
-        onCancel={() => setRenaming(undefined)}
-      >
-        <div className="ue:flex ue:flex-col ue:gap-2">
-          <ui.Input
-            autoFocus
-            value={newName}
-            onChange={(e: { target: { value: string } }) => setNewName(e.target.value)}
-            onKeyDown={(e: { key: string }) => e.key === 'Enter' && void rename()}
-          />
-          <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
-            {t('文件名和场景里的名字一起改，文件留在原来的目录。')}
-          </p>
-        </div>
-      </Confirm>
-      <Confirm
-        open={!!deleting}
-        danger
-        title={t('删除场景')}
-        okText={t('删除')}
-        onOk={() => void remove()}
-        onCancel={() => setDeleting(undefined)}
-      >
-        {t('删除 {root}/{p}？文件直接从磁盘删掉，不进回收站；用 git、P4 管着的可以从版本库找回。', {
-          root: o.rootLabel,
-          p: deleting?.relativePath ?? '',
-        })}
-      </Confirm>
-    </>
-  )
-
-  return { leafMenu, folderMenu, runMenu, dialogs }
+  return { leafMenu, runMenu }
 }
