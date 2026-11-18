@@ -646,11 +646,11 @@ try {
         cmd: bridge.state.calls.filter((x) => x.startsWith('Trace.File')).at(-1),
       }
     }
-    // 没装 UnLua：默认不录 Lua；明确要也去掉，说明原因
+    // 磁盘上认不出 UnLua：默认不录 Lua；明确要时假桥接报了 Lua 环境（算装了 UnLua），但名片是 1.0.0，照样去掉并说明原因
     let r = await traceStart({ label: 'noLuaDefault' })
     assert.ok(!/\blua\b/.test(r.cmd), r.cmd)
     r = await traceStart({ label: 'noUnLua', lua: true })
-    assert.ok(!/\blua\b/.test(r.cmd) && /UnLua/.test(r.res.luaNote), JSON.stringify(r.res))
+    assert.ok(!/\blua\b/.test(r.cmd) && /UnLua|2\.9\.0/.test(r.res.luaNote), JSON.stringify(r.res))
     mkdirSync(path.join(proj, 'Plugins', 'UnLua'), { recursive: true })
     writeFileSync(path.join(proj, 'Plugins', 'UnLua', 'UnLua.uplugin'), '{}')
     // 装了 UnLua 但假桥接的名片是 1.0.0：照常只录 UE 部分，提示升级 UELink
