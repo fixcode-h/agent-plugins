@@ -5,6 +5,7 @@ import { applyTidyDoc, parseTidyPlan } from './gt-tidy-plan.ts'
 import { flowifyHints } from './gt-flowify/index.ts'
 import { prepareGlobalGuards, withFlow } from './gt-tidy-write.ts'
 import { scenarioFile } from './gt-paths.ts'
+import { tidyScope } from './gt-tidy-scope.ts'
 
 /**
  * GameTest 页「AI 整理」：把录制交给 Agent 改成真正的测试步骤（去掉多余步骤、补中文说明，按项目代码判断步骤合不合理）。
@@ -74,17 +75,19 @@ export async function tidyAction(projectRoot: string, b: Record<string, unknown>
       // 出题：原步骤、文件 hash 和几个绝对路径（提示词里给 Agent 读文件、看截图用）
       const text = await readOrig()
       const doc = parseJson(text, t('原场景'))
+      const scope = tidyScope(doc, typeof b.segment === 'string' ? b.segment : undefined)
       return {
         hash: sha1(text),
         name: typeof doc.name === 'string' ? doc.name : '',
-        steps: Array.isArray(doc.steps) ? doc.steps : [],
+        steps: scope.steps,
+        ...(scope.segment ? { segment: scope.segment } : {}),
         scenarioPath: slash(f.abs),
         root: slash(f.rootAbs),
         rel: f.rel,
         projectRoot: slash(projectRoot),
         backup: (await exists(backup)) ? backupRel : '',
         // 「整理成流程」的规则建议（gt-flowify）：提示词里交给 Agent 参考，它判断后写进方案
-        hints: await flowifyHints(Array.isArray(doc.steps) ? (doc.steps as Record<string, unknown>[]) : [], f.rootAbs, f.abs),
+        hints: await flowifyHints(scope.steps, f.rootAbs, f.abs),
       }
     }
     case 'apply': {
@@ -92,7 +95,8 @@ export async function tidyAction(projectRoot: string, b: Record<string, unknown>
       if (sha1(text) !== String(b.hash ?? ''))
         throw new Error(t('场景文件在整理之后被改过（{p}），步骤号对不上了：重新点「整理成流程」', { p: f.rel }))
       const orig = parseJson(text, t('原场景'))
-      const steps = Array.isArray(orig.steps) ? (orig.steps as Record<string, unknown>[]) : []
+      const scope = tidyScope(orig, typeof b.segment === 'string' ? b.segment : undefined)
+      const steps = scope.steps
       let plan
       try {
         plan = parseTidyPlan(b.plan, steps.length)
@@ -103,9 +107,11 @@ export async function tidyAction(projectRoot: string, b: Record<string, unknown>
       const out = applyTidyDoc(steps, plan, picked, b.notes === true)
       const next = out.steps
       if (!next.length) throw new Error(t('应用后一步都不剩了，不能保存'))
-      const merged = mergeScenario(orig, withFlow(orig, out))
+      const merged = mergeScenario(orig, withFlow(orig, { ...out, steps: scope.put(next) }))
       // 全局守护写进 _settings.json：先读好、查好，场景写成功了再落盘，免得只写了一半
-      const commitSettings = out.globalGuards.length ? await prepareGlobalGuards(f.rootAbs, out.globalGuards) : undefined
+      const commitSettings = out.globalGuards.length
+        ? await prepareGlobalGuards(f.rootAbs, out.globalGuards)
+        : undefined
       const keptOld = await exists(backup)
       if (!keptOld) await copyFile(f.abs, backup)
       // UE 写场景用 tab 缩进，照它写

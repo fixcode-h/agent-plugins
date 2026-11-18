@@ -3579,6 +3579,7 @@
   "再点一个控件，录成空的按状态分支，各条路在编辑页里填": "Then click a control to record an empty state branch; fill in each path in the editor",
   "从这里接着录": "Continue recording from here",
   "这一步还没有 id，先存盘再接着录": "This step has no id yet; save first, then continue recording",
+  "这一步还没有 id，先存盘再整理": "This step has no id yet; save first, then tidy",
   "录完装成一个录制段": "Wrap recordings in a segment",
   "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页的逐步工具（换标识、转成控件步骤、从这步运行）只认平铺的步骤，要用它们就别开": "Put recorded steps into one step segment, shown as a collapsed recording in the editor (needs GameTest 1.10.0). The per-step tools on the scenario page (change key, convert to control step, run from this step) only work on flat steps, so leave this off if you use them",
   "取消选中": "Deselect",
