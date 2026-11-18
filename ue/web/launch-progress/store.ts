@@ -72,8 +72,11 @@ export function useLaunchEvents() {
 export function stageLabel(p: LaunchProgress) {
   if (p.waiting === 'rebuild') return t('等你在 UE 弹窗里确认编译')
   if (p.waiting === 'link') return t('UELink 还没连上')
+  if (p.waiting === 'vs') return t('等 VS 回应')
   if (p.shadersLeft && p.stage !== 'final') return t('编译着色器 · 剩 {n}', { n: p.shadersLeft })
   const names: Record<string, string> = {
+    vs: t('经 VS 启动'),
+    build: t('VS 编译中'),
     spawn: t('启动进程'),
     init: t('初始化引擎'),
     plugins: t('挂载插件'),
@@ -91,12 +94,14 @@ export function launchTip(p: LaunchProgress, now = Date.now()) {
   const s = Math.max(0, Math.round((now - p.startedAt) / 1000))
   const lines = [
     t('编辑器启动中：{stage}', { stage: stageLabel(p) }),
+    ...(p.via === 'vs' ? [t('VS 开着这个项目，经 VS 按 F5 启动（先编译，挂着调试器）')] : []),
     t('已用 {s} 秒，约 {pct}%', { s, pct: p.percent }),
     t('阶段从项目日志里读；百分比按阶段和上次启动用时（约 {e} 秒）估算', {
       e: Math.round(p.expectedMs / 1000),
     }),
   ]
   if (p.waiting === 'rebuild') lines.push(t('项目模块要重新编译：切到 UE 的弹窗点「是」，编完会接着启动'))
+  if (p.waiting === 'vs') lines.push(t('VS 一时没回应：多半弹着对话框（比如编译出错问要不要继续），切到 VS 看一下'))
   if (p.waiting === 'link') lines.push(t('引擎已经起来了，但一直没收到 UELink 的名片：确认项目里装了并启用了 UELink'))
   return lines.join('\n')
 }
