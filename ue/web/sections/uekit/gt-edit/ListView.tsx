@@ -18,6 +18,7 @@ import { blockUi, TONE_BAR, TONE_TEXT } from '../gt-blocks/index.ts'
 import { condSummary } from '../gt-cond/summary.ts'
 import { commandMenuItems, runKey, type CmdCtx } from './commands.ts'
 import { insertPlace, insertStep, openInsertAt, insertMenuItems } from './insert-menu.ts'
+import { foldableKeys, ListHead } from './ListHead.tsx'
 import type { ViewProps } from './views.ts'
 
 const INDENT = 18
@@ -288,73 +289,71 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
     )
   }
 
+  const endOf = (slot: GtPath) => ((getAt(doc, slot) as unknown[] | undefined) ?? []).length
+  // 在槽里某个位置插一步：从鼠标处弹插入菜单
+  const insertAt = (e: React.MouseEvent, slot: GtPath, index: number) =>
+    openMenu(
+      e,
+      insertMenuItems((it) => onChange(insertStep(doc, slot, index, it.make()))),
+    )
+  // 全部折叠 = 把每个块的 key 放进折叠集合；全部展开 = 清空（和逐个点的、左右键的是同一份状态）
+  const anyFolded = collapsed.size > 0
+  const foldAll = (fold: boolean) => setCollapsed(new Set(fold ? foldableKeys(doc) : []))
+
   return (
-    <div
-      ref={box}
-      tabIndex={0}
-      onKeyDown={key}
-      className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:pb-10 ue:outline-none"
-      aria-label={t('步骤列表')}
-    >
-      {sections.map((s) =>
-        s.kind === 'setup' && !s.rows.length ? null : (
-          <section key={s.kind}>
-            <div className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:bg-panel ue:px-3 ue:text-caption ue:text-subtle">
-              {s.title}
-              <span className="ue:tabular-nums">{s.rows.filter((r) => r.kind === 'step').length}</span>
-            </div>
-            {s.rows.map(row)}
-            <div
-              className={cn(
-                'ue:flex ue:h-8 ue:items-center ue:px-3',
-                over === `end:${s.kind}` && 'ue:shadow-[inset_0_2px_0_var(--accent)]',
+    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
+      <ListHead doc={doc} anyFolded={anyFolded} onFoldAll={foldAll} />
+      <div
+        ref={box}
+        tabIndex={0}
+        onKeyDown={key}
+        className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:pb-10 ue:outline-none"
+        aria-label={t('步骤列表')}
+      >
+        {sections.map((s) =>
+          s.kind === 'setup' && !s.rows.length ? null : (
+            <section key={s.kind}>
+              {/* 顶上标题行已经写了「主流程」：只有准备步骤时才需要小节头分开两段 */}
+              {(s.kind === 'setup' || sections[0].rows.length > 0) && (
+                <div className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:bg-panel ue:px-3 ue:text-caption ue:text-subtle">
+                  {s.title}
+                  <span className="ue:tabular-nums">{s.rows.filter((r) => r.kind === 'step').length}</span>
+                </div>
               )}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setOver(`end:${s.kind}`)
-              }}
-              onDrop={() => drop(s.slot, ((getAt(doc, s.slot) as unknown[] | undefined) ?? []).length)}
-            >
-              <button
-                type="button"
-                className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-sm ue:px-1 ue:text-caption ue:text-subtle ue:hover:text-fg"
-                onClick={(e) =>
-                  openMenu(
-                    e,
-                    insertMenuItems((it) =>
-                      onChange(
-                        insertStep(
-                          doc,
-                          s.slot,
-                          ((getAt(doc, s.slot) as unknown[] | undefined) ?? []).length,
-                          it.make(),
-                        ),
-                      ),
-                    ),
-                  )
-                }
+              {s.rows.map(row)}
+              <div
+                className={cn(
+                  'ue:flex ue:h-8 ue:items-center ue:px-3',
+                  over === `end:${s.kind}` && 'ue:shadow-[inset_0_2px_0_var(--accent)]',
+                )}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setOver(`end:${s.kind}`)
+                }}
+                onDrop={() => drop(s.slot, endOf(s.slot))}
               >
-                <Plus className="ue:h-3 ue:w-3" />
-                {s.kind === 'setup' ? t('加准备步骤') : t('加一步')}
-              </button>
-            </div>
-          </section>
-        ),
-      )}
-      {!sections[0].rows.length && (
-        <button
-          type="button"
-          className="ue:mx-3 ue:mt-2 ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
-          onClick={(e) =>
-            openMenu(
-              e,
-              insertMenuItems((it) => onChange(insertStep(doc, ['setup'], 0, it.make()))),
-            )
-          }
-        >
-          {t('+ 加准备步骤（每次运行先做、不算进结果，例如开关卡、设 GM 状态）')}
-        </button>
-      )}
+                <button
+                  type="button"
+                  className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-sm ue:px-1 ue:text-caption ue:text-subtle ue:hover:text-fg"
+                  onClick={(e) => insertAt(e, s.slot, endOf(s.slot))}
+                >
+                  <Plus className="ue:h-3 ue:w-3" />
+                  {s.kind === 'setup' ? t('加准备步骤') : t('加一步')}
+                </button>
+              </div>
+            </section>
+          ),
+        )}
+        {!sections[0].rows.length && (
+          <button
+            type="button"
+            className="ue:mx-3 ue:mt-2 ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
+            onClick={(e) => insertAt(e, ['setup'], 0)}
+          >
+            {t('+ 加准备步骤（每次运行先做、不算进结果，例如开关卡、设 GM 状态）')}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

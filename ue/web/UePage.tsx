@@ -146,6 +146,9 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   const [pidTarget, setPidTarget] = useState<number>()
   const [shot, setShot] = useState(false)
   const [jump, setJump] = useState(false)
+  // 分区要整页（GameTest 编辑页，效果图 1）：左边的分区栏收起来，换分区或项目时自动放开
+  const [wide, setWide] = useState(false)
+  useEffect(() => setWide(false), [project?.id, sectionId])
   // 左栏的数字：5 秒一次，一个请求取全（服务端 badges.ts）；在概览页时同一个请求多带概览要的几项（server/overview.ts）
   const onOverview = sectionId === 'overview'
   const badges = useLoad(
@@ -203,6 +206,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
             reloadBadges: () => void badges.reload(),
             openShot: () => setShot(true),
             openJump: () => setJump(true),
+            setWide,
           }
         : null,
     // go、list 每次渲染都是新的，按数据变化重建就够
@@ -271,7 +275,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
       <div className="ue:flex ue:h-full ue:min-h-0 ue:w-full ue:min-w-0 ue:flex-1 ue:flex-col ue:bg-bg ue:md:flex-row">
         <aside
           ref={navRef}
-          style={nav.style('calc(100% - 480px)')}
+          style={wide ? { display: 'none' } : nav.style('calc(100% - 480px)')}
           className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
         >
           <ProjectCard

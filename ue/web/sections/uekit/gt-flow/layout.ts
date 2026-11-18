@@ -109,8 +109,11 @@ export interface LayoutOptions {
   globalGuards?: GtGuard[]
 }
 
-/** 录制录出来的段默认折叠成一个节点（定稿 10：双击展开） */
-export const defaultCollapsed = (step: GtStep) => step.recorded === true
+/**
+ * 默认折叠成一个节点（卡片里列出前几步）的块：录制录出来的段（定稿 10）和步骤段（效果图 1、6 的「打开福利」）。
+ * 段只是把几步归成一组、没有分支，摊开只会把主流程拉得很长；双击展开
+ */
+export const defaultCollapsed = (step: GtStep) => step.recorded === true || step.action === 'group'
 
 export const stepKey = (step: GtStep, path: GtPath) =>
   typeof step.id === 'string' && step.id ? step.id : pathStr(path)
