@@ -1,6 +1,14 @@
-import { ArrowLeft, Info, Loader2, Redo2, Save, TriangleAlert, Undo2 } from 'lucide-react'
+import { Info, Loader2, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { getAt, parseScript, versionOf, wrap, type GtPath, type GtStep } from '../../../../shared/gt-script/index.ts'
+import {
+  getAt,
+  parseScript,
+  versionOf,
+  wrap,
+  type GtPath,
+  type GtScript,
+  type GtStep,
+} from '../../../../shared/gt-script/index.ts'
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { Confirm, ErrorText } from '../../../ui.tsx'
@@ -8,8 +16,11 @@ import { useApis } from '../gt-api/model.ts'
 import { guardsSupported, GUARD_MIN_VERSION } from '../gt-guards/model.ts'
 import type { CmdCtx } from './commands.ts'
 import { EditContext } from './ctx.ts'
+import { EditorHeader } from './EditorHeader.tsx'
 import { Inspector } from './Inspector.tsx'
 import { useRecordHere } from './record-here.ts'
+import { EditRail } from './rail/EditRail.tsx'
+import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useScript } from './use-script.ts'
 import { allViews } from './views.ts'
@@ -18,43 +29,70 @@ import { allViews } from './views.ts'
 const VIEW_KEY = 'ue.gt.editView'
 const readView = () => {
   try {
-    return localStorage.getItem(VIEW_KEY) ?? 'list'
+    // 默认流程图（定稿第 9 节、效果图 1）；用过别的视图就记住
+    return localStorage.getItem(VIEW_KEY) ?? 'flow'
   } catch {
-    return 'list'
+    return 'flow'
   }
 }
 
+/** 场景库里的一项（GameTest 页的场景列表），左栏的脚本库用 */
+export interface EditScenario {
+  name: string
+  relativePath: string
+  steps: number
+  tags?: string[]
+}
+
 /**
- * 场景编辑页（定稿第 9 节）：上面一条工具栏（视图切换、撤销重做、保存），中间是视图，右栏是检查器 / 脚本设置。
- * 视图来自视图注册表，块的样子来自块 UI 注册表，这里只管把它们拼起来、读写文件
+ * 场景编辑页（定稿第 9 节、效果图 1）：整页编辑器。上面一条顶栏（面包屑、编写 / 录制、视图切换、目标、保存、试节点、运行），
+ * 左栏是节点面板和脚本库，中间是视图，右栏是检查器 / 脚本设置；在跑这个脚本时顶栏下面多一条运行横条。
+ * 视图来自视图注册表，块的样子来自块 UI 注册表，节点面板来自面板格子注册表，这里只管把它们拼起来、读写文件
  */
 export function GtEditor({
   project,
   root,
   scenario,
+  scenarios,
   live,
   gtVersion,
   onClose,
   onSaved,
+  onOpen,
+  onRecord,
   onRecordHere,
+  onRun,
+  run,
 }: {
   project: string
   /** 场景根的绝对路径 */
   root: string
-  scenario: { name: string; relativePath: string }
+  scenario: EditScenario
+  /** 场景库全部场景（左栏脚本库） */
+  scenarios: EditScenario[]
   live: boolean
   gtVersion?: string
   onClose: () => void
   onSaved: () => void
+  /** 打开另一个脚本（脚本库里点的） */
+  onOpen: (relativePath: string) => void
+  /** 开始录制（录成新脚本，放在这个脚本的文件夹里） */
+  onRecord?: () => void
   /** 从选中这一步后面接着录（GameTest 1.10.0）：after 是步骤 id；不给时菜单项灰掉 */
   onRecordHere?: (after?: string) => Promise<void> | void
+  /** 跑这个脚本：不给 from 跑整个文件，给了就用编辑中的数据从第 index 步跑到底 */
+  onRun?: (from?: { doc: GtScript; index: number }) => void
+  /** 正在跑这个脚本时的进度 */
+  run?: EditRun
 }) {
-  const { ui, cn } = h()
+  const { ui } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
   const apis = useApis(project, root, live)
   const [aliases, setAliases] = useState<string[]>([])
   const [view, setView] = useState(readView)
   const [leaving, setLeaving] = useState(false)
+  // 有改动时在脚本库里点了另一个脚本：先问一句
+  const [switchTo, setSwitchTo] = useState<string>()
   const views = allViews()
   const View = (views.find((v) => v.id === view) ?? views[0]).Component
   const fileVersion = (() => {
@@ -95,6 +133,23 @@ export function GtEditor({
     await s.save()
     onSaved()
   }
+  const setViewKept = (v: string) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // 存不了就每次从流程图开始
+    }
+  }
+  // 跑之前先存盘：UE 跑的是磁盘上的文件
+  const runAll =
+    onRun &&
+    (async () => {
+      if (s.dirty) await save()
+      onRun()
+    })
+  const sel = s.selected.length === 1 ? s.selected[0] : undefined
+  const topIndex = sel && sel.length === 2 && sel[0] === 'steps' && typeof sel[1] === 'number' ? sel[1] : undefined
 
   // 整页快捷键：输入框里也要能 Ctrl+S；撤销重做在输入框里交给输入框自己
   useEffect(() => {
@@ -134,42 +189,26 @@ export function GtEditor({
   return (
     <EditContext.Provider value={{ project, root, live, doc: s.doc, apis: apis.items, aliases }}>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-        <header className="ue:flex ue:min-h-12 ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2">
-          <ui.IconButton
-            icon={ArrowLeft}
-            size="sm"
-            label={t('回到运行结果')}
-            onClick={() => (s.dirty ? setLeaving(true) : onClose())}
-          />
-          <span className="ue:truncate ue:text-body ue:font-medium ue:text-fg">{scenario.name}</span>
-          <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">{scenario.relativePath}</span>
-          <ui.Segmented
-            size="sm"
-            className="ue:ml-auto"
-            label={t('视图')}
-            value={view}
-            onChange={(v: string) => {
-              setView(v)
-              try {
-                localStorage.setItem(VIEW_KEY, v)
-              } catch {
-                // 存不了就每次从列表开始
-              }
-            }}
-            options={views.map((v) => ({ id: v.id, label: v.label() }))}
-          />
-          <ui.IconButton icon={Undo2} size="sm" label={t('撤销（Ctrl+Z）')} disabled={!s.canUndo} onClick={s.undo} />
-          <ui.IconButton icon={Redo2} size="sm" label={t('重做（Ctrl+Y）')} disabled={!s.canRedo} onClick={s.redo} />
-          <span className="ue:text-caption ue:text-subtle">{s.dirty ? t('改过，没存') : t('已保存')}</span>
-          <ui.Button size="sm" disabled={!s.dirty || s.saving} onClick={() => void save()}>
-            {s.saving ? (
-              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
-            ) : (
-              <Save className="ue:h-3.5 ue:w-3.5" />
-            )}
-            {t('保存')}
-          </ui.Button>
-        </header>
+        <EditorHeader
+          name={scenario.name}
+          folder={scenario.relativePath.split('/').slice(0, -1).join('/')}
+          recorded={(scenario.tags ?? []).includes('recorded')}
+          onBack={() => (s.dirty ? setLeaving(true) : onClose())}
+          views={views}
+          view={view}
+          onView={setViewKept}
+          onRecord={onRecord}
+          dirty={s.dirty}
+          saving={s.saving}
+          onSave={() => void save()}
+          onTry={onTry && sel ? () => onTry(sel) : undefined}
+          onRun={runAll && !run ? () => void runAll() : undefined}
+          onRunFrom={
+            onRun && !run && topIndex !== undefined && s.doc ? () => onRun({ doc: s.doc!, index: topIndex }) : undefined
+          }
+          running={!!run}
+        />
+        {run && <RunBanner run={run} />}
         {old && (
           <p className="ue:flex ue:items-center ue:gap-1.5 ue:border-b ue:border-line ue:bg-warning/8 ue:px-4 ue:py-1.5 ue:text-footnote ue:text-warning">
             <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
@@ -212,14 +251,26 @@ export function GtEditor({
           </div>
         ) : (
           <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:lg:flex-row ue:lg:overflow-hidden">
+            <EditRail
+              doc={s.doc}
+              selected={s.selected}
+              onChange={s.apply}
+              onSelect={s.select}
+              scenarios={scenarios}
+              current={scenario.relativePath}
+              onOpen={(p) => (p === scenario.relativePath ? undefined : s.dirty ? setSwitchTo(p) : onOpen(p))}
+            />
             <section className="ue:flex ue:min-h-[50vh] ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">
-              <View doc={s.doc} onChange={s.apply} selected={s.selected} onSelect={s.select} onTry={onTry} />
+              <View
+                doc={s.doc}
+                onChange={s.apply}
+                selected={s.selected}
+                onSelect={s.select}
+                onTry={onTry}
+                history={{ undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo }}
+              />
             </section>
-            <aside
-              className={cn(
-                'ue:min-h-0 ue:shrink-0 ue:overflow-auto ue:border-t ue:border-line ue:lg:w-[380px] ue:lg:border-t-0 ue:lg:border-l',
-              )}
-            >
+            <aside className="ue:min-h-0 ue:shrink-0 ue:overflow-auto ue:border-t ue:border-line ue:lg:w-[380px] ue:lg:border-t-0 ue:lg:border-l">
               {s.selected.length && cmdCtx ? (
                 <Inspector doc={s.doc} selected={s.selected} onChange={s.apply} ctx={cmdCtx} onTry={onTry} />
               ) : (
@@ -241,6 +292,20 @@ export function GtEditor({
         onCancel={() => setLeaving(false)}
       >
         <p className="ue:text-footnote ue:text-fg">{t('离开后这次的改动就丢了。要留着就先点「保存」。')}</p>
+      </Confirm>
+      <Confirm
+        open={!!switchTo}
+        title={t('有改动没存')}
+        okText={t('不存，打开那个')}
+        danger
+        onOk={() => {
+          const p = switchTo
+          setSwitchTo(undefined)
+          if (p) onOpen(p)
+        }}
+        onCancel={() => setSwitchTo(undefined)}
+      >
+        <p className="ue:text-footnote ue:text-fg">{t('打开别的脚本，这次的改动就丢了。要留着就先点「保存」。')}</p>
       </Confirm>
     </EditContext.Provider>
   )

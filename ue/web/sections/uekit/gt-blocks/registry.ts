@@ -37,6 +37,11 @@ const inserts: InsertItem[] = []
 
 export function registerBlockUi(ui: BlockUi, items: InsertItem[] = []) {
   table.set(ui.action, ui)
+  registerInsertItems(items)
+}
+
+/** 只登记插入项、不登记显示：原有动作（click、key…）的样子走兜底，但节点面板、插入菜单也要能加它们（leaf-items.ts） */
+export function registerInsertItems(items: InsertItem[]) {
   for (const it of items) {
     const i = inserts.findIndex((x) => x.id === it.id)
     if (i >= 0) inserts[i] = it

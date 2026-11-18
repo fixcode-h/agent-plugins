@@ -13,6 +13,7 @@ import './api.tsx'
 import './control.tsx'
 import './widget-ops.tsx'
 import './cond-leaves.tsx'
+import './leaf-items.ts'
 
 export { blockUi, insertItems, TONE_BAR, TONE_TEXT, type BlockTone, type BlockUi, type InsertItem } from './registry.ts'
 export { CommonFields } from './parts.tsx'

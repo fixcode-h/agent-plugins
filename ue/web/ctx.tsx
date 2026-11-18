@@ -20,6 +20,8 @@ export interface UeCtx {
   /** 打开截视口浮层、Ctrl+K 跳转 */
   openShot: () => void
   openJump: () => void
+  /** 分区要整页时（GameTest 编辑页）收起左边的分区栏；换分区或项目时自动放开 */
+  setWide: (on: boolean) => void
 }
 
 export interface Badges {

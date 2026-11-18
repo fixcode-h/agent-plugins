@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { MarkerType, useReactFlow, type Edge, type Node } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Hand, Maximize } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Hand, Maximize, MousePointer2 } from 'lucide-react'
 import { CanvasToolbar, CanvasToolbarSep, GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
 import {
   insert,
@@ -15,6 +15,7 @@ import { FlowContext, type FlowCtx } from './ctx.ts'
 import { EDGE_TYPES, type EdgeData } from './edges.tsx'
 import { defaultCollapsed, layoutFlow, type FlowNode, type InsertAt } from './layout.ts'
 import { NODE_TYPES, type NodeData } from './nodes/index.ts'
+import { ReadableFit } from './readable-fit.tsx'
 import { emptyRun, type FlowRunState } from './run-state.ts'
 
 /** 画布上选中的东西：一步 / 一块（key = 步骤 id 或路径），或者一条守护 */
@@ -196,6 +197,8 @@ export function GtFlowView({
         // 选中的框不抬高：xyflow 默认把选中的节点 z-index 提到最上面，段、循环、如果的框会盖住里面的节点和连线上的 +，点不到
         elevateNodesOnSelect={false}
         minimap={6}
+        // 打开时的视口自己算（readable-fit.tsx）：通用的自动适配会把稍长的脚本缩得看不清
+        autoFit={false}
         miniColor={miniOf(run)}
         onNodeClick={(_, n) => onSelect?.(selOf(n.data.node))}
         onNodeDoubleClick={(_, n) => {
@@ -211,7 +214,17 @@ export function GtFlowView({
         }}
         onPaneClick={() => onSelect?.(undefined)}
       >
+        <ReadableFit />
         <CanvasToolbar>
+          {/* 选择和平移互斥（效果图 1）：选择 = 关掉平移模式，左键空白处照样能拖画布 */}
+          <IconButton
+            icon={MousePointer2}
+            size="sm"
+            label={t('选择')}
+            className={h().cn(!pan && 'ue:bg-sel ue:text-fg')}
+            aria-pressed={!pan}
+            onClick={() => setPan(false)}
+          />
           <IconButton
             icon={Hand}
             size="sm"
@@ -220,6 +233,7 @@ export function GtFlowView({
             aria-pressed={pan}
             onClick={() => setPan(!pan)}
           />
+          <CanvasToolbarSep />
           <FitButton />
           <IconButton
             icon={anyFolded ? ChevronsUpDown : ChevronsDownUp}

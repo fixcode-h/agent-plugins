@@ -52,13 +52,15 @@ function LeafInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
   )
 }
 
-setFallbackUi((action): BlockUi => ({
-  action,
-  title: () => action,
-  icon: actionIcon(action),
-  tone: 'subtle',
-  summary: (s) => stepTitle(s),
-  Inspector: LeafInspector,
-}))
+setFallbackUi(
+  (action): BlockUi => ({
+    action,
+    title: () => action,
+    icon: actionIcon(action),
+    tone: 'subtle',
+    summary: (s) => stepTitle(s),
+    Inspector: LeafInspector,
+  }),
+)
 
 export { LeafInspector }
