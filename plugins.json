@@ -60,5 +60,15 @@
       "asset": "comfy-1.0.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/comfy"
     }
+  ],
+  "wraps": [
+    {
+      "repo": "tt-a1i/archify",
+      "id": "archify",
+      "name": "Archify 架构图",
+      "description": "让 Agent 把系统、流程、问题画成能交互的单页 HTML（十种图和一页式讲解页），诊断报告的「架构页」也用它画。官方包装配方，安装时按 wraps/ 里审核过的配方包装。",
+      "icon": "layout-template",
+      "homepage": "https://github.com/tt-a1i/archify"
+    }
   ]
 }
