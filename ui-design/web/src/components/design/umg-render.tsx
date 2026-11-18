@@ -577,7 +577,9 @@ function UmgBody({
           display: 'flex',
           flexDirection: p.Orientation === 'Orient_Horizontal' ? 'row' : 'column',
           overflow: 'auto',
-          scrollbarWidth: p.ScrollBarVisibility === 'Collapsed' || p.ScrollBarVisibility === 'Hidden' ? 'none' : 'thin',
+          // 要显示的滚动条不写 thin：Chromium 上写了标准属性就不认面板的 ::-webkit-scrollbar，会画回带箭头的原生滚动条；
+          // 不写就跟着面板全站那一套（设置 → 控件样式 →「滚动条」）
+          scrollbarWidth: p.ScrollBarVisibility === 'Collapsed' || p.ScrollBarVisibility === 'Hidden' ? 'none' : undefined,
         },
         <Children w={w} ctx={ctx} />,
       )
