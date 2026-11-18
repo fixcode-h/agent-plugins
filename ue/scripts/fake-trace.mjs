@@ -48,11 +48,7 @@ const GAME = n(1, 0.3, [
   n(2, 0.4, [
     n(3, 0.5, [
       n(4, 0.6, [
-        n(5, 0.1, [
-          n(6, 0.1, [
-            n(7, 0.4, [n(8, 0.5, [n(9, 0.25, [n(10, 0.12)], 6), n(11, 0.06, [], 2)])]),
-          ]),
-        ]),
+        n(5, 0.1, [n(6, 0.1, [n(7, 0.4, [n(8, 0.5, [n(9, 0.25, [n(10, 0.12)], 6), n(11, 0.06, [], 2)])])])]),
         n(12, 0.1, [n(6, 0.1, [n(13, 0.4, [n(14, 0.6, [n(15, 0.18, [], 8), n(16, 0.08)])])])]),
       ]),
       n(17, 0.4, [n(6, 0.1, [n(18, 0.6, [n(11, 0.05)])])]),
@@ -75,7 +71,8 @@ const LANES = [
   { id: 11, name: 'Foreground Worker #0', group: 'TaskGraph', tree: WORKER },
   { id: 12, name: 'Foreground Worker #1', group: 'TaskGraph', tree: WORKER },
 ]
-const totalOf = (x, k, lua) => x.times * (x.self * (LUA[x.t] || CFN.includes(x.t) ? lua : k) + x.kids.reduce((s, c) => s + totalOf(c, k, lua), 0))
+const totalOf = (x, k, lua) =>
+  x.times * (x.self * (LUA[x.t] || CFN.includes(x.t) ? lua : k) + x.kids.reduce((s, c) => s + totalOf(c, k, lua), 0))
 
 /** 摊平一帧一条泳道：每个事件 { s 秒, ms, d, t, x 独占 ms, p 父事件下标 } */
 function layout(tree, start, k, lua) {
@@ -211,12 +208,117 @@ export function traceOps(root) {
     return r
   }
 
+  /** 每帧每条泳道深度 0 的块（和桥接 framestats 一样）、每帧每个计时器的独占时间（framediff 用） */
+  const perFrame = () => {
+    const D = get()
+    if (D.pf) return D.pf
+    const busy = new Map(
+      LANES.filter((l) => l.id !== 11 && l.id !== 12).map((l) => [l.id, new Array(D.start.length).fill(0)]),
+    )
+    // 每帧每条泳道每个计时器的独占时间：excl[帧] = Map(泳道 → Map(计时器 → 毫秒))
+    const excl = D.start.map(() => new Map())
+    for (const [lane, list] of D.events)
+      for (const e of list) {
+        if (e.d === 0 && busy.has(lane)) busy.get(lane)[e.f] += e.ms
+        if (!excl[e.f].has(lane)) excl[e.f].set(lane, new Map())
+        const m = excl[e.f].get(lane)
+        m.set(e.t, (m.get(e.t) ?? 0) + e.x)
+      }
+    return (D.pf = { busy, excl })
+  }
+  const v211 = (a, D) => {
+    const { busy, excl } = perFrame()
+    switch (a.what) {
+      case 'framestats':
+        return {
+          ...base(),
+          type: 'game',
+          f0: 0,
+          count: D.start.length,
+          total: D.start.length,
+          ms: D.ms.map(r3),
+          lanes: [...busy].map(([id, b]) => ({ id, name: LANES.find((l) => l.id === id).name, busy: b.map(r3) })),
+        }
+      case 'framediff': {
+        const order = D.ms.map((ms, i) => [ms, i]).sort((x, y) => x[0] - y[0])
+        const baseF = order
+          .slice(Math.floor(order.length * 0.4), Math.floor(order.length * 0.6))
+          .slice(0, 120)
+          .map((x) => x[1])
+        const of = (f) => {
+          const m = new Map()
+          for (const [lane, ts] of excl[f])
+            if (!a.lanes || a.lanes.includes(lane)) for (const [t, v] of ts) m.set(t, (m.get(t) ?? 0) + v)
+          return m
+        }
+        const avg = new Map()
+        for (const f of baseF) for (const [t, v] of of(f)) avg.set(t, (avg.get(t) ?? 0) + v / baseF.length)
+        return {
+          ...base(),
+          base: { frames: baseF.length, ms: r3(baseF.reduce((s, f) => s + D.ms[f], 0) / baseF.length) },
+          frames: a.frames.map((f) => ({
+            frame: f,
+            start: D.start[f],
+            ms: r3(D.ms[f]),
+            items: [...of(f)]
+              .map(([t, v]) => ({ t, v, b: avg.get(t) ?? 0 }))
+              .filter((x) => x.v > x.b)
+              .sort((x, y) => y.v - y.b - (x.v - x.b))
+              .slice(0, a.top ?? 8)
+              .map((x) => {
+                const lx = D.luaTimers[x.t]
+                return {
+                  id: x.t,
+                  name: NAMES[x.t],
+                  excl: r3(x.v),
+                  base: r3(x.b),
+                  ...(GPU.has(x.t) ? { gpu: true } : {}),
+                  ...(lx ? { file: lx.file, line: lx.line, ...(lx.c ? { c: true } : {}) } : {}),
+                }
+              }),
+          })),
+        }
+      }
+      case 'session':
+        return {
+          ...base(),
+          name: 'Fake',
+          platform: 'Windows',
+          gameFrames: D.start.length,
+          renderFrames: 0,
+          threads: LANES.length,
+          counters: Object.keys(D.counters).length,
+          has: {
+            cpu: true,
+            gpu: true,
+            lua: true,
+            regions: false,
+            memtags: false,
+            allocs: false,
+            loads: false,
+            files: false,
+            tasks: false,
+            switches: false,
+            net: false,
+          },
+        }
+      default:
+        // 没录对应通道：和桥接一样回错误并说明要开什么
+        throw new Error('这份 trace 没有任务数据：录制时要开 task 通道（或用 preset=task）')
+    }
+  }
+
   return {
     'trace.query': (a) => {
       const D = get()
       switch (a.what) {
         case 'info':
-          return { ...base(), frames: D.start.length, lua: true, threads: LANES.map(({ id, name, group }) => ({ id, name, group })) }
+          return {
+            ...base(),
+            frames: D.start.length,
+            lua: true,
+            threads: LANES.map(({ id, name, group }) => ({ id, name, group })),
+          }
         case 'frames':
           return { ...base(), start: D.start, ms: D.ms.map(r3), total: D.start.length }
         case 'bookmarks':
@@ -240,6 +342,25 @@ export function traceOps(root) {
         case 'luainfo':
           return { ...base(), lua: true, timers: D.luaTimers }
         case 'counters': {
+          if (!a.names && a.stats && !globalThis.__fakeTraceOld)
+            return {
+              ...base(),
+              counters: Object.entries(D.counters).map(([name, pts]) => {
+                const vs = pts.filter(([t]) => t >= (a.t0 ?? 0) && t <= (a.t1 ?? Infinity))
+                const v = vs.map((x) => x[1])
+                return {
+                  name,
+                  n: v.length,
+                  min: Math.min(...v),
+                  max: Math.max(...v),
+                  avg: v.reduce((s, x) => s + x, 0) / v.length,
+                  first: v[0],
+                  last: v.at(-1),
+                  firstT: vs[0][0],
+                  lastT: vs.at(-1)[0],
+                }
+              }),
+            }
           if (!a.names) return { ...base(), counters: Object.keys(D.counters).map((name) => ({ name })) }
           const t0 = a.t0 ?? 0
           const t1 = a.t1 ?? D.duration
@@ -270,13 +391,27 @@ export function traceOps(root) {
           const res = lanes.map((id) => {
             const ev = D.events.get(id).filter((e) => inRange(a, e) && e.ms >= min)
             ev.forEach((e) => used.add(e.t))
-            return { id, s: ev.map((e) => e.s), ms: ev.map((e) => r3(e.ms)), d: ev.map((e) => e.d), t: ev.map((e) => e.t), x: ev.map((e) => r3(e.x)), hidden: 0 }
+            return {
+              id,
+              s: ev.map((e) => e.s),
+              ms: ev.map((e) => r3(e.ms)),
+              d: ev.map((e) => e.d),
+              t: ev.map((e) => e.t),
+              x: ev.map((e) => r3(e.x)),
+              hidden: 0,
+            }
           })
-          return { ...base(), lanes: res, names: Object.fromEntries([...used].map((id) => [String(id), NAMES[id]])), cut: false }
+          return {
+            ...base(),
+            lanes: res,
+            names: Object.fromEntries([...used].map((id) => [String(id), NAMES[id]])),
+            cut: false,
+          }
         }
         case 'timers': {
           const rows = new Map()
           for (const [lane, list] of D.events) {
+            if (a.lanes && !a.lanes.includes(lane)) continue
             const ix = lanesIdx(lane)
             for (const e of list) {
               if (!inRange(a, e)) continue
@@ -331,7 +466,11 @@ export function traceOps(root) {
                   for (let d = e.d - 1; d >= 0; d--) {
                     const p = parents[d]
                     let me = at.kids.get(p.t)
-                    if (!me) at.kids.set(p.t, (me = { id: p.t, name: NAMES[p.t], count: 0, incl: 0, excl: 0, kids: new Map() }))
+                    if (!me)
+                      at.kids.set(
+                        p.t,
+                        (me = { id: p.t, name: NAMES[p.t], count: 0, incl: 0, excl: 0, kids: new Map() }),
+                      )
                     me.count++
                     me.incl += e.ms
                     at = me
@@ -370,14 +509,28 @@ export function traceOps(root) {
           const ix = lanesIdx(Number(a.lane))
           return {
             ...base(),
-            stack: chain.map((e) => ({ id: e.t, name: NAMES[e.t], start: e.s, ms: r3(e.ms), excl: r3(e.x), depth: e.d })),
+            stack: chain.map((e) => ({
+              id: e.t,
+              name: NAMES[e.t],
+              start: e.s,
+              ms: r3(e.ms),
+              excl: r3(e.x),
+              depth: e.d,
+            })),
             selected: sel,
-            children: me ? ix.childrenOf(me).map((c) => ({ id: c.t, name: NAMES[c.t], count: 1, incl: r3(c.ms), inclMax: r3(c.ms) })) : [],
+            children: me
+              ? ix
+                  .childrenOf(me)
+                  .map((c) => ({ id: c.t, name: NAMES[c.t], count: 1, incl: r3(c.ms), inclMax: r3(c.ms) }))
+              : [],
           }
         }
         case 'instances': {
           const hits = []
-          for (const [lane, list] of D.events) for (const e of list) if (e.t === a.timer && inRange(a, e)) hits.push({ lane, start: e.s, ms: r3(e.ms), excl: r3(e.x), depth: e.d })
+          for (const [lane, list] of D.events)
+            for (const e of list)
+              if (e.t === a.timer && inRange(a, e))
+                hits.push({ lane, start: e.s, ms: r3(e.ms), excl: r3(e.x), depth: e.d })
           hits.sort((x, y) => y.ms - x.ms)
           const sum = hits.reduce((s, x) => s + x.ms, 0)
           return {
@@ -394,6 +547,13 @@ export function traceOps(root) {
             items: hits.slice(0, 50),
           }
         }
+        // ---------- UELink 2.11 起（globalThis.__fakeTraceOld 为真时装成旧桥接，测面板的兜底） ----------
+        case 'framestats':
+        case 'framediff':
+        case 'session':
+        case 'tasks':
+          if (globalThis.__fakeTraceOld) throw new Error(`不认识的查询：${a.what}`)
+          return v211(a, D)
         default:
           throw new Error(`不认识的查询：${a.what}`)
       }

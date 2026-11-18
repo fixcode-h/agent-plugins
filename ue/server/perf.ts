@@ -1,4 +1,4 @@
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   captureId,
@@ -51,7 +51,7 @@ export interface ActiveCapture {
   seconds: number
   pid: number
   by: Actor
-  marks: { at: number; name: string }[]
+  marks: { at: number; name: string; shot?: string }[]
   /** 开始前已经有的文件，结束后用来认出新文件 */
   before: string[]
 }
@@ -388,7 +388,7 @@ export async function stopCapture(ctx: OpCtx, id?: string, auto = false) {
 }
 
 /** 书签：往 CSV 里写一个事件（引擎的 CsvEvent 命令），面板这边同时记一份时间，引擎没写进去时也能按时间切段 */
-export async function markCapture(ctx: OpCtx, name: string) {
+export async function markCapture(ctx: OpCtx, name: string, shot = false) {
   const label = name.trim().replace(/[\s,;"]+/g, '_')
   if (!label) throw new BridgeError(t('书签要有名字'))
   const active = await readActive(ctx.project.id)
@@ -397,10 +397,27 @@ export async function markCapture(ctx: OpCtx, name: string) {
   const at = elapsedOf(item.startedAt)
   // trace 的书签进 trace 本身（时间轴上画竖线）；CSV 的进 CSV 事件
   const command = item.kind === 'trace' ? `Trace.Bookmark ${label}` : `CsvEvent ${label}`
-  const res = await runOp(granted({ ...ctx, target: { instance: item.pid } }), 'console', { command })
-  item.marks.push({ at, name: label })
+  const run = granted({ ...ctx, target: { instance: item.pid } })
+  const res = await runOp(run, 'console', { command })
+  // shot：同时截一张视口图存成文件，分析时 what=screenshots 能对上书签看当时的画面（设计稿 4.2）
+  const file = shot ? await saveShot(run, item, label) : undefined
+  item.marks.push({ at, name: label, ...(file ? { shot: file } : {}) })
   await writeJson(activeFile(ctx.project.id), active)
-  return { marked: label, at, output: res.output }
+  return { marked: label, at, ...(file ? { shot: file } : {}), output: res.output }
+}
+
+async function saveShot(ctx: OpCtx, item: ActiveCapture, label: string) {
+  const r = (await runOp(ctx, 'screenshot', { maxWidth: 1280 }, 20000)) as { png?: string }
+  if (!r.png) return undefined
+  const file = path.join(
+    profilingDir(ctx.project),
+    'AgentPanel',
+    'shots',
+    `${item.id}-${item.marks.length}-${safeName(label)}.png`,
+  )
+  await mkdir(path.dirname(file), { recursive: true })
+  await writeFile(file, Buffer.from(r.png, 'base64'))
+  return file
 }
 
 async function memreport(ctx: OpCtx, label?: string) {

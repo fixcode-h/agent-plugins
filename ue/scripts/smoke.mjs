@@ -690,6 +690,109 @@ try {
     r = await traceStart({ label: 'off' })
     assert.ok(!/\blua\b/.test(r.cmd), r.cmd)
     await api('POST', '/p/p1/settings', { perfLua: null })
+
+    // ---------- Agent 分析 trace（「UE 性能分析 MCP 接口」设计稿：diagnose、hitches、bound、record / wait、compare、export） ----------
+    writeFileSync(cardFile, JSON.stringify({ ...card, bridge: '2.11.0' }))
+    const cap = async (args) => {
+      const r = await call('ue_capture', args)
+      assert.ok(!r.isError, `${JSON.stringify(args)}：${text(r)}`)
+      assert.ok(text(r).length <= 12000, `${args.what ?? args.action} 结果太长：${text(r).length}`)
+      return JSON.parse(text(r))
+    }
+    const rec = JSON.parse(
+      text(
+        await call(
+          'ue_perf',
+          {
+            action: 'record',
+            label: 'bag',
+            lua: false,
+            steps: [
+              { mark: 'OpenBag', shot: true },
+              { console: 'stat unit' },
+              { wait: 0.2 },
+              { gm: 'OpenBag' },
+              { mark: 'CloseBag' },
+            ],
+          },
+          yes,
+        ),
+      ),
+    )
+    assert.ok(rec.capture?.id && rec.analysis?.analyzed, JSON.stringify(rec))
+    assert.ok(rec.steps.every((x) => x.ok) && rec.steps.length === 5, JSON.stringify(rec.steps))
+    const tid = rec.capture.id
+    assert.equal((await cap({ action: 'query', id: tid, what: 'screenshots' })).count, 1)
+    const waited = JSON.parse(text(await call('ue_perf', { action: 'wait', id: tid, timeoutMs: 2000 })))
+    assert.equal(waited.analyzed, true)
+    // 诊断：卡顿按元凶分组（假 trace 的卡顿主要是 Lua 放大），每条带 impactMs 排好序，给出并行方向
+    const dg = await cap({ action: 'diagnose', id: tid })
+    assert.ok(dg.frames.hitches >= 3, JSON.stringify(dg.frames))
+    assert.equal(Object.keys(dg.bound)[0], 'game', JSON.stringify(dg.bound))
+    assert.ok(
+      dg.findings.some((x) => x.kind === 'hitch' && x.title.startsWith('Lua')),
+      JSON.stringify(dg.findings),
+    )
+    for (let i = 1; i < dg.findings.length; i++)
+      assert.ok(dg.findings[i - 1].impactMs >= (dg.findings[i].impactMs ?? 0))
+    assert.ok(
+      dg.drill.some((x) => x.focus === 'lua'),
+      JSON.stringify(dg.drill),
+    )
+    const hh = await cap({ action: 'query', id: tid, what: 'hitches' })
+    assert.equal(hh.items.items[0].frame, 300, '最慢的是第 300 帧')
+    assert.equal(hh.items.items[0].culprit, 'Lua')
+    assert.ok(
+      hh.items.items[0].grew.some((g) => g.src && /AIUtil|BagPanel|ItemSlot|BP_Player|ABP_AI|WBP_HUD/.test(g.src)),
+    )
+    const bd = await cap({ action: 'query', id: tid, what: 'bound' })
+    assert.ok(bd.share.game > 0.9, JSON.stringify(bd))
+    const th = await cap({ action: 'query', id: tid, what: 'threads' })
+    assert.equal(th.threads[0].name, 'GameThread')
+    const fr = await cap({ action: 'query', id: tid, what: 'frame', frame: 300 })
+    assert.equal(fr.bound, 'game')
+    assert.ok(fr.grew.length && fr.lanes.length >= 3, JSON.stringify(fr).slice(0, 400))
+    // 线程按名字找：GameThread 唯一；「Worker」对得上两条要报错列出候选，不悄悄挑一个
+    const gtTimers = await cap({ action: 'query', id: tid, what: 'timers', lane: 'GameThread', perFrame: true })
+    assert.ok(gtTimers.items.every((x) => x.name !== 'TaskGraph Task') && gtTimers.items[0].perFrameMs > 0)
+    const amb = await call('ue_capture', { action: 'query', id: tid, what: 'timers', lane: 'Worker' })
+    assert.ok(amb.isError && /好几条线程/.test(text(amb)), text(amb))
+    assert.ok(
+      (await cap({ action: 'query', id: tid, what: 'instances', timer: 'AIUtil:FindPath' })).items[0].frame >= 0,
+    )
+    assert.ok((await cap({ action: 'query', id: tid, what: 'events', frame: 300, minMs: 1 })).count > 0)
+    const cs = await cap({ action: 'query', id: tid, what: 'counters', sort: 'growth' })
+    assert.equal(cs.total, 4)
+    for (let i = 1; i < cs.items.length; i++)
+      assert.ok(cs.items[i - 1].growth >= cs.items[i].growth, JSON.stringify(cs.items))
+    assert.equal((await cap({ action: 'query', id: tid, what: 'log', verbosity: 'Warning' })).count, 1)
+    assert.equal((await cap({ action: 'query', id: tid, what: 'session' })).has.lua, true)
+    const noTask = await call('ue_capture', { action: 'query', id: tid, what: 'tasks' })
+    assert.ok(noTask.isError && /task 通道/.test(text(noTask)), text(noTask))
+    // 对比：同一份比自己，变化都是 0；导出写文件只回路径
+    const cmpT = await cap({ action: 'compare', id: tid, other: tid })
+    assert.equal(cmpT.frames.avgMs[2], 0)
+    assert.equal(cmpT.worse.length, 0)
+    const ex = await cap({ action: 'export', id: tid, what: 'frames' })
+    assert.ok(existsSync(ex.file) && ex.rows === 600 && ex.columns.includes('GameThread'), JSON.stringify(ex))
+    // 旧桥接（没有 framestats / framediff）：面板用 timing 和逐帧 timers 兜底，照样能诊断，标 approx
+    globalThis.__fakeTraceOld = true
+    try {
+      const rec2 = JSON.parse(
+        text(await call('ue_perf', { action: 'record', label: 'old', lua: false, steps: [{ wait: 0.1 }] }, yes)),
+      )
+      const dg2 = await cap({ action: 'diagnose', id: rec2.capture.id })
+      assert.equal(dg2.approx, true)
+      assert.equal(Object.keys(dg2.bound)[0], 'game', JSON.stringify(dg2.bound))
+      assert.ok(
+        dg2.findings.some((x) => x.kind === 'hitch'),
+        JSON.stringify(dg2.findings),
+      )
+      const oldS = await call('ue_capture', { action: 'query', id: rec2.capture.id, what: 'session' })
+      assert.ok(oldS.isError && /2\.11\.0/.test(text(oldS)), text(oldS))
+    } finally {
+      globalThis.__fakeTraceOld = false
+    }
     writeFileSync(cardFile, JSON.stringify(card))
     rmSync(path.join(proj, 'Plugins', 'UnLua'), { recursive: true, force: true })
   }
