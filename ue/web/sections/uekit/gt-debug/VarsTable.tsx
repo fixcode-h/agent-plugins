@@ -8,6 +8,24 @@ export const valueText = (v: unknown) => {
 }
 
 /**
+ * 报告里一步的 payload.vars（GameTest 1.11.2）：这一步用到、写到的变量在这一步结束时的值。
+ * 没有或空时返回 undefined；`_truncated` 是截断标记不是变量，单独拿出来
+ */
+export function stepVars(payload?: Record<string, unknown>) {
+  const v = payload?.vars
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const { _truncated, ...vars } = v as Record<string, unknown>
+  if (!Object.keys(vars).length) return undefined
+  return { vars, truncated: _truncated === true }
+}
+
+/** 一行写下这一步的变量：`$a = 1 · $b = "x"`，给报告列表用 */
+export const varsLine = (vars: Record<string, unknown>) =>
+  Object.entries(vars)
+    .map(([k, v]) => `$${k} = ${valueText(v)}`)
+    .join(' · ')
+
+/**
  * 变量表（效果图 6 右下「此刻的变量」、「变量」页）：名字 | 值。
  * full 时把脚本声明的参数、变量都列出来，暂停时有此刻的值就显示此刻的，没有显示默认值（灰）
  */

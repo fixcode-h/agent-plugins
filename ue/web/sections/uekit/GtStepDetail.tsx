@@ -30,6 +30,7 @@ import { commandSuggestion, isEditorStep } from './gt-editor-steps.ts'
 import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
 import { canSkip, GtSkipIf } from './GtSkipIf.tsx'
 import { GtSkipResult } from './GtSkipResult.tsx'
+import { stepVars, VarsTable } from './gt-debug/VarsTable.tsx'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -185,6 +186,7 @@ export function StepDetail({
   const fallback = typeof res?.payload?.fallback === 'string' ? res.payload.fallback : undefined
   // GameTest 1.2.0-beta.6 起：这一步期间按运行配置自动关掉的阻挡界面
   const blockers = Array.isArray(res?.payload?.blockers) ? (res.payload.blockers as GtBlockerEvent[]) : []
+  const vars = stepVars(res?.payload)
   const shot = [res?.payload?.path, res?.payload?.screenshot, res?.payload?.annotated].find(
     (p): p is string => typeof p === 'string' && /\.(png|jpe?g)$/i.test(p),
   )
@@ -242,6 +244,13 @@ export function StepDetail({
           </div>
         )}
       </Block>
+      {/* GameTest 1.11.2：这一步用到、写到的变量在这一步结束时的值 */}
+      {vars && (
+        <Block title={t('变量')}>
+          <VarsTable vars={vars.vars} />
+          {vars.truncated && <p className="ue:text-caption ue:text-subtle">{t('变量太多，只记了一部分')}</p>}
+        </Block>
+      )}
       {(hint || ambiguous) && (
         <Block title={t('控件')}>
           {hint && <HintFields hint={hint} />}
