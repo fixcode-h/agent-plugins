@@ -8,7 +8,7 @@ import { commandSuggestion, editorStepTitle, editorVia, isEditorStep } from './g
 import type { RecordStatus } from './GtRecord.tsx'
 
 /**
- * 录 UE 编辑器操作的录制中界面（定稿 10.1、效果图 7，GameTest 1.10.0）：和录游戏同一个样子（红点、名字、时长、步数、
+ * 录 UE 编辑器操作的录制中界面（定稿 10.1、效果图 7，GameTest 1.11.0）：和录游戏同一个样子（红点、名字、时长、步数、
  * 检查点、停止并保存），但走 gt.editrec.*。每步右边标它是从哪录来的（资产事件、选中事件、属性改动、界面点击……），
  * 界面点击找得到同名编辑器命令时提示「可换成命令」（录完在步骤详情里点）。
  */

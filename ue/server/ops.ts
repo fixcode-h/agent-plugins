@@ -108,7 +108,7 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'gt.record.mark':
     case 'gt.record.move':
     case 'gt.record.stop':
-    // 录 UE 编辑器操作（GameTest 1.10.0）：只是开始盯编辑器事件，不改资产
+    // 录 UE 编辑器操作（GameTest 1.11.0）：只是开始盯编辑器事件，不改资产
     case 'gt.editrec.start':
     case 'gt.editrec.mark':
     case 'gt.editrec.stop':

@@ -23,7 +23,7 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
   const n = (k: string) => (typeof def[k] === 'number' ? (def[k] as number) : Number.NaN)
   const w = widgetLabel(hintOf(def), s('target'))
   const a = String(def.action ?? '')
-  // 录 UE 编辑器操作的步骤（GameTest 1.10.0）没有选择器，按对象和资源说
+  // 录 UE 编辑器操作的步骤（GameTest 1.11.0）没有选择器，按对象和资源说
   if (isEditorStep(a)) return editorStepTitle(def)
   switch (a) {
     case 'click': {

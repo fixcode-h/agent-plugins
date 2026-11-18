@@ -29,7 +29,7 @@ export interface RecordStatus extends RecordQuick {
   askTimeoutSec?: number
   /** 接着录（GameTest 1.10.0）：录到的段插进哪个场景的哪一步后面 */
   insert?: { scenario: string; after?: string }
-  /** 录的是 UE 编辑器操作（gt.editrec.*，GameTest 1.10.0）；录游戏时没有 */
+  /** 录的是 UE 编辑器操作（gt.editrec.*，GameTest 1.11.0）；录游戏时没有 */
   target?: 'editor' | string
   /** 录编辑器时最近弹出的模态框标题 */
   modal?: string

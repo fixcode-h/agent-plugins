@@ -28,6 +28,7 @@ import { GtOfflineBar } from './GtOffline.tsx'
 import { useGtAgentWrite } from './gt-author/GtAgentWrite.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { EDITOR_RECORD_HELP, GtEditorRecord } from './GtEditorRecord.tsx'
+import { editorRecordSupported } from './gt-editor-steps.ts'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
 import { keyAskArgs } from './gt-key.ts'
 import { GtKeyAsk } from './GtKeyAsk.tsx'
@@ -85,7 +86,7 @@ export function GameTest() {
   const [recordDir, setRecordDir] = useState<string>()
   // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
   const [keepPace, setKeepPace] = useState(false)
-  // 录游戏（PIE 里的操作）还是录 UE 编辑器操作（GameTest 1.10.0，定稿 10.1）
+  // 录游戏（PIE 里的操作）还是录 UE 编辑器操作（GameTest 1.11.0，定稿 10.1）
   const [recTarget, setRecTarget] = useState<'game' | 'editor'>('game')
   // 录制器认控件靠什么：hitPath 表示这个进程没编 Slate 调试，打字录不到，开始录制前就提示
   const [handlerSource, setHandlerSource] = useState<string>()
@@ -132,8 +133,8 @@ export function GameTest() {
         if (r.recording) setRec(r)
       })
       .catch(() => undefined)
-    // 正在录编辑器操作（刷新了页面）：GameTest 1.10.0 起才有，旧版本报不认识的操作，忽略
-    if (segmentSupported(gtVersion))
+    // 正在录编辑器操作（刷新了页面）：GameTest 1.11.0 起才有，旧版本报不认识的操作，忽略
+    if (editorRecordSupported(gtVersion))
       void op<RecordStatus>(project.id, 'gt.editrec.status', { last: 200 })
         .then((r) => r.recording && setRec(r))
         .catch(() => undefined)
@@ -334,7 +335,7 @@ export function GameTest() {
       setAsking(false)
       // 接着录存回原场景，不挪文件夹
       if (insert) setRecordDir(undefined)
-      if (!insert && recTarget === 'editor') {
+      if (!insert && recTarget === 'editor' && editorRecordSupported(gtVersion)) {
         const e = await op<RecordStatus>(project.id, 'gt.editrec.start', { name: recName.trim() || t('编辑器录制') })
         setRec({ ...e, target: 'editor', last: [] })
         return
@@ -735,7 +736,7 @@ export function GameTest() {
             placeholder={t('场景名，例如 新手引导')}
             onChange={(e: { target: { value: string } }) => setRecName(e.target.value)}
           />
-          {segmentSupported(gtVersion) && (
+          {editorRecordSupported(gtVersion) && (
             <ui.Segmented
               size="sm"
               label={t('录什么')}
@@ -747,7 +748,7 @@ export function GameTest() {
               ]}
             />
           )}
-          {recTarget === 'editor' && segmentSupported(gtVersion) ? (
+          {recTarget === 'editor' && editorRecordSupported(gtVersion) ? (
             <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
               {EDITOR_RECORD_HELP()}
               {recordDir !== undefined && ` ${t('录完挪进 {p}/。', { p: recordDir })}`}
