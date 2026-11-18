@@ -172,11 +172,11 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_gametest: {
     title: '游戏测试',
-    summary: '在 PIE 里跑 GameTest 场景、单步执行测试动作、看报告',
+    summary: '写、校验、跑 GameTest 测试脚本，看报告',
     useWhen:
-      '要验证 UI 流程或玩法能不能走通、复现用户说的操作步骤时：先 actions 看有哪些动作，step 一步步探路，确认后写成场景文件（放在 status 返回的场景根下），写完用 resolve 核对选择器，再用 run 跑，job / report 看结果；失败时读 report 里 payload.evidence 的截图、控件快照和日志找原因；改完代码要回归时 run tag=… 批量跑；不知道某个控件的选择器怎么写时用 inspect 指着它看；写会改变界面状态的步骤（勾选、领取、开关）时加 skipIf，回放时已经是那个状态就不做（GameTest 1.7.0）',
+      '验证刚改的功能或复现用户说的操作时：先 vars / widgets / api 查能用的变量、控件和接口，按技能 ue-gametest-authoring 写 v3 脚本（invoke / api 准备状态，界面操作，条件或表达式检查），validate 过了再 run，job / report 看结果，失败读 payload.evidence；通过的放进 regression/ 打标签，以后 run tag=… 回归。不知道选择器怎么写时 widgets 读 WBP，游戏开着时 inspect 指着看',
     avoidWhen:
-      '只读运行时数值用 ue_get（控件属性用 ue_get tree=true），找 Actor 用 ue_find；只截一张图看用 ue_screenshot（图直接返回），只临时开停 PIE 用 ue_editor，只敲一条控制台命令用 ue_console——要写进报告、能回放时才用对应的场景步骤；录制要用户在游戏窗口里操作，在 UE 页 GameTest 里点「录制」；click 已经自带等待，不要在前面插 wait seconds',
+      '不要让用户去录制，能从代码写就自己写；只读运行时数值用 ue_get，找 Actor 用 ue_find，只截图用 ue_screenshot，只开停 PIE 用 ue_editor，只敲一条命令用 ue_console——要写进报告、能回放时才用对应的脚本步骤；click 自带等待，不要在前面插 wait seconds；Lua 不用 ue_lua 求值绕过脚本，写成项目 Lua 接口',
     group: RUN,
   },
   ue_vs_debug: {
