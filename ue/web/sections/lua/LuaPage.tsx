@@ -2,6 +2,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Note, PageHead, useTargetInfo } from '../../ui.tsx'
 import { LUA_HEAD_ACTIONS, LUA_TABS } from './tabs.ts'
+import { SubNav, SubRows } from '../../nav/slot.tsx'
 
 /**
  * Lua 页（装了 UnLua 的项目才出现）：页签登记在 tabs.ts。地址是 lua/<页签>/<页签自己的子路径>，
@@ -30,23 +31,41 @@ export function Lua() {
           <a.View key={a.id} />
         ))}
       </PageHead>
-      <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
-        <ui.Segmented
-          size="sm"
+      {/* 宽屏放进左边二级面板（方案 B），面板太旧或二级面板收起时照旧是这一排页签 */}
+      <SubNav
+        fallback={
+          <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
+            <ui.Segmented
+              size="sm"
+              label={t('Lua 页签')}
+              value={tab.id}
+              onChange={(id: string) => go('lua', id)}
+              options={LUA_TABS.map((x, i) => {
+                const b = badges[i]
+                // 共用的分段控件只收文字：数字拼在名字后面，要紧的（报错）再加提示点
+                return {
+                  id: x.id,
+                  label: b ? `${x.label()} ${b.text}` : x.label(),
+                  dot: b?.tone === 'danger' ? b.hint : undefined,
+                }
+              })}
+            />
+          </div>
+        }
+      >
+        <SubRows
           label={t('Lua 页签')}
+          rows={LUA_TABS.map((x, i) => ({
+            id: x.id,
+            label: x.label(),
+            meta: badges[i]?.text,
+            tone: badges[i]?.tone,
+            title: badges[i]?.hint,
+          }))}
           value={tab.id}
-          onChange={(id: string) => go('lua', id)}
-          options={LUA_TABS.map((x, i) => {
-            const b = badges[i]
-            // 共用的分段控件只收文字：数字拼在名字后面，要紧的（报错）再加提示点
-            return {
-              id: x.id,
-              label: b ? `${x.label()} ${b.text}` : x.label(),
-              dot: b?.tone === 'danger' ? b.hint : undefined,
-            }
-          })}
+          onPick={(id) => go('lua', id)}
         />
-      </div>
+      </SubNav>
       {inst?.lua && !inst.lua.available && (
         <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
           <Note>{inst.lua.error || t('现在拿不到 Lua 环境')}</Note>

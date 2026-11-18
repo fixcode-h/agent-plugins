@@ -127,6 +127,18 @@ export interface WebHost {
      * 插件自己的设置页用，和设置 →「插件参数」改的是同一份值。2026-11-17 加的，旧面板没有：用之前先判断有没有
      */
     PluginParams?: Loose
+    /**
+     * 分区导航（2026-11-18 加的，旧面板没有：用之前先判断有没有）：图标轨 SectionRail { items, current, onPick, top?, bottom? }、
+     * 轨上的按钮 RailAction { icon, label, onClick, on?, dot? }、二级面板 SidePanel { title, onCollapse?, children }、
+     * 面板里的分组标题 SidePanelLabel、一行 SidePanelRow { icon?, label, on?, onClick, meta?, tone? }、状态小块 StatusChip { tone?, icon?, onClick?, title?, busy? }。
+     * 设置 → 组件 →「分区导航」里能调
+     */
+    SectionRail?: Loose
+    RailAction?: Loose
+    SidePanel?: Loose
+    SidePanelLabel?: Loose
+    SidePanelRow?: Loose
+    StatusChip?: Loose
   }
   toast: { error: (m: string) => void; success: (m: string) => void }
   cn: (...c: unknown[]) => string

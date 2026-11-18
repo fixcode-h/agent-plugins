@@ -1,3 +1,4 @@
+import { Box, ListTree, Search } from 'lucide-react'
 import { useEffect } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -8,6 +9,7 @@ import { setPending, takePending } from '../../pending.ts'
 import { ObjectTree } from '../ObjectTree.tsx'
 import { Outliner } from '../Outliner.tsx'
 import { ClassSearch } from './ClassSearch.tsx'
+import { SubNav, SubRows } from '../../nav/slot.tsx'
 
 export type BrowseTab = 'outline' | 'tree' | 'search'
 
@@ -49,19 +51,35 @@ export function Browse({
   }, [])
   return (
     <>
-      <div className="ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2">
-        <ui.Segmented
-          size="sm"
-          label={t('大纲 / UObject 树 / 按类搜')}
+      {/* 宽屏放进左边二级面板（方案 B），面板太旧或二级面板收起时照旧是这一排页签 */}
+      <SubNav
+        fallback={
+          <div className="ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2">
+            <ui.Segmented
+              size="sm"
+              label={t('大纲 / UObject 树 / 按类搜')}
+              value={tab}
+              onChange={setTab}
+              options={[
+                { id: 'outline' as const, label: t('大纲') },
+                { id: 'tree' as const, label: t('UObject 树') },
+                { id: 'search' as const, label: t('按类搜') },
+              ]}
+            />
+          </div>
+        }
+      >
+        <SubRows
+          label={t('浏览')}
           value={tab}
-          onChange={setTab}
-          options={[
-            { id: 'outline' as const, label: t('大纲') },
-            { id: 'tree' as const, label: t('UObject 树') },
-            { id: 'search' as const, label: t('按类搜') },
+          onPick={setTab}
+          rows={[
+            { id: 'outline' as const, label: t('大纲'), icon: ListTree },
+            { id: 'tree' as const, label: t('UObject 树'), icon: Box },
+            { id: 'search' as const, label: t('按类搜'), icon: Search },
           ]}
         />
-      </div>
+      </SubNav>
       {tab === 'outline' ? (
         <Outliner tick={tick} selected={selected} from={from} onSelect={(p) => onOpen(p, 'outline')} />
       ) : tab === 'tree' ? (

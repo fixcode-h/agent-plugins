@@ -1,4 +1,4 @@
-import { ArrowDown, Copy, Eraser, MessageSquare, Pause, Play, X } from 'lucide-react'
+import { ArrowDown, CircleAlert, Copy, Eraser, List, MessageSquare, Pause, Play, TriangleAlert, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ppost } from '../api.ts'
 import { useToChat } from '../chat.tsx'
@@ -7,6 +7,7 @@ import { h, t } from '../host.ts'
 import { ErrorText, PageHead, SearchBox } from '../ui.tsx'
 import { LineDetail, clock, collapse, lineText, type Line } from './LogParts.tsx'
 import { ClearDialog, Crashes } from './LogsExtra.tsx'
+import { SubNav, SubRows } from '../nav/slot.tsx'
 
 interface TailRes {
   live: boolean
@@ -185,17 +186,44 @@ export function Logs() {
       ) : (
         <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
           <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
-            <ui.Segmented
-              size="sm"
-              label={t('级别')}
-              value={filter.verbosity}
-              onChange={(v: string) => setFilter((f) => ({ ...f, verbosity: v }))}
-              options={[
-                { id: '', label: t('全部') },
-                { id: 'Error', label: info ? t('错误 {n}', { n: info.errors }) : t('错误') },
-                { id: 'Warning', label: info ? t('警告 {n}', { n: info.warnings }) : t('警告') },
-              ]}
-            />
+            <SubNav
+              fallback={
+                <ui.Segmented
+                  size="sm"
+                  label={t('级别')}
+                  value={filter.verbosity}
+                  onChange={(v: string) => setFilter((f) => ({ ...f, verbosity: v }))}
+                  options={[
+                    { id: '', label: t('全部') },
+                    { id: 'Error', label: info ? t('错误 {n}', { n: info.errors }) : t('错误') },
+                    { id: 'Warning', label: info ? t('警告 {n}', { n: info.warnings }) : t('警告') },
+                  ]}
+                />
+              }
+            >
+              <SubRows
+                label={t('级别')}
+                value={filter.verbosity}
+                onPick={(v) => setFilter((f) => ({ ...f, verbosity: v }))}
+                rows={[
+                  { id: '', label: t('全部'), icon: List },
+                  {
+                    id: 'Error',
+                    label: t('错误'),
+                    icon: CircleAlert,
+                    meta: info?.errors ? String(info.errors) : undefined,
+                    tone: 'danger',
+                  },
+                  {
+                    id: 'Warning',
+                    label: t('警告'),
+                    icon: TriangleAlert,
+                    meta: info?.warnings ? String(info.warnings) : undefined,
+                    tone: 'warn',
+                  },
+                ]}
+              />
+            </SubNav>
             <ui.Select
               size="sm"
               className="ue:w-44"

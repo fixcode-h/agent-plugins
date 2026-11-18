@@ -52,6 +52,7 @@ import { useJumpKeys } from './jump/keys.ts'
 import { loadIndex } from './jump/index-data.ts'
 import { ShotDialog } from './Shot.tsx'
 import { JumpEntry, NavItem, ProjectCard, SideFoot, TargetCard } from './Side.tsx'
+import { RailLayout } from './nav/RailLayout.tsx'
 
 /**
  * UE 管理页（设计文档 4.2，图 1）：左栏切项目和分区，右边是分区内容。地址 #/plugin/ue/main/<项目>/<分区>/<子位置>，
@@ -269,52 +270,74 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
     assets: b?.dirty ? { text: t('{n} 未存', { n: b.dirty }), tone: 'warn' } : undefined,
     plugins: ups ? { text: t('{n} 可升级', { n: ups }), title: t('有 {n} 个 UE 插件能升级', { n: ups }) } : undefined,
   }
+  const projectCard = (
+    <ProjectCard
+      pinned={!!fixed}
+      list={list}
+      onAdd={() => setAdding(true)}
+      onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}
+    />
+  )
   return (
     <Ctx.Provider value={ctx}>
       <PendingPie />
-      <div className="ue:flex ue:h-full ue:min-h-0 ue:w-full ue:min-w-0 ue:flex-1 ue:flex-col ue:bg-bg ue:md:flex-row">
-        <aside
-          ref={navRef}
-          style={wide ? { display: 'none' } : nav.style('calc(100% - 480px)')}
-          className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
+      {ui.SectionRail ? (
+        // 方案 B（用户 2026-11-18 定）：图标轨 + 二级面板；面板太旧没有这几个组件时照旧画下面的左栏
+        <RailLayout
+          sections={visible.map((s) => ({ id: s.id, label: s.label(), icon: s.icon, group: s.group() }))}
+          current={{ id: section.id, label: section.label(), icon: section.icon, group: section.group() }}
+          counts={counts}
+          onPick={(id) => go(id, kept<string>(`${project.id}/sub/${id}`))}
+          projectCard={projectCard}
+          wide={wide}
+          onShot={() => setShot(true)}
+          onJump={() => setJump(true)}
+          onAdd={fixed ? undefined : () => setAdding(true)}
         >
-          <ProjectCard
-            pinned={!!fixed}
-            list={list}
-            onAdd={() => setAdding(true)}
-            onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}
-          />
-          <TargetCard />
-          <JumpEntry onClick={() => setJump(true)} />
-          <nav
-            className="ue:flex ue:gap-1 ue:overflow-x-auto ue:md:mt-1 ue:md:flex-col ue:md:overflow-visible"
-            aria-label={t('UE 页分区')}
-          >
-            {groups.map((g) => (
-              <div key={g} className="ue:flex ue:gap-1 ue:md:flex-col">
-                <div className="ue:hidden ue:px-2 ue:pt-3 ue:pb-1 ue:text-caption ue:text-subtle ue:md:block">{g}</div>
-                {visible
-                  .filter((s) => s.group() === g)
-                  .map((s) => (
-                    <NavItem
-                      key={s.id}
-                      icon={s.icon}
-                      label={s.label()}
-                      on={s.id === section.id}
-                      onClick={() => go(s.id, kept<string>(`${project.id}/sub/${s.id}`))}
-                      count={counts[s.id]}
-                    />
-                  ))}
-              </div>
-            ))}
-          </nav>
-          <SideFoot onShot={() => setShot(true)} onAdd={() => setAdding(true)} />
-          <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} edge />
-        </aside>
-        <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
           <View key={`${project.id}/${section.id}`} />
-        </main>
-      </div>
+        </RailLayout>
+      ) : (
+        <div className="ue:flex ue:h-full ue:min-h-0 ue:w-full ue:min-w-0 ue:flex-1 ue:flex-col ue:bg-bg ue:md:flex-row">
+          <aside
+            ref={navRef}
+            style={wide ? { display: 'none' } : nav.style('calc(100% - 480px)')}
+            className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
+          >
+            {projectCard}
+            <TargetCard />
+            <JumpEntry onClick={() => setJump(true)} />
+            <nav
+              className="ue:flex ue:gap-1 ue:overflow-x-auto ue:md:mt-1 ue:md:flex-col ue:md:overflow-visible"
+              aria-label={t('UE 页分区')}
+            >
+              {groups.map((g) => (
+                <div key={g} className="ue:flex ue:gap-1 ue:md:flex-col">
+                  <div className="ue:hidden ue:px-2 ue:pt-3 ue:pb-1 ue:text-caption ue:text-subtle ue:md:block">
+                    {g}
+                  </div>
+                  {visible
+                    .filter((s) => s.group() === g)
+                    .map((s) => (
+                      <NavItem
+                        key={s.id}
+                        icon={s.icon}
+                        label={s.label()}
+                        on={s.id === section.id}
+                        onClick={() => go(s.id, kept<string>(`${project.id}/sub/${s.id}`))}
+                        count={counts[s.id]}
+                      />
+                    ))}
+                </div>
+              ))}
+            </nav>
+            <SideFoot onShot={() => setShot(true)} onAdd={() => setAdding(true)} />
+            <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} edge />
+          </aside>
+          <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
+            <View key={`${project.id}/${section.id}`} />
+          </main>
+        </div>
+      )}
       <AddProject
         open={adding}
         onOpenChange={setAdding}
