@@ -8,6 +8,7 @@ import { Inspector } from '../../inspect/Inspector.tsx'
 import { splitSub } from '../../inspect/nav-state.ts'
 import { keep, useKept } from '../../keep.ts'
 import { setPending, takePending } from '../../pending.ts'
+import { DockCol } from '../../nav/slot.tsx'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, PageHead } from '../../ui.tsx'
 import { MenuHost } from '../../menu.tsx'
@@ -74,6 +75,44 @@ export function Assets() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [path, cur?.from])
 
+  const col = (docked: boolean) => (
+    <>
+      <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} />
+      <div className={docked ? '' : 'ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2'}>
+        <ui.Segmented
+          size="sm"
+          label={t('文件夹 / 搜索')}
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: 'folders' as const, label: t('文件夹') },
+            { id: 'search' as const, label: t('搜索') },
+          ]}
+        />
+      </div>
+      {tab === 'folders' ? (
+        <AssetFolders
+          key={tick}
+          selected={folder ? '' : path}
+          onSelect={(p) => openAsset(p, 'folders')}
+          reveal={reveal}
+          folder={folder}
+          onFolder={showFolder}
+        />
+      ) : (
+        <AssetSearch
+          key={tick}
+          selected={path}
+          onOpen={(p) => openAsset(p, 'assetSearch')}
+          onReveal={(p) => {
+            setTab('folders')
+            setReveal(p)
+          }}
+        />
+      )}
+    </>
+  )
+
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('资源')} desc={t('编辑器没开时自动起后台编辑器读取；改动点「保存」才写回文件')}>
@@ -91,47 +130,23 @@ export function Assets() {
         </ui.Button>
       </PageHead>
       <div className={SPLIT_ROW}>
-        <Card
-          ref={ref}
-          className={PANE_FIXED}
-          style={pane.style('calc(100% - 600px)')}
-          bodyClass="ue:flex ue:min-h-0 ue:flex-col"
-        >
-          <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} />
-          <div className="ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2">
-            <ui.Segmented
-              size="sm"
-              label={t('文件夹 / 搜索')}
-              value={tab}
-              onChange={setTab}
-              options={[
-                { id: 'folders' as const, label: t('文件夹') },
-                { id: 'search' as const, label: t('搜索') },
-              ]}
-            />
-          </div>
-          {tab === 'folders' ? (
-            <AssetFolders
-              key={tick}
-              selected={folder ? '' : path}
-              onSelect={(p) => openAsset(p, 'folders')}
-              reveal={reveal}
-              folder={folder}
-              onFolder={showFolder}
-            />
-          ) : (
-            <AssetSearch
-              key={tick}
-              selected={path}
-              onOpen={(p) => openAsset(p, 'assetSearch')}
-              onReveal={(p) => {
-                setTab('folders')
-                setReveal(p)
-              }}
-            />
-          )}
-        </Card>
-        <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
+        {/* 文件夹 / 搜索整栏放进左边二级面板（用户 2026-11-18 定）；面板太旧或二级面板收起时照旧是页里左边一栏 */}
+        <DockCol
+          body={col}
+          fallback={
+            <>
+              <Card
+                ref={ref}
+                className={PANE_FIXED}
+                style={pane.style('calc(100% - 600px)')}
+                bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+              >
+                {col(false)}
+              </Card>
+              <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
+            </>
+          }
+        />
         {folder ? (
           <FolderView
             path={folder}

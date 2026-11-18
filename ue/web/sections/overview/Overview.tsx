@@ -18,6 +18,7 @@ import { AttentionRow, Readout } from './parts.tsx'
 import { Timeline } from './Timeline.tsx'
 import { Skeleton } from '../perf/parts.tsx'
 import { VsDebugCard } from '../../vs-debug/VsDebugCard.tsx'
+import { TargetChips } from '../../nav/TargetChips.tsx'
 
 /**
  * 概览（设计稿 designs/UE插件优化与扩展-设计稿.md 三.1，效果图 1）：四个读数、「需要你处理」（按紧急程度，每条一个主动作）、
@@ -26,8 +27,8 @@ import { VsDebugCard } from '../../vs-debug/VsDebugCard.tsx'
  * 扩展和测试结果打开页面时取一次
  */
 export function Overview() {
-  const { project, state, go, badges, reloadBadges } = useUe()
-  const { toast } = h()
+  const { project, state, go, badges, reloadBadges, switcher } = useUe()
+  const { toast, ui } = h()
   const { busy, run } = useAction()
   const chat = useToChat()
   const hist = useLoad(() => pget<{ items: HistoryItem[] }>(project.id, 'history'), [project.id], 5000)
@@ -92,6 +93,13 @@ export function Overview() {
       <PageHead title={t('概览')} desc={project.uproject}>
         <RunBar />
       </PageHead>
+      {/* 图标轨布局里目标卡在这里（用户 2026-11-18 定：二级面板不放项目卡和目标卡）；旧面板的左栏自己带目标卡 */}
+      {ui.SectionRail && (
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:border-b ue:border-line ue:px-6 ue:py-2.5">
+          {switcher && <div className="ue:w-64 ue:max-w-full">{switcher}</div>}
+          <TargetChips bar />
+        </div>
+      )}
       <div className={STACK}>
         <div className="ue:grid ue:gap-px ue:bg-line ue:sm:grid-cols-2 ue:xl:grid-cols-4">
           <Readout
