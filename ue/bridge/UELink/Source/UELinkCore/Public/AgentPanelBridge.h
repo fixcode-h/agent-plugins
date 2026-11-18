@@ -55,6 +55,16 @@ public:
 	void RemoveOp(const FString& Name);
 
 	/**
+	 * 2.12：在进程内直接调一个已登记的同步操作（不经 HTTP、不要令牌），在游戏线程调用。
+	 * 给扩展复用 UELink 的能力用（GameTest 读 Lua 模块、调 Lua 函数、取 Lua 报错走 lua.get / lua.call / lua.errors），
+	 * 参数和返回字段和客户端经 /rpc 调时完全一样，扩展不用再写一份 Lua 读写。
+	 * 操作不存在、引擎在退出或回收垃圾时返回 false 并写 Error；Out 一定不为空。
+	 */
+	bool CallOp(const FString& Name, const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error);
+	/** 2.12：这个进程有没有登记这个操作（例如 lua.* 只在编进了 Lua 支持时有） */
+	bool HasOp(const FString& Name) const { return Ops.Contains(Name); }
+
+	/**
 	 * 扩展推一条事件（作业进度、录制到的一步……）：主题必须带「前缀.」，和操作名同一个前缀。
 	 * 推送通道在编辑器里才有；没人订阅时什么都不做，所以每帧推也很便宜。
 	 * 这样客户端拿实时状态不用轮询 *.job；作业的最终结果仍然能用 *.job 查（客户端可能中途才连上）。

@@ -129,13 +129,16 @@
 
 // 区域（Timing Regions）：ReadRegionProvider 返回引用；回调返回 bool（false 停）
 #define UELINK_REGION_PROVIDER(Session) (&TraceServices::ReadRegionProvider(Session))
-// LLM 标签：5.5 起多了标签集合，EnumerateTags 的形参在变，统一走这里
-#define UELINK_MEM_ENUM_TAGS(Provider, Fn) (Provider)->EnumerateTags(Fn)
+// LLM 标签：5.5 起多了标签集合，EnumerateTags 的形参在变，统一走这里。
+// 回调是 lambda，里面的逗号会被当成宏参数分隔符，所以用可变参数宏原样转发
+#define UELINK_MEM_ENUM_TAGS(Provider, ...) (Provider)->EnumerateTags(__VA_ARGS__)
 // 内存分配查询的规则：某一时刻还活着的（a ≤ A < f）、A 到 B 之间分配且到 B 还没释放的（A ≤ a ≤ B < f）
 #define UELINK_ALLOC_RULE_LIVE TraceServices::IAllocationsProvider::EQueryRule::aAf
 #define UELINK_ALLOC_RULE_GROWTH TraceServices::IAllocationsProvider::EQueryRule::AaBf
 // 分配的标签名
 #define UELINK_ALLOC_TAG_NAME(Provider, Alloc) (Provider)->GetTagName((Alloc)->GetTag())
+// 分配时的调用栈：5.1 起分成分配 / 释放两个调用栈，旧的 GetCallstack 没了（只在 5.8 开 ALLOCS，5.4 不走这里）
+#define UELINK_ALLOC_CALLSTACK(Alloc) (Alloc)->GetAllocCallstack()
 // 调用栈一帧的符号名（还没解析出来时是空）
 #define UELINK_SYMBOL_NAME(Frame) ((Frame)->Symbol ? (Frame)->Symbol->Name : nullptr)
 // 任务：按「这段时间里活着的任务」枚举

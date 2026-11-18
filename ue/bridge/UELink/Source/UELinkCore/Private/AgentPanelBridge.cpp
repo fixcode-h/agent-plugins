@@ -351,6 +351,33 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	return Out;
 }
 
+bool FAgentPanelBridge::CallOp(const FString& Name, const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error)
+{
+	Out = MakeShared<FJsonObject>();
+	// 和 Dispatch 同样的拦法：退出、回收垃圾时对象随时会被销毁
+	if (IsEngineExitRequested() || IsGarbageCollecting())
+	{
+		Error = TEXT("引擎正在退出或回收垃圾，稍后再试");
+		return false;
+	}
+	FAgentPanelOp* Fn = Ops.Find(Name);
+	if (!Fn)
+	{
+		Error = FString::Printf(TEXT("这个进程不支持 %s"), *Name);
+		return false;
+	}
+	const bool bOk = (*Fn)(Args.IsValid() ? Args : MakeShared<FJsonObject>(), Out, Error);
+	if (!Out.IsValid())
+	{
+		Out = MakeShared<FJsonObject>();
+	}
+	if (!bOk && Error.IsEmpty())
+	{
+		Error = TEXT("执行失败");
+	}
+	return bOk;
+}
+
 bool FAgentPanelBridge::DispatchAsync(const TSharedPtr<FJsonObject>& Body, const TFunction<void(TUniquePtr<FHttpServerResponse>&& Response)>& Done)
 {
 	FString Op;

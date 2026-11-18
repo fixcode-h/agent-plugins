@@ -312,7 +312,7 @@ namespace TraceMemoryImpl
 						FGroup* G = nullptr;
 						if (GroupBy == TEXT("callstack"))
 						{
-							G = &ByStack.FindOrAdd(Alloc->GetCallstack());
+							G = &ByStack.FindOrAdd(UELINK_ALLOC_CALLSTACK(Alloc));
 						}
 						else
 						{
@@ -323,7 +323,7 @@ namespace TraceMemoryImpl
 						G->MaxBytes = FMath::Max(G->MaxBytes, Size);
 						if (!G->Sample)
 						{
-							G->Sample = Alloc->GetCallstack();
+							G->Sample = UELINK_ALLOC_CALLSTACK(Alloc);
 						}
 					}
 				}
