@@ -1,4 +1,5 @@
 import { t } from '../../host.ts'
+import { wholeScreenOf } from './gt-selector-tree.ts'
 import { hintOf, type GtHint } from './gt-steps.ts'
 import { moveTitle } from './gt-move.ts'
 import { editorStepTitle, isEditorStep } from './gt-editor-steps.ts'
@@ -188,6 +189,8 @@ export function widgetLabel(h: GtHint | undefined, target?: string) {
 /** 选择器 WBP_Main:Root/#Panel>Btn_Close[2] → Btn_Close：取最后一段，去掉 #、下标和条件 */
 export function nameOfTarget(target?: string) {
   if (!target) return ''
+  const screen = wholeScreenOf(target)
+  if (screen !== undefined) return screen
   const last = target.split(/[/>:]/).filter(Boolean).pop() ?? ''
   return last.replace(/^[#@]/, '').replace(/\[.*$/, '').replace(/\{.*$/, '').trim()
 }

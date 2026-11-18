@@ -1,5 +1,14 @@
 import { Fragment } from 'react'
-import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, SkipForward, Sparkles, TriangleAlert } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Crosshair,
+  Loader2,
+  SkipForward,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react'
 import { agentLookPrompt } from './gt-author/agent-look-prompt.ts'
 import { useGtAgentChat } from './gt-author/useGtAgentChat.tsx'
 import { useUe } from '../../ctx.tsx'
@@ -13,6 +22,7 @@ import { GtMatchMode } from './GtMatchMode.tsx'
 import { GtMoveView } from './GtMoveView.tsx'
 import { GtRecordShot } from './GtRecordShot.tsx'
 import { GtSelectorTree } from './GtSelectorTree.tsx'
+import { selectorLabel } from './gt-selector-label.ts'
 import { GtStepTools, type StepToolProps } from './GtStepTools.tsx'
 import { GtStepExec } from './GtStepExec.tsx'
 import { GtEditorCommand } from './GtEditorCommand.tsx'
@@ -370,7 +380,9 @@ export function StepDetail({
             <div key={k} className="ue:flex ue:flex-col ue:gap-0.5">
               <span className="ue:flex ue:items-center ue:gap-1.5">
                 <CheckMark check={[c]} />
-                <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-fg">{c.target}</span>
+                <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-fg" title={c.target}>
+                  {selectorLabel(c.target)}
+                </span>
                 {c.field && c.field !== 'target' && <span className="ue:text-subtle">{c.field}</span>}
               </span>
               {c.found ? (
