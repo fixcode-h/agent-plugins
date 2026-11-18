@@ -27,6 +27,7 @@ import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtOfflineBar } from './GtOffline.tsx'
 import { useGtAgentWrite } from './gt-author/GtAgentWrite.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
+import { EDITOR_RECORD_HELP, GtEditorRecord } from './GtEditorRecord.tsx'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
 import { keyAskArgs } from './gt-key.ts'
 import { GtKeyAsk } from './GtKeyAsk.tsx'
@@ -84,6 +85,8 @@ export function GameTest() {
   const [recordDir, setRecordDir] = useState<string>()
   // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
   const [keepPace, setKeepPace] = useState(false)
+  // 录游戏（PIE 里的操作）还是录 UE 编辑器操作（GameTest 1.10.0，定稿 10.1）
+  const [recTarget, setRecTarget] = useState<'game' | 'editor'>('game')
   // 录制器认控件靠什么：hitPath 表示这个进程没编 Slate 调试，打字录不到，开始录制前就提示
   const [handlerSource, setHandlerSource] = useState<string>()
   // 从第几步开始跑的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行；只在这次打开页面里记
@@ -129,6 +132,11 @@ export function GameTest() {
         if (r.recording) setRec(r)
       })
       .catch(() => undefined)
+    // 正在录编辑器操作（刷新了页面）：GameTest 1.10.0 起才有，旧版本报不认识的操作，忽略
+    if (segmentSupported(gtVersion))
+      void op<RecordStatus>(project.id, 'gt.editrec.status', { last: 200 })
+        .then((r) => r.recording && setRec(r))
+        .catch(() => undefined)
     // 换项目、编辑器起来或关掉时重拉（数据换成 UE 的或磁盘的）；reload 每次渲染都是新函数
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, installed, live])
@@ -152,6 +160,9 @@ export function GameTest() {
         // 事件里的 last 只有最新一步；录移动每秒、快捷动作改状态（GameTest 1.3.0）也会推，步数没涨就不追加，免得一步显示几遍
         const added = (r.steps ?? 0) - (old?.steps ?? 0)
         const fresh = added > 0 ? (r.last ?? []).slice(-added) : []
+        // 录编辑器时连着改同一个属性合成一步，步数不涨、最后一步的值变了：换掉最后一行
+        if (r.target === 'editor' && added === 0 && r.phase === 'step' && r.last?.length && old?.last?.length)
+          return { ...r, last: [...old.last.slice(0, -1), ...r.last.slice(-1)] }
         return { ...r, last: [...(old?.last ?? []), ...fresh].slice(-200) }
       })
       if (r.phase === 'stopped') reload()
@@ -323,6 +334,11 @@ export function GameTest() {
       setAsking(false)
       // 接着录存回原场景，不挪文件夹
       if (insert) setRecordDir(undefined)
+      if (!insert && recTarget === 'editor') {
+        const e = await op<RecordStatus>(project.id, 'gt.editrec.start', { name: recName.trim() || t('编辑器录制') })
+        setRec({ ...e, target: 'editor', last: [] })
+        return
+      }
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
         name: insert ? t('接着录') : recName.trim() || t('新录制'),
         keepPace,
@@ -516,6 +532,12 @@ export function GameTest() {
                         {t('录制')}
                       </span>
                     )}
+                    {/* Agent 写的脚本（场景 tags 带 agent，定稿 11）：和人录的分开，回归失败时先怀疑脚本 */}
+                    {(s.tags ?? []).includes('agent') && (
+                      <span className="ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:text-muted">
+                        {t('Agent 编写')}
+                      </span>
+                    )}
                     {marks ? (
                       <GtHistoryBar marks={marks} />
                     ) : (
@@ -574,7 +596,22 @@ export function GameTest() {
             onDone={() => undefined}
           />
         )}
-        {recording && rec ? (
+        {recording && rec?.target === 'editor' ? (
+          <GtEditorRecord
+            status={rec}
+            onDone={(saved) => {
+              setRec(undefined)
+              const dir = recordDir
+              setRecordDir(undefined)
+              if (!saved) return
+              void (async () => {
+                const at = dir === undefined ? saved : await lib.moveTo(saved, dir)
+                reload()
+                go('gametest', at)
+              })()
+            }}
+          />
+        ) : recording && rec ? (
           <GtRecord
             status={rec}
             gtVersion={gtVersion}
@@ -698,27 +735,48 @@ export function GameTest() {
             placeholder={t('场景名，例如 新手引导')}
             onChange={(e: { target: { value: string } }) => setRecName(e.target.value)}
           />
-          <label className="ue:flex ue:cursor-pointer ue:items-start ue:gap-2 ue:text-footnote ue:text-fg">
-            <input
-              type="checkbox"
-              className="ue:mt-0.5 ue:accent-(--accent)"
-              checked={keepPace}
-              onChange={(e) => setKeepPace(e.target.checked)}
+          {segmentSupported(gtVersion) && (
+            <ui.Segmented
+              size="sm"
+              label={t('录什么')}
+              value={recTarget}
+              onChange={setRecTarget}
+              options={[
+                { id: 'game' as const, label: t('游戏') },
+                { id: 'editor' as const, label: t('编辑器') },
+              ]}
             />
-            <span className="ue:flex ue:flex-col ue:gap-0.5">
-              {t('保留节奏')}
-              <span className="ue:text-subtle">
-                {t('点界面之间的停顿也录成等待，原样复现手速。默认不录：回放时点击、输入会自己等控件可以操作')}
-              </span>
-            </span>
-          </label>
-          <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
-            {t(
-              'PIE 没开时会先开 PIE。之后在游戏窗口里正常操作：点控件录成对这个控件的点击（不看控件类，谁接住了就录谁），在输入框里打字录成输入，点在游戏画面上和按键录成真实按键。按住 Ctrl+Alt 点一个控件录成断言。停止后存到场景根下的 recorded/。',
-            )}
-            {recordDir !== undefined && ` ${t('录完挪进 {p}/。', { p: recordDir })}`}
-          </p>
-          {handlerSource === 'hitPath' && <HitPathNote />}
+          )}
+          {recTarget === 'editor' && segmentSupported(gtVersion) ? (
+            <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
+              {EDITOR_RECORD_HELP()}
+              {recordDir !== undefined && ` ${t('录完挪进 {p}/。', { p: recordDir })}`}
+            </p>
+          ) : (
+            <>
+              <label className="ue:flex ue:cursor-pointer ue:items-start ue:gap-2 ue:text-footnote ue:text-fg">
+                <input
+                  type="checkbox"
+                  className="ue:mt-0.5 ue:accent-(--accent)"
+                  checked={keepPace}
+                  onChange={(e) => setKeepPace(e.target.checked)}
+                />
+                <span className="ue:flex ue:flex-col ue:gap-0.5">
+                  {t('保留节奏')}
+                  <span className="ue:text-subtle">
+                    {t('点界面之间的停顿也录成等待，原样复现手速。默认不录：回放时点击、输入会自己等控件可以操作')}
+                  </span>
+                </span>
+              </label>
+              <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
+                {t(
+                  'PIE 没开时会先开 PIE。之后在游戏窗口里正常操作：点控件录成对这个控件的点击（不看控件类，谁接住了就录谁），在输入框里打字录成输入，点在游戏画面上和按键录成真实按键。按住 Ctrl+Alt 点一个控件录成断言。停止后存到场景根下的 recorded/。',
+                )}
+                {recordDir !== undefined && ` ${t('录完挪进 {p}/。', { p: recordDir })}`}
+              </p>
+              {handlerSource === 'hitPath' && <HitPathNote />}
+            </>
+          )}
         </div>
       </Confirm>
     </div>

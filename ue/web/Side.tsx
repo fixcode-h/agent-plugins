@@ -211,19 +211,17 @@ export function TargetCard() {
 }
 
 /**
- * 后台编辑器（编辑器没开时读资源、AssetForge 导入导出用的不开窗口的编辑器）常驻显示在目标卡底部：
- * 在跑就让人看得见、能手动关（用户 2026-11-15）。默认不自动起（用户 2026-11-16）：
- * UE 没在运行、又没开自动启动时给一个「启动后台编辑器」，要读资源时自己点
+ * 后台编辑器的状态和启停（左栏目标卡的一行、二级面板目标卡上的「后台」小块共用）。
+ * 不该提示时返回 undefined：编辑器开着时读写都走它，不提示起后台；没装桥接时起了也连不上；开了自动启动也不提示
  */
-function BackgroundLine() {
+export function useBackgroundCtl() {
   const { project, state, reload } = useUe()
   const [busy, setBusy] = useState(false)
   const bg = state?.background
-  if (!bg || !state) return null
+  if (!bg || !state) return undefined
   const live = state.instances.some((i) => i.kind !== 'background')
   const idle = !bg.running && !bg.starting && !bg.error
-  // 编辑器开着时读写都走它，不提示起后台；没装桥接时起了也连不上
-  if (idle && (bg.auto || live || !state.bridge)) return null
+  if (idle && (bg.auto || live || !state.bridge)) return undefined
   const act = (action: 'start' | 'stop') => {
     setBusy(true)
     void ppost(project.id, 'background', { action })
@@ -233,6 +231,18 @@ function BackgroundLine() {
         reload()
       })
   }
+  return { bg, busy, live, act }
+}
+
+/**
+ * 后台编辑器（编辑器没开时读资源、AssetForge 导入导出用的不开窗口的编辑器）常驻显示在目标卡底部：
+ * 在跑就让人看得见、能手动关（用户 2026-11-15）。默认不自动起（用户 2026-11-16）：
+ * UE 没在运行、又没开自动启动时给一个「启动后台编辑器」，要读资源时自己点
+ */
+function BackgroundLine() {
+  const ctl = useBackgroundCtl()
+  if (!ctl) return null
+  const { bg, busy, live, act } = ctl
   const btn =
     'ue:shrink-0 ue:cursor-pointer ue:rounded-md ue:px-1.5 ue:py-0.5 ue:text-muted ue:hover:bg-hover ue:hover:text-fg ue:disabled:opacity-50'
   return (

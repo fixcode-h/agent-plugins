@@ -1,4 +1,5 @@
 import { t } from '../../host.ts'
+import { editorStepTitle, isEditorStep } from './gt-editor-steps.ts'
 
 /**
  * GameTest 步骤给人看的写法（GameTest 1.1）：录制会在 click / drag / wheel / type / key / assert 上附一份 hint
@@ -74,6 +75,7 @@ function widgetText(h: GtHint) {
  * 有 hint 的 UI 步骤显示成一句人话，例如「点击 按钮「确定」 · WBP_Login」；没有 hint 的步骤返回 undefined，照旧显示选择器
  */
 export function humanStep(def?: Record<string, unknown>): string | undefined {
+  if (def && isEditorStep(def.action)) return editorStepTitle(def)
   const h = hintOf(def)
   // move 的 hint 记的是录制时的起点和用时（GameTest 1.3.0），不是控件
   if (!def || !h || def.action === 'move') return undefined

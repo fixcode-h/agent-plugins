@@ -15,6 +15,8 @@ import { GtRecordShot } from './GtRecordShot.tsx'
 import { GtSelectorTree } from './GtSelectorTree.tsx'
 import { GtStepTools, type StepToolProps } from './GtStepTools.tsx'
 import { GtStepExec } from './GtStepExec.tsx'
+import { GtEditorCommand } from './GtEditorCommand.tsx'
+import { commandSuggestion, isEditorStep } from './gt-editor-steps.ts'
 import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
 import { canSkip, GtSkipIf } from './GtSkipIf.tsx'
 import { GtSkipResult } from './GtSkipResult.tsx'
@@ -164,7 +166,8 @@ export function StepDetail({
       ].filter(([, v]) => v) as [string, unknown][])
   const title = stepTitle(def, res?.action, res?.target)
   const human = humanStep(def)
-  const hint = isMove ? undefined : hintOf(def)
+  // 录编辑器的步骤 hint 只是 {via, label}（来源和对象名），标题里已经说了，不按控件列
+  const hint = isMove || isEditorStep(action) ? undefined : hintOf(def)
   const ambiguous = ambiguousOf(def)
   const picked = typeof res?.payload?.picked === 'string' ? res.payload.picked : undefined
   // GameTest 1.2.5：等它可操作时自动滚过的列表、滚动框；真实鼠标被挡住改用代码点击的原因
@@ -296,6 +299,19 @@ export function StepDetail({
                 ? { project: project.id, root, path: scenario.relativePath, index: row.i, onChanged }
                 : undefined
             }
+          />
+        </Block>
+      )}
+      {def && commandSuggestion(def) && scenario && root !== undefined && onChanged && !live && (
+        <Block title={t('编辑器命令')}>
+          <GtEditorCommand
+            project={project.id}
+            root={root}
+            path={scenario.relativePath}
+            index={row.i}
+            def={def}
+            locked={tools?.running}
+            onChanged={onChanged}
           />
         </Block>
       )}

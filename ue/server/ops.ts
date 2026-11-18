@@ -108,6 +108,10 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
     case 'gt.record.mark':
     case 'gt.record.move':
     case 'gt.record.stop':
+    // 录 UE 编辑器操作（GameTest 1.10.0）：只是开始盯编辑器事件，不改资产
+    case 'gt.editrec.start':
+    case 'gt.editrec.mark':
+    case 'gt.editrec.stop':
       return 'runtime'
     // AssetForge：导入把配置写成资产并保存（演练只读），导出把资产写回配置文件
     case 'forge.import':
@@ -242,6 +246,12 @@ function describe(op: string, args: Record<string, unknown>) {
       return `GameTest ${t('录制快捷动作')} ${args.phase ?? 'toggle'}`
     case 'gt.record.stop':
       return `GameTest ${t('停止录制')}${args.save === false ? ` · ${t('不保存')}` : ''}`
+    case 'gt.editrec.start':
+      return `GameTest ${t('开始录编辑器操作')} ${args.name ?? ''}`.trim()
+    case 'gt.editrec.mark':
+      return `GameTest ${t('检查点')} ${args.text ?? ''}`.trim()
+    case 'gt.editrec.stop':
+      return `GameTest ${t('停止录编辑器操作')}${args.save === false ? ` · ${t('不保存')}` : ''}`
     case 'pie':
       return `PIE ${args.action}${args.players ? ` × ${args.players}` : ''}${args.netMode ? ` ${args.netMode}` : ''}`
     default:
