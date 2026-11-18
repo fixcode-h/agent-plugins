@@ -662,8 +662,13 @@ namespace UELinkLuaDecl
 		{
 			FState& St = S();
 			St.AssetQueue.Reset();
+			// 先把脏列表整个搬出来再遍历：GetAssetsByPackageName 会顺手处理资源注册表攒着的更新并同步广播
+			// OnAssetAdded / OnAssetRemoved 等事件，我们的回调往 DirtyPackages 里加包会让集合扩容重排，
+			// 直接遍历成员集合时迭代器失效，编辑器崩在这里。遍历期间新进来的包留到下一遍处理。
+			const TSet<FName> Packages = MoveTemp(St.DirtyPackages);
+			St.DirtyPackages.Reset();
 			IAssetRegistry& Registry = IAssetRegistry::GetChecked();
-			for (const FName Package : St.DirtyPackages)
+			for (const FName Package : Packages)
 			{
 				TArray<FAssetData> Found;
 				Registry.GetAssetsByPackageName(Package, Found);
@@ -687,7 +692,6 @@ namespace UELinkLuaDecl
 					}
 				}
 			}
-			St.DirtyPackages.Reset();
 			St.AssetIndex = 0;
 			St.AssetSeen.Reset();
 			St.bAssetPassIsFull = false;
@@ -868,6 +872,15 @@ namespace UELinkLuaDecl
 			St.NativeDirtyAt = FPlatformTime::Seconds();
 		}
 
+		/** 蓝图开关关着时资源事件一律不记：保存地图、改别的资源也会触发，记了只会白查注册表（关着时的旧声明由整遍扫描删） */
+		void MarkPackageDirty(FName Package)
+		{
+			if (GBlueprints && !Package.IsNone())
+			{
+				S().DirtyPackages.Add(Package);
+			}
+		}
+
 		void Begin(bool bForce)
 		{
 			FState& St = S();
@@ -908,26 +921,25 @@ namespace UELinkLuaDecl
 				{
 					if (Package)
 					{
-						S().DirtyPackages.Add(Package->GetFName());
+						MarkPackageDirty(Package->GetFName());
 					}
 				});
 				IAssetRegistry& Registry = IAssetRegistry::GetChecked();
 				St.Removed = Registry.OnAssetRemoved().AddLambda([](const FAssetData& D)
 				{
-					S().DirtyPackages.Add(D.PackageName);
+					MarkPackageDirty(D.PackageName);
 				});
 				St.Renamed = Registry.OnAssetRenamed().AddLambda([](const FAssetData& D, const FString& OldObjectPath)
 				{
-					FState& State = S();
-					State.DirtyPackages.Add(D.PackageName);
-					State.DirtyPackages.Add(FName(*FPackageName::ObjectPathToPackageName(OldObjectPath)));
+					MarkPackageDirty(D.PackageName);
+					MarkPackageDirty(FName(*FPackageName::ObjectPathToPackageName(OldObjectPath)));
 				});
 				St.Added = Registry.OnAssetAdded().AddLambda([](const FAssetData& D)
 				{
 					// 启动时扫盘也会一个个报 Added，那时候整遍扫描会处理
 					if (!IAssetRegistry::GetChecked().IsLoadingAssets())
 					{
-						S().DirtyPackages.Add(D.PackageName);
+						MarkPackageDirty(D.PackageName);
 					}
 				});
 				// Live Coding / 热重载、新模块加载：原生类型可能变了，整遍过一次（只写内容变了的）
