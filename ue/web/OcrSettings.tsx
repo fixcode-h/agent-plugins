@@ -35,15 +35,15 @@ export function OcrSettings({ bare }: { bare?: boolean } = {}) {
       <div
         className={cn(
           'ue:flex ue:flex-col ue:gap-2',
-          bare ? 'ue:px-4 ue:py-3' : 'ue:border ue:border-line ue:bg-card ue:px-3.5 ue:py-2.5',
+          bare ? 'ue:py-3.5' : 'ue:border ue:border-line ue:bg-card ue:px-3.5 ue:py-2.5',
         )}
       >
         <div className="ue:flex ue:items-center ue:gap-3">
           <div className="ue:min-w-0 ue:flex-1">
-            <div className="ue:text-body ue:text-fg">
+            <div className={cn(bare ? 'ue:text-prose ue:font-medium' : 'ue:text-body', 'ue:text-fg')}>
               {!s ? t('检测中…') : busy ? t('正在下载') : s.installed ? t('已安装') : t('没装')}
             </div>
-            <div className="ue:text-footnote ue:text-subtle">
+            <div className={cn(bare ? 'ue:text-body' : 'ue:text-footnote', 'ue:text-subtle')}>
               {busy
                 ? `${busy.step}/${busy.steps} ${busy.what} · ${fmtSize(busy.done)} / ${t('约 {size}', { size: fmtSize(busy.total) })}`
                 : s?.installed

@@ -1,13 +1,14 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { BridgeError } from '../instances.ts'
 import { t } from '../util.ts'
-import { insideProject } from './gt-paths.ts'
+import { insideProject, within } from './gt-paths.ts'
 
 /**
  * 列表、格子条目「怎么认」（GameTest 1.4.0 起）在面板侧读写文件的部分：
  * - 规则（场景根 `_settings.json` 的 itemKeys）：规则面板直接读写磁盘，编辑器没开也能整理；
  *   UE 那边按文件时间重读，改完下次录制就用上。只动 itemKeys，别的运行配置原样保留。
+ * - 条目字段缓存（GameTest 1.6.0 录制时存的 hint.fields）：「换一个标识」在游戏没跑时用它列字段。
  * - 一次改好几步（replaceMany）：步骤详情「同一列表的其他步骤一起改」，每一步都核对没被改过再一起写。
  */
 
@@ -94,4 +95,25 @@ export async function replaceMany(abs: string, rel: string, doc: Record<string, 
     'utf8',
   )
   return { path: rel, steps: steps.length, changed: edits.length }
+}
+
+/** 一个条目的字段缓存最多几十 KB；比这大的多半不是我们写的文件 */
+const KEY_FIELDS_MAX_BYTES = 4 * 1024 * 1024
+
+/** POST ext/gt/keyfields：读录制时存的条目全部字段（Saved/<输出目录>/keys/…json，和 gt.keys 的返回同形状） */
+export async function readKeyFields(projectRoot: string, rel: string) {
+  const abs = insideProject(projectRoot, rel)
+  if (!/\.json$/i.test(abs) || !within(path.join(projectRoot, 'Saved'), abs))
+    throw new BridgeError(t('只能读 Saved 里的条目字段缓存：{p}', { p: rel }))
+  const size = (await stat(abs).catch(() => undefined))?.size
+  if (size === undefined)
+    throw new BridgeError(t('录制时存的字段文件没了（{p}）：开游戏、打开那个界面再挑', { p: rel }))
+  if (size > KEY_FIELDS_MAX_BYTES) throw new BridgeError(t('字段缓存文件太大，不像是录制时存的：{p}', { p: rel }))
+  try {
+    const doc = JSON.parse((await readFile(abs, 'utf8')).replace(/^\uFEFF/, '')) as Record<string, unknown>
+    if (!doc || !Array.isArray(doc.groups)) throw new Error('groups')
+    return doc
+  } catch {
+    throw new BridgeError(t('字段缓存文件读不了（{p}）：开游戏、打开那个界面再挑', { p: rel }))
+  }
 }

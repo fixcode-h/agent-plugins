@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applyKey, fieldsOfCond, keyOf, type StepKey } from './gt-key.ts'
+import { applyKey, fieldsOfCond, filterKeys, keyOf, type StepKey } from './gt-key.ts'
 
 const key: StepKey = {
   from: 'WBP_Bag:Root/ItemList[6]',
@@ -36,4 +36,28 @@ test('fieldsOfCond 取条件左边', () => {
 test('keyOf 只认带 from 的 key', () => {
   assert.equal(keyOf({ key: { by: 'auto' } }), undefined)
   assert.equal(keyOf({ key }), key)
+})
+
+test('filterKeys 按字段名或值筛、丢掉空组', () => {
+  const data = {
+    total: 3,
+    count: 3,
+    groups: [
+      {
+        source: 'item',
+        title: '数据',
+        fields: [
+          { by: 'Data.ItemId', v: 1001 },
+          { by: 'Data.Name', v: 'Sword' },
+        ],
+      },
+      { source: 'self', title: '控件', fields: [{ by: '@self.bSelected', v: false }] },
+    ],
+  }
+  const r = filterKeys(data, 'sword')
+  assert.equal(r.total, 1)
+  assert.equal(r.groups.length, 1)
+  assert.equal(r.groups[0].fields[0].by, 'Data.Name')
+  assert.equal(filterKeys(data, 'itemid').groups[0].fields[0].v, 1001)
+  assert.equal(filterKeys(data, ' ').total, 3)
 })
