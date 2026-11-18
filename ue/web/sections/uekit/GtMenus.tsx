@@ -32,7 +32,8 @@ export function useScenarioMenus(o: {
   locked: boolean
   reload: () => void
   open: (s: Scenario) => void
-  runScenario: (s: Scenario) => void
+  /** ignoreSkipIf：全部照做，忽略步骤上的「已达成就跳过」（GameTest 1.7.0） */
+  runScenario: (s: Scenario, ignoreSkipIf?: boolean) => void
   /** 批量运行几份场景（文件夹右键「运行这里的全部场景」）；旧 GameTest 不支持批量时不给 */
   runBatch?: (paths: string[], label: string) => void
   scenarios: Scenario[]
@@ -64,6 +65,16 @@ export function useScenarioMenus(o: {
         onClick: () => {
           o.open(s)
           o.runScenario(s)
+        },
+      },
+      {
+        label: t('全部照做'),
+        icon: Play,
+        hint: t('忽略已达成就跳过'),
+        disabled: o.locked || !!s.parseError,
+        onClick: () => {
+          o.open(s)
+          o.runScenario(s, true)
         },
       },
       'sep',

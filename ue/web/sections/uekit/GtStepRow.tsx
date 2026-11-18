@@ -10,6 +10,7 @@ import {
   Move,
   Play,
   ScrollText,
+  SkipForward,
   Square,
   Terminal,
   TriangleAlert,
@@ -21,6 +22,7 @@ import { CheckMark, ms, StepIcon, type StepRow } from './GtStepDetail.tsx'
 import { ambiguousOf } from './gt-steps.ts'
 import { keyOf } from './gt-key.ts'
 import { stepTitle } from './gt-step-title.ts'
+import { skipLabel, skipOf, skipWith } from './gt-skip.ts'
 
 /** 动作 → 行首的小图标：一眼分出点击、等待、按键，不用读动作名 */
 function actionIcon(a?: string): LucideIcon {
@@ -97,6 +99,9 @@ export function GtStepRow({
   // 录制时点在列表条目上、没定下用哪个字段认（GameTest 1.4.0）：标「待定」，详情里「回放怎么认」再定
   const pending = keyOf(row.def?.hint as Record<string, unknown> | undefined)?.by === 'pending'
   const status = row.res?.status
+  // 已达成就跳过（GameTest 1.7.0）：跑完是 already 时写「已达成」/「随第 N 步」，没跑时写条件的一句话
+  const skip = skipOf(row.def)
+  const along = status === 'already' ? skipWith(row.res?.payload) : undefined
   return (
     <button
       type="button"
@@ -107,7 +112,7 @@ export function GtStepRow({
       className={cn(
         'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[24px_16px_14px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:transition-colors ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
         status === 'failed' && 'ue:bg-danger/6',
-        dim && 'ue:opacity-60',
+        (dim || status === 'already') && 'ue:opacity-60',
       )}
     >
       <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{row.i + 1}</span>
@@ -131,6 +136,21 @@ export function GtStepRow({
           >
             {t('待定')}
           </span>
+        )}
+        {status === 'already' ? (
+          <span className="ue:shrink-0 ue:text-caption ue:text-success">
+            {along !== undefined ? t('随第 {n} 步', { n: along + 1 }) : t('已达成')}
+          </span>
+        ) : (
+          skip && (
+            <span
+              title={t('回放时{s}', { s: skipLabel(skip) })}
+              className="ue:flex ue:min-w-0 ue:shrink ue:items-center ue:gap-0.5 ue:text-caption ue:text-subtle"
+            >
+              <SkipForward className="ue:h-3 ue:w-3 ue:shrink-0" />
+              <span className="ue:truncate">{skipLabel(skip)}</span>
+            </span>
+          )
         )}
         <CheckMark check={row.check} />
       </span>

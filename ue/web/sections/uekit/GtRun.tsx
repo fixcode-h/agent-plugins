@@ -318,6 +318,12 @@ export function GtRun({
                 ? t('通过 · {n} 步 · {d}', { n: last.total, d: ms(last.durationMs) })
                 : t('失败 · {f} / {n} 步没过', { f: last.failed, n: last.total })}
             </span>
+            {/* 已达成跳过的步骤（GameTest 1.7.0）算通过，单独数一下：回放时界面本来就是想要的样子 */}
+            {rows.some((r) => r.res?.status === 'already') && (
+              <span className="ue:text-subtle">
+                {t('{n} 步已达成跳过', { n: rows.filter((r) => r.res?.status === 'already').length })}
+              </span>
+            )}
             {last.outputDir && <code className="ue:truncate ue:font-mono ue:text-subtle">{last.outputDir}</code>}
           </div>
         ) : (

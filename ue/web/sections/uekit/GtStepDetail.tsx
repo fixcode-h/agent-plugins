@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, SkipForward, TriangleAlert } from 'lucide-react'
 import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -15,6 +15,8 @@ import { GtSelectorTree } from './GtSelectorTree.tsx'
 import { GtStepTools, type StepToolProps } from './GtStepTools.tsx'
 import { GtStepExec } from './GtStepExec.tsx'
 import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
+import { canSkip, GtSkipIf } from './GtSkipIf.tsx'
+import { GtSkipResult } from './GtSkipResult.tsx'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -23,7 +25,8 @@ import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
 export interface GtStep {
   index: number
   action: string
-  status: 'succeeded' | 'failed' | 'skipped' | 'pending' | string
+  /** already：已达成跳过（GameTest 1.7.0，算通过） */
+  status: 'succeeded' | 'failed' | 'skipped' | 'already' | 'pending' | string
   message?: string
   target?: string
   note?: string
@@ -92,6 +95,7 @@ export const ms = (n?: number) =>
 export function StepIcon({ s, live }: { s?: string; live?: boolean }) {
   if (live) return <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin ue:text-warning" />
   if (s === 'succeeded') return <CircleCheck className="ue:h-3.5 ue:w-3.5 ue:text-success" />
+  if (s === 'already') return <SkipForward className="ue:h-3.5 ue:w-3.5 ue:text-success" />
   if (s === 'failed') return <CircleX className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
   return <CircleDashed className="ue:h-3.5 ue:w-3.5 ue:text-subtle" />
 }
@@ -197,6 +201,7 @@ export function StepDetail({
         {picked && <p className="ue:text-subtle">{t('这次回放：{r}', { r: picked })}</p>}
         {scrolled && <p className="ue:text-subtle">{t('自动滚动：{r}', { r: scrolled })}</p>}
         {fallback && <p className="ue:text-warning">{fallback}</p>}
+        {res && <GtSkipResult payload={res.payload} />}
       </Block>
       {(hint || ambiguous) && (
         <Block title={t('控件')}>
@@ -221,6 +226,25 @@ export function StepDetail({
               )}
             </Note>
           )}
+        </Block>
+      )}
+      {!isMove && canSkip(def) && def && (
+        <Block title={t('已达成就跳过')}>
+          <GtSkipIf
+            def={def}
+            edit={
+              scenario && root !== undefined && onChanged && !live
+                ? {
+                    project: project.id,
+                    root,
+                    path: scenario.relativePath,
+                    index: row.i,
+                    onChanged,
+                    locked: tools?.running,
+                  }
+                : undefined
+            }
+          />
         </Block>
       )}
       {hint && (hint.shot || hint.screen) && (
@@ -369,7 +393,15 @@ function agentText(row: StepRow, e: GtEvidenceData, scenario?: { name: string; r
 const MOVE_DRAWN = new Set(['path', 'jumps', 'fly'])
 
 const statusText = (s: string) =>
-  s === 'succeeded' ? t('通过') : s === 'failed' ? t('失败') : s === 'skipped' ? t('跳过') : t('进行中')
+  s === 'succeeded'
+    ? t('通过')
+    : s === 'failed'
+      ? t('失败')
+      : s === 'already'
+        ? t('已达成，跳过')
+        : s === 'skipped'
+          ? t('跳过')
+          : t('进行中')
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (

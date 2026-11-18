@@ -1,4 +1,5 @@
 import {
+  ChevronDown,
   CircleCheck,
   CircleDot,
   CircleX,
@@ -28,6 +29,7 @@ import { GtKeyRulesPanel } from './GtKeyRulesPanel.tsx'
 import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
+import { recordSkipArgs, skipSupported } from './gt-skip.ts'
 import { GtSettings } from './GtSettings.tsx'
 import { GtRun, type GtJob, type GtRunSummary, type GtScenarioFile } from './GtRun.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
@@ -53,6 +55,7 @@ export function GameTest() {
   const { busy, run } = useAction()
   const installed = state?.extensions?.some((x) => x.name === 'GameTest')
   const live = (state?.instances ?? []).some((i) => i.kind === 'editor' && i.online)
+  const gtVersion = state?.extensions?.find((x) => x.name === 'GameTest')?.version
   const [list, setList] = useState<ScenarioList>()
   const [runs, setRuns] = useState<GtRunSummary[]>([])
   const [error, setError] = useState('')
@@ -189,7 +192,9 @@ export function GameTest() {
           : { runId: r.runId, status: 'running', busy: true, name, steps: [], total: 0, planned: r.steps, failed: 0 },
       )
     })
-  const runScenario = (s: Scenario) => startRun(s.name, { scenario: s.relativePath }, 0)
+  /** ignoreSkipIf：全部照做（GameTest 1.7.0），每一步都真做，测第一次领取、新号这类路径 */
+  const runScenario = (s: Scenario, ignoreSkipIf?: boolean) =>
+    startRun(s.name, { scenario: s.relativePath, ...(ignoreSkipIf ? { ignoreSkipIf: true } : {}) }, 0)
   /** 批量：一个接一个跑（GameTest 1.2），进度和结果从 gt.job 事件的 batch 来 */
   const startBatch = (args: { tag?: string; scenarios?: string[]; name?: string }) =>
     run('run', async () => {
@@ -282,8 +287,9 @@ export function GameTest() {
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
         name: recName.trim() || t('新录制'),
         keepPace,
-        shots: shotsArg(state?.extensions?.find((x) => x.name === 'GameTest')?.version),
+        shots: shotsArg(gtVersion),
         ...keyAskArgs(),
+        ...recordSkipArgs(gtVersion),
       })
       setRec({ ...r, last: [] })
     })
@@ -340,6 +346,25 @@ export function GameTest() {
             >
               <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
             </ui.Button>
+            <ui.IconButton
+              icon={ChevronDown}
+              size="sm"
+              label={tip(t('更多运行方式：全部照做（忽略已达成就跳过）'))}
+              disabled={!live || !selected || running || recording || !!busy}
+              onClick={(e: React.MouseEvent) =>
+                selected &&
+                openMenu(e, [
+                  { label: t('运行'), icon: Play, onClick: () => runScenario(selected) },
+                  {
+                    label: t('全部照做'),
+                    icon: Play,
+                    hint: t('忽略已达成就跳过，每一步都真做'),
+                    disabled: !skipSupported(gtVersion),
+                    onClick: () => runScenario(selected, true),
+                  },
+                ])
+              }
+            />
           </>
         }
         tabs={

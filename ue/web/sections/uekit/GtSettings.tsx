@@ -10,6 +10,7 @@ import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
+import { type GtSkipConfig, GtSkipSettings, readSkip, tidySkip } from './GtSkipSettings.tsx'
 import { tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
@@ -42,6 +43,8 @@ interface GtRunConfig {
   move?: GtMoveConfig
   /** 条目怎么认的规则（GameTest 1.4.0） */
   itemKeys?: GtKeyRule[]
+  /** 已达成就跳过（GameTest 1.7.0）：false 全部照做，对象只留改过的项 */
+  skipIf?: false | GtSkipConfig
 }
 
 interface ConfigReply {
@@ -85,6 +88,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const [setup, setSetup] = useState('')
   const [seed, setSeed] = useState('')
   const [move, setMove] = useState<GtMoveConfig>({})
+  const [skip, setSkip] = useState<GtSkipConfig>({})
   const [keyRules, setKeyRules] = useState<GtKeyRule[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -102,6 +106,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         setSetup(setupText(r.config.setup))
         setSeed(r.config.randomSeed === undefined ? '' : String(r.config.randomSeed))
         setMove(r.config.move ?? {})
+        setSkip(readSkip(r.config.skipIf))
         setKeyRules(r.config.itemKeys ?? [])
       })
       .catch((e: Error) => setError(e.message))
@@ -139,6 +144,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         ...(setupParsed.steps?.length ? { setup: setupParsed.steps } : {}),
         ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
         ...(tidyMove(move) ? { move: tidyMove(move) } : {}),
+        ...(tidySkip(skip) !== undefined ? { skipIf: tidySkip(skip) } : {}),
       }
       // 条目规则也在这份文件里、由规则面板和录制弹窗改：表单整份重写，保存前现取一遍最新的带上，不然就丢了
       const fresh = (await op<ConfigReply>(project.id, 'gt.config')).config.itemKeys ?? keyRules
@@ -256,6 +262,8 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       </SettingGroup>
 
       <GtMoveSettings value={move} onChange={setMove} />
+
+      <GtSkipSettings value={skip} onChange={setSkip} />
 
       <SettingGroup
         title={t('条目怎么认')}
