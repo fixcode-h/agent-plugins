@@ -7,6 +7,7 @@ import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
+import { libraryAction } from './gt-library/index.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { configBaseline } from './forge-baseline.ts'
@@ -88,6 +89,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)
+    case 'POST ext/gt/library':
+      // 场景库整理：文件夹（空的也列）、新建、拖动移动、改名、删除，移动时 call 路径跟着改（gt-library/）
+      return libraryAction(p.root, b)
     case 'POST ext/gt/keyrules':
       // 条目规则面板：场景根 _settings.json 的 itemKeys（gt-keys.ts），编辑器没开也能改
       return keyRulesAction(p.root, b)
