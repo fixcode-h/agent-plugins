@@ -7,10 +7,24 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 
+#include <atomic>
+
 class UWorld;
+struct FHttpServerResponse;
 
 /** 一个操作：args 是请求里的 args，往 Out 里写结果字段；出错时返回 false 并写 Error（原样显示给用户和 Agent） */
 using FAgentPanelOp = TFunction<bool(const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error)>;
+
+/**
+ * 异步操作的回复（2.11）：任意线程都可以调，只能调一次；桥接把它转回游戏线程再发 HTTP 回复。
+ * bOk 为 false 时 Error 原样显示给用户和 Agent
+ */
+using FAgentPanelReply = TFunction<void(bool bOk, TSharedPtr<FJsonObject> Out, const FString& Error)>;
+/**
+ * 异步操作（2.11）：在游戏线程上被调用，可以把重活交给后台线程，做完再调 Reply。
+ * 给耗时长、又不碰 UObject 的读操作用（trace 分析）：查询期间编辑器不卡，多个客户端的查询也能同时跑
+ */
+using FAgentPanelAsyncOp = TFunction<void(const TSharedPtr<FJsonObject>& Args, FAgentPanelReply Reply)>;
 
 /** 扩展发出的推送事件：主题（forge.job、gt.record……）和事件内容。推送通道收到后转给订阅了这个主题的客户端 */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnAgentPanelEvent, const FString& /*Topic*/, const TSharedRef<FJsonObject>& /*Event*/);
@@ -22,6 +36,8 @@ public:
 
 	/** 登记操作（同名的后登记的覆盖前面的：编辑器模块用它接管编辑器世界的截图等） */
 	void AddOp(const FString& Name, FAgentPanelOp Op);
+	/** 登记异步操作（2.11，见 FAgentPanelAsyncOp）；和同名的同步操作并存时异步的优先 */
+	void AddAsyncOp(const FString& Name, FAgentPanelAsyncOp Op);
 
 	/**
 	 * UEKit 扩展插件（AssetForge、GameTest……）登记自己：名片和 /info 的 extensions 里列出名字和版本，
@@ -75,6 +91,9 @@ public:
 
 private:
 	TMap<FString, FAgentPanelOp> Ops;
+	TMap<FString, FAgentPanelAsyncOp> AsyncOps;
+	/** HTTP 服务还在：异步操作的回复晚到时（服务已停、引擎在退出）不再往已经拆掉的连接上写 */
+	TSharedRef<std::atomic<bool>, ESPMode::ThreadSafe> Alive = MakeShared<std::atomic<bool>, ESPMode::ThreadSafe>(false);
 	int32 Port = 0;
 	FString Token;
 	FString Kind;
@@ -93,5 +112,7 @@ private:
 	void EnsureIdentity();
 	TSharedPtr<FJsonObject> Info() const;
 	TSharedPtr<FJsonObject> Dispatch(const TSharedPtr<FJsonObject>& Body);
+	/** 请求的是异步操作时接手（返回 true，回复稍后经 Done 发出）；不是就返回 false 走 Dispatch */
+	bool DispatchAsync(const TSharedPtr<FJsonObject>& Body, const TFunction<void(TUniquePtr<FHttpServerResponse>&& Response)>& Done);
 	void RegisterRuntimeOps();
 };

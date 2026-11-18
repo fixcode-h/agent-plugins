@@ -158,6 +158,82 @@ using namespace TraceServices;
 	/** 树转 JSON：每层按包含时间倒序，最多 MaxKids 个、MaxDepth 层 */
 	TSharedPtr<FJsonObject> TreeJson(uint32 Id, const FNode& N, const FTimers& Timers, int32 Depth);
 
+	/** 请求里的布尔参数（没给或不是布尔时 false）。名字不叫 Flag：单体构建时会和 AgentPanelTraceLua.cpp 匿名命名空间里的撞名 */
+	inline bool BoolArg(const TSharedPtr<FJsonObject>& A, const TCHAR* Key)
+	{
+		bool B = false;
+		return A.IsValid() && A->TryGetBoolField(Key, B) && B;
+	}
+
+	// ---------- 查询预算（2.11）：查询在后台线程跑，单次有时间上限，编辑器退出时马上叫停 ----------
+	/** 开始一次查询的计时（每个后台线程各记各的） */
+	void BeginBudget(double Seconds);
+	/**
+	 * 超时或被叫停了没有：走事件的循环里每块都可以问，内部每 4096 次才真的看一次时钟。
+	 * 超了以后一直返回 true，查询尽快收尾，回包标 truncated
+	 */
+	bool OverBudget();
+	/** 这次查询有没有因为超时被截断 */
+	bool BudgetHit();
+
+	/** 游戏帧（Game）或渲染帧（Rendering）的开始和结束时间（秒），按帧号；还没结束的帧按 trace 结尾收 */
+	void ReadFrames(const IAnalysisSession& S, bool bRender, TArray<double>& OutStart, TArray<double>& OutEnd);
+
+	// AgentPanelTraceFrames.cpp（2.11）
+	/** what=framestats：每帧每条线程忙了多久（深度 0 的块在帧内的部分），给瓶颈线程、卡顿归因用 */
+	bool QueryFrameStats(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+	/** what=framediff：一组帧和基线帧比，每帧独占时间涨得最多的计时器 */
+	bool QueryFrameDiff(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	// AgentPanelTraceInfo.cpp（2.11）
+	/** what=session：平台、构建配置、程序名、命令行，以及这份 trace 里有哪些数据 */
+	void QuerySession(const IAnalysisSession& S, TSharedPtr<FJsonObject>& Out);
+	/** what=regions：Timing Regions */
+	bool QueryRegions(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	// AgentPanelTraceMemory.cpp（2.11）
+	/** what=memtags：LLM 内存标签（memtag 通道，UE 要 -llm 启动） */
+	bool QueryMemTags(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+	/** what=allocs：内存分配（memalloc 通道，UE 要 -trace=memory 启动），按标签 / 调用栈 / 大小聚合 */
+	bool QueryAllocs(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	// AgentPanelTraceLoad.cpp（2.11）
+	/** what=loads：包加载（loadtime / assetloadtime 通道） */
+	bool QueryLoads(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+	/** what=files：文件读写（file 通道） */
+	bool QueryFiles(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	// AgentPanelTraceTasks.cpp（2.11）
+	/** what=tasks：任务和等待（task 通道） */
+	bool QueryTasks(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+	/** what=switches：线程切换（contextswitch 通道），每条线程真正在跑的时间 */
+	bool QuerySwitches(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	// AgentPanelTraceNet.cpp（2.11）
+	/** what=net：网络（net 通道）每个连接的收发包统计 */
+	bool QueryNet(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error);
+
+	/** 这份 trace 里有没有这类数据（session 的 has 用；各自的文件里实现，编译时关掉的一律 false） */
+	bool HasRegions(const IAnalysisSession& S);
+	bool HasMemTags(const IAnalysisSession& S);
+	bool HasAllocs(const IAnalysisSession& S);
+	bool HasLoads(const IAnalysisSession& S);
+	bool HasFiles(const IAnalysisSession& S);
+	bool HasTasks(const IAnalysisSession& S);
+	bool HasSwitches(const IAnalysisSession& S);
+	bool HasNet(const IAnalysisSession& S);
+
+	/** 「这份 trace 没有某类数据」的统一说明：要开哪个通道、启动 UE 时要加什么参数 */
+	inline FString NoData(const TCHAR* What, const TCHAR* Channel, const TCHAR* Extra = TEXT(""))
+	{
+		return FString::Printf(TEXT("这份 trace 里没有%s：录制时要开 %s 通道（ue_perf action=start preset=custom channels=…）%s"), What, Channel, Extra);
+	}
+	/** 编译时关掉的查询（UELinkCompat.h 的 UELINK_TRACE_* 开关） */
+	inline FString Disabled(const TCHAR* What)
+	{
+		return FString::Printf(TEXT("这个 UELink 编译时关掉了%s的分析（这个引擎版本没有对应的 TraceServices 接口，或者还没适配）"), What);
+	}
+
 	// AgentPanelTraceLua.cpp
 	/** what=timers：计时器表；2.9.0 起带 lua / mergeC 参数，Lua 计时器的行带 file / line / c */
 	void QueryTimers(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out);

@@ -21,7 +21,7 @@ export interface CaptureMeta {
   by?: Actor
   startedAt?: string
   /** 面板这边记的书签：相对抓取开始的秒数。CSV 里的事件靠引擎写，这里是引擎没写进去时的后备 */
-  marks?: { at: number; name: string }[]
+  marks?: { at: number; name: string; /** mark shot=true 截的图（PNG 绝对路径） */ shot?: string }[]
   pid?: number
   /** trace 的录制预设 */
   preset?: string

@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.25.0",
+  "version": "0.26.2",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -17,8 +17,14 @@
       "desc": "只认 UE 页里接入的项目；聊天和设计模式的对话不挂",
       "default": "project",
       "options": [
-        { "value": "project", "label": "接入 UE 的项目里的所有 Agent 对话" },
-        { "value": "role", "label": "只有用了「UE 调试」技能的角色" }
+        {
+          "value": "project",
+          "label": "接入 UE 的项目里的所有 Agent 对话"
+        },
+        {
+          "value": "role",
+          "label": "只有用了「UE 调试」技能的角色"
+        }
       ]
     },
     {
@@ -29,8 +35,14 @@
       "desc": "后台编辑器首次启动 30–60 秒，之后常驻；占 2–6 GB 内存。默认不自动起，要用时在 UE 页目标卡点「启动后台编辑器」；编译和启动编辑器时会自动关掉",
       "default": "off",
       "options": [
-        { "value": "off", "label": "不自动起，提示先开编辑器或手动起后台编辑器" },
-        { "value": "background", "label": "自动起后台编辑器（不开窗口）" }
+        {
+          "value": "off",
+          "label": "不自动起，提示先开编辑器或手动起后台编辑器"
+        },
+        {
+          "value": "background",
+          "label": "自动起后台编辑器（不开窗口）"
+        }
       ]
     },
     {
@@ -159,9 +171,18 @@
       "desc": "点到列表、格子里的条目时怎么挑唯一字段；同一列表挑过一次就不再问",
       "default": "unsure",
       "options": [
-        { "value": "unsure", "label": "只在拿不准时暂停问我" },
-        { "value": "always", "label": "每个列表第一次都暂停问我" },
-        { "value": "never", "label": "不问，录完在步骤详情里再定" }
+        {
+          "value": "unsure",
+          "label": "只在拿不准时暂停问我"
+        },
+        {
+          "value": "always",
+          "label": "每个列表第一次都暂停问我"
+        },
+        {
+          "value": "never",
+          "label": "不问，录完在步骤详情里再定"
+        }
       ]
     },
     {
@@ -180,12 +201,21 @@
       "type": "select",
       "group": "GameTest 录制",
       "label": "点完界面变了时",
-      "desc": "录制时比较点一下前后的界面，推断这一步的目的，回放时已达成就跳过",
-      "default": "auto",
+      "desc": "录制时比较点一下前后的界面，把变了的地方列成跳过条件的候选；默认不自动加，要跳过的步骤在步骤详情里自己设",
+      "default": "suggest",
       "options": [
-        { "value": "auto", "label": "把握高的自动加跳过条件" },
-        { "value": "suggest", "label": "只列候选，录完自己挑" },
-        { "value": "off", "label": "不看" }
+        {
+          "value": "suggest",
+          "label": "只列候选，自己设"
+        },
+        {
+          "value": "auto",
+          "label": "把握高的自动加跳过条件"
+        },
+        {
+          "value": "off",
+          "label": "不看"
+        }
       ]
     },
     {
@@ -265,7 +295,7 @@
   "skillGuide": {
     "ue-runtime-debug": "在正在运行的 UE 里排查 Bug、看和改运行时数值、跑 GM、读 DataTable 和资源时（配合 ue_* 工具）",
     "ue-asset-authoring": "读懂或修改 UE 的蓝图和资源时：看图表和引用关系、按操作列表改蓝图并编译、新建复制改名删除资源（配合 ue_asset、ue_blueprint）",
-    "ue-perf-analysis": "排查 UE 的卡顿、帧率低、内存高和内存泄漏，或者分析 CSV Profiler、memreport 文件时（配合 ue_perf、ue_capture）"
+    "ue-perf-analysis": "排查 UE 的卡顿、帧率低、内存高和内存泄漏，或者分析 trace、CSV Profiler、memreport 文件时（配合 ue_perf、ue_capture；trace 先 diagnose 再下钻，方向多时并行派子任务）"
   },
   "agents": [
     {
@@ -290,6 +320,59 @@
         "model": "@high",
         "skills": ["ue-asset-authoring"],
         "instructions": "你是 UE 资源和蓝图的编辑助手，按 ue-asset-authoring 技能工作：先读（ue_asset describe / refs，ue_blueprint outline / graph），读懂了再改。\n\n- 改蓝图用 ue_blueprint edit 的操作列表，先 dryRun 演练，正式修改后看返回的编译结果，有错按节点 id 接着修。\n- 新建、复制、改名、删除先 dryRun；删除前说明谁在引用它。\n- 改动只在内存里，蓝图先 ue_compile 确认编译通过，说明改了什么之后再 ue_save；用户不要了就 ue_undo 或 revert。\n- 需要看运行效果时用 ue_editor 开 PIE、ue_log 和 ue_screenshot 验证。\n- 工具报错原样告诉用户，不绕过权限，不用 ue_python 代替有专用工具的操作。"
+      }
+    },
+    {
+      "key": "ue-perf",
+      "category": "开发",
+      "mounts": [
+        {
+          "key": "ue-perf-drill",
+          "mode": "subtask",
+          "rule": "diagnose 的 drill 有两个以上方向时，每个方向派一个（spawn_agents 的 params 写 {\"focus\": \"<方向>\"}），一次全部派出、并行分析"
+        }
+      ],
+      "agent": {
+        "name": "UE 性能分析",
+        "description": "排查 UE 的卡顿、帧率低和内存问题：问清现象、录 trace、诊断出排好序的问题，把方向分给子任务并行深挖，最后汇总成报告；只分析不改代码",
+        "icon": "rocket",
+        "model": "@high",
+        "skills": ["ue-perf-analysis", "ue-runtime-debug"],
+        "params": [
+          {
+            "type": "select",
+            "options": ["全流程", "问清现象", "录制", "诊断与深挖", "汇总报告", "复测对比"],
+            "ask": false,
+            "description": "全流程：从问清现象一直做到报告；工作流里每个节点只做自己那一段",
+            "key": "stage",
+            "label": "阶段",
+            "default": "全流程"
+          }
+        ],
+        "instructions": "你是 UE 性能分析的主导，按 ue-perf-analysis 技能工作：先弄清现象，再录 trace、诊断，把方向分给「UE 性能深挖」子任务并行分析，最后汇总成报告。\n\n当前阶段：{{stage}}。\n{{#if stage=全流程|问清现象}}\n## 问清现象\n- 先问清：什么操作、在哪个关卡或界面、每次都有还是偶尔、目标帧率（默认 60）、用的是编辑器 PIE 还是打包版本。用户已经说清的不再问。\n- ue_status 看进程；能用 GM / 控制台命令复现的，写出 record 要用的 steps；要人操作的，说明录制时请用户怎么做。\n{{/if}}\n{{#if stage=全流程|录制}}\n## 录制\n- 能用命令复现的用 ue_perf action=record（steps 里前后各一个 mark，关键时刻 shot=true 截图），否则 start → 请用户操作并 mark → stop → wait。\n- 按问题选 preset；UnLua 项目默认带 Lua。录 10 到 30 秒就够，不要录很长。\n{{/if}}\n{{#if stage=全流程|诊断与深挖}}\n## 诊断与并行深挖\n- ue_capture action=diagnose 看排好序的 findings 和 drill。\n- drill 有两个以上方向时，用 spawn_agents 一次派出「UE 性能深挖」子任务，每个方向一个（params 写 {\"focus\": \"<方向>\"}），说明里写清抓取 id、范围和这个方向的发现；只有一个方向时自己下钻。\n- 子任务都回来后去重、按 impactMs 排序；互相矛盾的自己再查一次。\n{{/if}}\n{{#if stage=全流程|汇总报告}}\n## 汇总报告\n按技能里「给结论（报告格式）」写报告，写进项目文档根的 perf-reports/<日期>-<场景>.md，并在回复里给出结论和文件路径。区分数据说明的和推测的。\n{{/if}}\n{{#if stage=复测对比}}\n## 复测对比\n用和改前一样的步骤再录一份，ue_capture action=compare id=<改前> other=<改后>（from / to 写书签名对齐），说明哪些变好了、哪些变差了、卡顿元凶的次数变化；有 warnings 时原样告诉用户。\n{{/if}}\n\n- 只分析和给建议，不改代码和资源；用户要改时交给「UE 调试」或开发角色。\n- 工具报错原样告诉用户，不绕过权限。抓到的文件结束时列出来。"
+      }
+    },
+    {
+      "key": "ue-perf-drill",
+      "category": "开发",
+      "agent": {
+        "name": "UE 性能深挖",
+        "description": "「UE 性能分析」派出的子任务：对一份 trace 只深挖一个方向（游戏线程、渲染、卡顿、Lua、内存、加载），按固定格式交回结论和证据；只分析，不录制不改代码",
+        "icon": "search",
+        "model": "@high",
+        "skills": ["ue-perf-analysis"],
+        "params": [
+          {
+            "type": "select",
+            "options": ["game", "render", "hitch", "lua", "memory", "loading"],
+            "ask": false,
+            "description": "这个子任务只看的方向（ue_capture diagnose 的 drill.focus）：game 游戏线程、render 渲染和 GPU、hitch 卡顿、lua、memory 内存、loading 加载",
+            "key": "focus",
+            "label": "方向",
+            "default": "hitch"
+          }
+        ],
+        "instructions": "你是 UE 性能分析的深挖子任务，只看一个方向：{{focus}}。按 ue-perf-analysis 技能里 trace 的下钻方法做，派单里有抓取 id、范围和这个方向的发现。\n\n- 只分析，不录制（不用 ue_perf start / record），不改代码和资源；要读源码时用读文件工具看 src 给的位置。\n{{#if focus=game}}- 游戏线程：timers lane=GameThread perFrame=true 找每帧最重的，butterfly 看调用关系，instances 区分每次都慢还是偶尔一次，tree 看主干。{{/if}}\n{{#if focus=render}}- 渲染和 GPU：threads / bound 看是渲染线程、RHI 还是 GPU，timers lane=<那条线程> perFrame=true，counters 看 Draw Call 和图元数。{{/if}}\n{{#if focus=hitch}}- 卡顿：hitches 看分组和周期，最慢的几帧逐个 frame，grew 里的计时器用 butterfly / stack 找到入口。{{/if}}\n{{#if focus=lua}}- Lua：timers lua=true mergeC=true、tree luaOnly=true，按 src 读源码，butterfly 看是从哪个 UE 回调进来的。{{/if}}\n{{#if focus=memory}}- 内存：counters sort=growth、memtags、allocs（有才查）；GC 卡顿看 hitches 里「垃圾回收」组的帧。{{/if}}\n{{#if focus=loading}}- 加载：loads sort=time、files，hitches 里「同步加载」「关卡流送」组的帧，看是哪些包在游戏线程上同步加载。{{/if}}\n\n交回时按这个格式（不超过 40 行）：\n## 结论\n一两句：这个方向最大的问题是什么、每帧大约多少毫秒（impactMs）。\n## 证据\n每条：哪一帧或哪一段、哪个计时器、多少毫秒、怎么查到的（工具和参数）。\n## 源码位置\n文件:行（Lua 的 src、C++ 能对上的函数）。\n## 建议\n具体改法，按收益排序。\n## 还没确认的\n推测和需要再录什么才能确认。"
       }
     }
   ],
@@ -322,5 +405,100 @@
   },
   "server": "server/index.js",
   "web": "web/index.js",
-  "css": "web/index.css"
+  "css": "web/index.css",
+  "workflows": [
+    {
+      "key": "ue-perf",
+      "name": "UE 性能分析",
+      "description": "问清现象（确认）→ 录 trace → 诊断与并行深挖 → 汇总报告（确认）；改完可单独跑「复测对比」",
+      "category": "开发",
+      "when": "UE 项目卡顿、掉帧、帧率低、内存涨，要找出原因和改法时",
+      "notFor": "只想看一眼帧率（直接用 ue_perf live）；要直接改代码修性能问题（交给开发角色）",
+      "kind": "readonly",
+      "main": "ue-perf",
+      "members": [
+        ["ue-perf", "问清现象、录制、诊断、派深挖、汇总报告、复测对比"],
+        ["ue-perf-drill", "按方向并行深挖一份 trace，交回结论、证据和源码位置"]
+      ],
+      "document": "## 适用\nUE 项目的性能和内存问题：先录一份 trace 诊断，再按方向并行深挖，最后给出带证据的报告。只分析不改代码。\n\n## 约定\n- 先问清现象（什么操作、哪里、偶尔还是一直、目标帧率），你确认后再录。\n- 录制会影响正在运行的游戏：要人操作时会请你在游戏里操作。\n- 深挖子任务每个方向一个，并行跑，不设上限。\n- 报告写进项目文档根的 perf-reports/<日期>-<场景>.md，你确认后结束；改完要复测时运行「复测对比」流程。",
+      "flows": [
+        {
+          "id": "main",
+          "name": "主流程",
+          "nodes": [
+            {
+              "id": "ask",
+              "title": "问清现象",
+              "agent": "ue-perf",
+              "tier": "medium",
+              "params": {
+                "stage": "问清现象"
+              },
+              "confirm": true,
+              "instructions": "问清现象和复现方法，写出录制计划（record 的 steps 或请用户怎么操作），请用户确认。"
+            },
+            {
+              "id": "record",
+              "title": "录制",
+              "agent": "ue-perf",
+              "tier": "medium",
+              "params": {
+                "stage": "录制"
+              },
+              "instructions": "按确认的计划录 trace，交出抓取 id 和书签。"
+            },
+            {
+              "id": "analyze",
+              "title": "诊断与深挖",
+              "agent": "ue-perf",
+              "tier": "high",
+              "params": {
+                "stage": "诊断与深挖"
+              },
+              "instructions": "对上一步的抓取 diagnose，按 drill 并行派出深挖子任务，汇总它们的结果。"
+            },
+            {
+              "id": "report",
+              "title": "汇总报告",
+              "agent": "ue-perf",
+              "tier": "high",
+              "params": {
+                "stage": "汇总报告"
+              },
+              "confirm": true,
+              "instructions": "把诊断和深挖结果写成报告，请用户确认。"
+            }
+          ],
+          "edges": [
+            ["start", "ask"],
+            ["ask", "record"],
+            ["record", "analyze"],
+            ["analyze", "report"],
+            ["report", "end"]
+          ]
+        },
+        {
+          "id": "retest",
+          "name": "复测对比",
+          "description": "改完后用同样的步骤再录一份，和改前对比",
+          "nodes": [
+            {
+              "id": "retest",
+              "title": "复测对比",
+              "agent": "ue-perf",
+              "tier": "medium",
+              "params": {
+                "stage": "复测对比"
+              },
+              "instructions": "按上面「输入」里的改前抓取和录制步骤再录一份，和改前对比。"
+            }
+          ],
+          "edges": [
+            ["start", "retest"],
+            ["retest", "end"]
+          ]
+        }
+      ]
+    }
+  ]
 }

@@ -5,8 +5,11 @@ import {
   condOf,
   condSay,
   parseSkipText,
+  quickDefault,
+  quickOf,
   sameAsCand,
   skipFromCand,
+  skipFromQuick,
   skipLabel,
   skipSupported,
   skipWith,
@@ -79,4 +82,40 @@ test('skipSupported 按 GameTest 版本', () => {
 test('skipWith 读连带跳过的带头步', () => {
   assert.equal(skipWith({ skip: { with: 3 } }), 3)
   assert.equal(skipWith({ skip: { say: 'x' } }), undefined)
+})
+
+test('快捷设置：文字用 textLike，显示 / 勾选写布尔，留空看这一步的控件，带上录制的 also 建议', () => {
+  assert.deepEqual(skipFromQuick({ kind: 'text', target: '', value: ' 已领取 ' }, undefined, 1), {
+    textLike: '已领取',
+    also: 1,
+    by: 'user',
+  })
+  assert.deepEqual(skipFromQuick({ kind: 'visible', target: 'W:Root/Img', value: 'no' }), {
+    target: 'W:Root/Img',
+    visible: false,
+    by: 'user',
+  })
+  assert.equal(skipFromQuick({ kind: 'text', target: '', value: '  ' }), undefined)
+  // 改条件时保留原来的 also / verify，不用建议值
+  assert.deepEqual(
+    skipFromQuick({ kind: 'checked', target: '', value: 'yes' }, { textLike: 'x', also: 2, verify: false }, 5),
+    {
+      checked: true,
+      also: 2,
+      verify: false,
+      by: 'user',
+    },
+  )
+})
+
+test('快捷设置的初值和回读', () => {
+  const cands = [
+    { kind: 'text', cond: { textLike: '已领取' }, score: 8 },
+    { kind: 'visible', target: 'W:Root/Tick', cond: { visible: true }, score: 7 },
+  ]
+  assert.deepEqual(quickDefault('text', cands), { kind: 'text', target: '', value: '已领取' })
+  assert.deepEqual(quickDefault('visible', cands), { kind: 'visible', target: 'W:Root/Tick', value: 'yes' })
+  assert.deepEqual(quickDefault('checked', cands), { kind: 'checked', target: '', value: 'yes' })
+  assert.deepEqual(quickOf({ target: 'W:A', checked: false, also: 1 }), { kind: 'checked', target: 'W:A', value: 'no' })
+  assert.equal(quickOf({ checked: true, visible: true }), undefined)
 })

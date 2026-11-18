@@ -1,9 +1,25 @@
-import { ArrowLeft, FolderOpen, Settings2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Camera,
+  CloudDownload,
+  FolderOpen,
+  Footprints,
+  Hammer,
+  KeyRound,
+  ListStart,
+  MonitorOff,
+  Play,
+  ScanText,
+  Settings2,
+  ShieldX,
+  SkipForward,
+} from 'lucide-react'
+import { useState } from 'react'
 import { pget, useLoad } from '../../../api.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { OcrSettings } from '../../../OcrSettings.tsx'
-import { SettingGroup, SettingRow, SettingsPage } from '../../../SettingRows.tsx'
+import { SettingGroup, SettingRow, SettingsLayout, type SettingsNavSection } from '../../../SettingRows.tsx'
 import { Badge, ErrorText, PageHead } from '../../../ui.tsx'
 import { GtSettings } from '../GtSettings.tsx'
 
@@ -74,11 +90,54 @@ function PathRow({ label, entry, where }: { label: string; entry?: PathEntry; wh
   )
 }
 
+/** 左边菜单：分节照面板设置窗口的侧栏，一项一页（id 对应各组 SettingGroup 的 page） */
+function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
+  return {
+    UELink: [
+      {
+        title: t('所有项目共用'),
+        items: [
+          { id: 'source', label: t('更新源'), icon: CloudDownload },
+          { id: 'offline', label: t('编辑器没开时'), icon: MonitorOff },
+        ],
+      },
+      { title: t('这个项目'), items: [{ id: 'build', label: t('编译'), icon: Hammer }] },
+    ],
+    AssetForge: [{ title: t('这个项目'), items: [{ id: 'paths', label: t('目录'), icon: FolderOpen }] }],
+    GameTest: [
+      {
+        title: t('运行设置 · 这个项目'),
+        items: [
+          { id: 'playback', label: t('回放'), icon: Play },
+          { id: 'setup', label: t('前置步骤'), icon: ListStart },
+          { id: 'move', label: t('移动'), icon: Footprints },
+          { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },
+          { id: 'keys', label: t('条目怎么认'), icon: KeyRound },
+          { id: 'blockers', label: t('阻挡界面'), icon: ShieldX },
+        ],
+      },
+      {
+        title: t('录制 · 所有项目共用'),
+        items: [
+          { id: 'shots', label: t('录制截图'), icon: Camera },
+          { id: 'ocr', label: t('OCR 认字'), icon: ScanText },
+        ],
+      },
+      { title: t('其他'), items: [{ id: 'paths', label: t('目录'), icon: FolderOpen }] },
+    ],
+  }
+}
+
 export function PluginSettings({ name }: { name: SettingsPlugin }) {
   const { project, go } = useUe()
   const { ui } = h()
   const paths = useLoad(() => pget<Paths>(project.id, 'ext/paths'), [project.id])
   const p = paths.data
+  const nav = settingsNav()
+  // 每个插件记自己停在哪一页；切插件时回到它记的那页（没有就第一页）
+  const [pages, setPages] = useState<Partial<Record<SettingsPlugin, string>>>({})
+  const cur = pages[name] ?? nav[name][0].items[0].id
+  const setPage = (id: string) => setPages((m) => ({ ...m, [name]: id }))
   const desc: Record<SettingsPlugin, string> = {
     UELink: t('更新源、编辑器没开时怎么读资源；引擎目录和编译命令在「权限与设置」'),
     AssetForge: t('配置放在哪；模板放在配置根的 _templates/ 下'),
@@ -98,7 +157,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
           options={SETTINGS_PLUGINS.map((id) => ({ id, label: id }))}
         />
       </PageHead>
-      <SettingsPage>
+      <SettingsLayout nav={nav[name]} current={cur} onPick={setPage}>
         {paths.error && (
           <div className="ue:pt-4">
             <ErrorText>{paths.error}</ErrorText>
@@ -106,13 +165,13 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
         )}
         {name === 'UELink' && (
           <>
-            <SettingGroup title={t('更新源')} aside={t('所有项目共用')} flush>
+            <SettingGroup page="source" title={t('更新源')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['UELink']} />
             </SettingGroup>
-            <SettingGroup title={t('编辑器没开时')} aside={t('所有项目共用')} flush>
+            <SettingGroup page="offline" title={t('编辑器没开时')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['离线读取']} />
             </SettingGroup>
-            <SettingGroup title={t('编译')}>
+            <SettingGroup page="build" title={t('编译')}>
               <SettingRow title={t('引擎目录和编译命令')} desc={t('整个项目共用，UELink 卡片上的「编译」也按它们编')}>
                 <div className="ue:flex ue:justify-end">
                   <ui.Button size="sm" variant="secondary" onClick={() => go('bridge')}>
@@ -124,7 +183,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
           </>
         )}
         {name === 'AssetForge' && (
-          <SettingGroup title={t('目录')} aside={t('这个项目')}>
+          <SettingGroup page="paths" title={t('目录')} aside={t('这个项目')}>
             <PathRow
               label={t('配置根')}
               entry={p?.forgeRoot}
@@ -136,15 +195,15 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
         )}
         {name === 'GameTest' && (
           <>
-            {/* 运行设置按组画成几张卡片，底部贴一条保存栏 */}
+            {/* 运行设置占左边菜单的前六页，一直挂着（换页不丢没保存的改动），只画当前那一组 */}
             <GtSettings />
-            <SettingGroup title={t('录制截图')} aside={t('所有项目共用')} flush>
+            <SettingGroup page="shots" title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
             </SettingGroup>
-            <SettingGroup title={t('OCR（认录制截图里的字）')} aside={t('所有项目共用')}>
+            <SettingGroup page="ocr" title={t('OCR（认录制截图里的字）')} aside={t('所有项目共用')}>
               <OcrSettings bare />
             </SettingGroup>
-            <SettingGroup title={t('目录')} aside={t('这个项目')}>
+            <SettingGroup page="paths" title={t('目录')} aside={t('这个项目')}>
               <PathRow
                 label={t('场景根')}
                 entry={p?.gtScenarioRoot}
@@ -160,7 +219,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
             </SettingGroup>
           </>
         )}
-      </SettingsPage>
+      </SettingsLayout>
     </div>
   )
 }

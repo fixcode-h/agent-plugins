@@ -10,7 +10,7 @@ import { projectJobs } from './jobs.ts'
 import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile, tailFile } from './logs.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { runLuaGm } from './lua-gm/run.ts'
-import { hasUnLua } from './perf/lua-trace.ts'
+import { hasUnLua } from './lua/unlua-detect.ts'
 import { readGm } from './store.ts'
 import type { ProjectState, UeProject } from './types.ts'
 import { t } from './util.ts'
@@ -50,7 +50,8 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
   return {
     project: p,
     instances,
-    unlua: await hasUnLua(p.root),
+    // 磁盘上认不出（插件放得太偏、名字全改了）但运行中的进程报了 Lua 环境，也算用了 UnLua
+    unlua: instances.some((i) => i.lua) || (await hasUnLua(p)),
     bridge,
     bundled,
     background: backgroundState(p, cards),

@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 29,
-  "VersionName": "2.10.2",
+  "Version": 32,
+  "VersionName": "2.11.1",
   "FriendlyName": "UELink",
   "Description": "让 Agent 面板连上这个 UE 进程：控制台、GM、对象属性、DataTable、资源和蓝图读写、日志、性能、Lua；UEKit 的其他插件也通过它和面板通信。只监听 127.0.0.1，Shipping 不加载。",
   "Category": "Developer Tools",

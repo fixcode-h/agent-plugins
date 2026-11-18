@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { hasUnLua } from '../lua/unlua-detect.ts'
 import type { UeProject } from '../types.ts'
 import { findPluginDirs } from '../uelink.ts'
 
@@ -44,7 +45,8 @@ export async function kitInfo(p: UeProject, m: KitFields | null | undefined): Pr
   const optional = await Promise.all(
     names.map(async (name) => ({
       name,
-      on: enabled.has(name) || (await findPluginDirs(p.root, name)).length > 0,
+      // UnLua 常是改过的分支、放得很偏，按 lua/unlua-detect.ts 的统一认法（不只看 Plugins/ 下有没有同名目录）
+      on: name === 'UnLua' ? await hasUnLua(p) : enabled.has(name) || (await findPluginDirs(p.root, name)).length > 0,
     })),
   )
   return {

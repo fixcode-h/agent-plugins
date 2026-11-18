@@ -1,5 +1,4 @@
-import { stat } from 'node:fs/promises'
-import path from 'node:path'
+import { hasUnLua } from '../lua/unlua-detect.ts'
 import { cmpVersion } from '../semver.ts'
 import type { UeProject } from '../types.ts'
 
@@ -13,17 +12,6 @@ export const LUA_TRACE_BRIDGE = '2.9.0'
 /** true = lua,luac；'noc' = 只要 lua（C 函数的时间算进调用它的 Lua 函数）；false = 不录 Lua */
 export type LuaTrace = boolean | 'noc'
 
-/**
- * 项目里有没有 UnLua（Plugins/ 下任一层有 UnLua.uplugin）：UE 没开时 Lua 页也要列出来，
- * GM 扫描、编译这些只读本机文件的页签不需要 UE 在运行（设计稿四.2、四.3）。.uproject 里关掉的不细判，进页后各页签自己报
- */
-export async function hasUnLua(root: string) {
-  for (const f of ['Plugins/UnLua/UnLua.uplugin', 'Plugins/UnLua/Plugins/UnLua/UnLua.uplugin']) {
-    if (await stat(path.join(root, f)).catch(() => undefined)) return true
-  }
-  return false
-}
-
 /** 参数写法宽松：true / "true" / false / "false" / "noc"；没给或认不出返回 undefined（按项目设置） */
 export function parseLuaTrace(v: unknown): LuaTrace | undefined {
   if (v === true || v === 'true') return true
@@ -35,7 +23,7 @@ export function parseLuaTrace(v: unknown): LuaTrace | undefined {
 /** 项目设置（UeProject.perfLua，用户在录制控件上改过才有）；没改过时装了 UnLua 就录、C 函数单独成块 */
 export async function luaTraceDefault(p: UeProject): Promise<LuaTrace> {
   const s = p.perfLua
-  const on = s?.on ?? (await hasUnLua(p.root))
+  const on = s?.on ?? (await hasUnLua(p))
   if (!on) return false
   return s?.c === false ? 'noc' : true
 }

@@ -6,7 +6,7 @@
  */
 
 /** 请求里表示时间点的参数 */
-const ARG_TIMES = ['t0', 't1', 'time'] as const
+const ARG_TIMES = ['t0', 't1', 'time', 'at'] as const
 
 export function shiftArgs(args: Record<string, unknown>, origin: number): Record<string, unknown> {
   if (!origin) return args
@@ -53,7 +53,28 @@ export function shiftResult(what: string, res: Record<string, unknown>, origin: 
     case 'log':
       out.items = subField(out.items, 't', origin)
       break
+    // UELink 2.11 的新查询
+    case 'framediff':
+      out.frames = subField(out.frames, 'start', origin)
+      break
+    case 'regions':
+    case 'files':
+      out.items = subField(out.items, 'start', origin)
+      break
+    case 'tasks':
+      out.slowest = subField(out.slowest, 'start', origin)
+      break
+    case 'memtags':
+      if (Array.isArray(out.items))
+        out.items = out.items.map((s: Record<string, unknown>) => (s.t ? { ...s, t: sub(s.t, origin) } : s))
+      break
     case 'counters':
+      if (Array.isArray(out.counters))
+        out.counters = out.counters.map((s: Record<string, unknown>) =>
+          typeof s.firstT === 'number'
+            ? { ...s, firstT: (s.firstT as number) - origin, lastT: (s.lastT as number) - origin }
+            : s,
+        )
       if (Array.isArray(out.series))
         out.series = out.series.map((s: Record<string, unknown>) => ({ ...s, t: sub(s.t, origin) }))
       break

@@ -26,7 +26,7 @@ import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
  */
 
 /** 用到这个技能的角色视为 UE 角色（attach=role 时只给它们挂工具） */
-const UE_SKILLS = ['ue-runtime-debug', 'ue-asset-authoring']
+const UE_SKILLS = ['ue-runtime-debug', 'ue-asset-authoring', 'ue-perf-analysis']
 
 const HINT = `## UE 工具
 这个对话所在的项目接入了 UE（面板「UE」页）。你有 ue_* 工具直接操作正在运行的 UE 编辑器 / 游戏，编辑器没开时也能读资源：

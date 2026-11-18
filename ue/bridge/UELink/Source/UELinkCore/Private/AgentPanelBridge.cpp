@@ -4,6 +4,7 @@
 #include "AgentPanelLog.h"
 #include "UELinkVersion.h"
 #include "AgentPanelLuaOps.h"
+#include "Async/Async.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -43,6 +44,11 @@ FAgentPanelBridge& FAgentPanelBridge::Get()
 void FAgentPanelBridge::AddOp(const FString& Name, FAgentPanelOp Op)
 {
 	Ops.Add(Name, MoveTemp(Op));
+}
+
+void FAgentPanelBridge::AddAsyncOp(const FString& Name, FAgentPanelAsyncOp Op)
+{
+	AsyncOps.Add(Name, MoveTemp(Op));
 }
 
 bool FAgentPanelBridge::AddExtensionOp(const FString& Name, FAgentPanelOp Op)
@@ -294,6 +300,13 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Info() const
 	{
 		Names.Add(MakeShared<FJsonValueString>(P.Key));
 	}
+	for (const TPair<FString, FAgentPanelAsyncOp>& P : AsyncOps)
+	{
+		if (!Ops.Contains(P.Key))
+		{
+			Names.Add(MakeShared<FJsonValueString>(P.Key));
+		}
+	}
 	O->SetArrayField(TEXT("ops"), Names);
 	AgentPanelLuaInfo(O);
 	return O;
@@ -336,6 +349,63 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	}
 	Out->SetBoolField(TEXT("ok"), true);
 	return Out;
+}
+
+bool FAgentPanelBridge::DispatchAsync(const TSharedPtr<FJsonObject>& Body, const TFunction<void(TUniquePtr<FHttpServerResponse>&& Response)>& Done)
+{
+	FString Op;
+	if (!Body.IsValid() || !Body->TryGetStringField(TEXT("op"), Op))
+	{
+		return false;
+	}
+	FAgentPanelAsyncOp* Fn = AsyncOps.Find(Op);
+	if (!Fn)
+	{
+		return false;
+	}
+	// 退出和回收垃圾时的拦法和同步操作一样：交给 Dispatch 回错误
+	if (IsEngineExitRequested() || IsGarbageCollecting())
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* ArgsPtr = nullptr;
+	TSharedPtr<FJsonObject> Args = Body->TryGetObjectField(TEXT("args"), ArgsPtr) && ArgsPtr ? *ArgsPtr : MakeShared<FJsonObject>();
+	TSharedRef<std::atomic<bool>, ESPMode::ThreadSafe> Live = Alive;
+	TSharedRef<std::atomic<bool>, ESPMode::ThreadSafe> Replied = MakeShared<std::atomic<bool>, ESPMode::ThreadSafe>(false);
+	FHttpResultCallback Callback = Done;
+	(*Fn)(Args, [Live, Replied, Callback](bool bOk, TSharedPtr<FJsonObject> Out, const FString& Error)
+	{
+		// 只回一次：操作写错了调两次时，第二次直接丢掉（HTTP 连接只能回一次）
+		if (Replied->exchange(true))
+		{
+			return;
+		}
+		TSharedPtr<FJsonObject> Res = Out.IsValid() ? Out : MakeShared<FJsonObject>();
+		if (bOk)
+		{
+			Res->SetBoolField(TEXT("ok"), true);
+		}
+		else
+		{
+			Res = ErrorObject(Error.IsEmpty() ? TEXT("执行失败") : Error);
+		}
+		auto Send = [Live, Callback, Res]()
+		{
+			if (Live->load())
+			{
+				Callback(JsonResponse(Res));
+			}
+		};
+		if (IsInGameThread())
+		{
+			Send();
+		}
+		else
+		{
+			AsyncTask(ENamedThreads::GameThread, MoveTemp(Send));
+		}
+	});
+	return true;
 }
 
 void FAgentPanelBridge::SetCardField(const FString& Name, const TSharedPtr<FJsonValue>& Value)
@@ -458,11 +528,17 @@ bool FAgentPanelBridge::Start(const FString& InKind)
 				Done(JsonResponse(ErrorObject(TEXT("请求不是 JSON")), EHttpServerResponseCodes::BadRequest));
 				return true;
 			}
+			// 异步操作（2.11，trace 分析）：回复稍后由操作自己发
+			if (DispatchAsync(Body, Done))
+			{
+				return true;
+			}
 			// 路由在游戏线程上回调（HTTPServer 由核心 ticker 驱动），反射读写可以直接做
 			Done(JsonResponse(Dispatch(Body)));
 			return true;
 		}));
 	Http.StartAllListeners();
+	Alive->store(true);
 	LastRequest = FPlatformTime::Seconds();
 	WriteCard();
 	UE_LOG(LogAgentPanelBridge, Display, TEXT("UELink %s 已启动：127.0.0.1:%d（%s）"), BridgeVersion, Port, *Kind);
@@ -477,6 +553,8 @@ void FAgentPanelBridge::Stop()
 	}
 	CardFiles.Reset();
 	FAgentPanelLog::Get().Detach();
+	// 还没回的异步操作不再回：连接跟着服务一起没了
+	Alive->store(false);
 	Port = 0;
 }
 

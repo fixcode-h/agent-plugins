@@ -1,5 +1,6 @@
 // UELink 的运行时模块（原 Agent 面板桥接 AgentPanelBridge）：编辑器、PIE、-game / 专用服务器进程里都加载（Shipping 不加载，见 .uplugin）
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnrealBuildTool;
@@ -106,12 +107,85 @@ public class UELinkCore : ModuleRules
 		catch (Exception)
 		{
 		}
-		string Found = FindFile(Path.Combine(ProjectDir, "Plugins"), "UnLua.uplugin");
+		// UnLua 常是改过的分支：可能放在 Plugins 的深层子目录、装在引擎里，或者 .uplugin 改了名，所以不认固定目录，
+		// 按「文件名是 UnLua.uplugin，或插件里有 UnLua 模块」在整棵插件树里找（下面依赖的就是 UnLua 这个模块名）
+		string Found = FindUnLuaPlugin(Path.Combine(ProjectDir, "Plugins"), 0);
 		if (Found == null)
 		{
-			Found = FindFile(Path.Combine(EngineDirectory, "Plugins", "Marketplace"), "UnLua.uplugin");
+			// 引擎里的插件要项目启用了才算，不然依赖一个没启用的模块 UBT 会直接报错
+			string InEngine = FindUnLuaPlugin(Path.Combine(EngineDirectory, "Plugins"), 0);
+			if (InEngine != null && EnabledForProject(Target.ProjectFile.FullName, InEngine))
+			{
+				Found = InEngine;
+			}
 		}
-		return Found == null ? null : Path.GetDirectoryName(Found);
+		return Found;
+	}
+
+	/** 插件目录里不会再套插件、又很大的子目录：扫引擎的插件树时跳过，几千个目录以内就扫完 */
+	private static readonly HashSet<string> SkipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"Source", "Content", "Binaries", "Intermediate", "Resources", "Shaders", "Config", "Saved", "Extras", "ThirdParty", "Docs", ".git", ".svn"
+	};
+
+	/** 返回 UnLua 插件的目录（.uplugin 所在）；插件里还能套插件（官方仓库是 Plugins/UnLua/Plugins/UnLua），找到 .uplugin 也接着往下 */
+	private static string FindUnLuaPlugin(string Dir, int Depth)
+	{
+		if (Depth > 8 || !Directory.Exists(Dir))
+		{
+			return null;
+		}
+		try
+		{
+			if (File.Exists(Path.Combine(Dir, "UnLua.uplugin")))
+			{
+				return Dir;
+			}
+			if (Directory.GetFiles(Dir, "*.uplugin").Length > 0 && File.Exists(Path.Combine(Dir, "Source", "UnLua", "UnLua.Build.cs")))
+			{
+				return Dir;
+			}
+			foreach (string Sub in Directory.GetDirectories(Dir))
+			{
+				if (SkipDirs.Contains(Path.GetFileName(Sub)))
+				{
+					continue;
+				}
+				string Found = FindUnLuaPlugin(Sub, Depth + 1);
+				if (Found != null)
+				{
+					return Found;
+				}
+			}
+		}
+		catch (Exception)
+		{
+		}
+		return null;
+	}
+
+	/** 引擎插件对这个项目开着没有：.uproject 里写了它的名字（没写 Enabled:false），或清单里 EnabledByDefault */
+	private static bool EnabledForProject(string UProjectFile, string PluginDir)
+	{
+		try
+		{
+			string[] Manifests = Directory.GetFiles(PluginDir, "*.uplugin");
+			if (Manifests.Length == 0)
+			{
+				return false;
+			}
+			string Name = Regex.Escape(Path.GetFileNameWithoutExtension(Manifests[0]));
+			string UProject = File.ReadAllText(UProjectFile);
+			if (Regex.IsMatch(UProject, "\"Name\"\\s*:\\s*\"" + Name + "\"", RegexOptions.IgnoreCase))
+			{
+				return !Regex.IsMatch(UProject, "\"Name\"\\s*:\\s*\"" + Name + "\"\\s*,\\s*\"Enabled\"\\s*:\\s*false", RegexOptions.IgnoreCase);
+			}
+			return Regex.IsMatch(File.ReadAllText(Manifests[0]), "\"EnabledByDefault\"\\s*:\\s*true");
+		}
+		catch (Exception)
+		{
+			return false;
+		}
 	}
 
 	private static string FindFile(string Dir, string Name)
