@@ -257,6 +257,11 @@ namespace TraceMemoryImpl
 		const double T0 = Num(A, TEXT("t0"), 0);
 		const double T1 = Num(A, TEXT("t1"), S.GetDurationSeconds());
 		const FString GroupBy = AgentPanel::Str(A, TEXT("groupBy"), TEXT("tag"));
+		if (GroupBy == TEXT("callstack") && !UELINK_ALLOC_HAS_CALLSTACK)
+		{
+			Error = TEXT("这个引擎版本的 TraceServices 取不到分配的调用栈，不能按调用栈分组：改用 groupBy=tag 或 groupBy=size");
+			return false;
+		}
 		const FString Filter = AgentPanel::Str(A, TEXT("filter"));
 		const int32 Top = FMath::Clamp(AgentPanel::Int(A, TEXT("top"), 30), 1, 200);
 		const int32 Depth = FMath::Clamp(AgentPanel::Int(A, TEXT("depth"), 6), 1, 20);
@@ -312,7 +317,7 @@ namespace TraceMemoryImpl
 						FGroup* G = nullptr;
 						if (GroupBy == TEXT("callstack"))
 						{
-							G = &ByStack.FindOrAdd(UELINK_ALLOC_CALLSTACK(Alloc));
+							G = &ByStack.FindOrAdd(UELINK_ALLOC_CALLSTACK(S, Alloc));
 						}
 						else
 						{
@@ -323,7 +328,7 @@ namespace TraceMemoryImpl
 						G->MaxBytes = FMath::Max(G->MaxBytes, Size);
 						if (!G->Sample)
 						{
-							G->Sample = UELINK_ALLOC_CALLSTACK(Alloc);
+							G->Sample = UELINK_ALLOC_CALLSTACK(S, Alloc);
 						}
 					}
 				}
