@@ -34,28 +34,20 @@ export function tidyMove(m: GtMoveConfig): GtMoveConfig | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
-export function GtMoveSettings({
-  value,
-  onChange,
-  framed,
-}: {
-  value: GtMoveConfig
-  onChange: (v: GtMoveConfig) => void
-  framed?: boolean
-}) {
+export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onChange: (v: GtMoveConfig) => void }) {
   const { ui } = h()
   const set = (p: Partial<GtMoveConfig>) => onChange({ ...value, ...p })
   return (
     <SettingGroup
       title={t('移动')}
-      framed={framed}
-      desc={t(
+      hint={t(
         'move 步骤（录移动录出来的）让角色自己走到目标点：先按导航网格寻路，没有就按录的轨迹走，再不行运行时探路。需要 GameTest 1.3.0；场景里写的 move 覆盖这里。',
       )}
     >
       <SettingRow
         title={t('走不到时')}
-        desc={t('瞬移兜底能让后面的步骤接着跑，但这一步就没测到「走得过去」；结果里会写明用了瞬移。')}
+        desc={t('寻路和探路都走不到目标点时')}
+        hint={t('瞬移兜底能让后面的步骤接着跑，但这一步就没测到「走得过去」；结果里会写明用了瞬移。')}
       >
         <ui.Select
           size="sm"
@@ -71,7 +63,8 @@ export function GtMoveSettings({
       {value.fallback === 'teleport' && (
         <SettingRow
           title={t('瞬移命令')}
-          desc={t('项目有自己的传送 GM 时填控制台命令，{x} {y} {z} {yaw} 换成目标坐标；空着直接设角色位置。')}
+          desc={t('空着直接设角色位置')}
+          hint={t('项目有自己的传送 GM 时填控制台命令，{x} {y} {z} {yaw} 换成目标坐标；空着直接设角色位置。')}
         >
           <ui.Input
             size="sm"
@@ -84,7 +77,8 @@ export function GtMoveSettings({
       )}
       <SettingRow
         title={t('怎么推角色')}
-        desc={t(
+        desc={t('move 步骤给角色的移动输入')}
+        hint={t(
           '推摇杆直接给角色移动输入，不经过按键绑定；项目只认按键（Enhanced Input 上做了自己的移动逻辑）时改成按住前进键。',
         )}
       >
@@ -112,7 +106,8 @@ export function GtMoveSettings({
       </SettingRow>
       <SettingRow
         title={t('录制快捷键')}
-        desc={t(
+        desc={t('录制时用 Alt+数字 录移动、记位置、断言')}
+        hint={t(
           '录制时 Alt+1 录移动、Alt+2 记下位置、Alt+3 在这附近、Alt+4 断言、Alt+5 检查点、Alt+0 放弃这段；游戏自己用了 Alt+数字时关掉，改用工具栏。',
         )}
       >

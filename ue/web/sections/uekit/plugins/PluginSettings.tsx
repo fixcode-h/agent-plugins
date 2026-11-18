@@ -1,11 +1,10 @@
 import { ArrowLeft, FolderOpen, Settings2 } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { pget, useLoad } from '../../../api.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { OcrSettings } from '../../../OcrSettings.tsx'
-import { STACK } from '../../../split.tsx'
-import { Badge, Card, ErrorText, PageHead } from '../../../ui.tsx'
+import { SettingGroup, SettingRow, SettingsPage } from '../../../SettingRows.tsx'
+import { Badge, ErrorText, PageHead } from '../../../ui.tsx'
 import { GtSettings } from '../GtSettings.tsx'
 
 /**
@@ -37,8 +36,8 @@ function PanelParams({ groups }: { groups: string[] }) {
   const nav = hooks.useNav()
   if (ui.PluginParams) return <ui.PluginParams groups={groups} />
   return (
-    <div className="ue:flex ue:items-center ue:gap-3 ue:px-4 ue:py-3">
-      <p className="ue:min-w-0 ue:flex-1 ue:text-footnote ue:text-subtle">
+    <div className="ue:flex ue:items-center ue:gap-3 ue:px-4 ue:py-3.5">
+      <p className="ue:min-w-0 ue:flex-1 ue:text-body ue:text-subtle">
         {t('这几项在面板设置里改（升级面板后可以直接在这里改）')}
       </p>
       <ui.Button size="sm" variant="secondary" onClick={() => nav.openSettings('pparam:ue')}>
@@ -48,31 +47,32 @@ function PanelParams({ groups }: { groups: string[] }) {
   )
 }
 
-/** 只读的目录行：实际用的路径、是设置里填的还是按约定找的、在不在 */
+/** 只读的目录行：实际用的路径、是设置里填的还是按约定找的、在不在；怎么改写在问号里 */
 function PathRow({ label, entry, where }: { label: string; entry?: PathEntry; where: string }) {
   return (
-    <div className="ue:flex ue:flex-col ue:gap-1 ue:px-4 ue:py-3.5">
-      <div className="ue:flex ue:items-center ue:gap-2">
-        <span className="ue:text-prose ue:font-medium ue:text-fg">{label}</span>
-        {entry && (
-          <Badge tone={entry.fromSetting ? 'run' : undefined}>
-            {entry.fromSetting ? t('项目设置里填的') : t('按约定找的')}
-          </Badge>
-        )}
-        {entry && !entry.exists && <Badge tone="warn">{t('还没建')}</Badge>}
-      </div>
-      <span className="ue:inline-flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-footnote ue:break-all ue:text-muted">
-        <FolderOpen className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-        {entry?.path ?? t('读取中…')}
-      </span>
-      <span className="ue:text-caption ue:text-subtle">{where}</span>
-    </div>
+    <SettingRow
+      stack
+      hint={where}
+      title={
+        <>
+          {label}
+          {entry && (
+            <Badge tone={entry.fromSetting ? 'run' : undefined}>
+              {entry.fromSetting ? t('项目设置里填的') : t('按约定找的')}
+            </Badge>
+          )}
+          {entry && !entry.exists && <Badge tone="warn">{t('还没建')}</Badge>}
+        </>
+      }
+      desc={
+        <span className="ue:inline-flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-footnote ue:break-all ue:text-muted">
+          <FolderOpen className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+          {entry?.path ?? t('读取中…')}
+        </span>
+      }
+    />
   )
 }
-
-const Rows = ({ children }: { children: ReactNode }) => (
-  <div className="ue:flex ue:flex-col ue:divide-y ue:divide-line">{children}</div>
-)
 
 export function PluginSettings({ name }: { name: SettingsPlugin }) {
   const { project, go } = useUe()
@@ -98,70 +98,69 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
           options={SETTINGS_PLUGINS.map((id) => ({ id, label: id }))}
         />
       </PageHead>
-      <div className={STACK}>
-        {paths.error && <ErrorText>{paths.error}</ErrorText>}
+      <SettingsPage>
+        {paths.error && (
+          <div className="ue:pt-4">
+            <ErrorText>{paths.error}</ErrorText>
+          </div>
+        )}
         {name === 'UELink' && (
           <>
-            <Card title={t('更新源')} aside={t('所有项目共用')}>
+            <SettingGroup title={t('更新源')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['UELink']} />
-            </Card>
-            <Card title={t('编辑器没开时')} aside={t('所有项目共用')}>
+            </SettingGroup>
+            <SettingGroup title={t('编辑器没开时')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['离线读取']} />
-            </Card>
-            <Card title={t('编译')}>
-              <div className="ue:flex ue:items-center ue:gap-3 ue:px-4 ue:py-3">
-                <p className="ue:min-w-0 ue:flex-1 ue:text-footnote ue:text-subtle">
-                  {t('引擎目录和编译命令是整个项目的，UELink 卡片上的「编译」也按它们编')}
-                </p>
-                <ui.Button size="sm" variant="secondary" onClick={() => go('bridge')}>
-                  {t('去权限与设置')}
-                </ui.Button>
-              </div>
-            </Card>
+            </SettingGroup>
+            <SettingGroup title={t('编译')}>
+              <SettingRow title={t('引擎目录和编译命令')} desc={t('整个项目共用，UELink 卡片上的「编译」也按它们编')}>
+                <div className="ue:flex ue:justify-end">
+                  <ui.Button size="sm" variant="secondary" onClick={() => go('bridge')}>
+                    {t('去权限与设置')}
+                  </ui.Button>
+                </div>
+              </SettingRow>
+            </SettingGroup>
           </>
         )}
         {name === 'AssetForge' && (
-          <Card title={t('目录')} aside={t('这个项目')}>
-            <Rows>
-              <PathRow
-                label={t('配置根')}
-                entry={p?.forgeRoot}
-                where={t(
-                  '在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge',
-                )}
-              />
-            </Rows>
-          </Card>
+          <SettingGroup title={t('目录')} aside={t('这个项目')}>
+            <PathRow
+              label={t('配置根')}
+              entry={p?.forgeRoot}
+              where={t(
+                '在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge',
+              )}
+            />
+          </SettingGroup>
         )}
         {name === 'GameTest' && (
           <>
-            {/* 运行设置按节画成几张卡片，底部自带保存栏 */}
+            {/* 运行设置按组画成几张卡片，底部贴一条保存栏 */}
             <GtSettings />
-            <Card title={t('录制截图')} aside={t('所有项目共用')}>
+            <SettingGroup title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
-            </Card>
-            <Card title={t('OCR（认录制截图里的字）')} aside={t('所有项目共用')}>
+            </SettingGroup>
+            <SettingGroup title={t('OCR（认录制截图里的字）')} aside={t('所有项目共用')}>
               <OcrSettings bare />
-            </Card>
-            <Card title={t('目录')} aside={t('这个项目')}>
-              <Rows>
-                <PathRow
-                  label={t('场景根')}
-                  entry={p?.gtScenarioRoot}
-                  where={t(
-                    '在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest',
-                  )}
-                />
-                <PathRow
-                  label={t('报告和截图')}
-                  entry={p?.gtOutputRoot}
-                  where={t('在 UE 的「项目设置 → 插件 → Game Test → 产物根目录」改，相对 Saved/；默认 Saved/GameTest')}
-                />
-              </Rows>
-            </Card>
+            </SettingGroup>
+            <SettingGroup title={t('目录')} aside={t('这个项目')}>
+              <PathRow
+                label={t('场景根')}
+                entry={p?.gtScenarioRoot}
+                where={t(
+                  '在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest',
+                )}
+              />
+              <PathRow
+                label={t('报告和截图')}
+                entry={p?.gtOutputRoot}
+                where={t('在 UE 的「项目设置 → 插件 → Game Test → 产物根目录」改，相对 Saved/；默认 Saved/GameTest')}
+              />
+            </SettingGroup>
           </>
         )}
-      </div>
+      </SettingsPage>
     </div>
   )
 }
