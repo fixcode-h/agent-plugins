@@ -51,7 +51,8 @@ export function Readout({
         <span className={cn('ue:text-title ue:font-medium ue:tabular-nums', NUM_TONES[tone])}>{value}</span>
         {unit && <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-muted">{unit}</span>}
       </div>
-      {desc && <div className="ue:truncate ue:text-caption ue:text-subtle">{desc}</div>}
+      {/* 说明行总占位：取样中、UE 开关这类说明时有时无，不占位的话四个读数一起变高变矮，整页跟着跳 */}
+      <div className="ue:truncate ue:text-caption ue:text-subtle">{desc || '\u00a0'}</div>
     </>
   )
   const cls = 'ue:flex ue:min-w-0 ue:flex-col ue:gap-1.5 ue:bg-card ue:p-4 ue:text-left'
