@@ -16,6 +16,7 @@ import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { blockUi, TONE_BAR, TONE_TEXT } from '../gt-blocks/index.ts'
 import { condSummary } from '../gt-cond/summary.ts'
+import { BreakpointDot } from '../gt-debug/BreakpointDot.tsx'
 import { commandMenuItems, runKey, type CmdCtx } from './commands.ts'
 import { insertPlace, insertStep, openInsertAt, insertMenuItems } from './insert-menu.ts'
 import { foldableKeys, ListHead } from './ListHead.tsx'
@@ -227,6 +228,7 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
             )}
           </button>
         ) : null}
+        <BreakpointDot k={k} inline />
         <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', TONE_TEXT[ui.tone])} />
         {block && <span className="ue:shrink-0 ue:font-medium ue:text-fg">{ui.title()}</span>}
         <span className={cn('ue:min-w-0 ue:truncate', block ? 'ue:text-subtle' : 'ue:text-fg')}>

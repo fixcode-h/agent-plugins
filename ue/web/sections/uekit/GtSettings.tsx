@@ -40,6 +40,10 @@ interface GtRunConfig {
   itemKeys?: GtKeyRule[]
   /** 已达成就跳过（GameTest 1.7.0）：false 全部照做，对象只留改过的项 */
   skipIf?: false | GtSkipConfig
+  /** 步骤能调 Lua 函数（GameTest 1.9，默认 true） */
+  allowLuaInvoke?: boolean
+  /** 条件、表达式能调 Lua 函数（GameTest 1.9，默认 false） */
+  allowLuaInCond?: boolean
 }
 
 interface ConfigReply {
@@ -50,7 +54,7 @@ interface ConfigReply {
 }
 
 /** 运行设置在分页设置页里占的几页（GtMoveSettings 是 move、GtSkipSettings 是 skip）：保存栏只在这几页出现 */
-export const GT_RUN_PAGES = ['playback', 'setup', 'move', 'skip', 'keys', 'guards'] as const
+export const GT_RUN_PAGES = ['playback', 'script', 'setup', 'move', 'skip', 'keys', 'guards'] as const
 
 /** 这份表单自己管的字段：保存时以表单为准，其余字段从文件里现取原样写回 */
 const FORM_KEYS = new Set([
@@ -64,6 +68,8 @@ const FORM_KEYS = new Set([
   'move',
   'skipIf',
   'itemKeys',
+  'allowLuaInvoke',
+  'allowLuaInCond',
 ])
 
 /** 等待上限的显示：0 是不限 */
@@ -90,6 +96,8 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const [move, setMove] = useState<GtMoveConfig>({})
   const [skip, setSkip] = useState<GtSkipConfig>({})
   const [keyRules, setKeyRules] = useState<GtKeyRule[]>([])
+  const [luaInvoke, setLuaInvoke] = useState(true)
+  const [luaInCond, setLuaInCond] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [guards, setGuards] = useState<GtGuard[]>([])
@@ -115,6 +123,8 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         setMove(r.config.move ?? {})
         setSkip(readSkip(r.config.skipIf))
         setKeyRules(r.config.itemKeys ?? [])
+        setLuaInvoke(r.config.allowLuaInvoke !== false)
+        setLuaInCond(r.config.allowLuaInCond === true)
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -153,6 +163,9 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
         ...(tidyMove(move) ? { move: tidyMove(move) } : {}),
         ...(tidySkip(skip) !== undefined ? { skipIf: tidySkip(skip) } : {}),
+        // 默认值不写进文件
+        ...(luaInvoke ? {} : { allowLuaInvoke: false }),
+        ...(luaInCond ? { allowLuaInCond: true } : {}),
       }
       // 条目规则也在这份文件里、由规则面板和录制弹窗改：表单整份重写，保存前现取一遍最新的带上，不然就丢了
       const latest = (await op<ConfigReply>(project.id, 'gt.config')).config as GtRunConfig & Record<string, unknown>
@@ -242,6 +255,46 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
             placeholder={t('不固定')}
             value={seed}
             onChange={(e: { target: { value: string } }) => setSeed(e.target.value)}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup
+        page="script"
+        title={t('脚本')}
+        desc={t('回放脚本里的调函数、条件和表达式能不能调 Lua')}
+        hint={t('需要 GameTest 1.9。C++ 和蓝图的函数不受这两项影响。')}
+      >
+        <SettingRow
+          title={t('步骤里可调 Lua 函数')}
+          desc={t('「调函数」「调接口」的步骤能不能调 Lua 表上的函数')}
+          hint={t('关掉后脚本里调 Lua 函数的步骤会直接失败并写明原因；C++、蓝图照常。')}
+        >
+          <ui.Select
+            size="sm"
+            className="ue:w-full"
+            value={luaInvoke ? 'on' : 'off'}
+            onChange={(e: { target: { value: string } }) => setLuaInvoke(e.target.value === 'on')}
+            options={[
+              { value: 'on', label: t('可以（默认）') },
+              { value: 'off', label: t('不可以') },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t('条件里可调 Lua 函数')}
+          desc={t('条件、表达式里的只读调用能不能调 Lua')}
+          hint={t('条件在等待中每 0.2 秒算一次，Lua 函数有副作用时会被反复调用，所以默认关。')}
+        >
+          <ui.Select
+            size="sm"
+            className="ue:w-full"
+            value={luaInCond ? 'on' : 'off'}
+            onChange={(e: { target: { value: string } }) => setLuaInCond(e.target.value === 'on')}
+            options={[
+              { value: 'off', label: t('不可以（默认）') },
+              { value: 'on', label: t('可以') },
+            ]}
           />
         </SettingRow>
       </SettingGroup>

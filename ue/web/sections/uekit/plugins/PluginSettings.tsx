@@ -8,11 +8,13 @@ import {
   KeyRound,
   Library,
   ListStart,
+  MonitorPlay,
   MonitorOff,
   Play,
   ScanText,
   Settings2,
   ShieldX,
+  SquareFunction,
   SkipForward,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -111,6 +113,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
         title: t('运行设置 · 这个项目'),
         items: [
           { id: 'playback', label: t('回放'), icon: Play },
+          { id: 'script', label: t('脚本'), icon: SquareFunction },
           { id: 'setup', label: t('前置步骤'), icon: ListStart },
           { id: 'move', label: t('移动'), icon: Footprints },
           { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },
@@ -119,6 +122,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
         ],
       },
       { title: t('编写 · 这个项目'), items: [{ id: 'api', label: t('接口库'), icon: Library }] },
+      { title: t('编写 · 所有项目共用'), items: [{ id: 'live', label: t('连着游戏'), icon: MonitorPlay }] },
       {
         title: t('录制 · 所有项目共用'),
         items: [
@@ -201,6 +205,9 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
             {/* 运行设置占左边菜单的前六页，一直挂着（换页不丢没保存的改动），只画当前那一组 */}
             <GtSettings />
             <GtApiSettings />
+            <SettingGroup page="live" title={t('连着游戏编辑')} aside={t('所有项目共用')} flush>
+              <PanelParams groups={['GameTest 连着游戏']} />
+            </SettingGroup>
             <SettingGroup page="shots" title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
             </SettingGroup>

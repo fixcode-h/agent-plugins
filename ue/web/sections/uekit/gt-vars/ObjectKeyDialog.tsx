@@ -1,9 +1,10 @@
-import { TriangleAlert } from 'lucide-react'
+import { Crosshair, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
+import { PickDialog } from '../gt-live/PickDialog.tsx'
 import { FieldGroups, itemKey } from './FieldGroups.tsx'
 import { useVars, type VarItem } from './model.ts'
 
@@ -41,6 +42,7 @@ export function ObjectKeyDialog({
   const [name, setName] = useState(initialName ?? '')
   const [loc, setLoc] = useState<Locator>(value ?? { class: '' })
   const [cls, setCls] = useState(loc.class)
+  const [picking, setPicking] = useState(false)
   const vars = useVars(ctx.project, cls ? { scope: 'class', name: cls } : undefined, ctx.live)
   const key = loc.key ?? {}
   const keyPaths = new Set(Object.keys(key))
@@ -100,13 +102,20 @@ export function ObjectKeyDialog({
             />
           </ui.Field>
           <ui.Field label={t('类')} hint={t('BP_ShopNpc_C、ANpc；子类也算')}>
-            <ui.Input
-              size="sm"
-              className="ue:font-mono"
-              value={loc.class}
-              onChange={(e: { target: { value: string } }) => setLoc({ ...loc, class: e.target.value })}
-              onBlur={() => setCls(loc.class.trim())}
-            />
+            <div className="ue:flex ue:items-center ue:gap-1">
+              <ui.Input
+                size="sm"
+                className="ue:min-w-0 ue:flex-1 ue:font-mono"
+                value={loc.class}
+                onChange={(e: { target: { value: string } }) => setLoc({ ...loc, class: e.target.value })}
+                onBlur={() => setCls(loc.class.trim())}
+              />
+              {ctx.live && (
+                <ui.IconButton size="sm" label={t('在游戏里点一下抓')} onClick={() => setPicking(true)}>
+                  <Crosshair className="ue:h-3.5 ue:w-3.5" />
+                </ui.IconButton>
+              )}
+            </div>
           </ui.Field>
           <ui.Field label={t('在哪找')} hint={t('world 关卡里的 Actor、widgets 屏上的界面、或 @sub.X.数组属性')}>
             <ui.Input
@@ -173,6 +182,18 @@ export function ObjectKeyDialog({
           <AddKey onAdd={(p) => setLoc({ ...loc, key: { ...key, [p]: '' } })} />
         </div>
       </div>
+      {picking && (
+        <PickDialog
+          mode="object"
+          onClose={() => setPicking(false)}
+          onObject={(c) => {
+            // 换了类，原来勾的标识多半不是这个类的属性：清掉重勾
+            setLoc({ ...loc, class: c, key: c === loc.class ? loc.key : undefined })
+            setCls(c)
+            setPicking(false)
+          }}
+        />
+      )}
     </ui.Modal>
   )
 }

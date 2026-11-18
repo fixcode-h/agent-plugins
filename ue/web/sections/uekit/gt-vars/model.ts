@@ -16,6 +16,16 @@ export interface VarItem {
   sig?: string
   callable?: boolean
   why?: string
+  /** 函数的参数（协议第 8 节的格式）：out 是输出参数、auto 是自动填的世界参数，都不用给 */
+  args?: {
+    name: string
+    type?: string
+    constructible?: boolean
+    object?: boolean
+    out?: boolean
+    auto?: string
+    why?: string
+  }[]
   note?: string
   line?: number
   value?: unknown

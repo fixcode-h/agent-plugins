@@ -1,94 +1,41 @@
-import { ArrowDown, ArrowUp, Loader2, Plus, ScanEye, Trash2, Wand2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Crosshair, Loader2, Plus, ScanEye, Trash2, Wand2 } from 'lucide-react'
 import { useState } from 'react'
-import type { CondNode, GtStep } from '../../../../shared/gt-script/index.ts'
-import { op } from '../../../api.ts'
+import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
-
-/** 一条路：条件 + 步骤。最后的「其余情况」没有条件 */
-interface Way {
-  cond?: unknown
-  then: GtStep[]
-}
-
-const ways = (s: GtStep): Way[] => [
-  { cond: s.cond, then: (s.then as GtStep[]) ?? [] },
-  ...(Array.isArray(s.elif) ? (s.elif as Way[]) : []),
-]
-
-/** 路的数组写回 if / elif（至少一条有条件的路） */
-function withWays(s: GtStep, list: Way[]): GtStep {
-  const [first, ...rest] = list
-  const out: GtStep = { ...s, cond: first?.cond ?? { all: [] }, then: first?.then ?? [] }
-  if (rest.length) out.elif = rest
-  else delete out.elif
-  return out
-}
-
-/**
- * 一键分路的几种分法（定稿 9.4A）：按控件给出常用的几条路，每条路的条件都是完整的条件组，之后可以随便改。
- * 反面的路（不显示、其余情况）由执行器按 elseSettleMs 稳住再走
- */
-const PRESETS = (target: string): { label: string; ways: CondNode[]; rest: boolean }[] => [
-  {
-    label: t('能点 / 显示但不能点 / 其余'),
-    ways: [
-      { target, enabled: true },
-      {
-        all: [
-          { target, visible: true },
-          { target, enabled: false },
-        ],
-      },
-    ],
-    rest: true,
-  },
-  { label: t('显示 / 不显示'), ways: [{ target, visible: true }], rest: true },
-  { label: t('文字是 … / 其余'), ways: [{ target, text: '' }], rest: true },
-  { label: t('勾上 / 没勾'), ways: [{ target, checked: true }], rest: true },
-]
+import { NowBadge } from '../gt-live/NowBar.tsx'
+import { PickDialog } from '../gt-live/PickDialog.tsx'
+import { useCondNow } from '../gt-live/use-cond-now.ts'
+import { applyPreset, statePresets, waysOf as ways, withWays, type Way } from './state-presets.ts'
 
 /**
  * 按状态分支（效果图 11）：同一个控件不同状态走不同的路。从上往下判断，走第一条成立的；都不成立走「其余情况」。
- * 每条路一张卡片：条件 + 这条路有几步（步骤在列表 / 流程图里往这条路里放）。连着游戏时「此刻走哪条」问一次 gt.resolve
+ * 每条路一张卡片：条件 + 这条路有几步（步骤在列表 / 流程图里往这条路里放）。连着游戏时一直标出「此刻走这条」
+ * （gt.watch 推送；GameTest 1.10.0 以前点「此刻走哪条」问一次）。看哪个控件可以从游戏里抓
  */
 export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui, cn } = h()
   const ctx = useEditCtx()
   const [target, setTarget] = useState('')
-  const [now, setNow] = useState<number>()
-  const [checking, setChecking] = useState(false)
+  const [picking, setPicking] = useState(false)
   const list = ways(step)
   const hasElse = Array.isArray(step.else)
+  const conds = list.map((w, i) => ({ id: String(i), cond: w.cond ?? { all: [] } }))
+  const live = useCondNow(conds)
+  // 从上往下第一条成立的；都不成立走「其余情况」，没有其余情况就是 -1（直接往下走）
+  const hit = list.findIndex((_, i) => live.byId.get(String(i))?.holds)
+  const now = live.byId.size ? (hit >= 0 ? hit : hasElse ? list.length : -1) : undefined
 
-  const set = (next: Way[]) => {
-    setNow(undefined)
-    onChange(withWays(step, next))
-  }
+  const set = (next: Way[]) => onChange(withWays(step, next))
   const move = (i: number, d: -1 | 1) => {
     const j = i + d
     if (j < 0 || j >= list.length) return
     const next = [...list]
     ;[next[i], next[j]] = [next[j], next[i]]
     set(next)
-  }
-
-  const which = async () => {
-    setChecking(true)
-    try {
-      const r = await op<{ conds?: { id: string; holds?: boolean }[] }>(ctx.project, 'gt.resolve', {
-        conds: list.map((w, i) => ({ id: String(i), cond: w.cond ?? { all: [] } })),
-      })
-      const hit = list.findIndex((_, i) => r.conds?.find((c) => c.id === String(i))?.holds)
-      setNow(hit < 0 ? (hasElse ? list.length : -1) : hit)
-    } catch (e) {
-      h().toast.error((e as Error).message)
-    } finally {
-      setChecking(false)
-    }
   }
 
   const card = (title: string, i: number, body: React.ReactNode, count: number, tools?: React.ReactNode) => (
@@ -120,6 +67,11 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
         <div className="ue:min-w-0 ue:flex-1">
           <TargetInput value={target} onChange={setTarget} placeholder={t('看哪个控件：WBP_Guide:Root/BtnFinish')} />
         </div>
+        {ctx.live && (
+          <ui.IconButton size="sm" label={t('从游戏里抓')} onClick={() => setPicking(true)}>
+            <Crosshair className="ue:h-3.5 ue:w-3.5" />
+          </ui.IconButton>
+        )}
         <ui.Button
           size="sm"
           variant="secondary"
@@ -127,17 +79,9 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
           onClick={(e: React.MouseEvent) =>
             openMenu(
               e,
-              PRESETS(target.trim()).map((p) => ({
+              statePresets(target.trim()).map((p) => ({
                 label: p.label,
-                onClick: () => {
-                  // 换分法不丢步骤：新的第 k 条路接着用原来第 k 条路的步骤，多出来的有步骤的旧路留在后面
-                  const fresh = p.ways.map((c, k) => ({ cond: c, then: list[k]?.then ?? [] }))
-                  const left = list.slice(p.ways.length).filter((w) => w.then.length)
-                  const next = withWays(step, [...fresh, ...left])
-                  if (p.rest) next.else = (step.else as GtStep[]) ?? []
-                  setNow(undefined)
-                  onChange(next)
-                },
+                onClick: () => onChange(applyPreset(step, p)),
               })),
             )
           }
@@ -193,9 +137,9 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
             {t('其余情况')}
           </ui.Button>
         )}
-        {ctx.live && (
-          <ui.Button size="sm" variant="ghost" disabled={checking} onClick={() => void which()}>
-            {checking ? (
+        {live.mode === 'manual' && (
+          <ui.Button size="sm" variant="ghost" disabled={live.checking} onClick={live.check}>
+            {live.checking ? (
               <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
             ) : (
               <ScanEye className="ue:h-3.5 ue:w-3.5" />
@@ -203,6 +147,7 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
             {t('此刻走哪条')}
           </ui.Button>
         )}
+        {live.mode === 'live' && <NowBadge error={live.error} />}
         <ui.Button
           size="sm"
           variant="ghost"
@@ -218,6 +163,16 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
       </div>
       {now === -1 && (
         <p className="ue:text-footnote ue:text-warning">{t('此刻哪条路都不成立，也没有「其余情况」：会直接往下走')}</p>
+      )}
+      {picking && (
+        <PickDialog
+          mode="target"
+          onClose={() => setPicking(false)}
+          onTarget={(tg) => {
+            setTarget(tg)
+            setPicking(false)
+          }}
+        />
       )}
     </div>
   )

@@ -1,4 +1,15 @@
-import { Check, ChevronDown, CircleDot, FlaskConical, Gamepad2, Loader2, Pencil, Play, PlayCircle } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  CircleDot,
+  FlaskConical,
+  Gamepad2,
+  Loader2,
+  Pencil,
+  Play,
+  PlayCircle,
+  StepForward,
+} from 'lucide-react'
 import { h, t } from '../../../host.ts'
 import { openMenuAt } from '../../../menu.tsx'
 import { kindLabel, useTargetInfo, worldLabel } from '../../../ui.tsx'
@@ -24,6 +35,7 @@ export function EditorHeader({
   onTry,
   onRun,
   onRunFrom,
+  onRunTo,
   running,
 }: {
   name: string
@@ -46,6 +58,8 @@ export function EditorHeader({
   onRun?: () => void
   /** 从选中的那一步跑到底（选中的是主流程的一步时才有） */
   onRunFrom?: () => void
+  /** 跑到选中的这一步停下（GameTest 1.9 起；选了一步才有） */
+  onRunTo?: () => void
   running: boolean
 }) {
   const { ui, cn } = h()
@@ -157,9 +171,16 @@ export function EditorHeader({
                 {
                   label: t('从选中的这一步跑到底'),
                   icon: Play,
-                  hint: onRunFrom ? undefined : t('先选主流程里的一步'),
+                  hint: onRunFrom ? undefined : t('先选一步'),
                   disabled: !onRunFrom,
                   onClick: () => onRunFrom?.(),
+                },
+                {
+                  label: t('运行到选中的这一步'),
+                  icon: StepForward,
+                  hint: onRunTo ? undefined : t('先选一步'),
+                  disabled: !onRunTo,
+                  onClick: () => onRunTo?.(),
                 },
               ])
             }

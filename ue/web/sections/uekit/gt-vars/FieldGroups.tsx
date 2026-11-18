@@ -38,6 +38,7 @@ export function FieldGroups({
   multi,
   extra,
   showValue,
+  lit,
 }: {
   groups: VarGroup[]
   selected: Set<string>
@@ -46,6 +47,8 @@ export function FieldGroups({
   /** 名字后面的附加一列（对象标识的「同类唯一」） */
   extra?: (it: VarItem) => ReactNode
   showValue?: boolean
+  /** 这一刻值刚变了的行（抓控件时字段实时刷新，变了闪一下） */
+  lit?: Set<string>
 }) {
   const { ui, cn } = h()
   const [src, setSrc] = useState<'all' | VarSrc>('all')
@@ -121,8 +124,9 @@ export function FieldGroups({
                       aria-pressed={on}
                       onClick={() => onToggle(g, it)}
                       className={cn(
-                        'ue:grid ue:h-8 ue:w-full ue:cursor-pointer ue:grid-cols-[16px_minmax(0,1.2fr)_minmax(0,0.7fr)_auto_minmax(0,1.4fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/40 ue:px-3 ue:text-left ue:text-footnote ue:hover:bg-hover ue:disabled:cursor-not-allowed',
+                        'ue:grid ue:h-8 ue:w-full ue:cursor-pointer ue:grid-cols-[16px_minmax(0,1.2fr)_minmax(0,0.7fr)_auto_minmax(0,1.4fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/40 ue:px-3 ue:text-left ue:text-footnote ue:transition-colors ue:duration-700 ue:hover:bg-hover ue:disabled:cursor-not-allowed',
                         on && 'ue:bg-sel',
+                        lit?.has(k) && !on && 'ue:bg-warning/14 ue:duration-75',
                         (it.dim || disabled) && 'ue:opacity-55',
                       )}
                     >
@@ -138,15 +142,23 @@ export function FieldGroups({
                       </span>
                       <span className="ue:truncate ue:font-mono ue:text-subtle">{it.type}</span>
                       <span className="ue:flex ue:items-center ue:gap-1">
-                        {it.kind === 'fn' && (
-                          <span className="ue:rounded-sm ue:bg-success/12 ue:px-1 ue:text-caption ue:text-success">
-                            {t('只读函数')}
-                          </span>
-                        )}
+                        {it.kind === 'fn' &&
+                          (it.readOnly === false ? (
+                            <span className="ue:rounded-sm ue:bg-warning/12 ue:px-1 ue:text-caption ue:text-warning">
+                              {t('会改东西')}
+                            </span>
+                          ) : (
+                            <span className="ue:rounded-sm ue:bg-success/12 ue:px-1 ue:text-caption ue:text-success">
+                              {t('只读函数')}
+                            </span>
+                          ))}
                         {it.line && <span className="ue:font-mono ue:text-caption ue:text-warning">:{it.line}</span>}
                         {extra?.(it)}
                       </span>
-                      <span className="ue:truncate ue:text-subtle">{it.note}</span>
+                      {/* 调不了的函数把原因写在说明的位置（定稿第 5 节「灰掉并写原因」） */}
+                      <span className={cn('ue:truncate', disabled ? 'ue:text-danger' : 'ue:text-subtle')}>
+                        {disabled ? it.why || t('调不了') : it.note}
+                      </span>
                       <span className="ue:max-w-28 ue:truncate ue:text-right ue:font-mono ue:text-fg">
                         {showValue && it.value !== undefined ? show(it.value) : ''}
                       </span>

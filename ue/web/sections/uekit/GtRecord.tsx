@@ -27,6 +27,8 @@ export interface RecordStatus extends RecordQuick {
   ask?: KeyAsk
   askKey?: string
   askTimeoutSec?: number
+  /** 接着录（GameTest 1.10.0）：录到的段插进哪个场景的哪一步后面 */
+  insert?: { scenario: string; after?: string }
 }
 
 /** handlerSource=hitPath 时的提示：开始录制前（对话框里）和录制中都显示 */
@@ -40,9 +42,17 @@ export function HitPathNote() {
   )
 }
 
+/** 条件里点名的控件（Alt+6 / Alt+7 录的条件是 {target, …}，按钮分支的第二条路是 all） */
+const condTarget = (c: unknown) => (c && typeof c === 'object' ? (c as { target?: unknown }).target : undefined)
+
 /** 录到的一步写成一行：有 hint 的 UI 步骤用人话（选择器放后面），其余列出参数 */
 function describe(s: Record<string, unknown>) {
   if (s.action === 'move') return moveLine(s)
+  // Alt+6 / Alt+7（GameTest 1.10.0）：条件对象原样列出来太长，写成人话
+  if (s.action === 'if' && s.branch === 'state')
+    return [t('按状态分支，各条路到编辑页里填'), condTarget(s.cond)].filter(Boolean).join(' · ')
+  if (s.action === 'wait' && s.until === 'cond')
+    return [t('等到'), condTarget(s.cond), s.note].filter(Boolean).join(' · ')
   const human = humanStep(s)
   if (human) return [human, s.target as string | undefined].filter(Boolean).join(' · ')
   const rest = Object.entries(s)
@@ -53,7 +63,15 @@ function describe(s: Record<string, unknown>) {
 }
 
 /** onDone：停止了；保存了时带上场景路径（相对场景根），父组件接着认截图里的字 */
-export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (saved?: string) => void }) {
+export function GtRecord({
+  status,
+  gtVersion,
+  onDone,
+}: {
+  status: RecordStatus
+  gtVersion?: string
+  onDone: (saved?: string) => void
+}) {
   const { project } = useUe()
   const { ui, cn, toast } = h()
   const { busy, run } = useAction()
@@ -71,8 +89,19 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
     })
   const stop = (save: boolean) =>
     run('stop', async () => {
-      const r = await op<{ path?: string; steps?: number }>(project.id, 'gt.record.stop', { save })
-      if (save && r.path) toast.success(t('已保存 {n} 步到 {p}', { n: r.steps ?? 0, p: r.path }))
+      const r = await op<{ path?: string; steps?: number; inserted?: boolean; warning?: string }>(
+        project.id,
+        'gt.record.stop',
+        { save },
+      )
+      if (save && r.path)
+        toast.success(
+          r.inserted
+            ? t('已把 {n} 步作为一段插进 {p}', { n: r.steps ?? 0, p: r.path })
+            : t('已保存 {n} 步到 {p}', { n: r.steps ?? 0, p: r.path }),
+        )
+      // 接着录时插不回原位置、或原场景写不进去另存了新文件：原样告诉用户
+      if (r.warning) toast.error(r.warning)
       onDone(save ? r.path : undefined)
     })
 
@@ -84,6 +113,11 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
           <span className="ue:truncate ue:text-body ue:font-medium ue:text-fg">
             {t('正在录制「{name}」', { name: status.name ?? '' })}
           </span>
+          {status.insert && (
+            <span className="ue:truncate ue:text-footnote ue:text-muted">
+              {t('停止后插进 {p}', { p: status.insert.scenario })}
+            </span>
+          )}
           <span className="ue:shrink-0 ue:text-footnote ue:text-subtle ue:tabular-nums">
             {time} · {t('{n} 步', { n: status.steps ?? steps.length })}
             {status.keepPace ? ` · ${t('保留节奏')}` : ''}
@@ -111,7 +145,7 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
             <Square className="ue:h-3.5 ue:w-3.5" /> {t('停止并保存')}
           </ui.Button>
         </div>
-        <GtRecordQuick status={status} />
+        <GtRecordQuick status={status} gtVersion={gtVersion} />
       </div>
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
