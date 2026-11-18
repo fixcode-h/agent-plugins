@@ -24,6 +24,7 @@
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/Paths.h"
+#include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
 #include "TraceServices/AnalysisService.h"
 #include "TraceServices/ITraceServicesModule.h"
@@ -151,17 +152,14 @@ namespace
 		double LastUse = 0;
 	};
 
-	/** 分析过的会话：留最近两个（网页来回切两份 trace 时不用重分析）。编辑器退出时先叫停读取，分析线程才退得出来 */
+	/**
+	 * 分析过的会话：留最近两个（网页来回切两份 trace 时不用重分析）。
+	 * 不能靠静态对象析构来释放：那时 TraceServices 已经卸载，释放分析会话会崩在引擎里（2.10.0 修的退出崩溃）。
+	 * 所以放在堆上、静态析构时不碰它，由 ShutdownTraceOps（引擎退出前、模块卸载时）先叫停读取再清空。
+	 */
 	struct FSessionCache
 	{
 		TMap<FString, FEntry> Map;
-		~FSessionCache()
-		{
-			for (TPair<FString, FEntry>& P : Map)
-			{
-				Drop(P.Value);
-			}
-		}
 		static void Drop(FEntry& E)
 		{
 			if (E.Follow.IsValid())
@@ -177,12 +175,22 @@ namespace
 				Map.Remove(File);
 			}
 		}
+		void Clear()
+		{
+			// 先全部叫停，跟随读取的分析线程 0.1 秒内就会返回，再释放会话（释放时会等分析线程退出）
+			for (TPair<FString, FEntry>& P : Map)
+			{
+				Drop(P.Value);
+			}
+			Map.Empty();
+		}
 	};
 
 	FSessionCache& Sessions()
 	{
-		static FSessionCache Cache;
-		return Cache;
+		// 故意不释放：进程退出时由系统回收，避免静态析构顺序晚于 TraceServices 卸载
+		static FSessionCache* Cache = new FSessionCache();
+		return *Cache;
 	}
 
 	/**
@@ -895,8 +903,32 @@ namespace
 
 namespace AgentPanelEd
 {
+	static FDelegateHandle GTracePreExit;
+
+	void ShutdownTraceOps()
+	{
+		FCoreDelegates::OnEnginePreExit.Remove(GTracePreExit);
+		GTracePreExit.Reset();
+		UELinkTrace::FSessionCache& Cache = UELinkTrace::Sessions();
+		if (FModuleManager::Get().IsModuleLoaded(TEXT("TraceServices")))
+		{
+			Cache.Clear();
+			return;
+		}
+		// TraceServices 已经卸载（没走到引擎退出前的回调）：会话不能再释放，叫停读取后整个丢给进程退出回收
+		for (TPair<FString, UELinkTrace::FEntry>& P : Cache.Map)
+		{
+			UELinkTrace::FSessionCache::Drop(P.Value);
+		}
+		static TMap<FString, UELinkTrace::FEntry>* Leaked = nullptr;
+		Leaked = new TMap<FString, UELinkTrace::FEntry>(MoveTemp(Cache.Map));
+		Cache.Map.Reset();
+	}
+
 	void RegisterTraceOps()
 	{
+		// 引擎退出前（TraceServices 还在）就把分析会话放掉；模块卸载时 ShutdownTraceOps 再兜一次
+		GTracePreExit = FCoreDelegates::OnEnginePreExit.AddStatic(&ShutdownTraceOps);
 		// 块作用域的 using 不会漏到别的文件（见文件头）
 		using namespace UELinkTrace;
 		using namespace TraceServices;

@@ -387,6 +387,7 @@ public:
 	virtual void ShutdownModule() override
 	{
 		UELINK_POST_ENGINE_INIT.Remove(PostInit);
+		ShutdownTraceOps();
 		StopOutlinerPush();
 		StopSelectionPush();
 		UELinkLuaDecl::Stop();

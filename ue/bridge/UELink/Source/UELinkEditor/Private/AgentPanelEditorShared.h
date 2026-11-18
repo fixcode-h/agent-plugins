@@ -91,6 +91,8 @@ namespace AgentPanelEd
 	void RegisterTextifyOps();
 	/** trace 分析（AgentPanelTrace.cpp）：trace.query */
 	void RegisterTraceOps();
+	/** 放掉缓存的 trace 分析会话（引擎退出前、模块卸载时调） */
+	void ShutdownTraceOps();
 	/** 推送通道那边的 HTTP 操作：tests.run、tests.status、livecoding.status（UELinkStreamOps.cpp） */
 	void RegisterStreamOps();
 	/** 编辑器小工具（UELinkEditorToolsOps.cpp）：asset.redirectors、editor.spawn、editor.destroy */

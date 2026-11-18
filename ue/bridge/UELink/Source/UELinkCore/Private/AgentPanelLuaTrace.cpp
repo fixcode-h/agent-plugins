@@ -14,6 +14,8 @@
 //   都没接住的，每帧结束时按影子栈全部收尾（只影响那一帧）。
 // - 尾调用：和 lua.profile 一样按层数对齐，被替换的帧在同一时刻结束。
 // - 从 C++ 回调进来（层数比影子栈顶深一层以上）：中间隔着 C++，不动下面的帧，直接嵌在最上面。
+// 同名头文件必须第一个 include：UBT 的 IWYU 检查要求 X.cpp 先 include X.h（2.10.0 在用户本地报过 Expected ... to be first header included）
+#include "AgentPanelLuaTrace.h"
 #include "AgentPanelLuaOps.h"
 
 #if !AGENT_PANEL_WITH_LUA
@@ -24,7 +26,6 @@ void AgentPanelUnregisterLuaTrace() {}
 #else
 
 #include "AgentPanelLuaShared.h"
-#include "AgentPanelLuaTrace.h"
 #include "UELinkCompat.h"
 
 #include "Containers/Ticker.h"
