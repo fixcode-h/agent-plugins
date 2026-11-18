@@ -26,7 +26,23 @@ async function readSteps(abs: string, rel: string) {
     throw new Error(t('场景文件不存在：{p}（可能刚被改名或删掉，刷新一下列表）', { p: rel }))
   })
   const doc = JSON.parse(text.replace(/^﻿/, '')) as Record<string, unknown>
-  return { doc, steps: Array.isArray(doc.steps) ? (doc.steps as Step[]) : [] }
+  const steps: Step[] = []
+  collectSteps(doc.steps, steps)
+  return { doc, steps }
+}
+
+/**
+ * 场景里所有的步骤，连块里的一起（GameTest 1.10.0 起录制可以装成步骤段、接着录的段插在块里）：
+ * 有 action 的对象算一步，往它的数组字段里接着找（do / then / else / elif 的每一项）；hint 是线索不是步骤，不进去找
+ */
+function collectSteps(v: unknown, out: Step[]) {
+  if (!Array.isArray(v)) return
+  for (const item of v) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const o = item as Step
+    if (typeof o.action === 'string') out.push(o)
+    for (const [k, child] of Object.entries(o)) if (k !== 'hint' && Array.isArray(child)) collectSteps(child, out)
+  }
 }
 
 const waitFile = async (file: string, ms: number) => {

@@ -232,8 +232,10 @@ function describe(op: string, args: Record<string, unknown>) {
       const step = (args.step ?? args) as Record<string, unknown>
       return `GameTest ${step.action ?? ''} ${step.target ?? ''}`.trim()
     }
-    case 'gt.record.start':
-      return `GameTest ${t('开始录制')} ${args.name ?? ''}`.trim()
+    case 'gt.record.start': {
+      const insert = args.insert as { scenario?: string } | undefined
+      return `GameTest ${t('开始录制')} ${args.name ?? ''}${insert?.scenario ? ` · ${t('接着录')} ${insert.scenario}` : ''}`.trim()
+    }
     case 'gt.record.mark':
       return `GameTest ${t('检查点')} ${args.text ?? ''}`.trim()
     case 'gt.record.move':

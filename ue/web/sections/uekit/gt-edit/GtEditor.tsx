@@ -9,6 +9,7 @@ import { guardsSupported, GUARD_MIN_VERSION } from '../gt-guards/model.ts'
 import type { CmdCtx } from './commands.ts'
 import { EditContext } from './ctx.ts'
 import { Inspector } from './Inspector.tsx'
+import { useRecordHere } from './record-here.ts'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useScript } from './use-script.ts'
 import { allViews } from './views.ts'
@@ -35,6 +36,7 @@ export function GtEditor({
   gtVersion,
   onClose,
   onSaved,
+  onRecordHere,
 }: {
   project: string
   /** 场景根的绝对路径 */
@@ -44,6 +46,8 @@ export function GtEditor({
   gtVersion?: string
   onClose: () => void
   onSaved: () => void
+  /** 从选中这一步后面接着录（GameTest 1.10.0）：after 是步骤 id；不给时菜单项灰掉 */
+  onRecordHere?: (after?: string) => Promise<void> | void
 }) {
   const { ui, cn } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
@@ -115,12 +119,14 @@ export function GtEditor({
   })
 
   const onTry = live ? (p: GtPath) => void tryStep(p) : undefined
+  const onRecordHereAt = useRecordHere(s, onSaved, live ? onRecordHere : undefined)
   const cmdCtx: CmdCtx | undefined = s.doc && {
     doc: s.doc,
     selected: s.selected,
     apply: s.apply,
     select: s.select,
     onTry,
+    onRecordHere: onRecordHereAt,
   }
   const old = !!gtVersion && !guardsSupported(gtVersion)
   const steps = (s.doc?.steps ?? []) as GtStep[]
