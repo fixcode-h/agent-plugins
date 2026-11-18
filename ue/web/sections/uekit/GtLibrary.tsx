@@ -1,4 +1,4 @@
-import { CircleDot, Copy, FilePlus, FolderOpen, FolderPlus, Layers, Pencil, Trash2 } from 'lucide-react'
+import { CircleDot, Copy, FilePlus, FolderOpen, FolderPlus, Layers, Pencil, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
@@ -37,6 +37,8 @@ export function useScenarioLibrary(o: {
   open: (path?: string) => void
   /** 录制要编辑器：没连上时为空，菜单里的「录制」置灰 */
   recordIn?: (dir: string) => void
+  /** 「让 Agent 写」（定稿 11.1，gt-author/GtAgentWrite.tsx）：在这个文件夹里写一份测试 */
+  agentWriteIn?: (dir: string) => void
   /** 批量运行（文件夹右键「运行这里的全部场景」）；正在跑时 locked */
   runBatch?: (paths: string[], label: string) => void
   locked: boolean
@@ -185,6 +187,7 @@ export function useScenarioLibrary(o: {
         disabled: !o.recordIn || o.locked,
         onClick: () => o.recordIn?.(newDir),
       },
+      o.agentWriteIn && { label: t('让 Agent 写…'), icon: Sparkles, onClick: () => o.agentWriteIn?.(newDir) },
       'sep',
       { label: t('新建文件夹…'), icon: FolderPlus, onClick: () => newFolder(newDir) },
     ])
@@ -202,6 +205,7 @@ export function useScenarioLibrary(o: {
         disabled: !o.recordIn || o.locked,
         onClick: () => o.recordIn?.(path),
       },
+      o.agentWriteIn && { label: t('在这里让 Agent 写…'), icon: Sparkles, onClick: () => o.agentWriteIn?.(path) },
       o.runBatch && 'sep',
       o.runBatch && {
         label: t('运行这里的全部场景'),

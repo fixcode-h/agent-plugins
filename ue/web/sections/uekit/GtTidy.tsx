@@ -40,7 +40,7 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
     let steps = 0
     runPromptInProject({
       projectId: o.project,
-      title: t('AI 整理录制：{name}', { name: o.name }),
+      title: t('整理成流程：{name}', { name: o.name }),
       prompt: async () => {
         const src = await call<TidySource>('source')
         steps = src.steps.length
@@ -56,7 +56,7 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
         } catch (e) {
           return { error: `gametest-tidy 代码块不对：${(e as Error).message}` }
         }
-        toast.success(t('AI 整理好了：在分析窗口右侧逐条勾选，应用后写回场景'))
+        toast.success(t('整理方案好了：在分析窗口右侧逐条勾选，应用后写回场景'))
         return {}
       },
     })
@@ -108,7 +108,7 @@ function TidyAsk({ onClose, onSend }: { onClose: () => void; onSend: (need: stri
     <ui.Modal
       open
       onOpenChange={(v: boolean) => !v && onClose()}
-      title={t('AI 整理录制')}
+      title={t('录制整理成流程')}
       footer={
         <>
           <span className="ue:flex-1" />
@@ -125,7 +125,7 @@ function TidyAsk({ onClose, onSend }: { onClose: () => void; onSend: (need: stri
       <div className="ue:flex ue:flex-col ue:gap-3">
         <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
           {t(
-            'Agent 会看录制截图、读项目里界面和点击处理的代码，判断每一步合不合理：去掉重复点击、误按和多余的等待，给每一步写中文说明，代码里看出的问题单独列出来。结果在分析窗口右侧逐条勾选，应用后才改场景文件，原录制会备份。',
+            'Agent 会看录制截图、读项目里界面和点击处理的代码：去掉重复点击、误按和多余的等待；重复操作改成循环、中途弹窗改成守护、和现成脚本一样的一段改成调用、输入的值提成参数；每一步写中文说明。结果在分析窗口右侧逐条勾选，应用后才改场景文件，原录制会备份。',
           )}
         </p>
         <ui.Field label={t('这份测试要验证什么')} hint={t('可以不填：Agent 按录制自己判断哪些步骤有用')}>
@@ -149,7 +149,7 @@ export function TidyButtons({ tidy, disabled }: { tidy: ReturnType<typeof useGtT
       <ui.IconButton
         icon={Sparkles}
         size="sm"
-        label={t('AI 整理：Agent 看截图、读项目代码优化步骤，每步写中文说明；逐条确认后再写回')}
+        label={t('整理成流程：Agent 看截图、读项目代码，把录制改成循环、守护、调用和参数，每步写中文说明；逐条确认后再写回')}
         disabled={disabled}
         onClick={tidy.ask}
       />
@@ -157,7 +157,7 @@ export function TidyButtons({ tidy, disabled }: { tidy: ReturnType<typeof useGtT
         <ui.IconButton
           icon={Undo2}
           size="sm"
-          label={t('恢复成原录制（AI 整理前的备份）')}
+          label={t('恢复成原录制（整理前的备份）')}
           disabled={disabled}
           onClick={tidy.restore}
         />

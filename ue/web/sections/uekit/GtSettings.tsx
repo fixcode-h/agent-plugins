@@ -57,6 +57,19 @@ interface ConfigReply {
 /** 运行设置在分页设置页里占的几页（GtMoveSettings 是 move、GtSkipSettings 是 skip）：保存栏只在这几页出现 */
 export const GT_RUN_PAGES = ['playback', 'setup', 'move', 'skip', 'keys', 'blockers'] as const
 
+/** 这份表单自己管的字段：保存时以表单为准，其余字段从文件里现取原样写回 */
+const FORM_KEYS = new Set([
+  'uiWaitTimeoutMs',
+  'uiStepGapMs',
+  'clickVia',
+  'blockers',
+  'setup',
+  'randomSeed',
+  'move',
+  'skipIf',
+  'itemKeys',
+])
+
 const blank = (): GtBlockerRule => ({ widget: '', action: 'close' })
 
 const WIDGET_LIMIT = 50
@@ -151,8 +164,12 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         ...(tidySkip(skip) !== undefined ? { skipIf: tidySkip(skip) } : {}),
       }
       // 条目规则也在这份文件里、由规则面板和录制弹窗改：表单整份重写，保存前现取一遍最新的带上，不然就丢了
-      const fresh = (await op<ConfigReply>(project.id, 'gt.config')).config.itemKeys ?? keyRules
+      const latest = (await op<ConfigReply>(project.id, 'gt.config')).config as GtRunConfig & Record<string, unknown>
+      const fresh = latest.itemKeys ?? keyRules
       if (tidyKeyRules(fresh).length) config.itemKeys = tidyKeyRules(fresh)
+      // 这份表单不管的字段（接口库文件夹 api、守护 guards、objectKeys 这些脚本化以后加的）原样带回去，整份重写时不丢
+      for (const [k, v] of Object.entries(latest))
+        if (!FORM_KEYS.has(k) && !(k in config)) (config as unknown as Record<string, unknown>)[k] = v
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
       onClose?.()

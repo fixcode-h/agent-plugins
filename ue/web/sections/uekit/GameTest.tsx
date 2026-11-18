@@ -23,6 +23,7 @@ import { useScenarioLibrary } from './GtLibrary.tsx'
 import { GtBatchBar } from './GtBatch.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtOfflineBar } from './GtOffline.tsx'
+import { useGtAgentWrite } from './gt-author/GtAgentWrite.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
 import { keyAskArgs } from './gt-key.ts'
@@ -276,6 +277,7 @@ export function GameTest() {
     })
   const shots = useShotMenus({ project: project.id, root: list?.absoluteRootDir ?? '', reload })
   const locked = !live || running || recording || !!busy
+  const agentWrite = useGtAgentWrite(list?.absoluteRootDir ?? '')
   const lib = useScenarioLibrary({
     project: project.id,
     root: list?.absoluteRootDir ?? '',
@@ -290,6 +292,7 @@ export function GameTest() {
           setAsking(true)
         }
       : undefined,
+    agentWriteIn: (dir) => agentWrite.open(dir),
     runBatch: (scenarios, label) => void startBatch({ scenarios, name: label }),
     locked,
   })
@@ -572,6 +575,7 @@ export function GameTest() {
         )}
       </main>
       {lib.dialogs}
+      {agentWrite.dialog}
       {shots.dialog}
       {settings && (
         <GtSettings

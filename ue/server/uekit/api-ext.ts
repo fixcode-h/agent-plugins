@@ -7,6 +7,7 @@ import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
+import { apiSettingsAction } from './gt-author/api-settings.ts'
 import { libraryAction } from './gt-library/index.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
@@ -101,6 +102,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/tidy':
       // 「AI 整理」：整理稿的路径、差异、保存（原场景备份成 .json.bak）、放弃、恢复原录制（gt-tidy.ts）
       return tidyAction(p.root, b)
+    case 'POST ext/gt/api':
+      // 设置页「接口库」：_settings.json 的 api.lua / api.cpp 文件夹，存完重扫 Lua 接口写 _api.json（gt-author/api-settings.ts）
+      return apiSettingsAction(p, b)
     case 'POST ext/gt/ocr':
       // 录完停止后、或步骤列表「识别截图文字」：给截图补 hint.ocr（gt-shots.ts）
       return ocrScenario(p.root, b)
