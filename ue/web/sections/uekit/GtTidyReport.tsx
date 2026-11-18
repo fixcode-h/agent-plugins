@@ -4,12 +4,14 @@ import type { Task } from '../../../../sdk/web.ts'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { ErrorText } from '../../ui.tsx'
+import { flowOpLabel } from '../../../server/uekit/gt-tidy-flow.ts'
 import {
-  applyTidyPlan,
+  applyTidyDoc,
   parseTidyPlan,
   tidyBlockOf,
   type TidyOp,
   type TidyPlan,
+  type TidyResult,
 } from '../../../server/uekit/gt-tidy-plan.ts'
 import { diffSteps } from './gt-tidy-diff.ts'
 import { ShotImage } from './GtRecordShot.tsx'
@@ -47,10 +49,18 @@ const opLabel = (c: TidyOp) =>
         ? c.after
           ? t('第 {s} 步后面插入 {n} 步', { s: c.after, n: c.with.length })
           : t('最前面插入 {n} 步', { n: c.with.length })
-        : t('改第 {s} 步：{k}', { s: c.step, k: Object.keys(c.set).join('、') })
+        : c.op === 'edit'
+          ? t('改第 {s} 步：{k}', { s: c.step, k: Object.keys(c.set).join('、') })
+          : flowOpLabel(c, t)
 
 const firstStep = (c: TidyOp) =>
-  c.op === 'delete' || c.op === 'replace' ? c.steps[0] : c.op === 'edit' ? c.step : c.after
+  c.op === 'param'
+    ? c.uses[0].step
+    : c.op === 'delete' || c.op === 'replace' || c.op === 'wrap' || c.op === 'guard'
+      ? c.steps[0]
+      : c.op === 'edit'
+        ? c.step
+        : c.after
 
 export function GtTidyReport({ task, messageId, text }: { task: Task; messageId: string; text: string }) {
   const { ui, cn, api, toast } = h()
@@ -90,7 +100,8 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
   const [off, setOff] = useState<Set<number>>(new Set())
   const [notes, setNotes] = useState(true)
   const picked = useMemo(() => (p ? p.changes.map((_, i) => i).filter((i) => !off.has(i)) : []), [p, off])
-  const next = useMemo(() => (p && src ? applyTidyPlan(src.steps, p, picked, notes) : []), [p, src, picked, notes])
+  const doc = useMemo(() => (p && src ? applyTidyDoc(src.steps, p, picked, notes) : undefined), [p, src, picked, notes])
+  const next = useMemo(() => doc?.steps ?? [], [doc])
   const rows = useMemo(() => (src ? diffSteps(src.steps, next) : []), [src, next])
   // 出题之后场景又被改过（重新录制、手改、OCR 补字）：步骤号可能对不上，不让应用
   const stale = !!(src && sc.hash && src.hash !== sc.hash)
@@ -150,7 +161,7 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
         {p.summary && <p className="ue:leading-relaxed ue:text-fg">{p.summary}</p>}
       </div>
       {stale && (
-        <ErrorText>{t('场景在这次分析之后被改过，步骤号可能对不上：回 GameTest 页重新点「AI 整理」')}</ErrorText>
+        <ErrorText>{t('场景在这次分析之后被改过，步骤号可能对不上：回 GameTest 页重新点「整理成流程」')}</ErrorText>
       )}
       {p.review.length > 0 && (
         <section className="ue:flex ue:flex-col ue:gap-1.5">
@@ -211,6 +222,7 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
         <h3 className="ue:text-caption ue:font-medium ue:text-subtle">
           {t('应用后：{a} 步 → {b} 步', { a: src.steps.length, b: next.length })}
         </h3>
+        {doc && <FlowExtras doc={doc} />}
         <div className="ue:flex ue:flex-col ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
           {rows.map((r, i) => {
             const def = (r.kind === 'del' ? src.steps[r.a] : next[r.b]) as StepDef
@@ -253,4 +265,16 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
       </div>
     </div>
   )
+}
+
+/** 「整理成流程」带出的守护和参数：不在步骤列表里，单独列一行 */
+function FlowExtras({ doc }: { doc: TidyResult }) {
+  const params = Object.keys(doc.params)
+  const parts = [
+    doc.guards.length ? t('本脚本守护 {n} 个', { n: doc.guards.length }) : '',
+    doc.globalGuards.length ? t('全局守护 {n} 个（写进场景根 _settings.json）', { n: doc.globalGuards.length }) : '',
+    params.length ? t('参数 {k}', { k: params.map((k) => '$' + k).join('、') }) : '',
+  ].filter(Boolean)
+  if (!parts.length) return null
+  return <p className="ue:text-caption ue:text-subtle">{parts.join(' · ')}</p>
 }

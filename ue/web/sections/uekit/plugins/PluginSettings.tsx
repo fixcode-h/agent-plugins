@@ -6,6 +6,7 @@ import {
   Footprints,
   Hammer,
   KeyRound,
+  Library,
   ListStart,
   MonitorOff,
   Play,
@@ -22,6 +23,7 @@ import { OcrSettings } from '../../../OcrSettings.tsx'
 import { SettingGroup, SettingRow, SettingsLayout, type SettingsNavSection } from '../../../SettingRows.tsx'
 import { Badge, ErrorText, PageHead } from '../../../ui.tsx'
 import { GtSettings } from '../GtSettings.tsx'
+import { GtApiSettings } from '../gt-author/GtApiSettings.tsx'
 
 /**
  * UE 插件页里每个插件自己的设置页（卡片上的「设置」，地址 plugins/<插件名>）。
@@ -113,9 +115,10 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
           { id: 'move', label: t('移动'), icon: Footprints },
           { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },
           { id: 'keys', label: t('条目怎么认'), icon: KeyRound },
-          { id: 'blockers', label: t('阻挡界面'), icon: ShieldX },
+          { id: 'guards', label: t('全局守护'), icon: ShieldX },
         ],
       },
+      { title: t('编写 · 这个项目'), items: [{ id: 'api', label: t('接口库'), icon: Library }] },
       {
         title: t('录制 · 所有项目共用'),
         items: [
@@ -197,6 +200,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
           <>
             {/* 运行设置占左边菜单的前六页，一直挂着（换页不丢没保存的改动），只画当前那一组 */}
             <GtSettings />
+            <GtApiSettings />
             <SettingGroup page="shots" title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
             </SettingGroup>

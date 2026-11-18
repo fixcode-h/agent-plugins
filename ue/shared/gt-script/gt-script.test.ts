@@ -255,3 +255,19 @@ test('列表行：否则如果 / 否则有分隔行、空槽有占位行、折�
   assert.equal(ifRow?.kind === 'step' && ifRow.hidden, 3)
   assert.equal(folded.length, 5)
 })
+
+test('能用的 $名字：参数、变量、set、saveAs、循环条目', async () => {
+  const { scriptNames } = await import('./index.ts')
+  const names = scriptNames({
+    params: { account: { default: 'a' } },
+    vars: { skipped: 0 },
+    steps: [
+      { action: 'set', var: 'gold0', value: 1 },
+      { action: 'loop', each: 'W:List', max: 3, do: [{ action: 'api', api: 'Object.Find', saveAs: 'npc' }] },
+    ],
+  })
+  assert.deepEqual(
+    names.map((n) => n.name),
+    ['account', 'skipped', 'gold0', 'index', 'item', 'npc'],
+  )
+})

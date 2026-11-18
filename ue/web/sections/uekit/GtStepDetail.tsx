@@ -1,11 +1,12 @@
 import { Fragment } from 'react'
-import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, SkipForward, TriangleAlert } from 'lucide-react'
-import { useToChat } from '../../chat.tsx'
+import { CircleCheck, CircleDashed, CircleX, Crosshair, Loader2, SkipForward, Sparkles, TriangleAlert } from 'lucide-react'
+import { agentLookPrompt } from './gt-author/agent-look-prompt.ts'
+import { useGtAgentChat } from './gt-author/useGtAgentChat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ppost, show } from '../../api.ts'
 import { Note, Term } from '../../ui.tsx'
-import { evidenceOf, GtEvidence, type GtEvidenceData } from './GtEvidence.tsx'
+import { evidenceOf, GtEvidence } from './GtEvidence.tsx'
 import { ambiguousOf, hintOf, humanStep, type GtHint } from './gt-steps.ts'
 import { stepTitle } from './gt-step-title.ts'
 import { GtMatchMode } from './GtMatchMode.tsx'
@@ -147,8 +148,8 @@ export function StepDetail({
   history?: GtHistoryRun[]
 }) {
   const { project } = useUe()
-  const { api } = h()
-  const chat = useToChat()
+  const { api, ui } = h()
+  const agent = useGtAgentChat()
   const { def, res } = row
   const evidence = evidenceOf(res?.payload)
   const fileUrl = (p: string) => api.url(`/p/${encodeURIComponent(project.id)}/ext/file?path=${encodeURIComponent(p)}`)
@@ -202,6 +203,31 @@ export function StepDetail({
         {scrolled && <p className="ue:text-subtle">{t('自动滚动：{r}', { r: scrolled })}</p>}
         {fallback && <p className="ue:text-warning">{fallback}</p>}
         {res && <GtSkipResult payload={res.payload} />}
+        {/* 定稿 11.1「让 Agent 看」：带上失败证据和场景，用「游戏测试」角色开对话判断是游戏问题还是脚本问题 */}
+        {res?.status === 'failed' && scenario && !live && agent.available && (
+          <div>
+            <ui.Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                agent.start(
+                  agentLookPrompt({
+                    scenario,
+                    root,
+                    index: row.i,
+                    def,
+                    action,
+                    message: res.message,
+                    payload: res.payload,
+                    evidence,
+                  }),
+                )
+              }
+            >
+              <Sparkles className="ue:h-3.5 ue:w-3.5" /> {t('让 Agent 看')}
+            </ui.Button>
+          </div>
+        )}
       </Block>
       {(hint || ambiguous) && (
         <Block title={t('控件')}>
@@ -352,7 +378,6 @@ export function StepDetail({
           imageUrl={fileUrl}
           recorded={hint?.shot}
           loadText={(file) => ppost<{ text: string; truncated?: boolean }>(project.id, 'ext/gt/text', { file })}
-          onAgent={chat.available ? () => chat.send(agentText(row, evidence, scenario)) : undefined}
         />
       )}
       {shot && (
@@ -362,7 +387,7 @@ export function StepDetail({
           className="ue:mx-4 ue:mt-3 ue:rounded-lg ue:border ue:border-line"
         />
       )}
-      {chat.dialog}
+      {agent.dialog}
       {res?.payload && Object.keys(res.payload).length > 0 && (
         <div className="ue:flex ue:flex-col ue:gap-1.5 ue:p-4">
           <h3 className="ue:text-caption ue:font-medium ue:text-subtle">{t('原始返回')}</h3>
@@ -373,20 +398,6 @@ export function StepDetail({
       )}
     </div>
   )
-}
-
-/** 「交给 Agent」放进对话输入框的话（发给 Agent 的提示词不翻译）：证据路径和场景文件，让它先读文件再判断 */
-function agentText(row: StepRow, e: GtEvidenceData, scenario?: { name: string; relativePath: string }) {
-  const files = [
-    e.screenshot && `截图 ${e.screenshot}`,
-    e.widgets && `控件快照 ${e.widgets}`,
-    e.log && `失败前后的日志 ${e.log}`,
-  ].filter(Boolean)
-  return [
-    `GameTest 场景「${scenario?.name ?? '?'}」第 ${row.i + 1} 步（${row.def?.action || row.res?.action || '?'}）失败：${row.res?.message ?? ''}`,
-    `失败证据（路径相对 UE 项目根）：${files.join('，')}。${e.selectorError ? `当时选择器找不到控件：${e.selectorError}` : e.target ? '当时选择器找得到控件，说明控件在但这一步没成。' : ''}`,
-    `请先读这些文件，结合场景文件 ${scenario?.relativePath ?? ''}（场景根下）找出失败原因，告诉我是测试写得不对还是游戏有问题、该怎么改；需要时用 ue_gametest resolve 核对选择器、step 单步复现。`,
-  ].join('\n')
 }
 
 /** move 步骤画进俯视图的参数：一长串坐标，参数表里不再列 */

@@ -7,6 +7,10 @@ import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
+import { readAliases } from './gt-vars-file.ts'
+import { luaGroup } from './gt-author/lua-vars.ts'
+import { luaRoot } from './gt-author/lua-files.ts'
+import { apiSettingsAction } from './gt-author/api-settings.ts'
 import { libraryAction } from './gt-library/index.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
@@ -89,6 +93,14 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)
+    case 'POST ext/gt/luafields': {
+      // 代码变量弹窗、对象标识的 Lua 组：游戏没开时扫界面绑的 Lua 文件（和 Agent 工具同一份 gt-author/lua-vars.ts）
+      const g = await luaGroup(luaRoot(p), String(b.module ?? ''), '')
+      return { module: String(b.module ?? ''), file: g?.file, items: g?.items ?? [] }
+    }
+    case 'POST ext/gt/aliases':
+      // 条件里的「常用」：场景根 _vars.json 的常用名（gt-vars-file.ts）；save 时加一条
+      return readAliases(p.root, String(b.root ?? ''), b)
     case 'POST ext/gt/library':
       // 场景库整理：文件夹（空的也列）、新建、拖动移动、改名、删除，移动时 call 路径跟着改（gt-library/）
       return libraryAction(p.root, b)
@@ -101,6 +113,10 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/tidy':
       // 「AI 整理」：整理稿的路径、差异、保存（原场景备份成 .json.bak）、放弃、恢复原录制（gt-tidy.ts）
       return tidyAction(p.root, b)
+    case 'POST ext/gt/api':
+      // 设置页「接口库」：_settings.json 的 api.lua / api.cpp 文件夹，存完重扫 Lua 接口写 _api.json；
+      // action=file 原样读 _api.json（编辑页、接口库弹窗编辑器没开时列项目接口）（gt-author/api-settings.ts）
+      return apiSettingsAction(p, b)
     case 'POST ext/gt/ocr':
       // 录完停止后、或步骤列表「识别截图文字」：给截图补 hint.ocr（gt-shots.ts）
       return ocrScenario(p.root, b)

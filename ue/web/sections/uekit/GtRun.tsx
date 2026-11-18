@@ -9,6 +9,7 @@ import {
   Play,
   ScanSearch,
   X,
+  PencilLine,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { op, ppost, useLoad } from '../../api.ts'
@@ -88,6 +89,7 @@ export function GtRun({
   onRunFrom,
   onChanged,
   offline,
+  onEdit,
 }: {
   scenario: {
     name: string
@@ -111,6 +113,8 @@ export function GtRun({
   onChanged: () => void
   /** 编辑器没连上（没开或正忙）：报告从磁盘读，核对选择器不能用 */
   offline?: boolean
+  /** 打开场景编辑页 */
+  onEdit?: () => void
 }) {
   const { project } = useUe()
   const { ui, cn, toast } = h()
@@ -166,10 +170,12 @@ export function GtRun({
     const defs = file.data?.steps ?? []
     const byRow = new Map(results.map((r) => [r.index + offset, r]))
     const n = Math.max(defs.length, ...[...byRow.keys()].map((k) => k + 1))
-    return Array.from(
-      { length: n },
-      (_, i): StepRow => ({ i, def: defs[i], res: byRow.get(i), check: check?.byStep.get(i) }),
-    )
+    return Array.from({ length: n }, (_, i): StepRow => ({
+      i,
+      def: defs[i],
+      res: byRow.get(i),
+      check: check?.byStep.get(i),
+    }))
   }, [file.data, results, offset, check])
   const [pick, setPick] = useState<number>()
   // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败、没跑过就第一步）
@@ -247,6 +253,12 @@ export function GtRun({
           <span className="ue:ml-auto ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
             {scenario.relativePath}
           </span>
+          {onEdit && (
+            <ui.Button size="sm" variant="secondary" disabled={running || !!scenario.parseError} onClick={onEdit}>
+              <PencilLine className="ue:h-3.5 ue:w-3.5" />
+              {t('编辑')}
+            </ui.Button>
+          )}
           <TidyButtons tidy={tidy} disabled={running || !!scenario.parseError} />
           <ui.IconButton
             icon={FileJson}
