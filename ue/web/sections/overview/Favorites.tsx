@@ -4,6 +4,7 @@ import { op, pget, ppost, useAction, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Card } from '../../ui.tsx'
+import { FIXED_BODY } from './Instances.tsx'
 
 /** 常用（从原来的概览搬过来）：宏、收藏的 GM 和控制台命令一键执行，外加截视口 */
 export function Favorites() {
@@ -42,26 +43,28 @@ export function Favorites() {
       }
       aside={t('在控制台和 GM 里点星标加到这里')}
     >
-      <div className="ue:flex ue:flex-wrap ue:gap-2 ue:p-4">
-        {favs.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            disabled={!!busy}
-            onClick={() =>
-              void run(f.key, async () => {
-                await f.run()
-                toast.success(t('已执行：{what}', { what: f.label }))
-              })
-            }
-            className={chip}
-          >
-            <f.icon className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {f.label}
+      <div className={FIXED_BODY}>
+        <div className="ue:flex ue:flex-wrap ue:gap-2 ue:p-4">
+          {favs.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              disabled={!!busy}
+              onClick={() =>
+                void run(f.key, async () => {
+                  await f.run()
+                  toast.success(t('已执行：{what}', { what: f.label }))
+                })
+              }
+              className={chip}
+            >
+              <f.icon className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {f.label}
+            </button>
+          ))}
+          <button type="button" onClick={openShot} className={chip}>
+            <Camera className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {t('截视口')}
           </button>
-        ))}
-        <button type="button" onClick={openShot} className={chip}>
-          <Camera className="ue:h-3.5 ue:w-3.5 ue:text-subtle" /> {t('截视口')}
-        </button>
+        </div>
       </div>
     </Card>
   )

@@ -3,6 +3,7 @@ import type { HistoryItem } from '../../../server/types.ts'
 import { useUe } from '../../ctx.tsx'
 import { t } from '../../host.ts'
 import { Card, LinkBtn } from '../../ui.tsx'
+import { Skeleton } from '../perf/parts.tsx'
 import { TimelineRow } from './parts.tsx'
 
 interface Ev {
@@ -16,6 +17,9 @@ interface Ev {
   undo?: HistoryItem
 }
 
+/** 固定成 10 行的高度（最多列 10 条），条数变了版面不跳，带报错第二行的多了就在里面滚 */
+const TIMELINE_BODY = 'ue:h-[23rem] ue:overflow-auto'
+
 const hms = (ms: number) =>
   ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
 
@@ -28,7 +32,8 @@ export function Timeline({
   busy,
   onUndo,
 }: {
-  history: HistoryItem[]
+  /** 还没取到时是 undefined，显示占位 */
+  history?: HistoryItem[]
   busy: boolean
   onUndo: (it: HistoryItem) => void
 }) {
@@ -43,7 +48,7 @@ export function Timeline({
       text: l.category ? `${l.category}: ${l.text}` : l.text,
       onClick: () => go('logs', l.level === 'error' ? 'error' : ''),
     })),
-    ...history.slice(0, 8).map((it) => ({
+    ...(history ?? []).slice(0, 8).map((it) => ({
       key: `h:${it.id}`,
       at: Date.parse(it.at),
       tag: it.actor.kind === 'user' ? t('你') : 'Agent',
@@ -77,31 +82,37 @@ export function Timeline({
       }
       aside={<LinkBtn onClick={() => go('history')}>{t('全部操作记录')}</LinkBtn>}
     >
-      <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
-        {evs.map((e) => (
-          <TimelineRow
-            key={e.key}
-            time={hms(e.at)}
-            tag={e.tag}
-            tone={e.tone}
-            text={e.text}
-            sub={e.sub}
-            onClick={e.onClick}
-            aside={
-              e.undo ? (
-                <LinkBtn disabled={busy} onClick={() => onUndo(e.undo!)}>
-                  <Undo2 className="ue:h-3 ue:w-3" /> {t('撤回修改')}
-                </LinkBtn>
-              ) : undefined
-            }
-          />
-        ))}
-        {!evs.length && (
-          <li className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
-            {t('还没有动静。日志里的错误、你和 Agent 的修改都会按时间列在这里')}
-          </li>
+      <div className={TIMELINE_BODY}>
+        {!history && !ex ? (
+          <Skeleton rows={6} />
+        ) : (
+          <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
+            {evs.map((e) => (
+              <TimelineRow
+                key={e.key}
+                time={hms(e.at)}
+                tag={e.tag}
+                tone={e.tone}
+                text={e.text}
+                sub={e.sub}
+                onClick={e.onClick}
+                aside={
+                  e.undo ? (
+                    <LinkBtn disabled={busy} onClick={() => onUndo(e.undo!)}>
+                      <Undo2 className="ue:h-3 ue:w-3" /> {t('撤回修改')}
+                    </LinkBtn>
+                  ) : undefined
+                }
+              />
+            ))}
+            {!evs.length && (
+              <li className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
+                {t('还没有动静。日志里的错误、你和 Agent 的修改都会按时间列在这里')}
+              </li>
+            )}
+          </ul>
         )}
-      </ul>
+      </div>
     </Card>
   )
 }

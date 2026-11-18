@@ -16,6 +16,7 @@ import { Favorites } from './Favorites.tsx'
 import { Instances } from './Instances.tsx'
 import { AttentionRow, Readout } from './parts.tsx'
 import { Timeline } from './Timeline.tsx'
+import { Skeleton } from '../perf/parts.tsx'
 import { VsDebugCard } from '../../vs-debug/VsDebugCard.tsx'
 
 /**
@@ -128,8 +129,11 @@ export function Overview() {
           />
         </div>
 
-        <div className="ue:grid ue:gap-px ue:bg-line ue:xl:grid-cols-[1.6fr_1fr]">
+        {/* 中间一排、时间线、实例和常用都是固定高度、里面滚动：数据隔几秒刷一次，条数一变整页就跳（用户 2026-11-18） */}
+        <div className="ue:grid ue:shrink-0 ue:gap-px ue:bg-line ue:xl:h-[26rem] ue:xl:grid-cols-[1.6fr_1fr]">
           <Card
+            className="ue:h-60 ue:xl:h-auto ue:xl:min-h-0"
+            bodyClass="ue:overflow-auto"
             title={
               <>
                 <ListChecks className="ue:h-4 ue:w-4" /> {t('需要你处理')}
@@ -137,7 +141,9 @@ export function Overview() {
             }
             aside={items.length ? t('按紧急程度排') : undefined}
           >
-            {items.length ? (
+            {!badges ? (
+              <Skeleton rows={3} />
+            ) : items.length ? (
               <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
                 {items.map((it) => (
                   <AttentionRow key={it.key} item={it} disabled={!!busy} />
@@ -149,7 +155,7 @@ export function Overview() {
               </p>
             )}
           </Card>
-          <div className="ue:flex ue:flex-col ue:gap-px ue:bg-line">
+          <div className="ue:flex ue:h-[26rem] ue:min-h-0 ue:flex-col ue:*:shrink-0 ue:gap-px ue:overflow-auto ue:bg-line ue:xl:h-auto">
             {/* VS 调试放在页头「启动编辑器 / PIE」旁边这一页：都是「怎么把 UE 跑起来」的控制，右栏最上面 */}
             <VsDebugCard />
             <SelectionSlot />
@@ -158,9 +164,9 @@ export function Overview() {
           </div>
         </div>
 
-        <Timeline history={hist.data?.items ?? []} busy={!!busy} onUndo={undoOne} />
+        <Timeline history={hist.data?.items} busy={!!busy} onUndo={undoOne} />
 
-        <div className="ue:grid ue:gap-px ue:bg-line ue:xl:grid-cols-[1.4fr_1fr]">
+        <div className="ue:grid ue:shrink-0 ue:gap-px ue:bg-line ue:xl:grid-cols-[1.4fr_1fr]">
           <Instances />
           <Favorites />
         </div>
