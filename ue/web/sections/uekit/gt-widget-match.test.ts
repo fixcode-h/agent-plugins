@@ -8,7 +8,8 @@ const idx: LoadedIndex = {
   version: '1',
   assets: [
     toAsset(['/Game/UI/Notice/WBP_Notice.WBP_Notice', 'WidgetBlueprint', 'UserWidget']),
-    toAsset(['/Game/UI/Guide/WBP_Guide.WBP_Guide', 'Blueprint', 'BaseWidget']),
+    toAsset(['/Game/UI/Guide/WBP_Guide.WBP_Guide', 'WidgetBlueprint', 'MyPanelBase']),
+    toAsset(['/Game/UI/Fake/WBP_Fake.WBP_Fake', 'Blueprint', 'FancyWidgetActor']),
     toAsset(['/Game/UI/Old/WBP_Guide.WBP_Guide', 'WidgetBlueprint', 'UserWidget']),
     toAsset(['/Game/UI/W_Reconnect.W_Reconnect', '']),
     toAsset(['/Game/Editor/EUW_Tools.EUW_Tools', 'EditorUtilityWidgetBlueprint', 'EditorUtilityWidget']),
@@ -19,14 +20,26 @@ const idx: LoadedIndex = {
   source: { assets: 'uetovs', lua: 'none' },
 }
 
-test('只列控件蓝图：认出的、父类像控件的、扫磁盘按名字猜的', () => {
+test('只按继承认控件蓝图：名字像界面、父类名带 Widget 都不算', () => {
   const r = matchWidgets(idx, '', 50)
   assert.deepEqual(
     r.rows.map((x) => x.pkg),
-    ['/Game/UI/Guide/WBP_Guide', '/Game/UI/Old/WBP_Guide', '/Game/UI/Notice/WBP_Notice', '/Game/UI/W_Reconnect'],
+    ['/Game/UI/Guide/WBP_Guide', '/Game/UI/Old/WBP_Guide', '/Game/UI/Notice/WBP_Notice'],
   )
-  assert.equal(r.all, 4)
-  assert.equal(r.rows[3].sure, false)
+  assert.equal(r.all, 3)
+})
+
+test('扫磁盘的索引认不出类型：都列出来，标成没认出', () => {
+  const disk: LoadedIndex = {
+    ...idx,
+    assets: [toAsset(['/Game/UI/Reconnect.Reconnect', '']), toAsset(['/Game/Maps/Main.Main', 'World'])],
+    source: { assets: 'disk', lua: 'none' },
+  }
+  const r = matchWidgets(disk, '', 50)
+  assert.deepEqual(
+    r.rows.map((x) => [x.pkg, x.sure]),
+    [['/Game/UI/Reconnect', false]],
+  )
 })
 
 test('名字不重复填类名，重名填包路径', () => {

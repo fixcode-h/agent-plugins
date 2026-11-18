@@ -58,7 +58,7 @@ const blank = (): GtBlockerRule => ({ widget: '', action: 'close' })
 
 const WIDGET_LIMIT = 50
 
-/** 候选 → 下拉的行：按名字猜的（扫磁盘时没有类名）淡显 */
+/** 候选 → 下拉的行：认不出类型的（扫磁盘时没有类名）淡显 */
 function widgetRows(m: ReturnType<typeof matchWidgets>): { rows: SuggestRow[]; total: number } {
   const { icon, tone } = ASSET_KINDS['umg-widget']
   return {

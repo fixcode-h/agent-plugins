@@ -6,6 +6,7 @@ import { createGunzip } from 'node:zlib'
 import type { UeProject } from '../types.ts'
 import type { IndexAsset, IndexLua, Mounts } from './types.ts'
 import { toObjectPath } from './mounts.ts'
+import { nativeWidgetClasses } from './native-widgets.ts'
 
 /**
  * 读 UEToVS（用户本地的 VS 插件）已经建好的索引，不自己再扫一遍（用户 2026-11-16 要的「先解析 UEToVS 的 Index」）：
@@ -58,20 +59,34 @@ export function shortClass(s: string | undefined) {
   return name.endsWith('_C') ? name.slice(0, -2) : name
 }
 
-/** 蓝图的资源类型按父类猜：UEToVS 只记父类不记资源类，控件蓝图、动画蓝图换个图标就够了 */
-function blueprintClass(npc: string, pc: string) {
-  const n = shortClass(npc || pc)
-  if (/UserWidget$/.test(n)) return 'WidgetBlueprint'
-  if (/AnimInstance$/.test(n)) return 'AnimBlueprint'
-  if (/EditorUtilityWidget$/.test(n)) return 'EditorUtilityWidgetBlueprint'
+/**
+ * 蓝图的资源类型：UEToVS 只记父类不记资源类。控件蓝图按**继承**认（用户 2026-11-18：所有 UMG 都直接或间接继承 UserWidget，
+ * 不按名字认）：原生父类是 UserWidget 或它的子类（项目头文件里拼出的继承链，见 native-widgets.ts）
+ */
+function blueprintClass(native: string, widgets: Set<string>) {
+  if (native === 'EditorUtilityWidget' || native === 'EditorUtilityWidgetBlueprint')
+    return 'EditorUtilityWidgetBlueprint'
+  if (widgets.has(native)) return 'WidgetBlueprint'
+  if (/AnimInstance$/.test(native)) return 'AnimBlueprint'
   return 'Blueprint'
+}
+
+/** 蓝图的原生父类：有 npc 用它，没有就顺着父蓝图（pc 是 /Game/A/BP_Base.BP_Base_C）往上找 */
+function nativeOf(gc: string, bps: Map<string, { pc: string; npc: string }>) {
+  const seen = new Set<string>()
+  for (let cur = bps.get(gc); cur && !seen.has(cur.pc); cur = bps.get(cur.pc)) {
+    if (cur.npc) return shortClass(cur.npc)
+    seen.add(cur.pc)
+    if (!bps.has(cur.pc)) return shortClass(cur.pc)
+  }
+  return ''
 }
 
 /** 解析 blueprints.jsonl.gz；格式不对返回空（调用方退回扫磁盘） */
 export async function readUetovsAssets(found: Found, root: string, mounts: Mounts): Promise<IndexAsset[] | undefined> {
   const prefix = norm(path.resolve(root)) + '/'
   const lines = createInterface({ input: createReadStream(found.file).pipe(createGunzip()), crlfDelay: Infinity })
-  const out: IndexAsset[] = []
+  const rows: { objectPath: string; file: string; pc: string; npc: string; isBp: boolean }[] = []
   let first = true
   try {
     for await (const line of lines) {
@@ -90,17 +105,21 @@ export async function readUetovsAssets(found: Found, root: string, mounts: Mount
       if (!objectPath) continue
       const pc = typeof o.pc === 'string' ? o.pc : ''
       const npc = typeof o.npc === 'string' ? o.npc : ''
-      const isBp = !!(pc || npc || o.gc)
-      const cls = /\.umap$/i.test(file) ? 'World' : isBp ? blueprintClass(npc, pc) : ''
-      const a: IndexAsset = [objectPath, cls]
-      if (isBp && (pc || npc)) a.push(shortClass(pc || npc))
-      out.push(a)
+      rows.push({ objectPath, file, pc, npc, isBp: !!(pc || npc || o.gc) })
     }
   } catch {
     // 读到一半坏了（UEToVS 正在替换文件、gzip 截断）：当这次没有，下次再读
     return undefined
   }
-  return first ? undefined : out
+  if (first) return undefined
+  const bps = new Map(rows.filter((r) => r.isBp).map((r) => [`${r.objectPath}_C`, r]))
+  const widgets = await nativeWidgetClasses(root)
+  return rows.map((r): IndexAsset => {
+    if (/\.umap$/i.test(r.file)) return [r.objectPath, 'World']
+    if (!r.isBp) return [r.objectPath, '']
+    const cls = blueprintClass(nativeOf(`${r.objectPath}_C`, bps), widgets)
+    return r.pc || r.npc ? [r.objectPath, cls, shortClass(r.pc || r.npc)] : [r.objectPath, cls]
+  })
 }
 
 interface LuaIndexFile {
