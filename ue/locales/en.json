@@ -3040,5 +3040,9 @@
   "只列候选，录完自己挑": "Only list candidates; pick after recording",
   "不看": "Off",
   "点完看多久": "Watch after click",
-  "点完等界面变化的时间，服务器回包慢的项目调大": "How long to watch for UI changes after a click; raise it for slow server replies"
+  "点完等界面变化的时间，服务器回包慢的项目调大": "How long to watch for UI changes after a click; raise it for slow server replies",
+  "设置分页": "Settings pages",
+  "运行设置 · 这个项目": "Run settings · this project",
+  "录制 · 所有项目共用": "Recording · all projects",
+  "OCR 认字": "OCR"
 }

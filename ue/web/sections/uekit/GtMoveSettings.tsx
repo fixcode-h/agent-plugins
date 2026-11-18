@@ -39,6 +39,7 @@ export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onCha
   const set = (p: Partial<GtMoveConfig>) => onChange({ ...value, ...p })
   return (
     <SettingGroup
+      page="move"
       title={t('移动')}
       hint={t(
         'move 步骤（录移动录出来的）让角色自己走到目标点：先按导航网格寻路，没有就按录的轨迹走，再不行运行时探路。需要 GameTest 1.3.0；场景里写的 move 覆盖这里。',
