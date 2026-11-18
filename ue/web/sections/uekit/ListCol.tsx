@@ -47,14 +47,17 @@ export function ListCol({
       className="ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:bg-panel ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
     >
       <div className="ue:flex ue:flex-col ue:gap-2.5 ue:px-4 ue:pt-4 ue:pb-2.5">
-        <div className="ue:flex ue:items-center ue:gap-2">
+        {/* 栏拖窄时按钮整组换到下一行，不挤出栏外盖住右边的页面 */}
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-x-2 ue:gap-y-2">
           <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
             {title}
           </h1>
           <span className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:text-footnote ue:text-muted ue:tabular-nums">
             {count}
           </span>
-          <div className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-1.5">{extra}</div>
+          <div className="ue:ml-auto ue:flex ue:shrink-0 ue:flex-wrap ue:items-center ue:justify-end ue:gap-1.5">
+            {extra}
+          </div>
         </div>
         <div className="ue:flex ue:items-center ue:gap-1.5">
           <label className="ue:relative ue:block ue:min-w-0 ue:flex-1">
