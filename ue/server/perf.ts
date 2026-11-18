@@ -9,11 +9,10 @@ import {
   type Capture,
   type CaptureKind,
 } from './captures.ts'
-import { BridgeError, liveCards, pickCard } from './instances.ts'
+import { BridgeError, type Card, info, liveCards, pickCard } from './instances.ts'
 import {
   bridgeHasLuaTrace,
   hasLuaChannel,
-  hasUnLua,
   LUA_TRACE_BRIDGE,
   luaTraceDefault,
   parseLuaTrace,
@@ -21,6 +20,7 @@ import {
   withoutLuaChannels,
 } from './perf/lua-trace.ts'
 import { runOp, type OpCtx } from './ops.ts'
+import { hasUnLua } from './lua/unlua-detect.ts'
 import type { Actor, UeProject } from './types.ts'
 import { c, now, readJson, t, uid, writeJson } from './util.ts'
 
@@ -160,15 +160,17 @@ async function luaChannels(
   if (!hasLuaChannel(ch)) return { channels: ch, lua: false }
   // 去掉 Lua 时从原来的通道串去（不带为 Lua 补的 counters）
   const drop = (luaNote: string) => ({ channels: withoutLuaChannels(channels), lua: false, luaNote })
-  if (!(await hasUnLua(p.root))) return drop(t('项目没装 UnLua，没录 Lua，只录 UE 部分'))
   // 和 runOp 选进程的规则一致（运行时操作不发给后台编辑器）；选不到时交给后面的 runOp 报错
   const target = ctx.target ?? { instance: p.target.kind || undefined }
-  let card: { bridge?: string } | undefined
+  let card: Card | undefined
   try {
     card = pickCard(await liveCards(p.root), target.instance ? target : undefined, 'editor', true)
   } catch {
     card = undefined
   }
+  // 磁盘上认不出 UnLua 时再问一下目标进程：它的桥接编进了 Lua 支持也算有
+  if (!(await hasUnLua(p)) && !(card && (await info(card).catch(() => undefined))?.lua))
+    return drop(t('项目没装 UnLua，没录 Lua，只录 UE 部分'))
   if (card && !bridgeHasLuaTrace(card.bridge))
     return drop(
       t('UE 进程里的 UELink 是 {v}，录 Lua 要 {min} 起：去 UE 页「UE 插件」升级。这次只录 UE 部分', {
