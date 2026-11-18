@@ -5,7 +5,7 @@ import type { InstallMode } from '../types.ts'
 import { c, t } from '../util.ts'
 import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
-import { keyRulesAction } from './gt-keys.ts'
+import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
@@ -91,6 +91,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/keyrules':
       // 条目规则面板：场景根 _settings.json 的 itemKeys（gt-keys.ts），编辑器没开也能改
       return keyRulesAction(p.root, b)
+    case 'POST ext/gt/keyfields':
+      // 「换一个标识」游戏没跑时：读录制时存下的条目全部字段（GameTest 1.6.0 的 hint.fields）
+      return readKeyFields(p.root, String(b.file ?? ''))
     case 'POST ext/gt/tidy':
       // 「AI 整理」：整理稿的路径、差异、保存（原场景备份成 .json.bak）、放弃、恢复原录制（gt-tidy.ts）
       return tidyAction(p.root, b)

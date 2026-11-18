@@ -177,3 +177,17 @@ export interface KeyAnswer {
   applied?: number
   skipped?: { step: number; why: string }[]
 }
+
+/**
+ * 录制时存下的全部字段（GameTest 1.6.0 的 hint.fields）在网页里筛：和 gt.keys 的 filter 一样按字段名或显示值，
+ * 不分大小写。缓存是全量的，筛完不用再分页。
+ */
+export function filterKeys(data: KeysResult, filter: string): KeysResult {
+  const q = filter.trim().toLowerCase()
+  if (!q) return data
+  const hit = (f: KeyField) =>
+    f.by.toLowerCase().includes(q) || (typeof f.v === 'string' ? f.v : showValue(f.v)).toLowerCase().includes(q)
+  const groups = data.groups.map((g) => ({ ...g, fields: g.fields.filter(hit) })).filter((g) => g.fields.length)
+  const count = groups.reduce((n, g) => n + g.fields.length, 0)
+  return { ...data, groups, total: count, count, hasMore: false, truncated: false }
+}

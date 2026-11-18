@@ -22,6 +22,8 @@ export interface GtHint {
   /** GameTest 1.3.2 录制截图：被点控件那一块（相对项目根），红框在图里的位置 [x, y, w, h] */
   shot?: string
   shotBox?: number[]
+  /** GameTest 1.6.0：录制时这个条目全部字段的缓存文件（相对项目根），「换一个标识」游戏没跑时用 */
+  fields?: string
   /** 顶层界面变了时存的整屏缩略图 */
   screen?: string
   /** 点完 2 秒内新打开的顶层界面（类名） */
