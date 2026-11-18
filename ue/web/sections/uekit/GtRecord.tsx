@@ -6,7 +6,8 @@ import { h, t } from '../../host.ts'
 import { Note } from '../../ui.tsx'
 import { humanStep } from './gt-steps.ts'
 import { moveLine } from './gt-move.ts'
-import type { KeyAsk } from './gt-key.ts'
+import { byLabel, keyOf, type KeyAsk } from './gt-key.ts'
+import { GtKeyAsk } from './GtKeyAsk.tsx'
 import { GtRecordQuick, type RecordQuick } from './GtRecordQuick.tsx'
 
 /**
@@ -57,6 +58,8 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
   const { ui, cn, toast } = h()
   const { busy, run } = useAction()
   const [mark, setMark] = useState('')
+  // 录制中改前面某一步的条目标识（GameTest 1.5.0）：候选在那一步的 hint.key.cands 里
+  const [editing, setEditing] = useState<KeyAsk>()
   const steps = status.last ?? []
   const secs = Math.round(status.seconds ?? 0)
   const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
@@ -123,17 +126,18 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
       <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
         {steps.map((s, i) => {
           const newest = i === steps.length - 1
+          const index = (status.steps ?? steps.length) - steps.length + i
+          const hint = s.hint && typeof s.hint === 'object' ? (s.hint as Record<string, unknown>) : undefined
+          const key = keyOf(hint)
           return (
             <div
               key={i}
               className={cn(
-                'ue:grid ue:h-9 ue:grid-cols-[22px_18px_104px_minmax(0,1fr)] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4',
+                'ue:grid ue:h-9 ue:grid-cols-[22px_18px_104px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4',
                 newest && 'ue:bg-run/8',
               )}
             >
-              <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">
-                {(status.steps ?? steps.length) - steps.length + i + 1}
-              </span>
+              <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{index + 1}</span>
               {newest ? (
                 <CircleDot className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
               ) : (
@@ -141,11 +145,39 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
               )}
               <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{String(s.action ?? '')}</span>
               <span className="ue:truncate ue:text-footnote ue:text-muted">{describe(s)}</span>
+              {key ? (
+                <button
+                  type="button"
+                  title={t('改这一步在列表里怎么认：{c}', { c: key.cond || t('按位置') })}
+                  disabled={!!status.ask}
+                  onClick={() =>
+                    setEditing({
+                      step: index,
+                      target: typeof s.target === 'string' ? s.target : '',
+                      key,
+                      shot: typeof hint?.shot === 'string' ? hint.shot : undefined,
+                      text: typeof hint?.text === 'string' ? hint.text : undefined,
+                    })
+                  }
+                  className={cn(
+                    'ue:max-w-48 ue:truncate ue:rounded-sm ue:px-1.5 ue:py-0.5 ue:text-caption ue:hover:bg-hover',
+                    key.by === 'pending' ? 'ue:text-warning' : 'ue:text-subtle',
+                  )}
+                >
+                  {byLabel(key.by)}
+                  {key.cond ? ` · ${key.cond}` : ''}
+                </button>
+              ) : (
+                <span />
+              )}
             </div>
           )
         })}
         {!steps.length && (
           <p className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">{t('还没录到操作')}</p>
+        )}
+        {editing && (
+          <GtKeyAsk key={editing.step} project={project.id} ask={editing} edit onDone={() => setEditing(undefined)} />
         )}
       </div>
     </div>

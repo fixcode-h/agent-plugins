@@ -5,6 +5,7 @@ import {
   FileJson,
   FlaskConical,
   Layers,
+  ListTree,
   Loader2,
   Play,
   SlidersHorizontal,
@@ -23,6 +24,7 @@ import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
 import { keyAskArgs } from './gt-key.ts'
 import { GtKeyAsk } from './GtKeyAsk.tsx'
+import { GtKeyRulesPanel } from './GtKeyRulesPanel.tsx'
 import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
@@ -61,6 +63,8 @@ export function GameTest() {
   const [asking, setAsking] = useState(false)
   // 运行设置弹窗（阻挡界面规则、UI 等待上限）
   const [settings, setSettings] = useState(false)
+  // 条目规则面板（_settings.json 的 itemKeys，树形、可搜）：直接读写磁盘，编辑器没开也能整理
+  const [keyRules, setKeyRules] = useState(false)
   const [recName, setRecName] = useState('')
   // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
   const [keepPace, setKeepPace] = useState(false)
@@ -135,6 +139,11 @@ export function GameTest() {
         return { ...r, last: [...(old?.last ?? []), ...fresh].slice(-200) }
       })
       if (r.phase === 'stopped') reload()
+      // 改了某一步的认法（可能连同一列表的好几步一起改）：事件只带最新一步，前面的步骤重新取一遍
+      if (r.phase === 'key' || r.phase === 'askEnd')
+        void op<RecordStatus>(project.id, 'gt.record.status', { last: 200 })
+          .then((s) => s.recording && setRec((old) => ({ ...s, last: s.last ?? old?.last })))
+          .catch(() => undefined)
     }
   })
 
@@ -310,6 +319,13 @@ export function GameTest() {
               onClick={() => setSettings(true)}
             />
             <ui.IconButton
+              icon={ListTree}
+              size="sm"
+              label={tip(t('条目规则：列表、格子里的条目按什么字段认，录制时按它认、不再问'))}
+              disabled={!list?.absoluteRootDir}
+              onClick={() => setKeyRules(true)}
+            />
+            <ui.IconButton
               icon={CircleDot}
               size="sm"
               label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
@@ -482,7 +498,18 @@ export function GameTest() {
       </main>
       {menus.dialogs}
       {shots.dialog}
-      {settings && <GtSettings onClose={() => setSettings(false)} />}
+      {settings && (
+        <GtSettings
+          onClose={() => setSettings(false)}
+          onOpenRules={() => {
+            setSettings(false)
+            setKeyRules(true)
+          }}
+        />
+      )}
+      {keyRules && list?.absoluteRootDir && (
+        <GtKeyRulesPanel project={project.id} root={list.absoluteRootDir} onClose={() => setKeyRules(false)} />
+      )}
       <MenuHost />
       <Confirm
         open={asking}

@@ -132,3 +132,48 @@ export function fieldsOfCond(cond: string) {
     .map((p) => p.split('=')[0]?.trim() ?? '')
     .filter(Boolean)
 }
+
+/** hint.key.by 的中文（步骤详情、录制中的步骤列表、规则面板都用） */
+export function byLabel(by: string) {
+  if (by === 'auto') return t('录制时自动挑的')
+  if (by === 'rule') return t('按规则')
+  if (by === 'same') return t('沿用同一列表的')
+  if (by === 'user') return t('你选的')
+  if (by === 'pending') return t('待定')
+  if (by === 'index') return t('只按第几个')
+  if (by === 'text') return t('先按文字找')
+  return by
+}
+
+/** 同一列表（条目类 + 容器）：和 GameTest 录制器、规则一样，类名带不带 _C 算同一个，不分大小写 */
+export function listIdOf(k: StepKey) {
+  const entry = (k.entry ?? '').replace(/_C$/, '')
+  return entry ? `${entry}|${k.base}`.toLowerCase() : ''
+}
+
+/**
+ * 录完以后按字段给另一步拼条件：用那一步录制时存下的候选（hint.key.cands）里同名字段的值。
+ * 候选里没有某个字段（录制时排在后面没存）就拼不出，返回 undefined。
+ */
+export function condFromCands(k: StepKey, fields: string[]) {
+  const parts: string[] = []
+  for (const f of fields) {
+    const c = (k.cands ?? []).find((x) => !x.combo && x.cond && x.by.toLowerCase() === f.toLowerCase())
+    if (!c?.cond) return undefined
+    parts.push(c.cond)
+  }
+  return parts.length ? parts.join(',') : undefined
+}
+
+/** gt.record.key 的返回（GameTest 1.5.0 起有 applied / skipped） */
+export interface KeyAnswer {
+  step: number
+  target: string
+  by: string
+  cond?: string
+  rule?: boolean
+  ruleError?: string
+  resumed?: boolean
+  applied?: number
+  skipped?: { step: number; why: string }[]
+}
