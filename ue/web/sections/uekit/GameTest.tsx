@@ -36,6 +36,8 @@ import { GtKeyRulesPanel } from './GtKeyRulesPanel.tsx'
 import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
+import { runStart, type RunBase } from './gt-rows/rows.ts'
+import { getAt, parsePath } from '../../../shared/gt-script/index.ts'
 import { recordSegmentArgs, segmentSupported } from './gt-record-segment.ts'
 import { recordSkipArgs, skipSupported } from './gt-skip.ts'
 import { GtSettings } from './GtSettings.tsx'
@@ -91,7 +93,7 @@ export function GameTest() {
   // 录制器认控件靠什么：hitPath 表示这个进程没编 Slate 调试，打字录不到，开始录制前就提示
   const [handlerSource, setHandlerSource] = useState<string>()
   // 从第几步开始跑的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行；只在这次打开页面里记
-  const [offsets, setOffsets] = useState<Record<string, number>>({})
+  const [offsets, setOffsets] = useState<Record<string, RunBase>>({})
   // 推送里已经结束的 run：第一步就失败的 run 在 gt.run 返回之前就推了「结束」，返回后不能再标成运行中
   const finished = useRef(new Set<string>())
   // 每个场景最近 10 次的通过 / 失败（GameTest 1.2 的 gt.history，最新在前）；旧版本没有这个操作时是空的，列表退回只看最近一次
@@ -203,7 +205,7 @@ export function GameTest() {
   const running = (!!job?.busy && !runs.some((r) => r.runId === job.runId)) || batchActive
   const recording = !!rec?.recording
   /** 开跑：gt.run 里 UE 会立刻推进一次，第一步就失败的 run 返回时已经结束（finished），这时不再标成运行中 */
-  const startRun = (name: string, args: Record<string, unknown>, offset: number) =>
+  const startRun = (name: string, args: Record<string, unknown>, offset: RunBase) =>
     run('run', async () => {
       const r = await op<{ runId: string; steps: number; finished?: boolean }>(project.id, 'gt.run', args)
       setOffsets((o) => ({ ...o, [r.runId]: offset }))
@@ -272,9 +274,20 @@ export function GameTest() {
         }),
     },
   ]
-  /** 从第 i 步跑到底；only 时只跑这一步（临时运行，不跑前置步骤、不记进场景的运行历史） */
-  const runFrom = (s: Scenario, file: GtScenarioFile, i: number, only?: boolean) =>
-    startRun(
+  /**
+   * 从这一步跑到底；only 时只跑这一步（临时运行，不跑前置步骤、不记进场景的运行历史）。
+   * 顶层的步骤照旧截出来交给 gt.run（旧 GameTest 也能跑）；录制段等块里的步骤：只跑这一步时单独交这一步，
+   * 跑到底时用 gt.run 的 from（GameTest 1.9.0，按路径从场景里这一步开始，块外面后面的步骤也接着跑）
+   */
+  const runFrom = (s: Scenario, file: GtScenarioFile, at: { key: string }, only?: boolean) => {
+    const start = runStart(at.key)
+    if ('from' in start) {
+      if (!only) return runScenario(s, false, { from: start.from })
+      const step = getAt(file, parsePath(at.key))
+      return startRun(s.name, { name: s.name, steps: [step], stepDelayMs: file.stepDelayMs }, at.key)
+    }
+    const i = start.index
+    return startRun(
       s.name,
       {
         name: s.name,
@@ -283,6 +296,7 @@ export function GameTest() {
       },
       i,
     )
+  }
   /**
    * 停止：gt.stop 只是请求取消，结果以 UE 的作业状态为准——已经不在跑（例如早就失败结束、推送没到）时
    * 直接收尾，不让按钮按了没反应
@@ -663,7 +677,7 @@ export function GameTest() {
               live && !recording && !busy
                 ? (from, extra) =>
                     void (from
-                      ? runFrom(selected, from.doc as unknown as GtScenarioFile, from.index)
+                      ? runFrom(selected, from.doc as unknown as GtScenarioFile, { key: `steps.${from.index}` })
                       : runScenario(selected, false, extra))
                 : undefined
             }
@@ -688,7 +702,7 @@ export function GameTest() {
             offset={offsets[(running ? job?.runId : lastOf(selected)?.runId) ?? ''] ?? 0}
             onStop={() => void stop()}
             onRunFrom={
-              !live || running || recording ? undefined : (file, i, only) => void runFrom(selected, file, i, only)
+              !live || running || recording ? undefined : (file, at, only) => void runFrom(selected, file, at, only)
             }
             onChanged={reload}
             offline={!live}

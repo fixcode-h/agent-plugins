@@ -5,6 +5,7 @@ import { revealInFolder } from '../reveal.ts'
 import { t } from '../util.ts'
 import { replaceMany } from './gt-keys.ts'
 import { insideProject, scenarioFile, within } from './gt-paths.ts'
+import { cloneDoc, slotOf } from './gt-slot/slot.ts'
 
 export { insideProject }
 
@@ -90,34 +91,34 @@ async function writeWithName(abs: string, doc: Record<string, unknown>, name: st
  * click / type 补上 via:"code"——和 GameTest 读 v1 文件时做的一样，旧步骤行为不变
  */
 async function replaceSteps(abs: string, rel: string, doc: Record<string, unknown>, b: Record<string, unknown>) {
-  const steps = Array.isArray(doc.steps) ? [...(doc.steps as Record<string, unknown>[])] : []
   const index = Number(b.index)
   const expect = Array.isArray(b.expect) ? b.expect : []
   const next = Array.isArray(b.steps) ? (b.steps as Record<string, unknown>[]) : []
   // steps 可以是空数组：步骤右键「删除这一步」；插入新步骤是把原步骤换成 [新步骤, 原步骤] 或 [原步骤, 新步骤]
   if (!Number.isInteger(index) || index < 0 || !expect.length || !Array.isArray(b.steps))
     throw new BridgeError(t('替换步骤缺参数：index、expect、steps'))
+  const version = typeof doc.schemaVersion === 'number' ? doc.schemaVersion : 1
+  // v1 的文件没有块，只有顶层 steps：给没写 via 的 click / type 补上 via:"code"（和 GameTest 读 v1 时一样）
+  const out = cloneDoc(doc)
+  if (version < 2 && Array.isArray(out.steps))
+    out.steps = (out.steps as Record<string, unknown>[]).map((s) =>
+      (s?.action === 'click' || s?.action === 'type') && !('via' in s) ? { ...s, via: 'code' } : s,
+    )
+  // slot：录制段里的步骤在 steps.N.steps 里（gt-slot/slot.ts）；不给时是顶层 steps
+  const steps = slotOf(out, b.slot)
   // 网页拿到的步骤经过 readScenario 的整理（action 排在最前），这里照样整理再比，字段顺序不同不算改过
   const same = (x: unknown) => JSON.stringify(x && typeof x === 'object' ? { action: '', ...x } : x)
+  const now = slotOf(doc, b.slot)
   if (
-    steps
+    now
       .slice(index, index + expect.length)
       .map(same)
       .join() !== expect.map(same).join()
   )
     throw new BridgeError(t('场景文件在这期间被改过（{p}），刷新后再试', { p: rel }))
-  const version = typeof doc.schemaVersion === 'number' ? doc.schemaVersion : 1
-  const kept =
-    version >= 2
-      ? steps
-      : steps.map((s) => ((s?.action === 'click' || s?.action === 'type') && !('via' in s) ? { ...s, via: 'code' } : s))
-  kept.splice(index, expect.length, ...next)
-  await writeFile(
-    abs,
-    JSON.stringify({ ...doc, schemaVersion: Math.max(version, 2), steps: kept }, null, '\t') + '\n',
-    'utf8',
-  )
-  return { path: rel, steps: kept.length }
+  steps.splice(index, expect.length, ...next)
+  await writeFile(abs, JSON.stringify({ ...out, schemaVersion: Math.max(version, 2) }, null, '\t') + '\n', 'utf8')
+  return { path: rel, steps: Array.isArray(out.steps) ? out.steps.length : 0 }
 }
 
 /**

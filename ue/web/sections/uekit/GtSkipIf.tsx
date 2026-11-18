@@ -50,7 +50,16 @@ export function GtSkipIf({
   edit,
 }: {
   def: StepDef
-  edit?: { project: string; root: string; path: string; index: number; onChanged: () => void; locked?: boolean }
+  edit?: {
+    project: string
+    root: string
+    path: string
+    index: number
+    /** 所在槽（录制段里的步骤是 steps.N.do），不给时是顶层 steps */
+    slot?: string
+    onChanged: () => void
+    locked?: boolean
+  }
 }) {
   const { state } = useUe()
   const { ui } = h()
@@ -68,8 +77,8 @@ export function GtSkipIf({
   const [also, setAlso] = useState(String(skip?.also ?? 0))
   useEffect(() => setAlso(String(skip?.also ?? 0)), [skip?.also])
   const skipKey = JSON.stringify(skip ?? null)
-  useEffect(() => setCheck(undefined), [skipKey, edit?.index])
-  useEffect(() => setQuick(undefined), [skipKey, edit?.index])
+  useEffect(() => setCheck(undefined), [skipKey, edit?.index, edit?.slot])
+  useEffect(() => setQuick(undefined), [skipKey, edit?.index, edit?.slot])
   const off = !edit || edit.locked || !!busy || !supported
 
   const save = (next: SkipIf | undefined, done: string) =>

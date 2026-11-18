@@ -12,7 +12,7 @@ export function GtMoveView(o: {
   def?: StepDef
   payload?: Record<string, unknown>
   /** 给了才能改「回放怎么走」：场景文件的位置和这一步的下标 */
-  edit?: { project: string; root: string; path: string; index: number; onChanged: () => void }
+  edit?: { project: string; root: string; path: string; index: number; slot?: string; onChanged: () => void }
 }) {
   const { def } = o
   const p = (o.payload ?? {}) as MovePayload
@@ -105,6 +105,7 @@ function ViaPicker({ def, edit }: { def: StepDef; edit: NonNullable<Parameters<t
         root: edit.root,
         path: edit.path,
         action: 'replace',
+        ...(edit.slot && edit.slot !== 'steps' ? { slot: edit.slot } : {}),
         index: edit.index,
         expect: [def],
         steps: [step],

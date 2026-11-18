@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.33.2",
+  "version": "0.33.3",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -168,8 +168,8 @@
       "type": "boolean",
       "group": "GameTest 录制",
       "label": "录完装成一个录制段",
-      "desc": "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页的逐步工具（换标识、转成控件步骤、从这步运行）只认平铺的步骤，要用它们就别开",
-      "default": false
+      "desc": "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页里段里的每一步照样能换标识、设跳过条件、从这步运行",
+      "default": true
     },
     {
       "key": "gtAskKey",
