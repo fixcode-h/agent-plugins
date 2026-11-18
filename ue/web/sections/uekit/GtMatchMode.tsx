@@ -1,14 +1,28 @@
 import { Check, ListTree, Pencil, ScanSearch } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { op, ppost, useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { Badge } from '../../ui.tsx'
-import { applyKey, keyOf, showValue, sourceLabel, type KeyCand, type PreviewResult, type StepKey } from './gt-key.ts'
+import { editStep, planListEdits, type MatchChoice } from './gt-key-batch.ts'
+import { saveKeyRule } from './gt-key-rules-io.ts'
+import {
+  byLabel,
+  fieldsOfCond,
+  keyOf,
+  listIdOf,
+  showValue,
+  sourceLabel,
+  type KeyCand,
+  type PreviewResult,
+  type StepKey,
+} from './gt-key.ts'
 import { hintOf, isPositional } from './gt-steps.ts'
 import { GtKeyFields } from './GtKeyFields.tsx'
+import type { GtScenarioFile } from './GtRun.tsx'
 import type { StepDef } from './GtStepDetail.tsx'
 
 type Mode = 'key' | 'text' | 'index'
+const EMPTY = { from: '', base: '', pos: '', by: '' }
 
 /**
  * 步骤详情「控件」里的「回放怎么认」（效果图 3）。
@@ -27,43 +41,101 @@ export function GtMatchMode(o: {
 }) {
   const { busy, run } = useAction()
   const [fields, setFields] = useState(false)
+  // 同一列表的其他步骤一起改、记成规则：默认都勾上，选一次就别再一步步改（用户 2026-11-18）
+  const [together, setTogether] = useState(true)
+  const [remember, setRemember] = useState(true)
+  const [siblings, setSiblings] = useState(0)
   const hint = hintOf(o.def)
   const key = keyOf(hint as Record<string, unknown> | undefined)
   const target = typeof o.def.target === 'string' ? o.def.target : ''
+  const listId = key ? listIdOf(key) : ''
+
+  // 同一列表还有几步：场景文件里数（只为显示「其他 N 步」）
+  useEffect(() => {
+    if (!listId) return setSiblings(0)
+    let alive = true
+    void ppost<GtScenarioFile>(o.project, 'ext/gt/scenario', { root: o.root, path: o.path })
+      .then((f) => {
+        const n = f.steps.filter(
+          (s, i) => i !== o.index && listIdOf(keyOf(s.hint as Record<string, unknown> | undefined) ?? EMPTY) === listId,
+        ).length
+        if (alive) setSiblings(n)
+      })
+      .catch(() => alive && setSiblings(0))
+    return () => {
+      alive = false
+    }
+  }, [o.project, o.root, o.path, o.index, listId])
+
   if (!key && (!hint?.text || !isPositional(target))) return null
   const value: Mode = key?.cond ? 'key' : hint?.byIndex ? 'index' : 'text'
 
-  /** 写回场景：target 和 hint 一起换 */
-  const save = (nextTarget: string, nextHint: Record<string, unknown>, done: string) =>
+  /** 写回场景：这一步（和勾了时同一列表的其他步骤）一起写，再按需存规则 */
+  const save = (
+    step: Record<string, unknown>,
+    choice: MatchChoice | undefined,
+    cond: string | undefined,
+    done: string,
+  ) =>
     run('match', async () => {
-      const step = { ...o.def, target: nextTarget, hint: nextHint }
-      await ppost(o.project, 'ext/gt/file', {
-        root: o.root,
-        path: o.path,
-        action: 'replace',
-        index: o.index,
-        expect: [o.def],
-        steps: [step],
-      })
-      h().toast.success(done)
+      const { toast } = h()
+      let extra = ''
+      if (key && choice && together && siblings) {
+        // 现读一遍：expect 要和磁盘上的一致
+        const f = await ppost<GtScenarioFile>(o.project, 'ext/gt/scenario', { root: o.root, path: o.path })
+        const plan = planListEdits(f.steps, o.index, key, choice)
+        await ppost(o.project, 'ext/gt/file', {
+          root: o.root,
+          path: o.path,
+          action: 'replaceMany',
+          edits: [{ index: o.index, expect: o.def, step }, ...plan.edits],
+        })
+        extra = plan.skipped.length
+          ? t('同一列表另外改了 {n} 步，第 {s} 步录制时没存这个字段，没改', {
+              n: plan.edits.length,
+              s: plan.skipped.map((i) => i + 1).join('、'),
+            })
+          : t('同一列表另外改了 {n} 步', { n: plan.edits.length })
+      } else {
+        await ppost(o.project, 'ext/gt/file', {
+          root: o.root,
+          path: o.path,
+          action: 'replace',
+          index: o.index,
+          expect: [o.def],
+          steps: [step],
+        })
+      }
+      if (key && remember && cond && key.entry) {
+        try {
+          await saveKeyRule(o.project, o.root, { entry: key.entry, container: key.base, by: fieldsOfCond(cond) })
+        } catch (e) {
+          toast.error(t('规则没存上：{e}', { e: (e as Error).message }))
+        }
+      }
+      toast.success(extra ? `${done}；${extra}` : done)
       o.onChanged()
     })
 
   /** 换认法：按标识时 cond 必填；按位置（文字 / 第几个）时 cond 空 */
   const switchTo = (mode: Mode, cond?: string) => {
-    const rest: Record<string, unknown> = { ...hint }
-    delete rest.byIndex
     if (!key) {
       if (mode === value) return
-      return save(target, mode === 'index' ? { ...rest, byIndex: true } : rest, doneText(mode))
+      const rest: Record<string, unknown> = { ...hint }
+      delete rest.byIndex
+      return save(
+        { ...o.def, hint: mode === 'index' ? { ...rest, byIndex: true } : rest },
+        undefined,
+        undefined,
+        doneText(mode),
+      )
     }
     const c = mode === 'key' ? cond : undefined
     if (mode === 'key' && !c) return setFields(true)
-    const next = applyKey(target, key, c)
-    if (!next) return h().toast.error(t('这一步的 target 改过了，和录制时对不上：直接改 target 的方括号'))
-    const nextKey: StepKey = { ...key, from: next.from, cond: c, by: mode === 'key' ? 'user' : mode }
-    if (!c) delete nextKey.cond
-    save(next.target, { ...rest, key: nextKey, ...(mode === 'index' ? { byIndex: true } : {}) }, doneText(mode))
+    const choice: MatchChoice = mode === 'key' ? { mode, fields: fieldsOfCond(c ?? '') } : { mode }
+    const step = editStep(o.def, key, choice, c)
+    if (!step) return h().toast.error(t('这一步的 target 改过了，和录制时对不上：直接改 target 的方括号'))
+    save(step, choice, c, doneText(mode))
   }
 
   const { ui } = h()
@@ -99,6 +171,30 @@ export function GtMatchMode(o: {
         </p>
       )}
       {key && <OtherCands k={key} busy={!!busy} onPick={(c) => switchTo('key', c)} />}
+      {key && (
+        <div className="ue:flex ue:flex-col ue:gap-1">
+          {siblings > 0 && (
+            <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+              <input
+                type="checkbox"
+                className="ue:accent-accent"
+                checked={together}
+                onChange={(e) => setTogether(e.target.checked)}
+              />
+              {t('换认法时，同一列表的其他 {n} 步一起改', { n: siblings })}
+            </label>
+          )}
+          <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+            <input
+              type="checkbox"
+              className="ue:accent-accent"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+            />
+            {t('按字段认时记成规则，以后录到 {e} 直接这样认', { e: key.entry || t('这类条目') })}
+          </label>
+        </div>
+      )}
       {fields && key && (
         <FieldsDialog
           project={o.project}
@@ -176,14 +272,6 @@ function KeyCard({
       </div>
     </div>
   )
-}
-
-function byLabel(by: string) {
-  if (by === 'auto') return t('录制时自动挑的')
-  if (by === 'rule') return t('按规则')
-  if (by === 'user') return t('你选的')
-  if (by === 'pending') return t('待定')
-  return by
 }
 
 /** 录制时的其他候选（hint.key.cands）：游戏不用开着也能换 */

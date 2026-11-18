@@ -19,6 +19,7 @@ import {
   fieldsOfCond,
   showValue,
   sourceLabel,
+  type KeyAnswer,
   type KeyAsk,
   type KeyCand,
   type PreviewResult,
@@ -31,15 +32,20 @@ import { ShotImage } from './GtRecordShot.tsx'
  * 暂停游戏推 gt.record { phase: 'ask' }，这里弹窗。左边是按下那一刻的截图和「被点的 → 条目 → 容器」，
  * 右边「推荐」列打好分的候选，「全部字段」可以勾几个组合；选好后 gt.record.key 改写这一步并继续游戏。
  * 关掉弹窗 = 先跳过（这一步保持待定，录完在步骤详情里再定），不让游戏一直停着没人管。
+ * edit：录制中从步骤列表点开、改前面某一步（游戏没停，关掉 = 不改）。答过的认法 GameTest 1.5.0 起记在这次录制里，
+ * 同一列表后面的条目直接沿用；勾「同一列表的都改」时这次录制里已录的同列表步骤一起改。
  */
 export function GtKeyAsk({
   project,
   ask,
   timeoutSec,
   onDone,
+  edit,
 }: {
   project: string
   ask: KeyAsk
+  /** 录制中改前面的某一步：不暂停、不倒计时，关掉不改 */
+  edit?: boolean
   /** 设置里的自动继续秒数，0 = 一直等 */
   timeoutSec?: number
   onDone: () => void
@@ -54,12 +60,14 @@ export function GtKeyAsk({
     const first = key.cond || cands.find((c) => c.unique && !c.changed)?.cond
     return first ? [first] : []
   })
-  const [rule, setRule] = useState(false)
+  // 默认记成规则、同一列表一起改：选一次就别再问（用户 2026-11-18）
+  const [rule, setRule] = useState(true)
+  const [all, setAll] = useState(true)
   const [preview, setPreview] = useState<PreviewResult>()
   const [err, setErr] = useState('')
   const cond = picked.join(',')
   const rewritten = cond ? applyKey(ask.target, key, cond) : undefined
-  const left = useCountdown(timeoutSec, ask.pausedSec)
+  const left = useCountdown(edit ? undefined : timeoutSec, ask.pausedSec)
   const entry = key.entry || ask.entryName || t('条目')
 
   useEffect(() => setPreview(undefined), [cond])
@@ -68,15 +76,24 @@ export function GtKeyAsk({
     run('answer', async () => {
       setErr('')
       try {
-        await op(project, 'gt.record.key', { step: ask.step, resume: true, ...body })
-        toast.success(done)
+        const r = await op<KeyAnswer>(project, 'gt.record.key', {
+          step: ask.step,
+          resume: !edit,
+          ...(all && body.mode !== 'skip' ? { all: true } : {}),
+          ...body,
+        })
+        toast.success(withApplied(done, r))
         onDone()
       } catch (e) {
         setErr((e as Error).message)
       }
     })
   const accept = () =>
-    answer({ cond, rule: rule || undefined }, rule ? t('已按它认，以后同类条目也这样认') : t('已按它认，游戏继续'))
+    answer(
+      { cond, rule: rule || undefined },
+      rule ? t('已按它认，以后同类条目也这样认') : edit ? t('已改好这一步') : t('已按它认，游戏继续'),
+    )
+  const close = () => (edit ? onDone() : answer({ mode: 'skip' }, t('先跳过，这一步录完再定')))
   const look = () =>
     run('preview', async () => {
       setErr('')
@@ -91,43 +108,49 @@ export function GtKeyAsk({
     <ui.Modal
       open
       size="xl"
-      onOpenChange={(o: boolean) => !o && answer({ mode: 'skip' }, t('先跳过，这一步录完再定'))}
-      title={t('这一格怎么认 · 第 {n} 步', { n: ask.step + 1 })}
+      onOpenChange={(o: boolean) => !o && close()}
+      title={edit ? t('改第 {n} 步怎么认', { n: ask.step + 1 }) : t('这一格怎么认 · 第 {n} 步', { n: ask.step + 1 })}
       footer={
         <>
           <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-footnote ue:text-subtle">
-            {t('游戏里按 Alt+K 直接接受推荐')}
+            {edit ? '' : t('游戏里按 Alt+K 直接接受推荐')}
           </span>
           <ui.Button variant="ghost" disabled={!!busy} onClick={() => answer({ mode: 'index' }, t('这一步按位置认'))}>
             {t('按位置（不推荐）')}
           </ui.Button>
-          <ui.Button
-            variant="secondary"
-            disabled={!!busy}
-            onClick={() => answer({ mode: 'skip' }, t('先跳过，这一步录完再定'))}
-          >
-            {t('先跳过，录完再定')}
+          <ui.Button variant="secondary" disabled={!!busy} onClick={close}>
+            {edit ? t('取消') : t('先跳过，录完再定')}
           </ui.Button>
           <ui.Button disabled={!!busy || !cond} onClick={accept}>
-            <Play className="ue:h-3.5 ue:w-3.5" /> {t('按它认并继续')}
+            {edit ? (
+              <>
+                <Check className="ue:h-3.5 ue:w-3.5" /> {t('改好')}
+              </>
+            ) : (
+              <>
+                <Play className="ue:h-3.5 ue:w-3.5" /> {t('按它认并继续')}
+              </>
+            )}
           </ui.Button>
         </>
       }
     >
-      <Note
-        action={
-          left !== undefined && (
-            <span className="ue:shrink-0 ue:tabular-nums ue:text-warning">
-              {t('{t} 后自动继续', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}
-            </span>
-          )
-        }
-      >
-        <span className="ue:inline-flex ue:items-center ue:gap-1.5">
-          <Pause className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
-          {ask.gamePaused === false ? t('等你选好再继续录制（游戏原本就停着）') : t('游戏已暂停，选好后继续录制')}
-        </span>
-      </Note>
+      {!edit && (
+        <Note
+          action={
+            left !== undefined && (
+              <span className="ue:shrink-0 ue:tabular-nums ue:text-warning">
+                {t('{t} 后自动继续', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}
+              </span>
+            )
+          }
+        >
+          <span className="ue:inline-flex ue:items-center ue:gap-1.5">
+            <Pause className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
+            {ask.gamePaused === false ? t('等你选好再继续录制（游戏原本就停着）') : t('游戏已暂停，选好后继续录制')}
+          </span>
+        </Note>
+      )}
       <div className="ue:grid ue:min-h-0 ue:gap-4 ue:md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <Chain project={project} ask={ask} entry={entry} />
         <div className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-col ue:gap-3">
@@ -194,6 +217,18 @@ export function GtKeyAsk({
             <span className="ue:min-w-0">
               {t('以后 {entry} 的条目都按 {by} 认，不再问', { entry, by: cond ? fieldsOfCond(cond).join(' + ') : '…' })}
               <span className="ue:ml-1.5 ue:text-subtle">{t('（存进运行设置）')}</span>
+            </span>
+          </label>
+          <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+            <input
+              type="checkbox"
+              className="ue:accent-accent"
+              checked={all}
+              onChange={(e) => setAll(e.target.checked)}
+            />
+            <span className="ue:min-w-0">
+              {t('这次录制里同一列表已录的步骤也改成这样')}
+              <span className="ue:ml-1.5 ue:text-subtle">{t('（后面再点这个列表不再问）')}</span>
             </span>
           </label>
           <ErrorText>{err}</ErrorText>
@@ -324,4 +359,16 @@ function useCountdown(timeoutSec: number | undefined, pausedSec: number | undefi
   }, [timeoutSec])
   if (!timeoutSec) return undefined
   return Math.max(0, Math.round(timeoutSec - (now - start) / 1000))
+}
+
+/** 答完的提示：同一列表另外改了几步、哪几步改不了 */
+function withApplied(done: string, r: KeyAnswer) {
+  const parts = [done]
+  if (r.applied) parts.push(t('同一列表另外改了 {n} 步', { n: r.applied }))
+  if (r.skipped?.length)
+    parts.push(
+      t('第 {s} 步改不了：{why}', { s: r.skipped.map((x) => x.step + 1).join('、'), why: r.skipped[0]?.why ?? '' }),
+    )
+  if (r.ruleError) parts.push(t('规则没存上：{e}', { e: r.ruleError }))
+  return parts.join('；')
 }
