@@ -273,7 +273,7 @@ export function GameTest() {
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
         name: recName.trim() || t('新录制'),
         keepPace,
-        shots: shotsArg(),
+        shots: shotsArg(state?.extensions?.find((x) => x.name === 'GameTest')?.version),
         ...keyAskArgs(),
       })
       setRec({ ...r, last: [] })

@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.21.3",
+  "version": "0.22.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -65,29 +65,59 @@
       "type": "boolean",
       "group": "GameTest 录制",
       "label": "录制时截图",
-      "desc": "每次点界面截一小块（被点的控件描红框），用来认按钮上的字、给 AI 整理看；存在项目的 Saved/GameTest/shots，不进版本库",
+      "desc": "每次点界面截下被点的控件（描红框），用来认按钮上的字、给 AI 整理看；存在项目的 Saved/GameTest/shots，不进版本库",
       "default": true
     },
     {
-      "key": "gtShotPad",
+      "key": "gtShotExpand",
+      "type": "boolean",
+      "group": "GameTest 录制",
+      "label": "截图外扩",
+      "desc": "关着时只截被点的控件，认字只看控件里的字；打开后按下面的比例往外多截一圈，带上周围的界面（需要 GameTest 1.4.2，旧版按左右、上下里较大的那个比例）",
+      "default": false
+    },
+    {
+      "key": "gtShotPadX",
       "type": "number",
       "group": "GameTest 录制",
-      "label": "往外多截",
-      "desc": "按控件的宽高往外扩这么多比例，带上周围的界面",
+      "label": "左右外扩比例",
+      "desc": "左右每边多截控件宽度的这么多（开了截图外扩才用）",
+      "default": 20,
+      "min": 0,
+      "max": 300,
+      "unit": "%"
+    },
+    {
+      "key": "gtShotPadXMax",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "左右外扩上限",
+      "desc": "整行宽的条目按比例会扩出去一大片，左右每边最多扩这么多",
+      "default": 80,
+      "min": 0,
+      "max": 2000,
+      "unit": "像素"
+    },
+    {
+      "key": "gtShotPadY",
+      "type": "number",
+      "group": "GameTest 录制",
+      "label": "上下外扩比例",
+      "desc": "上下每边多截控件高度的这么多，和左右分开算：细长条上下只扩一点",
       "default": 50,
       "min": 0,
       "max": 300,
       "unit": "%"
     },
     {
-      "key": "gtShotPadMax",
+      "key": "gtShotPadYMax",
       "type": "number",
       "group": "GameTest 录制",
-      "label": "外扩上限",
-      "desc": "大控件按比例外扩太多时，每边最多扩这么多",
-      "default": 160,
+      "label": "上下外扩上限",
+      "desc": "上下每边最多扩这么多",
+      "default": 40,
       "min": 0,
-      "max": 1000,
+      "max": 2000,
       "unit": "像素"
     },
     {
