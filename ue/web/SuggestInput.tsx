@@ -32,6 +32,7 @@ export function SuggestInput({
   inputClassName,
   status,
   empty,
+  display,
 }: {
   value: string
   onChange: (v: string) => void
@@ -43,10 +44,13 @@ export function SuggestInput({
   status?: ReactNode
   /** 一个候选都没有时（还没建索引）的说明 */
   empty?: string
+  /** 没在编辑时框里显示成什么（例如把 `WBP_X:.` 显示成「WBP_X（整个界面）」）；一点进去就是原文 */
+  display?: (v: string) => string
 }) {
   const { ui, cn } = h()
   const [open, setOpen] = useState(false)
   const [act, setAct] = useState(0)
+  const [focused, setFocused] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const { rows, total } = open ? suggest(value) : { rows: [], total: 0 }
@@ -75,11 +79,16 @@ export function SuggestInput({
         size="sm"
         className={cn('ue:w-full', inputClassName)}
         placeholder={placeholder}
-        value={value}
+        value={!focused && display ? display(value) : value}
+        title={display && display(value) !== value ? value : undefined}
         role="combobox"
         aria-expanded={open}
         aria-autocomplete="list"
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setFocused(true)
+          setOpen(true)
+        }}
+        onBlur={() => setFocused(false)}
         onChange={(e: { target: { value: string } }) => {
           onChange(e.target.value)
           setOpen(true)

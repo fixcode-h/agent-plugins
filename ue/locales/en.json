@@ -2611,6 +2611,7 @@
   "录制截图": "Recording screenshots",
   "点的地方": "Clicked area",
   "整个界面": "Whole screen",
+  "{w}（整个界面）": "{w} (whole screen)",
   "认出的字": "Recognized text",
   "这一步叫什么（写进步骤说明）": "Name this step (saved as the step note)",
   "没认出来": "Nothing recognized",

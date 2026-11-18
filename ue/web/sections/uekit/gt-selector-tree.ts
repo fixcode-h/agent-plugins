@@ -38,6 +38,15 @@ const indexOf = (seg: string) => {
   return m ? Number(m[1]) : undefined
 }
 
+/**
+ * `WBP_X:.` 是「整个界面本身」的写法（GameTest 的语法，存盘照旧）：返回界面名，不是这种写法返回 undefined。
+ * 显示时用它把末尾的 `:.` 换成看得懂的话，别让用户看到一个孤零零的点
+ */
+export function wholeScreenOf(target: string | undefined): string | undefined {
+  const m = /^([^:>[\]]*):\.$/.exec((target ?? '').trim())
+  return m ? m[1] || '*' : undefined
+}
+
 export function selectorTree(target: string): SelectorNode[] {
   const s = target.trim()
   if (!s || s.startsWith('@')) return [{ text: s, depth: 0, kind: 'path' }]
@@ -56,7 +65,7 @@ export function selectorTree(target: string): SelectorNode[] {
     }
     splitTop(rest, '>').forEach((hop, h) => {
       splitTop(hop, '/')
-        .filter((seg) => seg !== '')
+        .filter((seg) => seg !== '' && seg !== '.')
         .forEach((seg, k) =>
           nodes.push({ text: seg, depth: depth++, kind: h > 0 && k === 0 ? 'hop' : 'path', index: indexOf(seg) }),
         )

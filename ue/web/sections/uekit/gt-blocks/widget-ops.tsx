@@ -2,6 +2,7 @@ import { PanelTopClose, SquareMousePointer } from 'lucide-react'
 import { blockOf, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { t } from '../../../host.ts'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
+import { selectorLabel } from '../gt-selector-label.ts'
 import { Row, TextField } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
 
@@ -27,7 +28,7 @@ registerBlockUi(
     title: () => t('关掉界面'),
     icon: PanelTopClose,
     tone: 'subtle',
-    summary: (s) => t('关掉 {w}', { w: String(s.target ?? '') }),
+    summary: (s) => t('关掉 {w}', { w: selectorLabel(String(s.target ?? '')) }),
     Inspector,
   },
   [
@@ -48,7 +49,7 @@ registerBlockUi(
     title: () => t('调界面函数'),
     icon: SquareMousePointer,
     tone: 'subtle',
-    summary: (s) => `${String(s.target ?? '')} · ${String(s.function ?? '')}()`,
+    summary: (s) => `${selectorLabel(String(s.target ?? ''))} · ${String(s.function ?? '')}()`,
     Inspector,
   },
   [

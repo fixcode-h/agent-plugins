@@ -3,6 +3,8 @@ import { loopModeOf, walkChecks, countChecks, type GtStep } from '../../../../sh
 import { t } from '../../../host.ts'
 import { blockUi, TONE_TEXT } from '../gt-blocks/index.ts'
 import { stepTitle } from '../gt-step-title.ts'
+import { selectorLabel } from '../gt-selector-label.ts'
+import { wholeScreenOf } from '../gt-selector-tree.ts'
 
 /**
  * 流程图节点上一步「长什么样」：图标、标题、标题下的一行小字（定稿效果图 1、6）。
@@ -19,7 +21,8 @@ const table = new Map<string, StepFace>()
 export const registerFace = (action: string, face: StepFace) => void table.set(action, face)
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
-const lastSeg = (sel: string) => sel.split(/[/>]/).filter(Boolean).pop() ?? sel
+const lastSeg = (sel: string) => wholeScreenOf(sel) ?? sel.split(/[/>]/).filter(Boolean).pop() ?? sel
+const sel = (v: unknown) => selectorLabel(str(v))
 
 /** 条件的一句话：第一项的目标和判断，多项时写「等 N 项」 */
 export function condText(cond: unknown): string {
@@ -76,7 +79,7 @@ registerFace('widget.close', {
 })
 registerFace('widget.call', {
   title: (s) => t('调界面函数 {f}', { f: str(s.function) }),
-  sub: (s) => str(s.target),
+  sub: (s) => sel(s.target),
 })
 
 export function faceOf(s: GtStep): { icon: LucideIcon; tone: string; title: string; sub: string } {
@@ -85,7 +88,7 @@ export function faceOf(s: GtStep): { icon: LucideIcon; tone: string; title: stri
   // 图标和色调取块 UI 注册表（gt-blocks），和列表视图、插入菜单同一张表，不在这里另配一套
   const ui = blockUi(s.action)
   const look = { icon: ui.icon, tone: TONE_TEXT[ui.tone] }
-  if (!f) return { ...look, title: note || stepTitle(s), sub: str(s.target) }
+  if (!f) return { ...look, title: note || stepTitle(s), sub: sel(s.target) }
   return { ...look, title: note || f.title(s), sub: f.sub?.(s) ?? '' }
 }
 

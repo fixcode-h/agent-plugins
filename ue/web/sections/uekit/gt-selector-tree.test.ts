@@ -30,3 +30,14 @@ test('方括号里的 / 和 > 不切，>> 之后是 Slate', () => {
 test('句柄原样', () => {
   assert.deepEqual(selectorTree('@btn'), [{ text: '@btn', depth: 0, kind: 'path' }])
 })
+
+test('整个界面 WBP_X:. 只显示界面名，不出孤零零的点', async () => {
+  const { wholeScreenOf } = await import('./gt-selector-tree.ts')
+  assert.equal(wholeScreenOf('WBP_ForgeSample:.'), 'WBP_ForgeSample')
+  assert.equal(wholeScreenOf('WBP_A:Root/Btn'), undefined)
+  assert.equal(wholeScreenOf('WBP_A:Root>.'), undefined)
+  assert.deepEqual(
+    selectorTree('WBP_ForgeSample:.').map((x) => [x.text, x.kind]),
+    [['WBP_ForgeSample', 'screen']],
+  )
+})
