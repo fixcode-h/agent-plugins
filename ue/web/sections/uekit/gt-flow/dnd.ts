@@ -20,4 +20,9 @@ export function readDrop(e: { dataTransfer: DataTransfer | null }): GtStep[] | u
   }
 }
 
+/** 拖的时候按着 Alt：脚本库拖进来的「调用脚本」展开成一份副本（拖动开始时按着、或松手时按着都算） */
+export const GT_COPY_MIME = 'application/x-gt-copy'
+export const wantsCopy = (e: { altKey: boolean; dataTransfer: DataTransfer | null }) =>
+  e.altKey || !!e.dataTransfer?.types.includes(GT_COPY_MIME)
+
 export const canDrop = (e: { dataTransfer: DataTransfer | null }) => !!e.dataTransfer?.types.includes(GT_STEPS_MIME)

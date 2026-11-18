@@ -1,7 +1,7 @@
 import { ChevronRight, CircleDot, Folder, FolderOpen, GripVertical, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { h, t } from '../../../../host.ts'
-import { GT_STEPS_MIME } from '../../gt-flow/dnd.ts'
+import { GT_COPY_MIME, GT_STEPS_MIME } from '../../gt-flow/dnd.ts'
 import type { EditRailProps } from './EditRail.tsx'
 
 type Scenario = EditRailProps['scenarios'][number]
@@ -17,7 +17,7 @@ const scriptOf = (rel: string) => norm(rel).replace(/\.json$/i, '')
 const isRecorded = (s: Scenario) => !!s.tags?.includes('recorded')
 
 /**
- * 脚本库（效果图 1 左栏下半）：按文件夹分组的场景，点一下打开，拖进流程图就是一步「调用脚本」。
+ * 脚本库（效果图 1 左栏下半）：按文件夹分组的场景，点一下打开，拖进流程图就是一步「调用脚本」，按住 Alt 拖是一份副本（步骤段）。
  * 只分一层（文件夹按完整相对路径当组名）：左栏窄，嵌套缩进放不下；当前脚本不能拖（自己调自己）
  */
 export function ScriptLib({
@@ -62,10 +62,11 @@ export function ScriptLib({
         type="button"
         role="treeitem"
         aria-selected={self}
-        title={self ? t('正在编辑的脚本，不能调用自己') : t('拖进流程图就是「调用脚本」')}
+        title={self ? t('正在编辑的脚本，不能调用自己') : t('拖进流程图就是「调用脚本」；按住 Alt 拖是插一份副本')}
         draggable={!self}
         onDragStart={(e) => {
           e.dataTransfer.setData(GT_STEPS_MIME, JSON.stringify([{ action: 'call', script: scriptOf(s.relativePath) }]))
+          if (e.altKey) e.dataTransfer.setData(GT_COPY_MIME, '1')
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={() => onOpen(s.relativePath)}

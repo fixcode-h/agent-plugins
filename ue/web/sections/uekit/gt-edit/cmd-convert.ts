@@ -1,18 +1,9 @@
 import { ShieldPlus, UnfoldVertical } from 'lucide-react'
-import {
-  ensureIds,
-  getAt,
-  parseScript,
-  remove,
-  replace,
-  walk,
-  type GtScript,
-  type GtStep,
-} from '../../../../shared/gt-script/index.ts'
-import { ppost } from '../../../api.ts'
+import { ensureIds, getAt, remove, replace, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { debugSession } from '../gt-debug/session.ts'
 import { blankGuard } from '../gt-guards/model.ts'
+import { callCopy } from './call-copy.ts'
 import { registerCommand, roots, type CmdCtx } from './commands.ts'
 
 /**
@@ -47,51 +38,18 @@ registerCommand(
   'wrap-loop',
 )
 
-/** 子脚本的步骤去掉 id：副本里的 id 由 ensureIds 重新发，不和原脚本、别的副本撞 */
-function stripIds(steps: GtStep[]): GtStep[] {
-  const tmp: GtScript = { steps: structuredClone(steps) }
-  walk(tmp, (e) => void delete e.step.id)
-  return tmp.steps ?? []
-}
-
 async function inlineCall(c: CmdCtx) {
   const path = c.selected[0]
-  const call = getAt(c.doc, path) as GtStep
-  const s = debugSession()
-  const script = typeof call.script === 'string' ? call.script : ''
-  if (!s || !script) return void h().toast.error(t('先在检查器里填要调用的脚本'))
-  let sub: GtScript
+  let made: Awaited<ReturnType<typeof callCopy>>
   try {
-    const file = /\.json$/i.test(script) ? script : `${script}.json`
-    const r = await ppost<{ text: string }>(s.project, 'ext/gt/file', { root: s.root, path: file, action: 'raw' })
-    const p = parseScript(r.text)
-    if ('error' in p) throw new Error(p.error)
-    sub = p.doc
+    made = await callCopy(getAt(c.doc, path) as GtStep)
   } catch (e) {
-    return void h().toast.error(t('读不到 {s}：{e}', { s: script, e: (e as Error).message }))
+    return void h().toast.error((e as Error).message)
   }
-  const given = (call.with && typeof call.with === 'object' ? call.with : {}) as Record<string, unknown>
-  // 传进来的参数、没传的默认值都写成段开头的设变量，副本里的 $名字 照旧能用
-  const sets: GtStep[] = Object.entries(sub.params ?? {}).map(([k, p]) => ({
-    action: 'set',
-    var: k,
-    value: k in given ? given[k] : (p.default ?? ''),
-  }))
-  const group: GtStep = {
-    action: 'group',
-    name: t('{s}（展开的副本）', { s: sub.name || script }),
-    do: [...sets, ...stripIds(sub.steps ?? [])],
-    ...(Array.isArray(sub.guards) && sub.guards.length ? { guards: structuredClone(sub.guards) } : {}),
-  }
-  const r = replace(c.doc, path, group)
+  const r = replace(c.doc, path, made.group)
   if (!r) return
   if (c.apply(ensureIds(r.doc))) c.select([path])
-  let warn = ''
-  walk({ steps: group.do as GtStep[] }, (e) => {
-    if (e.step.action === 'return') warn = t('副本里有「结束脚本」：展开后会结束整个脚本，不只是这一段')
-  })
-  if (call.saveAs) warn = warn || t('调用的返回值（存到 ${v}）展开后没有了', { v: String(call.saveAs) })
-  if (warn) h().toast.error(warn)
+  if (made.warn) h().toast.error(made.warn)
 }
 
 registerCommand(
