@@ -6,7 +6,8 @@ import type { StepDef } from './GtStepDetail.tsx'
  * 带上网页看到的原步骤核对，文件在这期间被重新录制或 Agent 改过就报错让刷新，不按行号硬改
  */
 export function patchStep(
-  o: { project: string; root: string; path: string },
+  /** slot：所在槽的路径（录制段里的步骤是 steps.N.do），不给时是顶层 steps */
+  o: { project: string; root: string; path: string; slot?: string },
   index: number,
   def: StepDef,
   patch: Record<string, unknown>,
@@ -20,6 +21,7 @@ export function patchStep(
     root: o.root,
     path: o.path,
     action: 'replace',
+    ...(o.slot && o.slot !== 'steps' ? { slot: o.slot } : {}),
     index,
     expect: [def],
     steps: [next],

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { BridgeError } from '../instances.ts'
 import { t } from '../util.ts'
 import { insideProject, within } from './gt-paths.ts'
+import { cloneDoc, placeOfEdit, slotOf } from './gt-slot/slot.ts'
 
 /**
  * 列表、格子条目「怎么认」（GameTest 1.4.0 起）在面板侧读写文件的部分：
@@ -75,26 +76,31 @@ export async function keyRulesAction(projectRoot: string, b: Record<string, unkn
 
 /** 场景文件里一次改好几步：edits = [{index, expect, step}]，任何一步和 expect 对不上就整个不写 */
 export async function replaceMany(abs: string, rel: string, doc: Record<string, unknown>, b: Record<string, unknown>) {
-  const steps = Array.isArray(doc.steps) ? [...(doc.steps as Record<string, unknown>[])] : []
   const edits = Array.isArray(b.edits) ? (b.edits as Record<string, unknown>[]) : []
   if (!edits.length) throw new BridgeError(t('缺 edits'))
+  // 一份拷贝上改完再写：几步里有一步对不上就整份不写
+  const out = cloneDoc(doc)
   // 和 replaceSteps 一样：网页拿到的步骤整理过（action 排最前），字段顺序不同不算改过
   const same = (x: unknown) => JSON.stringify(x && typeof x === 'object' ? { action: '', ...x } : x)
   for (const e of edits) {
-    const index = Number(e.index)
-    if (!Number.isInteger(index) || index < 0 || index >= steps.length || !e.step || typeof e.step !== 'object')
+    // path：录制段里的步骤（steps.1.steps.3）；旧网页只给顶层序号 index
+    const at = placeOfEdit(e)
+    const steps = slotOf(out, at.slot)
+    if (
+      !Number.isInteger(at.index) ||
+      at.index < 0 ||
+      at.index >= steps.length ||
+      !e.step ||
+      typeof e.step !== 'object'
+    )
       throw new BridgeError(t('改步骤缺参数：index、expect、step'))
-    if (same(steps[index]) !== same(e.expect))
+    if (same(steps[at.index]) !== same(e.expect))
       throw new BridgeError(t('场景文件在这期间被改过（{p}），刷新后再试', { p: rel }))
-    steps[index] = e.step as Record<string, unknown>
+    steps[at.index] = e.step as Record<string, unknown>
   }
   const version = typeof doc.schemaVersion === 'number' ? doc.schemaVersion : 1
-  await writeFile(
-    abs,
-    JSON.stringify({ ...doc, schemaVersion: Math.max(version, 2), steps }, null, '\t') + '\n',
-    'utf8',
-  )
-  return { path: rel, steps: steps.length, changed: edits.length }
+  await writeFile(abs, JSON.stringify({ ...out, schemaVersion: Math.max(version, 2) }, null, '\t') + '\n', 'utf8')
+  return { path: rel, steps: Array.isArray(out.steps) ? out.steps.length : 0, changed: edits.length }
 }
 
 /** 一个条目的字段缓存最多几十 KB；比这大的多半不是我们写的文件 */

@@ -33,7 +33,7 @@ export function GtStepTools({ row, onRunOne, onRunFrom, onEdit, running }: StepT
   const [locating, setLocating] = useState(false)
   const [found, setFound] = useState<GtResolveItem>()
   // 换了一步，上一步的定位结果不再算数
-  useEffect(() => setFound(undefined), [row.i, target])
+  useEffect(() => setFound(undefined), [row.key, target])
 
   const locate = async () => {
     if (!target) return

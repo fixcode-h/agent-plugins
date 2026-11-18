@@ -3580,7 +3580,7 @@
   "从这里接着录": "Continue recording from here",
   "这一步还没有 id，先存盘再接着录": "This step has no id yet; save first, then continue recording",
   "录完装成一个录制段": "Wrap recordings in a segment",
-  "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页的逐步工具（换标识、转成控件步骤、从这步运行）只认平铺的步骤，要用它们就别开": "Put recorded steps into one step segment, shown as a collapsed recording in the editor (needs GameTest 1.10.0). The per-step tools on the scenario page (change key, convert to control step, run from this step) only work on flat steps, so leave this off if you use them",
+  "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页里段里的每一步照样能换标识、设跳过条件、从这步运行": "Put recorded steps into one step segment, shown as a collapsed recording in the editor (needs GameTest 1.10.0). On the scenario page every step inside the segment still supports changing its key, skip conditions and running from it",
   "取消选中": "Deselect",
   "批量操作": "Bulk actions",
   "在游戏里试": "Try in game",
@@ -3792,5 +3792,10 @@
   "VS {s}": "VS {s}",
   "记录": "History",
   "展开二级面板": "Expand side panel",
-  "测试": "Tests"
+  "测试": "Tests",
+  "删除段里前面所有步骤（{n} 步）": "Delete all earlier steps in this segment ({n})",
+  "删除段里后面所有步骤（{n} 步）": "Delete all later steps in this segment ({n})",
+  "，{u} 次是旧记录、分不出段里哪一步": ", {u} older runs can't tell which step in the segment",
+  "场景里找不到这一段步骤（{s}）：文件可能刚被改过，刷新后再试": "Can't find this group of steps in the scenario ({s}): the file may have just changed, refresh and try again",
+  "步骤路径不对：{p}": "Invalid step path: {p}"
 }

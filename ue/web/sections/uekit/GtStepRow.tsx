@@ -6,11 +6,15 @@ import { keyOf } from './gt-key.ts'
 import { stepTitle } from './gt-step-title.ts'
 import { actionIcon } from './gt-action-icon.ts'
 import { skipLabel, skipOf, skipWith } from './gt-skip.ts'
+import { faceOf } from './gt-flow/faces.tsx'
+import { numOf } from './gt-rows/rows.ts'
+import type { GtStep } from '../../../shared/gt-script/index.ts'
 
 /**
  * GameTest 步骤列表的一行：序号、状态、动作图标、一句中文（stepTitle），右边是耗时。
  * 选择器、hint、参数、结果消息都不在行里，选中后在右边详情看；只留两个要马上看到的标记：
- * 选择器可能不唯一（黄三角）、「核对选择器」的结果（准星 / 红三角）、条目怎么认待定（黄字，GameTest 1.4.0）
+ * 选择器可能不唯一（黄三角）、「核对选择器」的结果（准星 / 红三角）、条目怎么认待定（黄字，GameTest 1.4.0）。
+ * 录制段、如果、循环里的步骤按层缩进，序号带上外层（2.3）；块那一行用流程图同一套的图标和名字（录制段、如果……）
  */
 export function GtStepRow({
   row,
@@ -31,8 +35,9 @@ export function GtStepRow({
 }) {
   const { cn } = h()
   const action = row.def?.action || row.res?.action
-  const Icon = actionIcon(action)
-  const title = stepTitle(row.def, row.res?.action, row.res?.target)
+  const face = row.block && row.def ? faceOf(row.def as GtStep) : undefined
+  const Icon = face?.icon ?? actionIcon(action)
+  const title = face?.title ?? stepTitle(row.def, row.res?.action, row.res?.target)
   const ambiguous = ambiguousOf(row.def)
   // 录制时点在列表条目上、没定下用哪个字段认（GameTest 1.4.0）：标「待定」，详情里「回放怎么认」再定
   const pending = keyOf(row.def?.hint as Record<string, unknown> | undefined)?.by === 'pending'
@@ -47,18 +52,25 @@ export function GtStepRow({
       onContextMenu={onContextMenu}
       aria-selected={selected}
       title={title}
+      // 块里的步骤按层缩进（一层 14px），块行的背景淡一点，看得出段从哪儿开始
+      style={row.depth ? { paddingLeft: 16 + row.depth * 14 } : undefined}
       className={cn(
-        'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[24px_16px_14px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:transition-colors ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
+        'ue:grid ue:h-9 ue:w-full ue:cursor-pointer ue:grid-cols-[minmax(24px,auto)_16px_14px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4 ue:text-left ue:transition-colors ue:hover:bg-sel/50 ue:aria-selected:bg-sel',
+        row.block && 'ue:bg-sel/25',
         status === 'failed' && 'ue:bg-danger/6',
         (dim || status === 'already') && 'ue:opacity-60',
       )}
     >
-      <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{row.i + 1}</span>
+      <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{row.no}</span>
       <StepIcon s={status} live={live} />
       <Icon className="ue:h-3.5 ue:w-3.5 ue:text-subtle" aria-label={action} />
       <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
         <span
-          className={cn('ue:min-w-0 ue:truncate ue:text-body', status === 'failed' ? 'ue:text-danger' : 'ue:text-fg')}
+          className={cn(
+            'ue:min-w-0 ue:truncate ue:text-body',
+            row.block && 'ue:font-medium',
+            status === 'failed' ? 'ue:text-danger' : 'ue:text-fg',
+          )}
         >
           {title}
         </span>
@@ -77,7 +89,7 @@ export function GtStepRow({
         )}
         {status === 'already' ? (
           <span className="ue:shrink-0 ue:text-caption ue:text-success">
-            {along !== undefined ? t('随第 {n} 步', { n: along + 1 }) : t('已达成')}
+            {along !== undefined ? t('随第 {n} 步', { n: numOf(row)(along) }) : t('已达成')}
           </span>
         ) : (
           skip && (

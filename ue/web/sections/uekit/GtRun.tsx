@@ -18,6 +18,9 @@ import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import { Badge, ErrorText } from '../../ui.tsx'
 import { coordClickAt } from './gt-steps.ts'
+import { getAt, parsePath } from '../../../shared/gt-script/index.ts'
+import { placeRows, resultKey, type RowPlace, type RunBase } from './gt-rows/rows.ts'
+import { collectTargets } from './gt-rows/check.ts'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 import { useToWidget } from './gt-convert.ts'
 import { useStepEdit } from './GtStepEdit.tsx'
@@ -104,11 +107,11 @@ export function GtRun({
   root: string
   job?: GtJob
   last?: GtRunSummary
-  /** 这次运行是从场景第几步开始的（「从这一步开始运行」）：结果的 index 加上它才对得上场景里的行 */
-  offset?: number
+  /** 这次运行从哪儿开始（「从这一步开始运行」「只跑这一步」）：结果按它对回场景里的行（gt-rows/rows.ts resultKey） */
+  offset?: RunBase
   onStop: () => void
-  /** 从第 i 步开始跑（右键菜单）、only 时只跑这一步：父组件拿场景文件里的步骤去 gt.run */
-  onRunFrom?: (file: GtScenarioFile, i: number, only?: boolean) => void
+  /** 从这一步开始跑（右键菜单）、only 时只跑这一步：父组件拿场景文件里的步骤（块里的按路径）去 gt.run */
+  onRunFrom?: (file: GtScenarioFile, at: RowPlace, only?: boolean) => void
   /** 场景文件被面板改过（转成控件步骤）：父组件重新要场景列表，步数变了这里会重新读文件 */
   onChanged: () => void
   /** 编辑器没连上（没开或正忙）：报告从磁盘读，核对选择器不能用 */
@@ -147,51 +150,82 @@ export function GtRun({
   const setupResults = useMemo(() => allResults.filter((r) => r.setup), [allResults])
   const results = useMemo(() => allResults.filter((r) => !r.setup), [allResults])
   // 「核对选择器」的结果（gt.resolve，只看这一刻屏上的界面）：按步骤分好，场景文件变了就作废
-  const [check, setCheck] = useState<{ found: number; missing: number; byStep: Map<number, GtResolveItem[]> }>()
+  const [check, setCheck] = useState<{ found: number; missing: number; byStep: Map<string, GtResolveItem[]> }>()
   const [checking, setChecking] = useState(false)
   useEffect(() => setCheck(undefined), [file.data])
   const runCheck = () => {
     setChecking(true)
+    // 选择器由面板从场景里收（录制段里的步骤也收），按顺序给 gt.resolve 的 targets，结果按同样的顺序对回行：
+    // gt.resolve 的 scenario 只看顶层步骤，段里的核对不到
+    const wanted = collectTargets(file.data?.steps ?? [])
     op<{ results?: GtResolveItem[]; found?: number; missing?: number; file?: string }>(project.id, 'gt.resolve', {
-      scenario: scenario.relativePath,
+      targets: wanted.map((w) => w.target),
     })
       .then(async (r) => {
         // 结果太长时 UE 写成文件只回 file：由面板读那份文件
         const full = r.results ? r : await ppost<typeof r>(project.id, 'ext/gt/report', { file: r.file })
-        const byStep = new Map<number, GtResolveItem[]>()
-        for (const x of full.results ?? [])
-          if (x.step !== undefined) byStep.set(x.step, [...(byStep.get(x.step) ?? []), x])
+        const byStep = new Map<string, GtResolveItem[]>()
+        ;(full.results ?? []).forEach((x, k) => {
+          const w = wanted[k]
+          if (!w) return
+          byStep.set(w.key, [...(byStep.get(w.key) ?? []), { ...x, field: w.field }])
+        })
         setCheck({ found: full.found ?? 0, missing: full.missing ?? 0, byStep })
       })
       .catch((e: Error) => toast.error(e.message))
       .finally(() => setChecking(false))
   }
+  // 一行一步，录制段、如果、循环里的步骤也各占一行，按路径认（gt-rows/rows.ts）；结果按路径对回来
   const rows = useMemo(() => {
     const defs = file.data?.steps ?? []
-    const byRow = new Map(results.map((r) => [r.index + offset, r]))
-    const n = Math.max(defs.length, ...[...byRow.keys()].map((k) => k + 1))
-    return Array.from(
-      { length: n },
-      (_, i): StepRow => ({
-        i,
-        def: defs[i],
-        res: byRow.get(i),
-        check: check?.byStep.get(i),
-      }),
-    )
+    const byKey = new Map<string, GtStep>()
+    for (const r of results) {
+      const k = resultKey(r, offset)
+      if (k) byKey.set(k, r)
+    }
+    const out: StepRow[] = placeRows(defs).map((p) => ({
+      ...p,
+      res: byKey.get(p.key),
+      check: check?.byStep.get(p.key),
+    }))
+    // 场景文件在跑完后少了几步：顶层多出来的结果照样列出来（没有场景里写的）
+    const known = new Set(out.map((r) => r.key))
+    for (const [key, res] of byKey) {
+      const m = /^steps\.(\d+)$/.exec(key)
+      if (known.has(key) || !m) continue
+      const i = Number(m[1])
+      out.push({ i, key, slot: 'steps', no: String(i + 1), depth: 0, res })
+    }
+    return out
   }, [file.data, results, offset, check])
-  const [pick, setPick] = useState<number>()
+  const hasBlocks = rows.some((r) => r.depth > 0)
+  const [pick, setPick] = useState<string>()
+  const startKey = typeof offset === 'string' ? offset : `steps.${offset}`
   // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败、没跑过就第一步）
   useEffect(() => {
     const done = rows.filter((r) => r.res)
-    if (running) setPick(done.at(-1)?.i ?? offset)
-    else setPick((done.find((r) => r.res?.status === 'failed') ?? rows[0])?.i)
+    if (running) setPick(done.at(-1)?.key ?? startKey)
+    // 失败的块（段里有一步失败）也记了一条：停在最里面那一步上，不停在块上
+    else
+      setPick(
+        (
+          done.find((r) => r.res?.status === 'failed' && !r.block) ??
+          done.find((r) => r.res?.status === 'failed') ??
+          rows[0]
+        )?.key,
+      )
     // 只在结果数、行数变化时跳
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [running, results.length, rows.length])
-  const row = rows.find((r) => r.i === pick)
+  const row = rows.find((r) => r.key === pick)
   const planned = job?.planned || scenario.steps
-  const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
+  // 正在跑的那一步：最后一条结果的下一行（块行不算，块的结果在块结束时才记）；还没有结果时是起点
+  const liveRow = useMemo(() => {
+    if (!running) return undefined
+    const last = rows.reduce((k, r, idx) => (r.res ? idx : k), -1)
+    if (last < 0) return startKey
+    return rows.slice(last + 1).find((r) => !r.block)?.key
+  }, [running, rows, startKey])
   const toWidget = useToWidget({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
   const stepEdit = useStepEdit({
     project: project.id,
@@ -200,6 +234,11 @@ export function GtRun({
     onDone: onChanged,
     onPick: setPick,
   })
+  /** 一行所在槽的全部步骤（录制段里的是段里的）：插入删除、上移下移、转成控件步骤都在这个槽里做 */
+  const slotSteps = (r: StepRow) => {
+    const arr = file.data ? getAt(file.data, parsePath(r.slot)) : undefined
+    return Array.isArray(arr) ? (arr as StepDef[]) : []
+  }
   const tidy = useGtTidy({
     project: project.id,
     root,
@@ -210,16 +249,16 @@ export function GtRun({
 
   const stepMenu = (e: React.MouseEvent, r: StepRow) => {
     const s = rowSummary(r)
-    const coord = file.data && coordClickAt(file.data.steps, r.i)
+    const coord = file.data && coordClickAt(slotSteps(r), r.i)
     openMenu(e, [
-      { title: t('第 {n} 步 · {a}', { n: r.i + 1, a: r.def?.action || r.res?.action || '?' }) },
+      { title: t('第 {n} 步 · {a}', { n: r.no, a: r.def?.action || r.res?.action || '?' }) },
       onRunFrom &&
         file.data &&
         r.def && {
           label: t('只跑这一步'),
           icon: Play,
           disabled: running,
-          onClick: () => onRunFrom(file.data!, r.i, true),
+          onClick: () => onRunFrom(file.data!, r, true),
         },
       onRunFrom &&
         file.data &&
@@ -227,16 +266,16 @@ export function GtRun({
           label: t('从这一步开始运行'),
           icon: Play,
           disabled: running,
-          onClick: () => onRunFrom(file.data!, r.i),
+          onClick: () => onRunFrom(file.data!, r),
         },
       coord && {
         label: t('转成控件步骤'),
         icon: MousePointerClick,
         disabled: running || !!toWidget.busy,
-        onClick: () => void toWidget.convert(file.data!, coord),
+        onClick: () => void toWidget.convert(slotSteps(r), coord, r.slot),
       },
       'sep',
-      ...(r.def ? stepEdit.menuItems(r.i, file.data?.steps ?? [], running || !!scenario.parseError) : []),
+      ...(r.def ? stepEdit.menuItems(r, slotSteps(r), running || !!scenario.parseError) : []),
       'sep',
       r.def && { label: t('复制这一步（JSON）'), icon: Copy, onClick: () => copyText(JSON.stringify(r.def, null, 2)) },
       s.target && { label: t('复制目标选择器'), icon: Crosshair, onClick: () => copyText(s.target!) },
@@ -361,14 +400,14 @@ export function GtRun({
           <GtSetupRows steps={setupResults} />
           {rows.map((r) => (
             <GtStepRow
-              key={r.i}
+              key={r.key}
               row={r}
-              selected={r.i === pick}
-              live={r.i === liveRow}
+              selected={r.key === pick}
+              live={r.key === liveRow}
               dim={!r.res && (running || !!last)}
-              onClick={() => setPick(r.i)}
+              onClick={() => setPick(r.key)}
               onContextMenu={(e) => {
-                setPick(r.i)
+                setPick(r.key)
                 stepMenu(e, r)
               }}
             />
@@ -379,16 +418,17 @@ export function GtRun({
         {row ? (
           <StepDetail
             row={row}
-            live={row.i === liveRow}
+            live={row.key === liveRow}
             scenario={scenario}
             root={root}
             onChanged={onChanged}
             history={history.data}
+            hasBlocks={hasBlocks}
             tools={{
               running,
-              onRunOne: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row.i, true) : undefined,
-              onRunFrom: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row.i) : undefined,
-              onEdit: row.def && !scenario.parseError ? () => stepEdit.startEdit(row.i, row.def!) : undefined,
+              onRunOne: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row, true) : undefined,
+              onRunFrom: onRunFrom && file.data && row.def ? () => onRunFrom(file.data!, row) : undefined,
+              onEdit: row.def && !scenario.parseError ? () => stepEdit.startEdit(row, row.def!) : undefined,
             }}
           />
         ) : null}

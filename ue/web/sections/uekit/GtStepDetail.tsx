@@ -31,6 +31,7 @@ import { GtStepHistory, type GtHistoryRun } from './GtStepHistory.tsx'
 import { canSkip, GtSkipIf } from './GtSkipIf.tsx'
 import { GtSkipResult } from './GtSkipResult.tsx'
 import { stepVars, VarsTable } from './gt-debug/VarsTable.tsx'
+import type { RowPlace } from './gt-rows/rows.ts'
 
 /**
  * GameTest 一步的两份数据：场景文件里写的（def：动作和参数），这次运行的结果（res：状态、消息、payload、耗时）。
@@ -48,6 +49,10 @@ export interface GtStep {
   durationMs?: number
   /** 运行配置里的前置步骤（GameTest 1.2.5）：index 是它在前置步骤里的序号，不对应场景的步骤 */
   setup?: boolean
+  /** GameTest 1.9.0 起：步骤路径（steps.1.do.0），块里的步骤 index 只是所在槽里的序号，按它对行 */
+  path?: string
+  /** 块结束时记的一条（块本身的结果） */
+  block?: boolean
 }
 
 export interface StepDef {
@@ -55,9 +60,8 @@ export interface StepDef {
   [k: string]: unknown
 }
 
-export interface StepRow {
-  /** 场景里的第几步（0 起） */
-  i: number
+/** 一行：在场景里的位置（gt-rows/rows.ts，按路径认，块里的步骤也各占一行）+ 场景里写的 + 这次的结果 */
+export interface StepRow extends RowPlace {
   def?: StepDef
   res?: GtStep
   /** 「核对选择器」（gt.resolve）里这一步的结果：target、拖动的 toTarget 各一条 */
@@ -118,7 +122,7 @@ export function StepIcon({ s, live }: { s?: string; live?: boolean }) {
  * 一行里显示的说明：目标 + 说明 / 结果消息；没有目标时把关键参数拼一行（key、map、seconds……）。
  * 录制附了 hint 的 UI 步骤多一句人话（human），选择器退成次要信息；ambiguous 是录制时选择器没核对通过的原因
  */
-export function rowSummary(r: StepRow) {
+export function rowSummary(r: Pick<StepRow, 'def' | 'res'>) {
   const target = r.res?.target ?? (typeof r.def?.target === 'string' ? r.def.target : undefined)
   const note = r.res?.note ?? (typeof r.def?.note === 'string' ? r.def.note : undefined)
   const params = r.def ? paramsOf(r.def) : []
@@ -148,6 +152,7 @@ export function StepDetail({
   onChanged,
   tools,
   history,
+  hasBlocks,
 }: {
   row: StepRow
   live?: boolean
@@ -159,6 +164,8 @@ export function StepDetail({
   tools?: StepToolProps
   /** 这个场景最近几次运行（gt.history）：给了才显示「最近几次」 */
   history?: GtHistoryRun[]
+  /** 场景里有块（录制段等）：旧的运行历史只有序号，对不上段里的步骤 */
+  hasBlocks?: boolean
 }) {
   const { project } = useUe()
   const { api, ui } = h()
@@ -195,7 +202,7 @@ export function StepDetail({
       <header className="ue:flex ue:flex-col ue:gap-1 ue:border-b ue:border-line ue:px-4 ue:py-3">
         <div className="ue:flex ue:items-center ue:gap-2 ue:text-caption ue:text-subtle">
           <StepIcon s={res?.status} live={live} />
-          <span>{t('第 {n} 步', { n: row.i + 1 })}</span>
+          <span>{t('第 {n} 步', { n: row.no })}</span>
           <span className="ue:font-mono">{action}</span>
           <span className="ue:ml-auto ue:tabular-nums">{ms(res?.durationMs)}</span>
         </div>
@@ -230,6 +237,8 @@ export function StepDetail({
                     scenario,
                     root,
                     index: row.i,
+                    no: row.no,
+                    path: row.key,
                     def,
                     action,
                     message: res.message,
@@ -260,6 +269,7 @@ export function StepDetail({
               root={root}
               path={scenario.relativePath}
               index={row.i}
+              slot={row.slot}
               def={def}
               onChanged={onChanged}
             />
@@ -287,6 +297,7 @@ export function StepDetail({
                     root,
                     path: scenario.relativePath,
                     index: row.i,
+                    slot: row.slot,
                     onChanged,
                     locked: tools?.running,
                   }
@@ -302,7 +313,15 @@ export function StepDetail({
             imageUrl={fileUrl}
             edit={
               def && scenario && root !== undefined && onChanged && !live
-                ? { project: project.id, root, path: scenario.relativePath, index: row.i, def, onChanged }
+                ? {
+                    project: project.id,
+                    root,
+                    path: scenario.relativePath,
+                    index: row.i,
+                    slot: row.slot,
+                    def,
+                    onChanged,
+                  }
                 : undefined
             }
           />
@@ -315,7 +334,7 @@ export function StepDetail({
             payload={res?.payload}
             edit={
               def && scenario && root !== undefined && onChanged && !live
-                ? { project: project.id, root, path: scenario.relativePath, index: row.i, onChanged }
+                ? { project: project.id, root, path: scenario.relativePath, index: row.i, slot: row.slot, onChanged }
                 : undefined
             }
           />
@@ -328,6 +347,7 @@ export function StepDetail({
             root={root}
             path={scenario.relativePath}
             index={row.i}
+            slot={row.slot}
             def={def}
             locked={tools?.running}
             onChanged={onChanged}
@@ -341,6 +361,7 @@ export function StepDetail({
             root={root}
             path={scenario.relativePath}
             index={row.i}
+            slot={row.slot}
             def={def}
             locked={tools?.running}
             onChanged={onChanged}
@@ -380,7 +401,7 @@ export function StepDetail({
       </Block>
       {history && def && (
         <Block title={t('最近几次')}>
-          <GtStepHistory runs={history} index={row.i} revision={scenario?.revision} />
+          <GtStepHistory runs={history} row={row} hasBlocks={hasBlocks} revision={scenario?.revision} />
         </Block>
       )}
       {row.check?.length ? (

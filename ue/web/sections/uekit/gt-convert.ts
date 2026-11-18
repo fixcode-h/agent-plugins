@@ -11,8 +11,11 @@ import { clickFromInspect, type GtInspect } from './gt-steps.ts'
 export function useToWidget(o: { project: string; root: string; path: string; onDone: () => void }) {
   const { busy, run } = useAction()
   const convert = (
-    file: { steps: Record<string, unknown>[] },
+    /** 这一步所在槽的步骤（录制段里的是段里的） */
+    steps: Record<string, unknown>[],
     span: { start: number; count: number; x: number; y: number; button: string },
+    /** 所在槽的路径，不给时是顶层 steps */
+    slot = 'steps',
   ) =>
     run('convert', async () => {
       const r = await op<GtInspect>(o.project, 'gt.inspect', { x: span.x, y: span.y })
@@ -23,12 +26,13 @@ export function useToWidget(o: { project: string; root: string; path: string; on
             y: span.y,
           }),
         )
-      const expect = file.steps.slice(span.start, span.start + span.count)
+      const expect = steps.slice(span.start, span.start + span.count)
       const step = clickFromInspect(span, r, expect[0])
       await ppost(o.project, 'ext/gt/file', {
         root: o.root,
         path: o.path,
         action: 'replace',
+        ...(slot !== 'steps' ? { slot } : {}),
         index: span.start,
         expect,
         steps: [step],

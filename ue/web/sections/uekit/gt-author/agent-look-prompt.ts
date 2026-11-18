@@ -9,6 +9,9 @@ export interface AgentLookInput {
   root?: string
   /** 第几步（0 起） */
   index: number
+  /** 显示的序号（块里的是 2.3）和步骤路径（steps.1.do.2）：录成段的场景里只有序号对不上是哪一步 */
+  no?: string
+  path?: string
   def?: Record<string, unknown>
   action?: string
   message?: string
@@ -53,10 +56,12 @@ export function agentLookPrompt(x: AgentLookInput) {
   return [
     '/ue-gametest-authoring',
     '',
-    `GameTest 场景「${x.scenario.name}」第 ${x.index + 1} 步${id}（${x.action ?? x.def?.action ?? '?'}）失败：${x.message ?? ''}`,
+    `GameTest 场景「${x.scenario.name}」第 ${x.no ?? x.index + 1} 步${id}${x.path && x.path.split('.').length > 2 ? `（路径 ${x.path}）` : ''}（${x.action ?? x.def?.action ?? '?'}）失败：${x.message ?? ''}`,
     `场景文件：${scen}（相对 UE 项目根）`,
     x.def ? `这一步：${JSON.stringify(x.def).slice(0, 1200)}` : '',
-    files.length ? `失败证据（相对 UE 项目根）：${files.join('，')}` : '这一步没有留下失败证据（截图、日志），需要时自己 run 一次复现。',
+    files.length
+      ? `失败证据（相对 UE 项目根）：${files.join('，')}`
+      : '这一步没有留下失败证据（截图、日志），需要时自己 run 一次复现。',
     selector,
     ...(fact.length ? ['报告里的细节：', ...fact] : []),
     '',
