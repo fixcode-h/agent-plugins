@@ -61,13 +61,15 @@ export function ApiLibrary({
   const scan = async () => {
     setScanning(true)
     try {
-      const r = await ppost<{ counts: Record<string, number>; written?: boolean }>(project, 'ext/gt/api', {
+      const r = await ppost<{ luaScan: { items: number; written?: boolean } }>(project, 'ext/gt/api', {
         root,
         action: 'scan',
       })
-      const n = Object.values(r.counts).reduce((a, b) => a + b, 0)
+      const n = r.luaScan.items
       h().toast.success(
-        r.written ? t('扫到 {n} 个 Lua 接口，已写进 _api.json', { n }) : t('扫到 {n} 个 Lua 接口，和上次一样', { n }),
+        r.luaScan.written
+          ? t('扫到 {n} 个 Lua 接口，已写进 _api.json', { n })
+          : t('扫到 {n} 个 Lua 接口，和上次一样', { n }),
       )
       apis.reload()
     } catch (e) {

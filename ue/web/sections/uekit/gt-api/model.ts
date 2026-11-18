@@ -105,7 +105,7 @@ export function useApis(project: string, root: string, live: boolean) {
     if (!root) return
     let off = false
     void (async () => {
-      const f = await ppost<ApiFile>(project, 'ext/gt/api', { root }).catch((e: Error) => {
+      const f = await ppost<ApiFile>(project, 'ext/gt/api', { root, action: 'file' }).catch((e: Error) => {
         setError(e.message)
         return undefined
       })

@@ -13,7 +13,11 @@ export interface TidySource {
   /** 场景相对场景根的路径 */
   rel: string
   projectRoot: string
+  /** 「整理成流程」规则认出的模式（gt-flowify） */
+  hints?: FlowHintLite[]
 }
+
+import { FLOW_OP_EXAMPLES, FLOW_OP_HELP, flowLines, type FlowHintLite } from './gt-author/flow-prompt.ts'
 
 const join = (root: string, rel: string) => `${root.replace(/[\\/]+$/, '')}/${rel.replace(/^[\\/]+/, '')}`
 
@@ -37,7 +41,7 @@ function clues(s: TidySource) {
 export function tidyPrompt(s: TidySource, need: string) {
   const shots = clues(s)
   return [
-    `请整理这份 GameTest 录制，提炼成真正的测试步骤：${s.scenarioPath}（场景「${s.name}」，共 ${s.steps.length} 步）`,
+    `请把这份 GameTest 录制整理成测试流程：${s.scenarioPath}（场景「${s.name}」，共 ${s.steps.length} 步）`,
     need.trim() ? `这份测试要验证的是：${need.trim()}` : '',
     '',
     '录制是真人操作直接录下来的，常见的问题：',
@@ -48,6 +52,8 @@ export function tidyPrompt(s: TidySource, need: string) {
     '- input.cursor + 鼠标键的坐标点击点在 UI 上：能确定是哪个控件的，改成 click target=选择器（拿不准用 ue_gametest action=inspect 看，或者原样留着），点在游戏画面上的不动。',
     '- mark（录制时的说明）想表达的是检查点的，改成 assert；只是备注的写进前后步骤的说明。',
     '',
+    ...flowLines(s.hints),
+    '',
     shots.length ? '录制时的线索（截图里红框是被点的控件、十字是按下的位置；先看图再判断这一步在做什么）：' : '',
     ...shots,
     shots.length ? '' : '',
@@ -56,7 +62,7 @@ export function tidyPrompt(s: TidySource, need: string) {
     '2. 按项目实际代码判断步骤合不合理：从截图、hint 里的界面资源（asset）、选择器找到被点控件所在的 WBP，再找它绑定的点击处理（蓝图事件、Lua 里的 OnClicked / 按钮回调、C++），看这一步实际触发什么、前后步骤的依赖对不对（例如点「领取」前要先满足什么条件、某个界面是异步打开要等、某个按钮其实是切页签）。发现的问题写进 review（只提示用户，不自动应用），能改的写进 changes。',
     '3. 选择器、hint 原样保留，不要自己编选择器；拿不准的步骤不改，在 review 里说明。',
     '4. 给每一步写 notes：一句中文，说这一步在测试里做什么（「打开桌面摆件第 2 页」，不要只写「点击桌面摆件2」）。',
-    '5. 不要改场景文件。最后在回复里给出一个 gametest-tidy 代码块（步骤号都从 1 数、指原场景；一步只能被一条改动碰）：',
+    '5. 不要改场景文件。最后在回复里给出一个 gametest-tidy 代码块（步骤号都从 1 数、指原场景；一步只能被一条改动删掉、替换或搬走）：',
     '```gametest-tidy',
     '{',
     '  "kind": "gametest-tidy",',
@@ -67,12 +73,14 @@ export function tidyPrompt(s: TidySource, need: string) {
     '    { "what": "第 2 步重复点了商店入口", "op": "delete", "steps": [2] },',
     '    { "what": "固定等待改成等商店界面出现", "op": "replace", "steps": [3], "with": [ { "action": "wait", "until": "widget", "target": "WBP_Shop" } ] },',
     '    { "what": "开头先用 GM 加钱", "op": "insert", "after": 0, "with": [ { "action": "gm", "command": "..." } ] },',
-    '    { "what": "加载慢，放宽等待", "op": "edit", "step": 6, "set": { "timeoutMs": 10000 } }',
+    '    { "what": "加载慢，放宽等待", "op": "edit", "step": 6, "set": { "timeoutMs": 10000 } },',
+    ...FLOW_OP_EXAMPLES,
     '  ],',
     '  "notes": { "1": "打开商店", "4": "买第一件商品" }',
     '}',
     '```',
     '   op：delete 删掉 steps；replace 把 steps 换成 with；insert 在 after 后面插入 with（0 是最前面）；edit 改 step 的字段（值写 null 是删掉这个字段，换动作用 replace）。scenario 一行照上面原样抄回。',
+    FLOW_OP_HELP,
     '6. 代码块前面用几句话说明整理了什么、哪几步拿不准。用户在这个窗口右侧的应用面板里逐条勾选后才写回场景文件（原录制会自动备份）。',
   ]
     .filter((l, i, all) => l !== '' || all[i - 1] !== '')

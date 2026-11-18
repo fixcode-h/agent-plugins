@@ -17,6 +17,7 @@ import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
+import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { GtTidyReport } from './sections/uekit/GtTidyReport.tsx'
 import { TIDY_LANG } from '../server/uekit/gt-tidy-plan.ts'
@@ -78,6 +79,8 @@ const activate: ActivateWeb = (host) => {
     // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
     specimens: [
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
+      // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标，跟面板「流程图画布」「数字角标」的调节项
+      { id: 'gt-flow', label: t('GameTest · 流程图'), tune: ['canvas', 'countBadge'], Specimen: FlowSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项

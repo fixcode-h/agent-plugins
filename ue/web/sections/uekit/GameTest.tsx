@@ -10,6 +10,7 @@ import {
   ListTree,
   Loader2,
   Play,
+  Plus,
   SlidersHorizontal,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -19,9 +20,11 @@ import { h, t } from '../../host.ts'
 import { MenuHost, openMenu } from '../../menu.tsx'
 import { Confirm, ErrorText } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
+import { useScenarioLibrary } from './GtLibrary.tsx'
 import { GtBatchBar } from './GtBatch.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
 import { GtOfflineBar } from './GtOffline.tsx'
+import { useGtAgentWrite } from './gt-author/GtAgentWrite.tsx'
 import { GtRecord, HitPathNote, type RecordStatus } from './GtRecord.tsx'
 import { ocrAfterRecord, shotsArg } from './gt-ocr.ts'
 import { keyAskArgs } from './gt-key.ts'
@@ -75,6 +78,8 @@ export function GameTest() {
   // 条目规则面板（_settings.json 的 itemKeys，树形、可搜）：直接读写磁盘，编辑器没开也能整理
   const [keyRules, setKeyRules] = useState(false)
   const [recName, setRecName] = useState('')
+  // 「在这里录制」「新建脚本（录制）」：录完从 recorded/ 挪进这个文件夹（GameTest 只会存到 recorded/）
+  const [recordDir, setRecordDir] = useState<string>()
   // 「保留节奏」：UI 操作之间也录 wait（默认不录，回放的 click / type 自己等控件可操作）
   const [keepPace, setKeepPace] = useState(false)
   // 录制器认控件靠什么：hitPath 表示这个进程没编 Slate 调试，打字录不到，开始录制前就提示
@@ -170,6 +175,8 @@ export function GameTest() {
   const items: TreeLeaf<Scenario>[] = useMemo(
     () =>
       (list?.scenarios ?? [])
+        // _ 开头的是场景根的配置和生成物（_settings.json、_vars.json、_api.json），不是场景
+        .filter((s) => !/(^|\/)_[^/]*$/.test(s.relativePath))
         .filter((s) => !q || `${s.name} ${s.relativePath} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(q))
         .map((s) => ({ path: s.relativePath.replace(/\.json$/i, ''), data: s })),
     [list, q],
@@ -275,17 +282,37 @@ export function GameTest() {
       }
     })
   const shots = useShotMenus({ project: project.id, root: list?.absoluteRootDir ?? '', reload })
+  const locked = !live || running || recording || !!busy
+  const agentWrite = useGtAgentWrite(list?.absoluteRootDir ?? '')
+  const lib = useScenarioLibrary({
+    project: project.id,
+    root: list?.absoluteRootDir ?? '',
+    rootLabel: list?.rootDir ?? '',
+    scenarios: list?.scenarios ?? [],
+    selected: selected?.relativePath,
+    reload,
+    open: (p) => go('gametest', p),
+    recordIn: live
+      ? (dir) => {
+          setRecordDir(dir || undefined)
+          setAsking(true)
+        }
+      : undefined,
+    agentWriteIn: (dir) => agentWrite.open(dir),
+    runBatch: (scenarios, label) => void startBatch({ scenarios, name: label }),
+    locked,
+  })
   const menus = useScenarioMenus({
     project: project.id,
     shotItems: shots.items,
     root: list?.absoluteRootDir ?? '',
-    rootLabel: list?.rootDir ?? '',
-    locked: !live || running || recording || !!busy,
+    locked,
     reload,
     open: (s) => go('gametest', s.relativePath),
     runScenario,
-    runBatch: (scenarios, label) => void startBatch({ scenarios, name: label }),
     scenarios: list?.scenarios ?? [],
+    rename: lib.renameScenario,
+    remove: lib.removeScenario,
   })
   const startRecord = () =>
     run('record', async () => {
@@ -345,11 +372,21 @@ export function GameTest() {
               onClick={() => setKeyRules(true)}
             />
             <ui.IconButton
+              icon={Plus}
+              size="sm"
+              label={t('新建：脚本（编写 / 录制）、文件夹，建在选中的文件夹里')}
+              disabled={!list?.absoluteRootDir}
+              onClick={lib.newMenu}
+            />
+            <ui.IconButton
               icon={CircleDot}
               size="sm"
               label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
               disabled={!live || recording || running || !!busy}
-              onClick={() => setAsking(true)}
+              onClick={() => {
+                setRecordDir(undefined)
+                setAsking(true)
+              }}
             />
             <ui.Button
               size="sm"
@@ -424,9 +461,17 @@ export function GameTest() {
             items={items}
             searching={!!q}
             active={selected?.relativePath.replace(/\.json$/i, '')}
-            onOpen={(_p, s) => go('gametest', s.relativePath)}
+            onOpen={(_p, s) => {
+              lib.setActiveFolder(undefined)
+              go('gametest', s.relativePath)
+            }}
             onLeafMenu={menus.leafMenu}
-            onFolderMenu={menus.folderMenu}
+            onFolderMenu={lib.folderMenu}
+            // 搜索时只看命中的场景，空文件夹不掺进来
+            folders={q ? undefined : lib.folders}
+            activeFolder={lib.activeFolder}
+            onFolderClick={lib.setActiveFolder}
+            onMove={lib.onMove}
             leafIcon={(s) =>
               recording && rec?.name === s.name
                 ? { icon: CircleDot, tone: 'ue:text-danger' }
@@ -505,7 +550,15 @@ export function GameTest() {
             onDone={(saved) => {
               setRec(undefined)
               shots.refresh()
-              if (saved) void ocrAfterRecord(project.id, list?.absoluteRootDir ?? '', saved, reload)
+              const dir = recordDir
+              setRecordDir(undefined)
+              if (!saved) return
+              void (async () => {
+                // 在某个文件夹里录的：挪过去再认截图里的字、打开它
+                const at = dir === undefined ? saved : await lib.moveTo(saved, dir)
+                if (dir !== undefined) go('gametest', at)
+                void ocrAfterRecord(project.id, list?.absoluteRootDir ?? '', at, reload)
+              })()
             }}
           />
         ) : selected && editing === selected.relativePath && list ? (
@@ -546,7 +599,8 @@ export function GameTest() {
           </div>
         )}
       </main>
-      {menus.dialogs}
+      {lib.dialogs}
+      {agentWrite.dialog}
       {shots.dialog}
       {settings && (
         <GtSettings
@@ -569,7 +623,10 @@ export function GameTest() {
         title={t('开始录制')}
         okText={t('开始录制')}
         onOk={startRecord}
-        onCancel={() => setAsking(false)}
+        onCancel={() => {
+          setAsking(false)
+          setRecordDir(undefined)
+        }}
       >
         <div className="ue:flex ue:flex-col ue:gap-2">
           <ui.Input
@@ -596,6 +653,7 @@ export function GameTest() {
             {t(
               'PIE 没开时会先开 PIE。之后在游戏窗口里正常操作：点控件录成对这个控件的点击（不看控件类，谁接住了就录谁），在输入框里打字录成输入，点在游戏画面上和按键录成真实按键。按住 Ctrl+Alt 点一个控件录成断言。停止后存到场景根下的 recorded/。',
             )}
+            {recordDir !== undefined && ` ${t('录完挪进 {p}/。', { p: recordDir })}`}
           </p>
           {handlerSource === 'hitPath' && <HitPathNote />}
         </div>

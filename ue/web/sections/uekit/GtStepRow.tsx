@@ -1,73 +1,11 @@
-import {
-  Camera,
-  CheckSquare,
-  Clock,
-  Footprints,
-  Keyboard,
-  type LucideIcon,
-  MousePointer2,
-  MousePointerClick,
-  Move,
-  Play,
-  ScrollText,
-  SkipForward,
-  Square,
-  Terminal,
-  TriangleAlert,
-  Type,
-  Zap,
-} from 'lucide-react'
+import { SkipForward, TriangleAlert } from 'lucide-react'
 import { h, t } from '../../host.ts'
 import { CheckMark, ms, StepIcon, type StepRow } from './GtStepDetail.tsx'
 import { ambiguousOf } from './gt-steps.ts'
 import { keyOf } from './gt-key.ts'
 import { stepTitle } from './gt-step-title.ts'
+import { actionIcon } from './gt-action-icon.ts'
 import { skipLabel, skipOf, skipWith } from './gt-skip.ts'
-
-/** 动作 → 行首的小图标：一眼分出点击、等待、按键，不用读动作名 */
-export function actionIcon(a?: string): LucideIcon {
-  switch (a) {
-    case 'click':
-    case 'select':
-      return MousePointerClick
-    case 'drag':
-    case 'scroll':
-    case 'wheel':
-      return Move
-    case 'input.cursor':
-      return MousePointer2
-    case 'key':
-    case 'ability.input':
-    case 'input.start':
-    case 'input.stop':
-      return Keyboard
-    case 'type':
-      return Type
-    case 'wait':
-    case 'editor.ensure':
-      return Clock
-    case 'assert':
-    case 'probe':
-    case 'net.compare':
-      return CheckSquare
-    case 'screenshot':
-    case 'snapshot':
-      return Camera
-    case 'pie.start':
-    case 'level.load':
-      return Play
-    case 'pie.stop':
-      return Square
-    case 'console':
-      return Terminal
-    case 'mark':
-      return ScrollText
-    case 'move':
-      return Footprints
-    default:
-      return Zap
-  }
-}
 
 /**
  * GameTest 步骤列表的一行：序号、状态、动作图标、一句中文（stepTitle），右边是耗时。

@@ -21,6 +21,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.187.0",
+    "@xyflow/react": "^12.12.1",
     "ag-psd": "^34.1.0",
     "esbuild": "^0.28.2",
     "hono": "^4.13.18",

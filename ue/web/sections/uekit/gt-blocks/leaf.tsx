@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { stepTitle } from '../gt-step-title.ts'
-import { actionIcon } from '../GtStepRow.tsx'
+import { actionIcon } from '../gt-action-icon.ts'
 import { setFallbackUi, type BlockUi } from './registry.ts'
 
 /** 公共字段由外壳画，这里只改动作自己的字段：去掉 id 和公共字段后的 JSON */

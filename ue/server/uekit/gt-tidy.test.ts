@@ -168,3 +168,51 @@ test('流程：出题带 hash → 场景被改过就拒绝 → 应用备份原�
   assert.equal(await readFile(file, 'utf8'), orig)
   assert.equal((await call('status')).backup, '')
 })
+
+test('整理成流程写回：本脚本守护、参数、全局守护进 _settings.json，版本升到 3', async () => {
+  const root = path.join(base, 'proj-flow')
+  const sr = path.join(root, 'docs', 'GameTest')
+  const file = path.join(sr, 'flow.json')
+  await mkdir(sr, { recursive: true })
+  await writeFile(path.join(sr, '_settings.json'), JSON.stringify({ speed: 1, guards: [{ id: 'g1', when: {}, do: [] }] }))
+  await writeFile(
+    file,
+    JSON.stringify({
+      kind: 'gametest-scenario',
+      name: 'flow',
+      steps: [
+        { id: 's1', action: 'type', target: 'WBP_Login:Input_Account', text: 'qa_01' },
+        { id: 's2', action: 'click', target: 'WBP_Notice:Btn_Close' },
+        { id: 's3', action: 'click', target: 'WBP_Reward:Btn_Ok' },
+        { id: 's4', action: 'key', key: 'E' },
+      ],
+    }),
+  )
+  const call = (action: string, extra: Record<string, unknown> = {}) =>
+    tidyAction(root, { root: sr, path: 'flow.json', action, ...extra }) as Promise<Record<string, unknown>>
+  const src = await call('source')
+  assert.ok((src.hints as { rule: string }[]).some((h) => h.rule === 'input-param'))
+  const plan = {
+    scenario: { root: src.root, path: 'flow.json' },
+    changes: [
+      { what: '账号', op: 'param', name: 'account', default: 'qa_01', uses: [{ step: 1, field: 'text' }] },
+      { what: '公告', op: 'guard', steps: [2], guard: { name: '关公告', when: { target: 'WBP_Notice:.', onScreen: true } } },
+      { what: '奖励', op: 'guard', steps: [3], guard: { when: { target: 'WBP_Reward:.', onScreen: true } }, global: true },
+    ],
+  }
+  const r = await call('apply', { hash: src.hash, plan, picked: [0, 1, 2], notes: false })
+  assert.ok(String(r.settings).endsWith('_settings.json'))
+  const saved = JSON.parse(await readFile(file, 'utf8'))
+  assert.equal(saved.schemaVersion, 3)
+  assert.deepEqual(saved.params, { account: { default: 'qa_01' } })
+  assert.equal(saved.steps.length, 2)
+  assert.equal(saved.steps[0].text, '$account')
+  assert.equal(saved.guards[0].id, 'g1')
+  assert.equal(saved.guards[0].do[0].id, 's2')
+  const settings = JSON.parse(await readFile(path.join(sr, '_settings.json'), 'utf8'))
+  assert.equal(settings.speed, 1)
+  assert.deepEqual(
+    settings.guards.map((g: { id: string }) => g.id),
+    ['g1', 'g2'],
+  )
+})
