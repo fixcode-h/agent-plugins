@@ -74,7 +74,7 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
       return { error: t('gametest-tidy 代码块不是合法的 JSON：{e}', { e: (e as Error).message }) }
     }
   }, [text])
-  const sc = (raw.json?.scenario ?? {}) as { root?: string; path?: string; hash?: string }
+  const sc = (raw.json?.scenario ?? {}) as { root?: string; path?: string; hash?: string; segment?: string }
   const [src, setSrc] = useState<TidySource & { backup: string }>()
   const [err, setErr] = useState('')
   const [applied, setApplied] = useState(() => readApplied().includes(messageId))
@@ -85,8 +85,9 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
       root: sc.root,
       path: sc.path,
       action: 'source',
+      ...(sc.segment ? { segment: sc.segment } : {}),
     }).then(setSrc, (e: Error) => setErr(e.message))
-  }, [project, sc.root, sc.path])
+  }, [project, sc.root, sc.path, sc.segment])
 
   const plan = useMemo((): { plan?: TidyPlan; error?: string } => {
     if (!raw.json || !src) return {}
@@ -121,6 +122,7 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
         path: sc.path,
         action: 'apply',
         hash: src.hash,
+        ...(sc.segment ? { segment: sc.segment } : {}),
         plan: raw.json,
         picked,
         notes,
@@ -226,7 +228,7 @@ export function GtTidyReport({ task, messageId, text }: { task: Task; messageId:
         <div className="ue:flex ue:flex-col ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
           {rows.map((r, i) => {
             const def = (r.kind === 'del' ? src.steps[r.a] : next[r.b]) as StepDef
-            const sum = rowSummary({ i: 0, def })
+            const sum = rowSummary({ def })
             return (
               <div
                 key={i}

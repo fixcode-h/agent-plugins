@@ -14,6 +14,8 @@ export function GtEditorCommand(o: {
   root: string
   path: string
   index: number
+  /** 所在槽（录制段里的步骤是 steps.N.do），不给时是顶层 steps */
+  slot?: string
   def: StepDef
   locked?: boolean
   onChanged: () => void

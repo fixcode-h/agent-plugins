@@ -13,10 +13,11 @@ export const segmentSupported = (gameTestVersion?: string) =>
 /**
  * gt.record.start 的 group / insert：
  * - 接着录（insert）：录到的段插进正在编辑的场景里 after 这一步后面，UE 停止时自己写回原文件；
- * - 新录制按设置「录完装成一个录制段」决定要不要 group（默认不装：场景详情页的逐步工具只认平铺的步骤）
+ * - 新录制按设置「录完装成一个录制段」决定要不要 group：默认装（UE 插件 0.33 起，场景详情页的逐步工具按路径认段里的步骤，
+ *   gt-rows/rows.ts）；设置里关掉才录成平铺
  */
 export function recordSegmentArgs(gameTestVersion?: string, insert?: { scenario: string; after?: string }) {
   if (!segmentSupported(gameTestVersion)) return {}
   if (insert) return { insert: insert.after ? insert : { scenario: insert.scenario } }
-  return h().config().gtRecordGroup === true ? { group: true } : {}
+  return h().config().gtRecordGroup !== false ? { group: true } : {}
 }

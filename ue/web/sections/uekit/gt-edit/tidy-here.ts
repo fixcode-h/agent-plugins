@@ -22,7 +22,9 @@ export function useTidyHere(
     if (!step) return h().toast.error(t('这一步找不到了'))
     const name = typeof step.name === 'string' && step.name ? step.name : t('录制段')
     // 给 Agent 看的话，不翻译
-    tidy.ask(`只整理录制段「${name}」（步骤 id ${String(step.id ?? '')}）里的步骤，段外的步骤原样保留。`)
+    const id = typeof step.id === 'string' ? step.id : ''
+    if (!id) return h().toast.error(t('这一步还没有 id，先存盘再整理'))
+    tidy.ask(`整理录制段「${name}」里的步骤。`, id)
   }
   return { onTidy: (path: GtPath) => void start(path), dialogs: tidy.dialogs }
 }

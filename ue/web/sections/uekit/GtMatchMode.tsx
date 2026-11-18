@@ -18,6 +18,7 @@ import {
 } from './gt-key.ts'
 import { hintOf, isPositional } from './gt-steps.ts'
 import { GtKeyFields } from './GtKeyFields.tsx'
+import { placeRows } from './gt-rows/rows.ts'
 import type { GtScenarioFile } from './GtRun.tsx'
 import type { StepDef } from './GtStepDetail.tsx'
 
@@ -36,6 +37,8 @@ export function GtMatchMode(o: {
   root: string
   path: string
   index: number
+  /** 所在槽（录制段里的步骤是 steps.N.do），不给时是顶层 steps */
+  slot?: string
   def: StepDef
   onChanged: () => void
 }) {
@@ -49,6 +52,8 @@ export function GtMatchMode(o: {
   const key = keyOf(hint as Record<string, unknown> | undefined)
   const target = typeof o.def.target === 'string' ? o.def.target : ''
   const listId = key ? listIdOf(key) : ''
+  // 这一步的完整路径：同一列表的其他步骤按路径找（录制段里的也算）
+  const self = `${o.slot || 'steps'}.${o.index}`
 
   // 同一列表还有几步：场景文件里数（只为显示「其他 N 步」）
   useEffect(() => {
@@ -56,8 +61,9 @@ export function GtMatchMode(o: {
     let alive = true
     void ppost<GtScenarioFile>(o.project, 'ext/gt/scenario', { root: o.root, path: o.path })
       .then((f) => {
-        const n = f.steps.filter(
-          (s, i) => i !== o.index && listIdOf(keyOf(s.hint as Record<string, unknown> | undefined) ?? EMPTY) === listId,
+        const n = placeRows(f.steps).filter(
+          (r) =>
+            r.key !== self && listIdOf(keyOf(r.def.hint as Record<string, unknown> | undefined) ?? EMPTY) === listId,
         ).length
         if (alive) setSiblings(n)
       })
@@ -65,7 +71,7 @@ export function GtMatchMode(o: {
     return () => {
       alive = false
     }
-  }, [o.project, o.root, o.path, o.index, listId])
+  }, [o.project, o.root, o.path, self, listId])
 
   if (!key && (!hint?.text || !isPositional(target))) return null
   const value: Mode = key?.cond ? 'key' : hint?.byIndex ? 'index' : 'text'
@@ -83,17 +89,17 @@ export function GtMatchMode(o: {
       if (key && choice && together && siblings) {
         // 现读一遍：expect 要和磁盘上的一致
         const f = await ppost<GtScenarioFile>(o.project, 'ext/gt/scenario', { root: o.root, path: o.path })
-        const plan = planListEdits(f.steps, o.index, key, choice)
+        const plan = planListEdits(f.steps, self, key, choice)
         await ppost(o.project, 'ext/gt/file', {
           root: o.root,
           path: o.path,
           action: 'replaceMany',
-          edits: [{ index: o.index, expect: o.def, step }, ...plan.edits],
+          edits: [{ path: self, expect: o.def, step }, ...plan.edits],
         })
         extra = plan.skipped.length
           ? t('同一列表另外改了 {n} 步，第 {s} 步录制时没存这个字段，没改', {
               n: plan.edits.length,
-              s: plan.skipped.map((i) => i + 1).join('、'),
+              s: plan.skipped.join('、'),
             })
           : t('同一列表另外改了 {n} 步', { n: plan.edits.length })
       } else {
@@ -101,6 +107,7 @@ export function GtMatchMode(o: {
           root: o.root,
           path: o.path,
           action: 'replace',
+          ...(o.slot && o.slot !== 'steps' ? { slot: o.slot } : {}),
           index: o.index,
           expect: [o.def],
           steps: [step],

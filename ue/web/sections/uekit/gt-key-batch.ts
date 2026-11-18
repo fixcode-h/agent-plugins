@@ -1,4 +1,5 @@
 import { applyKey, condFromCands, keyOf, listIdOf, type StepKey } from './gt-key.ts'
+import { placeRows } from './gt-rows/rows.ts'
 
 /**
  * 录完以后「同一列表的其他步骤一起改」（GameTest 1.5.0 那批）：只看场景文件，不用开游戏。
@@ -9,7 +10,8 @@ import { applyKey, condFromCands, keyOf, listIdOf, type StepKey } from './gt-key
 export type MatchChoice = { mode: 'key'; fields: string[] } | { mode: 'text' | 'index' }
 
 export interface StepEdit {
-  index: number
+  /** 步骤的完整路径（steps.3、录制段里的 steps.1.do.0），ext/gt/file replaceMany 按它改 */
+  path: string
   expect: Record<string, unknown>
   step: Record<string, unknown>
 }
@@ -30,17 +32,21 @@ export function editStep(def: Record<string, unknown>, key: StepKey, choice: Mat
   }
 }
 
-/** 同一列表（条目类 + 容器）的其他步骤要怎么改；self 是正在改的那一步 */
-export function planListEdits(steps: Record<string, unknown>[], self: number, key: StepKey, choice: MatchChoice) {
+/**
+ * 同一列表（条目类 + 容器）的其他步骤要怎么改；self 是正在改的那一步的路径。
+ * 录制段、如果、循环里的步骤也算（按路径摊开整份场景）；skipped 是跳过的步骤的显示序号（2.3）
+ */
+export function planListEdits(steps: Record<string, unknown>[], self: string, key: StepKey, choice: MatchChoice) {
   const id = listIdOf(key)
   const edits: StepEdit[] = []
-  const skipped: number[] = []
+  const skipped: string[] = []
   if (!id) return { edits, skipped }
-  steps.forEach((def, index) => {
-    if (index === self) return
+  for (const row of placeRows(steps)) {
+    const { def, key: path, no } = row
+    if (path === self) continue
     const hint = def.hint && typeof def.hint === 'object' ? (def.hint as Record<string, unknown>) : undefined
     const k = keyOf(hint)
-    if (!k || listIdOf(k) !== id) return
+    if (!k || listIdOf(k) !== id) continue
     let cond: string | undefined
     if (choice.mode === 'key') {
       cond = condFromCands(k, choice.fields)
@@ -51,13 +57,13 @@ export function planListEdits(steps: Record<string, unknown>[], self: number, ke
         (f) => (k.cands ?? []).find((c) => !c.combo && c.by.toLowerCase() === f.toLowerCase())?.changed,
       )
       if (!cond || changed || (single && !single.unique)) {
-        skipped.push(index)
-        return
+        skipped.push(no)
+        continue
       }
     }
     const step = editStep(def, k, choice, cond)
-    if (!step) skipped.push(index)
-    else edits.push({ index, expect: def, step })
-  })
+    if (!step) skipped.push(no)
+    else edits.push({ path, expect: def, step })
+  }
   return { edits, skipped }
 }

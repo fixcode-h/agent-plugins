@@ -17,6 +17,8 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
   const [backup, setBackup] = useState('')
   // 打开「要验证什么」弹窗时预填的话；undefined 是没开（录制段节点上的入口会预填「只整理这一段」）
   const [asking, setAsking] = useState<string>()
+  // 只整理哪个录制段（编辑页录制段节点上的入口给）；不给时服务端按「顶层只有一个录制段」自动认
+  const [segment, setSegment] = useState<string>()
   const [restoring, setRestoring] = useState(false)
   const call = <T,>(action: string, extra: Record<string, unknown> = {}) =>
     ppost<T>(o.project, 'ext/gt/tidy', { root: o.root, path: o.path, action, ...extra })
@@ -43,7 +45,7 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
       projectId: o.project,
       title: t('整理成流程：{name}', { name: o.name }),
       prompt: async () => {
-        const src = await call<TidySource>('source')
+        const src = await call<TidySource>('source', segment ? { segment } : {})
         steps = src.steps.length
         return tidyPrompt(src, need)
       },
@@ -95,7 +97,10 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
 
   return {
     hasBackup: !!backup,
-    ask: (need = '') => setAsking(need),
+    ask: (need = '', seg?: string) => {
+      setSegment(seg)
+      setAsking(need)
+    },
     restore: () => setRestoring(true),
     dialogs,
   }

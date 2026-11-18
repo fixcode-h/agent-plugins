@@ -15,6 +15,8 @@ export interface TidySource {
   projectRoot: string
   /** 「整理成流程」规则认出的模式（gt-flowify） */
   hints?: FlowHintLite[]
+  /** 整理的是哪个录制段（步骤 id）；整理整个场景时没有（server/uekit/gt-tidy-scope.ts） */
+  segment?: string
 }
 
 import { FLOW_OP_EXAMPLES, FLOW_OP_HELP, flowLines, type FlowHintLite } from './gt-author/flow-prompt.ts'
@@ -42,6 +44,9 @@ export function tidyPrompt(s: TidySource, need: string) {
   const shots = clues(s)
   return [
     `请把这份 GameTest 录制整理成测试流程：${s.scenarioPath}（场景「${s.name}」，共 ${s.steps.length} 步）`,
+    s.segment
+      ? `这次只整理录制段 ${s.segment}（文件里 id 为 ${s.segment} 的 group 的 do）里的这 ${s.steps.length} 步：下面说的「第几步」、代码块里的步骤号都从 1 数、指段内的步骤，段外的步骤不动。`
+      : '',
     need.trim() ? `这份测试要验证的是：${need.trim()}` : '',
     '',
     '录制是真人操作直接录下来的，常见的问题：',
@@ -66,7 +71,7 @@ export function tidyPrompt(s: TidySource, need: string) {
     '```gametest-tidy',
     '{',
     '  "kind": "gametest-tidy",',
-    `  "scenario": { "root": ${JSON.stringify(s.root)}, "path": ${JSON.stringify(s.rel)}, "hash": "${s.hash}" },`,
+    `  "scenario": { "root": ${JSON.stringify(s.root)}, "path": ${JSON.stringify(s.rel)}, "hash": "${s.hash}"${s.segment ? `, "segment": ${JSON.stringify(s.segment)}` : ''} },`,
     '  "summary": "一句话说整理了什么",',
     '  "review": [ { "step": 5, "level": "warn", "text": "按 WBP_Shop 的 OnBuyClicked，余额不够时不会打开确认框，回放前要先加钱" } ],',
     '  "changes": [',
