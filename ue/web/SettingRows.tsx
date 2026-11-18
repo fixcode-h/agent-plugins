@@ -1,5 +1,5 @@
-import { CircleHelp, Plus } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { CircleHelp, Plus, type LucideIcon } from 'lucide-react'
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { h, t } from './host.ts'
 
 /**
@@ -8,12 +8,93 @@ import { h, t } from './host.ts'
  * 每行左边标题和一行短说明（长的写进标题旁的问号），右边是定宽 280px 的控件栏。
  * 用户 2026-11-18：「插件设置页面就很乱，参考软件设置页面」——之前是贴边的卡片 + 卡片头，和面板设置窗口两套样子。
  * 主题色、圆角都用面板的变量（--panel-radius 跟着外观设置走），不自造配色。
+ * 用户 2026-11-18 又要「做成分页，左边加个菜单列」：SettingsLayout 左边一列菜单（照面板设置窗口的侧栏），右边只画选中的那一组；
+ * 组靠 SettingGroup 的 page 认，不在当前页的组不画。弹窗里没有菜单（不给 PageContext），所有组照常一起画。
  */
 
-/** 设置页的滚动区：居中的一栏，宽度和面板设置窗口的内容区差不多 */
-export function SettingsPage({ children }: { children: ReactNode }) {
+/** 当前显示哪一页：SettingsLayout 提供；没有时（弹窗里）所有组都画 */
+const PageContext = createContext<string | undefined>(undefined)
+
+/** 当前页是不是这几页之一（运行设置的保存栏只在它那几页出现）；不分页时总是 true */
+export function useSettingsPage(pages: readonly string[]) {
+  const cur = useContext(PageContext)
+  return cur === undefined || pages.includes(cur)
+}
+
+export interface SettingsNavItem {
+  id: string
+  label: string
+  icon?: LucideIcon
+}
+export interface SettingsNavSection {
+  title?: string
+  items: SettingsNavItem[]
+}
+
+/**
+ * 分页的设置页：左边菜单列（分节小标题 + 一项一页），右边滚动区画当前页。
+ * 菜单样式照面板设置窗口的侧栏：选中项浅底、图标 + 文字；窄屏时菜单变成顶上一排可横向滚动的按钮
+ */
+export function SettingsLayout({
+  nav,
+  current,
+  onPick,
+  children,
+}: {
+  nav: SettingsNavSection[]
+  current: string
+  onPick: (id: string) => void
+  children: ReactNode
+}) {
+  const { cn } = h()
   return (
-    <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
+    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
+      <nav
+        aria-label={t('设置分页')}
+        className="ue:flex ue:shrink-0 ue:gap-1 ue:overflow-x-auto ue:border-b ue:border-line ue:px-3 ue:py-2 ue:md:w-56 ue:md:flex-col ue:md:gap-0 ue:md:overflow-y-auto ue:md:border-r ue:md:border-b-0 ue:md:py-3"
+      >
+        {nav.map((sec, i) => (
+          <div key={sec.title ?? i} className="ue:flex ue:shrink-0 ue:gap-1 ue:md:flex-col ue:md:gap-0.5 ue:md:pb-3">
+            {sec.title && (
+              <span className="ue:hidden ue:px-2.5 ue:pt-1 ue:pb-1.5 ue:text-footnote ue:text-subtle ue:md:block">
+                {sec.title}
+              </span>
+            )}
+            {sec.items.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={id === current ? 'page' : undefined}
+                onClick={() => onPick(id)}
+                className={cn(
+                  'ue:flex ue:h-8 ue:shrink-0 ue:items-center ue:gap-2.5 ue:rounded-(--c-row-radius) ue:px-2.5 ue:text-left ue:text-body ue:whitespace-nowrap ue:transition-colors',
+                  id === current ? 'ue:bg-fg/8 ue:text-fg' : 'ue:text-muted ue:hover:bg-fg/5 ue:hover:text-fg',
+                )}
+              >
+                {Icon && <Icon className="ue:h-4 ue:w-4 ue:shrink-0" />}
+                <span className="ue:min-w-0 ue:truncate">{label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+      {/* 换页不重新挂载内容：表单（运行设置）在几页之间共用一份没保存的改动 */}
+      <PageContext.Provider value={current}>
+        <SettingsPage scrollKey={current}>{children}</SettingsPage>
+      </PageContext.Provider>
+    </div>
+  )
+}
+
+/** 设置页的滚动区：居中的一栏，宽度和面板设置窗口的内容区差不多 */
+export function SettingsPage({ children, scrollKey }: { children: ReactNode; scrollKey?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // 换页回到顶上（分页时）
+  useEffect(() => {
+    ref.current?.scrollTo({ top: 0 })
+  }, [scrollKey])
+  return (
+    <div ref={ref} className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
       <div className="ue:mx-auto ue:flex ue:w-full ue:max-w-[960px] ue:flex-col ue:px-6 ue:pb-10">{children}</div>
     </div>
   )
@@ -48,6 +129,7 @@ const DIVIDE = 'ue:[&>*+*]:border-t ue:[&>*+*]:border-line/80'
 /**
  * 一组设置：组名在卡片外（小字），右边可放说明小字（aside）和按钮（action）；desc 是卡片里第一段的一句说明。
  * flush：内容自己带左右边距（面板画的插件参数表单），卡片不再加
+ * page：属于分页设置页的哪一页；不是当前页时不画
  */
 export function SettingGroup({
   title,
@@ -57,8 +139,10 @@ export function SettingGroup({
   hint,
   children,
   flush,
+  page,
 }: {
   title: ReactNode
+  page?: string
   /** 组名旁问号里的详细说明 */
   hint?: ReactNode
   aside?: ReactNode
@@ -68,6 +152,8 @@ export function SettingGroup({
   flush?: boolean
 }) {
   const { cn } = h()
+  const cur = useContext(PageContext)
+  if (cur !== undefined && page !== undefined && page !== cur) return null
   return (
     <section className="ue:flex ue:flex-col ue:pt-6 ue:first:pt-4">
       <h3 className="ue:flex ue:min-h-7 ue:items-center ue:gap-2 ue:pb-2 ue:pl-1 ue:text-footnote ue:font-semibold ue:tracking-wide ue:text-subtle">

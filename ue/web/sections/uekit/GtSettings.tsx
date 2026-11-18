@@ -5,7 +5,7 @@ import { ASSET_KINDS } from '../../asset-icons.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useSearchIndex } from '../../jump/index-data.ts'
-import { AddButton, SettingGroup, SettingList, SettingRow } from '../../SettingRows.tsx'
+import { AddButton, SettingGroup, SettingList, SettingRow, useSettingsPage } from '../../SettingRows.tsx'
 import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
@@ -54,6 +54,9 @@ interface ConfigReply {
   settingsUiWaitTimeoutMs: number
 }
 
+/** 运行设置在分页设置页里占的几页（GtMoveSettings 是 move、GtSkipSettings 是 skip）：保存栏只在这几页出现 */
+export const GT_RUN_PAGES = ['playback', 'setup', 'move', 'skip', 'keys', 'blockers'] as const
+
 const blank = (): GtBlockerRule => ({ widget: '', action: 'close' })
 
 const WIDGET_LIMIT = 50
@@ -80,6 +83,7 @@ function waitText(ms: number) {
 export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onOpenRules?: () => void }) {
   const { project } = useUe()
   const { ui, cn } = h()
+  const onRunPage = useSettingsPage(GT_RUN_PAGES)
   const [reply, setReply] = useState<ConfigReply>()
   const [wait, setWait] = useState('')
   const [gap, setGap] = useState('')
@@ -174,7 +178,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const where = t('这个项目 · 存在场景根的 _settings.json，全组共用')
   const sections = (
     <>
-      <SettingGroup title={t('回放')} aside={framed ? undefined : where}>
+      <SettingGroup page="playback" title={t('回放')} aside={framed ? undefined : where}>
         <SettingRow
           title={t('UI 等待上限（秒）')}
           desc={t('点击、输入、等界面出现时最多等多久')}
@@ -244,6 +248,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       </SettingGroup>
 
       <SettingGroup
+        page="setup"
         title={t('前置步骤')}
         desc={t('每次从场景文件跑都先跑这几步，让回放从同一个存档状态开始')}
         hint={t(
@@ -266,6 +271,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       <GtSkipSettings value={skip} onChange={setSkip} />
 
       <SettingGroup
+        page="keys"
         title={t('条目怎么认')}
         action={
           onOpenRules ? (
@@ -285,6 +291,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       </SettingGroup>
 
       <SettingGroup
+        page="blockers"
         title={t('阻挡界面')}
         action={<AddButton onClick={() => setRules([...rules, blank()])} />}
         hint={t(
@@ -398,13 +405,15 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
     return (
       <>
         {sections}
-        {/* 保存条贴在滚动区底部：表单很长，改了上面的项不用滚到底才能保存 */}
-        <div className="ue:sticky ue:bottom-0 ue:z-10 ue:mt-4 ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:border-t ue:border-line ue:bg-bg ue:py-2.5">
-          <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">{foot}</div>
-          <ui.Button size="sm" disabled={!reply || saving} onClick={() => void save()}>
-            {t('保存运行设置')}
-          </ui.Button>
-        </div>
+        {/* 保存条贴在滚动区底部，只在运行设置那几页出现；切到别的页时表单还挂着，没保存的改动不丢 */}
+        {onRunPage && (
+          <div className="ue:sticky ue:bottom-0 ue:z-10 ue:mt-4 ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:border-t ue:border-line ue:bg-bg ue:py-2.5">
+            <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">{foot}</div>
+            <ui.Button size="sm" disabled={!reply || saving} onClick={() => void save()}>
+              {t('保存运行设置')}
+            </ui.Button>
+          </div>
+        )}
       </>
     )
   return (

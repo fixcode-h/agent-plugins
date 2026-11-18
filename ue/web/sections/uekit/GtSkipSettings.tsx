@@ -41,6 +41,7 @@ export function GtSkipSettings({ value, onChange }: { value: GtSkipConfig; onCha
   const on = value.enabled !== false
   return (
     <SettingGroup
+      page="skip"
       title={t('已达成就跳过')}
       hint={t(
         '步骤上写了跳过条件（录制时自动加或在步骤详情里加）时，回放到这一步先看一眼：已经是想要的样子（勾已勾上、按钮已是「已领取」）就不做，记成「已达成」，算通过。需要 GameTest 1.7.0；场景顶层写 "skipIf": false 的场景照做，运行按钮旁的「全部照做」只管这一次。',
