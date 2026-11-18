@@ -9,6 +9,7 @@ import {
   Layers,
   ListTree,
   Loader2,
+  MoreHorizontal,
   Play,
   Plus,
   SlidersHorizontal,
@@ -17,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost, openMenu } from '../../menu.tsx'
+import { MenuHost, openMenuAt, type MenuItem } from '../../menu.tsx'
 import { Confirm, ErrorText } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
 import { useScenarioLibrary } from './GtLibrary.tsx'
@@ -235,28 +236,28 @@ export function GameTest() {
       )
     })
   const tags = useMemo(() => batchTags(list?.scenarios ?? []), [list])
-  const tagMenu = (e: React.MouseEvent) =>
-    openMenu(e, [
-      { title: t('批量运行') },
-      ...tags.map(([tag, n]) => ({
-        label: tag,
-        icon: Layers,
-        hint: t('{n} 个场景', { n }),
-        onClick: () => void startBatch({ tag }),
-      })),
-      tags.length > 0 && 'sep',
-      {
-        label: t('全部场景'),
-        icon: Layers,
-        hint: t('{n} 个场景', { n: (list?.scenarios ?? []).filter((s) => !s.parseError).length }),
-        disabled: !list?.scenarios.some((s) => !s.parseError),
-        onClick: () =>
-          void startBatch({
-            scenarios: (list?.scenarios ?? []).filter((s) => !s.parseError).map((s) => s.relativePath),
-            name: t('全部场景'),
-          }),
-      },
-    ])
+  /** 批量运行的菜单项：按标签或全部场景，一个接一个跑（并在「运行」旁的下拉里） */
+  const batchItems = (): (MenuItem | false)[] => [
+    { title: t('批量运行') },
+    ...tags.map(([tag, n]) => ({
+      label: tag,
+      icon: Layers,
+      hint: t('{n} 个场景', { n }),
+      onClick: () => void startBatch({ tag }),
+    })),
+    tags.length > 0 && 'sep',
+    {
+      label: t('全部场景'),
+      icon: Layers,
+      hint: t('{n} 个场景', { n: (list?.scenarios ?? []).filter((s) => !s.parseError).length }),
+      disabled: !list?.scenarios.some((s) => !s.parseError),
+      onClick: () =>
+        void startBatch({
+          scenarios: (list?.scenarios ?? []).filter((s) => !s.parseError).map((s) => s.relativePath),
+          name: t('全部场景'),
+        }),
+    },
+  ]
   /** 从第 i 步跑到底；only 时只跑这一步（临时运行，不跑前置步骤、不记进场景的运行历史） */
   const runFrom = (s: Scenario, file: GtScenarioFile, i: number, only?: boolean) =>
     startRun(
@@ -342,34 +343,70 @@ export function GameTest() {
         onQuery={setQuery}
         placeholder={t('按名字找场景')}
         extra={
+          <div className="ue:flex ue:items-center ue:gap-0.5">
+            <ui.Button
+              size="sm"
+              title={needEditor || undefined}
+              disabled={!live || !selected || running || recording || !!busy}
+              onClick={() => selected && runScenario(selected)}
+            >
+              <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
+            </ui.Button>
+            <ui.IconButton
+              icon={ChevronDown}
+              size="sm"
+              label={tip(t('更多运行方式：全部照做、批量运行'))}
+              disabled={!live || running || recording || !!busy}
+              onClick={(e: React.MouseEvent<HTMLElement>) =>
+                openMenuAt(e.currentTarget, [
+                  selected && { label: t('运行'), icon: Play, onClick: () => runScenario(selected) },
+                  selected && {
+                    label: t('全部照做'),
+                    icon: Play,
+                    hint: t('忽略已达成就跳过，每一步都真做'),
+                    disabled: !skipSupported(gtVersion),
+                    onClick: () => runScenario(selected, true),
+                  },
+                  selected && 'sep',
+                  ...batchItems(),
+                ])
+              }
+            />
+          </div>
+        }
+        searchExtra={
           <>
+            {/* 列表栏默认只有 316px 宽，标题行放不下一整排按钮（以前挤出栏外、盖住右边编辑页的返回按钮，用户 2026-11-18 截图）：
+                新建、录制和低频的设置入口挪到搜索框旁边，批量运行并进「运行」旁的下拉 */}
             <ui.IconButton
-              icon={Layers}
+              icon={MoreHorizontal}
               size="sm"
-              label={tip(t('批量运行：按标签或全部场景，一个接一个跑'))}
-              disabled={!live || running || recording || !!busy || !list?.scenarios.length}
-              onClick={tagMenu}
-            />
-            <ui.IconButton
-              icon={SlidersHorizontal}
-              size="sm"
-              label={tip(t('运行设置：UI 等待上限、全局守护'))}
-              disabled={!live}
-              onClick={() => setSettings(true)}
-            />
-            <ui.IconButton
-              icon={BookOpen}
-              size="sm"
-              label={t('接口库：脚本里「调接口」能用的接口')}
-              disabled={!list?.absoluteRootDir}
-              onClick={() => setApiLib(true)}
-            />
-            <ui.IconButton
-              icon={ListTree}
-              size="sm"
-              label={tip(t('条目规则：列表、格子里的条目按什么字段认，录制时按它认、不再问'))}
-              disabled={!list?.absoluteRootDir}
-              onClick={() => setKeyRules(true)}
+              label={t('更多：运行设置、接口库、条目规则')}
+              onClick={(e: React.MouseEvent<HTMLElement>) =>
+                openMenuAt(e.currentTarget, [
+                  {
+                    label: t('运行设置'),
+                    icon: SlidersHorizontal,
+                    hint: t('UI 等待上限、全局守护'),
+                    disabled: !live,
+                    onClick: () => setSettings(true),
+                  },
+                  {
+                    label: t('接口库'),
+                    icon: BookOpen,
+                    hint: t('脚本里「调接口」能用的接口'),
+                    disabled: !list?.absoluteRootDir,
+                    onClick: () => setApiLib(true),
+                  },
+                  {
+                    label: t('条目规则'),
+                    icon: ListTree,
+                    hint: t('列表、格子里的条目按什么字段认'),
+                    disabled: !list?.absoluteRootDir,
+                    onClick: () => setKeyRules(true),
+                  },
+                ])
+              }
             />
             <ui.IconButton
               icon={Plus}
@@ -387,33 +424,6 @@ export function GameTest() {
                 setRecordDir(undefined)
                 setAsking(true)
               }}
-            />
-            <ui.Button
-              size="sm"
-              title={needEditor || undefined}
-              disabled={!live || !selected || running || recording || !!busy}
-              onClick={() => selected && runScenario(selected)}
-            >
-              <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
-            </ui.Button>
-            <ui.IconButton
-              icon={ChevronDown}
-              size="sm"
-              label={tip(t('更多运行方式：全部照做（忽略已达成就跳过）'))}
-              disabled={!live || !selected || running || recording || !!busy}
-              onClick={(e: React.MouseEvent) =>
-                selected &&
-                openMenu(e, [
-                  { label: t('运行'), icon: Play, onClick: () => runScenario(selected) },
-                  {
-                    label: t('全部照做'),
-                    icon: Play,
-                    hint: t('忽略已达成就跳过，每一步都真做'),
-                    disabled: !skipSupported(gtVersion),
-                    onClick: () => runScenario(selected, true),
-                  },
-                ])
-              }
             />
           </>
         }
@@ -519,7 +529,7 @@ export function GameTest() {
               <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:leading-relaxed ue:text-subtle">
                 {q
                   ? t('没有名字里带「{q}」的场景', { q: query })
-                  : t('场景根里还没有场景：点右上角的录制按钮录一个，或让 Agent 用 ue_gametest 写')}
+                  : t('场景根里还没有场景：点搜索框旁的录制按钮录一个，或让 Agent 用 ue_gametest 写')}
               </p>
             }
           />
