@@ -122,6 +122,7 @@ export interface WebHost {
      * { projectId, name?, meta?, icon?, className? }。2026-11-15 加的，旧面板没有：用之前先判断有没有
      */
     ProjectBackCard?: Loose
+    ProjectBackRail?: Loose
     /**
      * 这个插件的参数（清单 settings）里挑几个分组画成表单、带保存：{ groups?: string[] }，不给画全部。
      * 插件自己的设置页用，和设置 →「插件参数」改的是同一份值。2026-11-17 加的，旧面板没有：用之前先判断有没有

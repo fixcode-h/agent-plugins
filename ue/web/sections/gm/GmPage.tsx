@@ -9,6 +9,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { takePending } from '../../pending.ts'
+import { DockCol } from '../../nav/slot.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { ErrorText, PageHead } from '../../ui.tsx'
 import { favOf, parseFav, type GmEntry, type GmParam } from './data.ts'
@@ -173,6 +174,44 @@ export function GmPage() {
     if (note !== undefined) void askAi('fix', note)
   }
 
+  const tree = () => (
+    <>
+      <GmTree
+        entries={shown}
+        favs={favs}
+        recent={recent}
+        macros={d.gm.macros}
+        src={src}
+        onSrc={setSrc}
+        counts={counts}
+        q={q}
+        onQ={setQ}
+        selected={pick?.kind === 'macro' ? `macro:${pick.id}` : (pick?.line ?? '')}
+        onPick={choose}
+        onNewMacro={() => void newMacro()}
+        onAdd={
+          macro
+            ? (e, a) => void saveMacro({ ...macro, steps: [...macro.steps, stepOf(e, a ?? args[e.key] ?? [])] })
+            : undefined
+        }
+        footer={
+          <LuaStatus
+            scan={d.lua.data?.scan}
+            scanning={scanning}
+            onRescan={() => void rescan()}
+            onFixScript={() => void fixScript()}
+            onSetup={() => setSetup(true)}
+          />
+        }
+      />
+      {!d.inst && !counts.lua && (
+        <p className="ue:border-t ue:border-line ue:p-3 ue:text-caption ue:text-subtle">
+          {t('UE 没在运行：C++ GM 要连上运行中的编辑器或游戏才列得出。Lua GM 设置好扫描脚本后不用开 UE 也能看')}
+        </p>
+      )}
+    </>
+  )
+
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       {dialog}
@@ -190,42 +229,18 @@ export function GmPage() {
       </PageHead>
       <ErrorText>{d.cpp.error || d.lua.error}</ErrorText>
       <div className={SPLIT_ROW}>
-        <nav ref={navRef} style={nav.style('40%')} className={`ue:flex ue:flex-col ${PANE_FIXED}`}>
-          <GmTree
-            entries={shown}
-            favs={favs}
-            recent={recent}
-            macros={d.gm.macros}
-            src={src}
-            onSrc={setSrc}
-            counts={counts}
-            q={q}
-            onQ={setQ}
-            selected={pick?.kind === 'macro' ? `macro:${pick.id}` : (pick?.line ?? '')}
-            onPick={choose}
-            onNewMacro={() => void newMacro()}
-            onAdd={
-              macro
-                ? (e, a) => void saveMacro({ ...macro, steps: [...macro.steps, stepOf(e, a ?? args[e.key] ?? [])] })
-                : undefined
-            }
-            footer={
-              <LuaStatus
-                scan={d.lua.data?.scan}
-                scanning={scanning}
-                onRescan={() => void rescan()}
-                onFixScript={() => void fixScript()}
-                onSetup={() => setSetup(true)}
-              />
-            }
-          />
-          {!d.inst && !counts.lua && (
-            <p className="ue:border-t ue:border-line ue:p-3 ue:text-caption ue:text-subtle">
-              {t('UE 没在运行：C++ GM 要连上运行中的编辑器或游戏才列得出。Lua GM 设置好扫描脚本后不用开 UE 也能看')}
-            </p>
-          )}
-        </nav>
-        <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} />
+        {/* GM 树整栏放进左边二级面板（用户 2026-11-18 定）；面板太旧或二级面板收起时照旧是页里左边一栏 */}
+        <DockCol
+          body={tree}
+          fallback={
+            <>
+              <nav ref={navRef} style={nav.style('40%')} className={`ue:flex ue:flex-col ${PANE_FIXED}`}>
+                {tree()}
+              </nav>
+              <SplitHandle pane={nav} paneRef={navRef} reserve={() => 480} />
+            </>
+          }
+        />
         <section className={`ue:flex ue:min-h-0 ue:flex-col ${PANE_FILL}`}>
           {macro ? (
             <MacroPane

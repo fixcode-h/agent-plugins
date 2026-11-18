@@ -9,6 +9,7 @@ import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, NotRunning, PageHead, useTargetInfo } from '../../ui.tsx'
 import { SelectionBar } from '../../selection/SelectionBar.tsx'
 import { Browse } from './Browse.tsx'
+import { SubNav } from '../../nav/slot.tsx'
 
 /**
  * 对象页（设计稿第 4 节，用户 2026-11-15 定名「对象」）：原来的 Actor 页和 Object 页合成一页。
@@ -28,6 +29,19 @@ export function Objects() {
   // 检视区在看的是点引用过去的：引用链的起点（浏览栏里点的那个）在大纲里标「from」
   const start = nav.current?.path === path && nav.current.via ? nav.chain[0]?.entry : undefined
 
+  const browse = (docked: boolean) => (
+    <>
+      <SelectionBar page="objects" current={path} onOpen={(p) => nav.open('objects', p, { from: 'jump' })} />
+      <Browse
+        docked={docked}
+        tick={tick}
+        selected={path}
+        from={start?.page === 'objects' ? start.path : undefined}
+        onOpen={(p, from) => nav.open('objects', p, { from })}
+      />
+    </>
+  )
+
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead
@@ -42,21 +56,25 @@ export function Objects() {
         <NotRunning icon={Box} what={t('对象要在运行中的编辑器或游戏里找；资源在「资源」里看。')} />
       ) : (
         <div className={SPLIT_ROW}>
-          <Card
-            ref={ref}
-            className={PANE_FIXED}
-            style={pane.style('calc(100% - 600px)')}
-            bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+          {/* 浏览栏整栏放进左边二级面板（用户 2026-11-18 定）；面板太旧或二级面板收起时照旧是页里左边一栏 */}
+          <SubNav
+            wide
+            fallback={
+              <>
+                <Card
+                  ref={ref}
+                  className={PANE_FIXED}
+                  style={pane.style('calc(100% - 600px)')}
+                  bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+                >
+                  {browse(false)}
+                </Card>
+                <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
+              </>
+            }
           >
-            <SelectionBar page="objects" current={path} onOpen={(p) => nav.open('objects', p, { from: 'jump' })} />
-            <Browse
-              tick={tick}
-              selected={path}
-              from={start?.page === 'objects' ? start.path : undefined}
-              onOpen={(p, from) => nav.open('objects', p, { from })}
-            />
-          </Card>
-          <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
+            {browse(true)}
+          </SubNav>
           <Inspector key={tick} page="objects" empty={t('在左边选一个对象，在这里看和改属性')} />
         </div>
       )}

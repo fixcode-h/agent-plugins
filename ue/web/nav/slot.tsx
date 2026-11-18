@@ -9,8 +9,8 @@ import { h } from '../host.ts'
  */
 interface Slot {
   el: HTMLElement | null
-  /** 有页面占用插槽时二级面板不再列「本组」的分区；返回释放函数 */
-  claim: () => () => void
+  /** 页面占用插槽（有页面放东西才显示二级面板）；wide：放进来的是整栏列表（对象页的大纲），面板加宽、可拖。返回释放函数 */
+  claim: (wide?: boolean) => () => void
 }
 
 export const SlotCtx = createContext<Slot | null>(null)
@@ -19,21 +19,26 @@ export const SlotCtx = createContext<Slot | null>(null)
 export function useSlot() {
   const [el, setEl] = useState<HTMLElement | null>(null)
   const [used, setUsed] = useState(0)
+  const [wide, setWide] = useState(0)
   const [value] = useState(() => ({
     el: null as HTMLElement | null,
-    claim: () => {
+    claim: (w?: boolean) => {
       setUsed((n) => n + 1)
-      return () => setUsed((n) => n - 1)
+      if (w) setWide((n) => n + 1)
+      return () => {
+        setUsed((n) => n - 1)
+        if (w) setWide((n) => n - 1)
+      }
     },
   }))
-  return { value: { ...value, el }, setEl, used: used > 0 }
+  return { value: { ...value, el }, setEl, used: used > 0, wide: wide > 0 }
 }
 
-/** 分区页面用：插槽在就把 children 放进二级面板，不在就画 fallback */
-export function SubNav({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
+/** 分区页面用：插槽在就把 children 放进二级面板，不在就画 fallback；wide 见 Slot.claim */
+export function SubNav({ children, fallback, wide }: { children: ReactNode; fallback?: ReactNode; wide?: boolean }) {
   const slot = useContext(SlotCtx)
   const el = slot?.el ?? null
-  useEffect(() => (el && slot ? slot.claim() : undefined), [el, slot?.claim])
+  useEffect(() => (el && slot ? slot.claim(wide) : undefined), [el, slot?.claim, wide])
   if (!el) return <>{fallback}</>
   return createPortal(children, el)
 }
@@ -68,6 +73,29 @@ export function SubRows<T extends string>({
           title={r.title}
         />
       ))}
+    </div>
+  )
+}
+
+/**
+ * 页面左边那一整栏（列表、树）：宽屏放进左边二级面板（用户 2026-11-18 定：列表和二级面板并到一起），
+ * 面板太旧或二级面板收起时照旧画页里的那一栏（fallback 里自己带卡片和拖动条）。
+ * body(true) 是放进二级面板时的样子：去掉卡片，占满面板
+ */
+export function DockCol({ body, fallback }: { body: (docked: boolean) => ReactNode; fallback: ReactNode }) {
+  return (
+    <SubNav wide fallback={fallback}>
+      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">{body(true)}</div>
+    </SubNav>
+  )
+}
+
+/** 放进二级面板的那一栏没了卡片标题：用一行小字补上（配置文件名、个数） */
+export function DockHead({ title, aside }: { title?: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2 ue:px-1 ue:pb-1.5 ue:text-footnote ue:text-subtle">
+      <span className="ue:min-w-0 ue:flex-1 ue:truncate">{title}</span>
+      {aside}
     </div>
   )
 }

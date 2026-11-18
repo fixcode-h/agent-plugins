@@ -6,6 +6,7 @@ import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { copyText } from '../../menu.tsx'
 import { setPending } from '../../pending.ts'
+import { DockCol, DockHead } from '../../nav/slot.tsx'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { TreeList, type TreeLine } from '../../TreeList.tsx'
 import { Badge, Card, ErrorText, Note, SearchBox } from '../../ui.tsx'
@@ -108,48 +109,68 @@ export function TagTree() {
     run('refs', async () =>
       setRefs({
         tag: sel,
-        ...(await ppost<{ items: string[]; total: number; loading?: boolean }>(project.id, 'tools/tags/refs', { tag: sel })),
+        ...(await ppost<{ items: string[]; total: number; loading?: boolean }>(project.id, 'tools/tags/refs', {
+          tag: sel,
+        })),
       }),
     )
 
+  const aside =
+    tags.data &&
+    (tags.data.live ? (
+      <Badge tone="ok">{t('{n} 个 · 进程里登记的', { n: tags.data.total })}</Badge>
+    ) : (
+      <Badge title={tags.data.note}>{t('{n} 个 · 只读了 ini', { n: tags.data.total })}</Badge>
+    ))
+  const col = (docked: boolean) => (
+    <>
+      {docked && <DockHead title="GameplayTag" aside={aside} />}
+      <div className={docked ? 'ue:pb-2' : 'ue:border-b ue:border-line ue:p-3'}>
+        <SearchBox placeholder={t('Tag 名包含…')} onSearch={setFilter} live />
+      </div>
+      <ErrorText>{tags.error}</ErrorText>
+      {tags.data && !tags.data.live && (
+        <p className="ue:px-3 ue:pt-2 ue:text-caption ue:text-subtle">
+          {t('UE 没连上：只列出 ini 里写的 Tag，C++ 原生的和 DataTable 里的要开着编辑器才有')}
+        </p>
+      )}
+      <TreeList lines={lines} label={t('GameplayTag 树')} />
+    </>
+  )
+
   return (
     <div className={SPLIT_ROW}>
-      <Card
-        ref={left}
-        className={PANE_FIXED}
-        style={pane.style('70%')}
-        bodyClass="ue:flex ue:min-h-0 ue:flex-col"
-        title={<Tags className="ue:h-4 ue:w-4 ue:text-subtle" />}
-        aside={
-          tags.data &&
-          (tags.data.live ? (
-            <Badge tone="ok">{t('{n} 个 · 进程里登记的', { n: tags.data.total })}</Badge>
-          ) : (
-            <Badge title={tags.data.note}>{t('{n} 个 · 只读了 ini', { n: tags.data.total })}</Badge>
-          ))
+      {/* Tag 树整栏放进左边二级面板（用户 2026-11-18 定） */}
+      <DockCol
+        body={col}
+        fallback={
+          <>
+            <Card
+              ref={left}
+              className={PANE_FIXED}
+              style={pane.style('70%')}
+              bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+              title={<Tags className="ue:h-4 ue:w-4 ue:text-subtle" />}
+              aside={
+                tags.data &&
+                (tags.data.live ? (
+                  <Badge tone="ok">{t('{n} 个 · 进程里登记的', { n: tags.data.total })}</Badge>
+                ) : (
+                  <Badge title={tags.data.note}>{t('{n} 个 · 只读了 ini', { n: tags.data.total })}</Badge>
+                ))
+              }
+            >
+              {col(false)}
+            </Card>
+            <SplitHandle pane={pane} paneRef={left} reserve={() => 320} />
+          </>
         }
-      >
-        <div className="ue:border-b ue:border-line ue:p-3">
-          <SearchBox placeholder={t('Tag 名包含…')} onSearch={setFilter} live />
-        </div>
-        <ErrorText>{tags.error}</ErrorText>
-        {tags.data && !tags.data.live && (
-          <p className="ue:px-3 ue:pt-2 ue:text-caption ue:text-subtle">
-            {t('UE 没连上：只列出 ini 里写的 Tag，C++ 原生的和 DataTable 里的要开着编辑器才有')}
-          </p>
-        )}
-        <TreeList lines={lines} label={t('GameplayTag 树')} />
-      </Card>
-      <SplitHandle pane={pane} paneRef={left} reserve={() => 320} />
+      />
       <Card
         className="ue:min-w-0 ue:lg:flex-1"
         bodyClass="ue:overflow-auto"
         title={sel ? <span className="ue:truncate ue:font-mono">{sel}</span> : t('选一个 Tag')}
-        aside={
-          sel && (
-            <ui.IconButton icon={Copy} size="xs" label={t('复制 Tag 名')} onClick={() => copyText(sel)} />
-          )
-        }
+        aside={sel && <ui.IconButton icon={Copy} size="xs" label={t('复制 Tag 名')} onClick={() => copyText(sel)} />}
       >
         {!sel ? (
           <div className="ue:p-4">
@@ -161,7 +182,9 @@ export function TagTree() {
               <dt className="ue:text-subtle">{t('注释')}</dt>
               <dd className="ue:text-fg">{row?.comment || '—'}</dd>
               <dt className="ue:text-subtle">{t('来源')}</dt>
-              <dd className="ue:font-mono ue:text-fg">{row?.source || (row ? '—' : t('隐式父级（只因为有子 Tag 才存在）'))}</dd>
+              <dd className="ue:font-mono ue:text-fg">
+                {row?.source || (row ? '—' : t('隐式父级（只因为有子 Tag 才存在）'))}
+              </dd>
             </dl>
             <div className="ue:flex ue:items-center ue:gap-2">
               <ui.Button size="sm" variant="secondary" disabled={busy === 'refs'} onClick={() => void loadRefs()}>

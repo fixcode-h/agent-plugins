@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { OverviewExtra } from '../server/overview.ts'
 import { createContext, useContext } from 'react'
 import type { ProjectState, Target, UeProject } from '../server/types.ts'
@@ -22,6 +23,8 @@ export interface UeCtx {
   openJump: () => void
   /** 分区要整页时（GameTest 编辑页）收起左边的分区栏；换分区或项目时自动放开 */
   setWide: (on: boolean) => void
+  /** 左栏是图标轨、又不是从项目工具打开时，换项目的卡片放到概览页头（图标轨里没位置） */
+  switcher?: ReactNode
 }
 
 export interface Badges {
