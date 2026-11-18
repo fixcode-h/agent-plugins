@@ -162,15 +162,16 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
           src: index.idx.source.assets === 'uetovs' ? t('来自 UEToVS 索引') : t('扫磁盘'),
           n: matchWidgets(index.idx, '', 0).all,
         })
-  // 弹窗里卡片之间没有分隔线，每节自己描边；设置页里卡片贴边、由外层的堆叠容器画分隔线
+  // 弹窗里不写「存在哪」（弹窗底下有一行），设置页里写在第一组的组名旁边
   const framed = !!onClose
   const where = t('这个项目 · 存在场景根的 _settings.json，全组共用')
   const sections = (
     <>
-      <SettingGroup title={t('回放')} aside={framed ? undefined : where} framed={framed}>
+      <SettingGroup title={t('回放')} aside={framed ? undefined : where}>
         <SettingRow
           title={t('UI 等待上限（秒）')}
-          desc={t('点击、输入、等界面出现时最多等多久，0 是一直等到界面出现（卡住时点停止）。空着用项目设置：{d}', {
+          desc={t('点击、输入、等界面出现时最多等多久')}
+          hint={t('0 是一直等到界面出现（卡住时点停止）。空着用项目设置：{d}', {
             d: waitText(reply?.settingsUiWaitTimeoutMs ?? 0),
           })}
         >
@@ -185,7 +186,8 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         </SettingRow>
         <SettingRow
           title={t('UI 操作间隔（秒）')}
-          desc={t(
+          desc={t('回放时相邻两个 UI 操作至少隔多久')}
+          hint={t(
             '回放时相邻两个 UI 操作（点击、拖动、输入、选择……）之间至少隔多久，和录制时点得多快无关；中间等待步骤用掉的时间也算。0 是不隔，空着按 1 秒。需要 GameTest 1.2.6。',
           )}
         >
@@ -200,7 +202,8 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         </SettingRow>
         <SettingRow
           title={t('点击方式')}
-          desc={t(
+          desc={t('回放时怎么点按钮')}
+          hint={t(
             '不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。',
           )}
         >
@@ -217,7 +220,8 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         </SettingRow>
         <SettingRow
           title={t('随机种子')}
-          desc={t(
+          desc={t('每次开跑前固定引擎的全局随机')}
+          hint={t(
             '填整数时每次开跑前固定引擎的全局随机（蓝图 Random 节点、FMath::Rand）；游戏自己的随机流、Lua 的 math.random 管不到，用前置步骤里的 GM 固定。空着不固定。',
           )}
         >
@@ -234,12 +238,12 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
 
       <SettingGroup
         title={t('前置步骤')}
-        framed={framed}
-        desc={t(
+        desc={t('每次从场景文件跑都先跑这几步，让回放从同一个存档状态开始')}
+        hint={t(
           '每次从场景文件跑都先跑这几步（写法和场景步骤一样），用来清引导、重置任务、发道具，让回放从同一个存档状态开始。场景写 "setup": false 的跳过；「从这一步开始运行」不跑。需要 GameTest 1.2.5。',
         )}
       >
-        <div className="ue:px-4 ue:py-3">
+        <div className="ue:py-3.5">
           <ui.Textarea
             rows={4}
             className="ue:font-mono"
@@ -250,15 +254,14 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         </div>
       </SettingGroup>
 
-      <GtMoveSettings value={move} onChange={setMove} framed={framed} />
+      <GtMoveSettings value={move} onChange={setMove} />
 
-      <GtKeyRules value={keyRules} onChange={setKeyRules} framed={framed} />
+      <GtKeyRules value={keyRules} onChange={setKeyRules} />
 
       <SettingGroup
         title={t('阻挡界面')}
-        framed={framed}
-        aside={<AddButton onClick={() => setRules([...rules, blank()])} />}
-        desc={t(
+        action={<AddButton onClick={() => setRules([...rules, blank()])} />}
+        hint={t(
           '公告、新手引导、活动弹窗这类不定时弹出的界面：跑测试时一出现就按规则处理掉，不让它挡住后面的步骤。正在等的那一步要点的就是它时不处理；每次处理都记在那一步的结果里。',
         )}
       >
@@ -370,7 +373,7 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
       <>
         {sections}
         {/* 保存条贴在滚动区底部：表单很长，改了上面的项不用滚到底才能保存 */}
-        <div className="ue:sticky ue:bottom-0 ue:z-10 ue:flex ue:border-t ue:border-line ue:flex-wrap ue:items-center ue:gap-3 ue:bg-card ue:px-4 ue:py-2.5">
+        <div className="ue:sticky ue:bottom-0 ue:z-10 ue:mt-4 ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:border-t ue:border-line ue:bg-bg ue:py-2.5">
           <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">{foot}</div>
           <ui.Button size="sm" disabled={!reply || saving} onClick={() => void save()}>
             {t('保存运行设置')}
@@ -394,7 +397,7 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         </>
       }
     >
-      <div className="ue:flex ue:flex-col ue:gap-3 ue:text-body">
+      <div className="ue:-mt-4 ue:flex ue:flex-col ue:gap-3 ue:text-body">
         {sections}
         {foot}
       </div>

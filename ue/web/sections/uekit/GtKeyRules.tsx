@@ -27,23 +27,14 @@ export function tidyKeyRules(rules: GtKeyRule[]) {
  * 运行设置里的「条目怎么认」（效果图 3 右下）：录制时点到这些条目直接按规则写，不再暂停问。
  * 规则一般是录制弹窗里勾「以后都按这个认」加的，这里能看、改、删、手加。
  */
-export function GtKeyRules({
-  value,
-  onChange,
-  framed,
-}: {
-  value: GtKeyRule[]
-  onChange: (v: GtKeyRule[]) => void
-  framed?: boolean
-}) {
+export function GtKeyRules({ value, onChange }: { value: GtKeyRule[]; onChange: (v: GtKeyRule[]) => void }) {
   const { ui } = h()
   const patch = (i: number, p: Partial<GtKeyRule>) => onChange(value.map((r, k) => (k === i ? { ...r, ...p } : r)))
   return (
     <SettingGroup
       title={t('条目怎么认')}
-      framed={framed}
-      aside={<AddButton onClick={() => onChange([...value, { entry: '', by: [] }])} />}
-      desc={t(
+      action={<AddButton onClick={() => onChange([...value, { entry: '', by: [] }])} />}
+      hint={t(
         '录制时点到列表、格子里的这些条目，直接按规则里的字段认（如物品 Id），不再暂停问。录制弹窗里勾「以后都按这个认」会加到这里。',
       )}
     >
