@@ -45,6 +45,11 @@ npm test                      # 这类插件的单测
 同一版本号的 Release 已经有了时不覆盖：内容一样就跳过，内容变了只出警告，要发布就升版本号。
 要让用户收到新版本，同时改插件的 `plugin.json` 和根上 `plugins.json` 里的版本号（`npm run check` 会核对）。
 
+## 市场里的包装配方
+
+`wraps/` 里的配方（面板「从 GitHub 链接包装…」用，见 [wraps/README.md](wraps/README.md)）想让用户在插件页直接看到的，在 `plugins.json` 的 `wraps` 数组里加一项（`repo`、`id`、`name`、`description`、`icon`、`homepage`，`id` 和 `name` 和配方一致）。
+面板把它列在「可安装」里、标「包装」，点安装走包装预览；它没有版本号、不参加检查更新。旧面板只读 `plugins`，看不到这一组。现在列着 Archify（诊断报告的「架构页」用它画）。
+
 ## 新增插件
 
 1. 新建 `<id>/`，写 `plugin.json`（`id` 和目录名一致，`api` 写面板的插件接口版本），按需要加 `server/index.ts`、`web/index.tsx`、`web/index.css`、`skills/`、`locales/en.json`；

@@ -24,8 +24,21 @@ for (const d of dirs) {
   if (e.asset !== `${m.id}-${m.version}.zip`) errors.push(`${m.id}：asset 要写 ${m.id}-${m.version}.zip`)
 }
 for (const e of index) if (!dirs.some((d) => d.name === e.id)) errors.push(`plugins.json 里的 ${e.id} 没有对应的目录`)
+// wraps：市场里列出的官方包装配方（面板读成「包装」条目，安装走包装弹窗）：要有 wraps/ 里的配方，id、名字和配方一致
+const wraps = JSON.parse(readFileSync(path.join(ROOT, 'plugins.json'), 'utf8')).wraps ?? []
+for (const w of wraps) {
+  const file = path.join(ROOT, 'wraps', `${String(w.repo).replace('/', '__')}.json`)
+  if (!existsSync(file)) {
+    errors.push(`plugins.json 的 wraps 里 ${w.repo} 在 wraps/ 下没有配方`)
+    continue
+  }
+  const r = JSON.parse(readFileSync(file, 'utf8'))
+  if (r.id !== w.id) errors.push(`wraps 里 ${w.repo} 的 id 是 ${w.id}，配方写的是 ${r.id}`)
+  if (r.name !== w.name) errors.push(`wraps 里 ${w.repo} 的名字和配方不一致`)
+  if (index.some((e) => e.id === w.id)) errors.push(`wraps 里的 ${w.id} 和插件同名`)
+}
 if (errors.length) {
   console.error(errors.join('\n'))
   process.exit(1)
 }
-console.log(`plugins.json 和 ${dirs.length} 个插件对得上`)
+console.log(`plugins.json 和 ${dirs.length} 个插件、${wraps.length} 个包装配方对得上`)
