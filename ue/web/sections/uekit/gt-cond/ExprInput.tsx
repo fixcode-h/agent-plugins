@@ -1,4 +1,5 @@
 import { AtSign, CircleAlert, DollarSign, FunctionSquare, Plug } from 'lucide-react'
+import { show } from '../../../api.ts'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   EXPR_FUNCTIONS,
@@ -12,6 +13,7 @@ import {
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
+import { useExprNow } from '../gt-live/use-cond-now.ts'
 import { sigOf } from '../gt-api/model.ts'
 import { exprErrorText, sourceDoc } from './expr-docs.ts'
 
@@ -29,7 +31,7 @@ const MAX = 12
 
 /**
  * 写出来的问题：语法错（带位置）、忘了加 $ 的名字、参数个数不对、没有这个函数或接口、条件里调了会改状态的接口。
- * 只看得出写法上的问题，取不取得到值要「现在核对」问游戏
+ * 只看得出写法上的问题，取不取得到值看下面「此刻」那一行（连着游戏时一直刷新）
  */
 export function exprProblems(
   src: string,
@@ -90,6 +92,9 @@ export function ExprInput({
   const problem = value.trim()
     ? exprProblems(value, { names: new Set(names.map((n) => n.name)), apis: apiMap, readOnly })
     : undefined
+  // 写对了才问游戏：此刻的值（定稿 3.3），连着游戏时一直刷新；GameTest 太旧时不显示
+  const now = useExprNow(value.trim() && !problem ? [{ id: 'e', expr: value.trim() }] : undefined)
+  const res = now.mode === 'live' ? now.byId.get('e') : undefined
 
   const word = open ? wordAt(value, caret) : undefined
   const items = useMemo((): Item[] => {
@@ -181,6 +186,21 @@ export function ExprInput({
             {t('第 {n} 个字：', { n: problem.at + 1 })}
             {problem.text}
           </span>
+        </span>
+      )}
+      {res && !problem && (
+        <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-caption ue:text-subtle">
+          <span className="ue:h-1.5 ue:w-1.5 ue:shrink-0 ue:rounded-full ue:bg-success ue:motion-safe:animate-pulse" />
+          {res.error || res.unresolved ? (
+            <span className="ue:truncate ue:text-warning">
+              {res.error ?? t('读不到：{r}', { r: res.unresolved ?? '' })}
+            </span>
+          ) : (
+            <span className="ue:truncate ue:font-mono">
+              {t('此刻 = {v}', { v: show(res.value) })}
+              {res.type && <span className="ue:ml-1.5 ue:font-sans">{res.type}</span>}
+            </span>
+          )}
         </span>
       )}
       {open && shown.length > 0 && (

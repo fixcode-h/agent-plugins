@@ -8,6 +8,7 @@ import {
   KeyRound,
   Library,
   ListStart,
+  MonitorPlay,
   MonitorOff,
   Play,
   ScanText,
@@ -119,6 +120,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
         ],
       },
       { title: t('编写 · 这个项目'), items: [{ id: 'api', label: t('接口库'), icon: Library }] },
+      { title: t('编写 · 所有项目共用'), items: [{ id: 'live', label: t('连着游戏'), icon: MonitorPlay }] },
       {
         title: t('录制 · 所有项目共用'),
         items: [
@@ -201,6 +203,9 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
             {/* 运行设置占左边菜单的前六页，一直挂着（换页不丢没保存的改动），只画当前那一组 */}
             <GtSettings />
             <GtApiSettings />
+            <SettingGroup page="live" title={t('连着游戏编辑')} aside={t('所有项目共用')} flush>
+              <PanelParams groups={['GameTest 连着游戏']} />
+            </SettingGroup>
             <SettingGroup page="shots" title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
             </SettingGroup>

@@ -4,11 +4,10 @@ import {
   CircleHelp,
   CircleX,
   Code2,
+  Crosshair,
   GripVertical,
   Layers,
-  Loader2,
   Plus,
-  ScanEye,
   Star,
   Trash2,
 } from 'lucide-react'
@@ -28,34 +27,36 @@ import {
   type CondNode,
   type GtPath,
 } from '../../../../shared/gt-script/index.ts'
-import { op, ppost, show } from '../../../api.ts'
+import { ppost, show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
+import { NowBar } from '../gt-live/NowBar.tsx'
+import { PickDialog } from '../gt-live/PickDialog.tsx'
+import { useCondNow } from '../gt-live/use-cond-now.ts'
+import type { WidgetKind } from '../gt-blocks/state-presets.ts'
 import { VarsDialog } from '../gt-vars/VarsDialog.tsx'
 import { allChecks, checkKindOf } from './checks/index.ts'
-
-/** gt.resolve conds 的一项（协议第 10 节）：此刻成不成立，每条判断的实际值 */
-interface Resolved {
-  holds?: boolean
-  parts?: { path: string; holds: boolean; actual?: unknown; unresolved?: string }[]
-}
 
 const keyOf = (p: GtPath) => p.join('.')
 
 /**
  * 条件组编辑器（定稿 4.1、效果图 2）：全部满足 / 任一满足，任意嵌套子组和「不」，每行一条判断，
- * 点开就地改；连着游戏时「现在核对」标出此刻每条成不成立和实际值（只问一次，不轮询）。
- * 底下是稳住时间和存进场景里的样子。if、循环、等到、守护、已达成就跳过、检查都用这一个
+ * 点开就地改；连着游戏时每条一直标着此刻成不成立和实际值（gt.watch 推送，GameTest 1.10.0 以前点「现在核对」问一次）。
+ * 「从游戏里抓」在实时画面上点控件拼条件（效果图 3）。底下是稳住时间和存进场景里的样子。
+ * if、循环、等到、守护、已达成就跳过、检查都用这一个
  */
 export function CondEditor({
   value,
   onChange,
   elseSettle,
   compact,
+  onSplit,
 }: {
   value: unknown
   onChange: (cond: CondNode) => void
+  /** 「按它分路」：抓到控件后把所在的如果换成按状态分支（只有如果给） */
+  onSplit?: (target: string, kind?: WidgetKind) => void
   /** 有「否」那一边的（if、loop while）显示「走否前」的稳住时间 */
   elseSettle?: boolean
   /** 嵌在守护、按状态分支卡片里时不显示稳住时间和 JSON */
@@ -66,29 +67,15 @@ export function CondEditor({
   const root = toEditable(value)
   const [open, setOpen] = useState<string>()
   const [vars, setVars] = useState<GtPath>()
-  const [checking, setChecking] = useState(false)
-  const [resolved, setResolved] = useState<Resolved>()
+  const [picking, setPicking] = useState<GtPath>()
   const [json, setJson] = useState(false)
   // 「存成常用」：起名字的小弹窗
   const [aliasDraft, setAliasDraft] = useState<{ node: CondNode; name: string }>()
-  const set = (next: CondNode) => {
-    setResolved(undefined)
-    onChange(simplify(next))
-  }
+  const set = (next: CondNode) => onChange(simplify(next))
 
+  const now = useCondNow([{ id: 'c', cond: root }])
+  const resolved = now.byId.get('c')
   const parts = new Map((resolved?.parts ?? []).map((p) => [p.path, p]))
-
-  const check = async () => {
-    setChecking(true)
-    try {
-      const r = await op<{ conds?: Resolved[] }>(ctx.project, 'gt.resolve', { conds: [{ id: 'c', cond: root }] })
-      setResolved(r.conds?.[0] ?? {})
-    } catch (e) {
-      h().toast.error((e as Error).message)
-    } finally {
-      setChecking(false)
-    }
-  }
 
   const addMenu = (e: React.MouseEvent, group: GtPath) =>
     openMenu(
@@ -198,6 +185,12 @@ export function CondEditor({
             <Layers className="ue:h-3.5 ue:w-3.5" />
             {t('条件组')}
           </ui.Button>
+          {ctx.live && (
+            <ui.Button size="sm" variant="ghost" onClick={() => setPicking(path)}>
+              <Crosshair className="ue:h-3.5 ue:w-3.5" />
+              {t('从游戏里抓')}
+            </ui.Button>
+          )}
           <ui.Button size="sm" variant="ghost" onClick={() => setVars(path)}>
             <Code2 className="ue:h-3.5 ue:w-3.5" />
             {t('从代码选')}
@@ -331,24 +324,7 @@ export function CondEditor({
   return (
     <div className="ue:flex ue:flex-col ue:gap-2">
       {renderGroup(root, [], 0)}
-      {ctx.live && (
-        <div className="ue:flex ue:items-center ue:gap-2 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2.5 ue:py-1.5 ue:text-footnote">
-          <ui.Button size="sm" variant="ghost" disabled={checking} onClick={() => void check()}>
-            {checking ? (
-              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
-            ) : (
-              <ScanEye className="ue:h-3.5 ue:w-3.5" />
-            )}
-            {t('现在核对')}
-          </ui.Button>
-          {resolved && (
-            <span className={resolved.holds ? 'ue:text-success' : 'ue:text-danger'}>
-              {resolved.holds ? t('此刻：成立') : t('此刻：不成立')}
-            </span>
-          )}
-          {!resolved && <span className="ue:text-subtle">{t('问一次游戏，看此刻每条成不成立')}</span>}
-        </div>
-      )}
+      <NowBar now={now} holds={resolved?.holds} />
       {!compact && (
         <div className="ue:grid ue:grid-cols-[auto_auto_minmax(0,1fr)] ue:items-center ue:gap-x-2 ue:gap-y-1.5 ue:text-footnote">
           <span className="ue:text-subtle">{t('稳住')}</span>
@@ -409,6 +385,27 @@ export function CondEditor({
             />
           </ui.Field>
         </ui.Modal>
+      )}
+      {picking && (
+        <PickDialog
+          mode="cond"
+          onClose={() => setPicking(undefined)}
+          onUse={(c) => {
+            set(c)
+            setPicking(undefined)
+          }}
+          onAdd={(c) => {
+            set(addTo(root, picking, c) ?? root)
+            setPicking(undefined)
+          }}
+          onSplit={
+            onSplit &&
+            ((target, kind) => {
+              onSplit(target, kind)
+              setPicking(undefined)
+            })
+          }
+        />
       )}
       {vars && (
         <VarsDialog
