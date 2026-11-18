@@ -9,7 +9,7 @@ import { satisfies } from './plugins/model.ts'
 
 /**
  * gt.record.start 的 shots：关掉时 false；外扩按百分比存，高度上限按 16:9 跟着宽度算。
- * GameTest 1.4.2 起外扩有开关（默认关）、左右和上下各一个比例和上限；编辑器里的 GameTest 更旧时
+ * GameTest 1.5.0 起外扩有开关（默认关）、左右和上下各一个比例和上限；编辑器里的 GameTest 更旧时
  * 不认这些字段（会报「不认识 padX」），换成旧写法：一个比例管四边，关外扩时比例和上限都给 0、最小尺寸给下限
  */
 export function shotsArg(gameTestVersion?: string): false | Record<string, number | boolean> {
@@ -23,7 +23,7 @@ export function shotsArg(gameTestVersion?: string): false | Record<string, numbe
   const padY = num(c.gtShotPadY, 50) / 100
   const padYMax = Math.round(num(c.gtShotPadYMax, 40))
   const size = { maxWidth, maxHeight: Math.max(90, Math.round((maxWidth * 9) / 16)) }
-  if (gameTestVersion && !satisfies(gameTestVersion, '>=1.4.2'))
+  if (gameTestVersion && !satisfies(gameTestVersion, '>=1.5.0'))
     return expand
       ? { padRatio: Math.max(padX, padY), padMax: Math.max(padXMax, padYMax), ...size }
       : { padRatio: 0, padMin: 0, padMax: 0, minWidth: 16, minHeight: 16, ...size }

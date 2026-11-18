@@ -2872,7 +2872,6 @@
   "lua_gc 报的内存，后面是录制期间（或分析范围内）涨了多少": "Memory reported by lua_gc, followed by how much it grew during the recording (or the analysis range)",
   "每次点界面截下被点的控件（描红框），用来认按钮上的字、给 AI 整理看；存在项目的 Saved/GameTest/shots，不进版本库": "Each UI click captures the clicked control (outlined in red), used to read button text and for AI tidy. Stored in the project's Saved/GameTest/shots, outside version control",
   "截图外扩": "Expand screenshots",
-  "关着时只截被点的控件，认字只看控件里的字；打开后按下面的比例往外多截一圈，带上周围的界面（需要 GameTest 1.4.2，旧版按左右、上下里较大的那个比例）": "When off, only the clicked control is captured, so text recognition sees only its text. When on, the capture extends by the ratios below to include the surrounding UI (needs GameTest 1.4.2; older versions use the larger of the horizontal and vertical ratios)",
   "左右外扩比例": "Horizontal margin",
   "左右每边多截控件宽度的这么多（开了截图外扩才用）": "Extra capture on the left and right, as a share of the control's width (only when expanding)",
   "左右外扩上限": "Horizontal margin limit",
@@ -2882,5 +2881,6 @@
   "上下外扩上限": "Vertical margin limit",
   "上下每边最多扩这么多": "Caps the margin above and below",
   "回放": "Playback",
-  "保存运行设置": "Save run settings"
+  "保存运行设置": "Save run settings",
+  "关着时只截被点的控件，认字只看控件里的字；打开后按下面的比例往外多截一圈，带上周围的界面（需要 GameTest 1.5.0，旧版按左右、上下里较大的那个比例）": "When off, only the clicked control is captured, so text recognition sees only its text. When on, the capture extends by the ratios below to include the surrounding UI (needs GameTest 1.5.0; older versions use the larger of the horizontal and vertical ratios)"
 }
