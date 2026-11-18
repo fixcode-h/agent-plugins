@@ -77,6 +77,18 @@ test('有 UEToVS 的索引时直接用：蓝图带父类、控件蓝图认出来
       pc: '/Script/UMG.UserWidget',
       npc: '/Script/UMG.UserWidget',
     },
+    // 名字不像界面、父类是项目自己的 C++ 控件基类：按头文件里的继承链认；子蓝图只写了父蓝图也认
+    {
+      p: path.join(root, 'Content', 'UI', 'Shop.uasset'),
+      o: '/Game/UI/Shop.Shop',
+      pc: '/Script/MyGame.PanelBase',
+      npc: '/Script/MyGame.PanelBase',
+    },
+    {
+      p: path.join(root, 'Content', 'UI', 'ShopVip.uasset'),
+      o: '/Game/UI/ShopVip.ShopVip',
+      pc: '/Game/UI/Shop.Shop_C',
+    },
     { p: path.join(root, 'Content', 'Data', 'DT_Items.uasset'), o: '/Game/Data/DT_Items.DT_Items' },
     { p: path.join(base, 'Other', 'Content', 'BP_X.uasset'), o: '/Game/BP_X.BP_X' },
   ]
@@ -92,11 +104,17 @@ test('有 UEToVS 的索引时直接用：蓝图带父类、控件蓝图认出来
       files: [{ path: path.join(root, 'Content', 'Script', 'Game', 'Main.lua'), module: 'Game.Main' }],
     }),
   )
+  await touch(
+    path.join(root, 'Source', 'MyGame', 'UI', 'PanelBase.h'),
+    'UCLASS()\nclass MYGAME_API UPanelBase : public UUserWidget\n{\n};\n',
+  )
   const idx = await searchIndex(project('uetovs'))
   assert.equal(idx.source.assets, 'uetovs')
   assert.deepEqual(idx.assets, [
     ['/Game/Characters/BP_Hero.BP_Hero', 'Blueprint', 'HeroCharacter'],
     ['/Kit/UI/WBP_Bag.WBP_Bag', 'WidgetBlueprint', 'UserWidget'],
+    ['/Game/UI/Shop.Shop', 'WidgetBlueprint', 'PanelBase'],
+    ['/Game/UI/ShopVip.ShopVip', 'WidgetBlueprint', 'Shop'],
     ['/Game/Data/DT_Items.DT_Items', ''],
   ])
   assert.equal(idx.source.lua, 'uetovs')

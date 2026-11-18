@@ -11,24 +11,20 @@ export interface WidgetHit {
   name: string
   /** 包路径 /Game/UI/WBP_Notice */
   pkg: string
-  /** 索引认出了是控件蓝图；false 是按名字猜的（扫磁盘时没有类名） */
+  /** 索引认出了是控件蓝图；false 是认不出类型的（扫磁盘时没有类名） */
   sure: boolean
 }
 
-/** 名字像界面的前缀：扫磁盘的索引不知道类名，只能按命名习惯猜 */
-const WIDGET_NAME = /^(wbp|wb|w|ui|umg)_/
-
 /**
- * 是不是可能当阻挡界面的控件蓝图：
- * - 索引认出是 WidgetBlueprint 的（编辑器工具控件不会在游戏里弹，不列）；
- * - UEToVS 只按父类猜类型，父类是项目自己的控件基类（名字不以 UserWidget 结尾）时会记成 Blueprint，父类名里有 Widget 的也算；
- * - 扫磁盘时类名是空串，名字是 WBP_ / W_ / UI_ 开头的也列出来
+ * 是不是可能当阻挡界面的控件蓝图。只按**继承**认，不按名字猜（用户 2026-11-18：所有 UMG 都直接或间接继承 UserWidget）：
+ * - 索引认出是 WidgetBlueprint 的（服务端顺着原生父类和项目头文件的继承链认，见 server/search-index/native-widgets.ts）；
+ *   编辑器工具控件不会在游戏里弹，不列；
+ * - 扫磁盘的索引（`disk`）不读 .uasset，类名是空串、认不出是什么：也列出来但标成没认出（淡显、排在后面），打字筛。
+ *   UEToVS 的索引里类名是空串的是不是蓝图的资源（数据表、贴图），不列
  */
-export function widgetKind(r: AssetRow): 'sure' | 'guess' | undefined {
+export function widgetKind(r: AssetRow, disk = false): 'sure' | 'guess' | undefined {
   if (r.cls === 'WidgetBlueprint') return 'sure'
-  if (r.cls !== 'Blueprint' && r.cls !== '') return undefined
-  if (r.parent && /widget/i.test(r.parent) && !/EditorUtility/i.test(r.parent)) return 'sure'
-  return WIDGET_NAME.test(r.lname) ? 'guess' : undefined
+  return disk && r.cls === '' ? 'guess' : undefined
 }
 
 /** 每份索引只挑一次候选：5000+ 资源时每次按键只在控件蓝图里筛 */
@@ -41,8 +37,9 @@ function widgets(idx: LoadedIndex) {
   const sure = new Set<AssetRow>()
   const seen = new Set<string>()
   const dup = new Set<string>()
+  const disk = idx.source.assets === 'disk'
   for (const r of idx.assets) {
-    const k = widgetKind(r)
+    const k = widgetKind(r, disk)
     if (!k) continue
     rows.push(r)
     if (k === 'sure') sure.add(r)

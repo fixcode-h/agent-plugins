@@ -13,7 +13,7 @@ export interface SuggestRow {
   detail?: string
   icon?: LucideIcon
   tone?: string
-  /** 淡显（按名字猜的，不一定对） */
+  /** 淡显（没认出来的，不一定对） */
   dim?: boolean
 }
 
