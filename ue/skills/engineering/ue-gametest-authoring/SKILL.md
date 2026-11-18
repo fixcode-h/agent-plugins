@@ -21,7 +21,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 4. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。返回 `offline: true` 说明编辑器没开、只查了结构：函数、选择器、代码变量路径要开着编辑器再校验一次。
 5. **跑**：`action=run scenario=…`（可带 `params`），`job` 看进度，`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。
 6. **改**：读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.invoke`（调用的返回值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
-7. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名和 `regression`，以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
+7. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
 **不要**让用户去录制、去点界面；能从代码写就自己写。不知道某个控件怎么写选择器时，`widgets` 读资产；游戏开着可以 `inspect` 指着看。
 
@@ -98,6 +98,15 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 | 断言实际值不对、日志里有 Error / Lua 报错 | 功能 bug | 给用户看证据（步骤、实际值、日志行、截图），说明判断 |
 
 报告里每一条结论都要有证据：哪一步、实际值、日志行或截图路径。不确定是 bug 还是脚本问题时说清楚还要确认什么。
+
+## 测编辑器里的操作（editor.*，GameTest 1.10.0）
+
+要验证的是编辑器工具（资产编辑器按钮、细节面板、编译保存流程），不是游戏玩法时，用 `editor.*` 动作，只在开着界面的 UE 编辑器里跑、不开 PIE：
+
+- `editor.open`（`asset` 或 `map`）、`editor.select`（`actors` / `assets`）、`editor.prop`（`object` + `path` + `value`，可撤销）、`editor.spawn`（`class` + `label`）、`editor.save`、`editor.compile`；
+- `editor.command`（`name` 写 `上下文.命令`，`asset` 指在哪个资产编辑器里执行；或 `console`）；`editor.click` 按停靠页 `tab`、`widget`、`text`、`nth` 点界面，能用命令就别用它；
+- `editor.assert`：`check` = `compiled` / `saved` / `open` + `asset`，或按 `widget` 检查界面上有某个控件。
+- 关卡里的 Actor 写 `actor:<大纲里的标签>`，组件写 `actor:<标签>/<组件名>`；资源写对象路径。
 
 ## 录制「整理成流程」
 

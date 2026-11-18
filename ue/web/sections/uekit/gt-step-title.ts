@@ -1,6 +1,7 @@
 import { t } from '../../host.ts'
 import { hintOf, type GtHint } from './gt-steps.ts'
 import { moveTitle } from './gt-move.ts'
+import { editorStepTitle, isEditorStep } from './gt-editor-steps.ts'
 
 /**
  * GameTest 步骤列表每一行的一句中文：只说「这一步在干什么」，选择器、hint、参数原文都留给右边的详情。
@@ -22,6 +23,8 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
   const n = (k: string) => (typeof def[k] === 'number' ? (def[k] as number) : Number.NaN)
   const w = widgetLabel(hintOf(def), s('target'))
   const a = String(def.action ?? '')
+  // 录 UE 编辑器操作的步骤（GameTest 1.10.0）没有选择器，按对象和资源说
+  if (isEditorStep(a)) return editorStepTitle(def)
   switch (a) {
     case 'click': {
       const b = s('button')

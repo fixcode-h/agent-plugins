@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   Camera,
   CheckSquare,
   Clock,
@@ -56,6 +57,18 @@ export function actionIcon(a?: string): LucideIcon {
       return ScrollText
     case 'move':
       return Footprints
+    case 'editor.open':
+    case 'editor.select':
+    case 'editor.prop':
+    case 'editor.spawn':
+    case 'editor.save':
+    case 'editor.compile':
+    case 'editor.command':
+      return AppWindow
+    case 'editor.click':
+      return MousePointerClick
+    case 'editor.assert':
+      return CheckSquare
     default:
       return Zap
   }
