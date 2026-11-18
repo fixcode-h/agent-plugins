@@ -1,4 +1,4 @@
-import { Check, CircleCheck, CircleX, Code, Plus, ScanSearch, Trash2 } from 'lucide-react'
+import { Check, CircleCheck, CircleX, Code, Eye, Pencil, ScanSearch, SquareCheck, Trash2, Type } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -13,13 +13,19 @@ import {
   type GtSkipIf as SkipIf,
   type GtStateCand,
   parseSkipText,
+  type QuickCond,
+  type QuickKind,
+  quickDefault,
+  quickOf,
   sameAsCand,
   SKIP_MIN_VERSION,
   skipFromCand,
+  skipFromQuick,
   skipOf,
   skipSupported,
   stateOf,
 } from './gt-skip.ts'
+import { GtSkipQuick } from './GtSkipQuick.tsx'
 import type { StepDef } from './GtStepDetail.tsx'
 
 /** gt.resolve checks 的一项（GameTest 1.7.0） */
@@ -50,7 +56,11 @@ export function GtSkipIf({
   const { ui } = h()
   const { busy, run } = useAction()
   const skip = skipOf(def)
-  const cands = stateOf(hintOf(def) as Record<string, unknown> | undefined)?.cands ?? []
+  const hint = hintOf(def)
+  const st = stateOf(hint as Record<string, unknown> | undefined)
+  const cands = st?.cands ?? []
+  const [quick, setQuick] = useState<QuickCond>()
+  const quickInit = (k: QuickKind) => quickDefault(k, cands, hint?.text)
   const version = state?.extensions?.find((x) => x.name === 'GameTest')?.version
   const supported = skipSupported(version)
   const [text, setText] = useState<string>()
@@ -59,6 +69,7 @@ export function GtSkipIf({
   useEffect(() => setAlso(String(skip?.also ?? 0)), [skip?.also])
   const skipKey = JSON.stringify(skip ?? null)
   useEffect(() => setCheck(undefined), [skipKey, edit?.index])
+  useEffect(() => setQuick(undefined), [skipKey, edit?.index])
   const off = !edit || edit.locked || !!busy || !supported
 
   const save = (next: SkipIf | undefined, done: string) =>
@@ -67,6 +78,7 @@ export function GtSkipIf({
       await patchStep(edit, edit.index, def, { skipIf: next })
       h().toast.success(done)
       setText(undefined)
+      setQuick(undefined)
       edit.onChanged()
     })
 
@@ -91,6 +103,17 @@ export function GtSkipIf({
     const r = parseSkipText(text ?? '')
     if (r.error) return void h().toast.error(r.error)
     void save({ ...r.skip, by: 'user' }, t('已改跳过条件'))
+  }
+
+  const saveQuick = (q: QuickCond) => {
+    const next = skipFromQuick(q, skip, st?.also)
+    if (!next) return void h().toast.error(t('要填文字'))
+    void save(next, t('已设跳过条件：{s}', { s: condSay(condOf(next)) }))
+  }
+
+  const openQuick = (k: QuickKind) => {
+    setText(undefined)
+    setQuick(quickInit(k))
   }
 
   const verify = skip?.verify === false ? 'off' : 'inherit'
@@ -155,7 +178,21 @@ export function GtSkipIf({
               size="sm"
               variant="ghost"
               disabled={off}
-              onClick={() => setText(text === undefined ? JSON.stringify(skip, null, 2) : undefined)}
+              onClick={() => {
+                setText(undefined)
+                setQuick(quick ? undefined : (quickOf(skip) ?? quickInit('text')))
+              }}
+            >
+              <Pencil className="ue:h-3.5 ue:w-3.5" /> {t('改条件')}
+            </ui.Button>
+            <ui.Button
+              size="sm"
+              variant="ghost"
+              disabled={off}
+              onClick={() => {
+                setQuick(undefined)
+                setText(text === undefined ? JSON.stringify(skip, null, 2) : undefined)
+              }}
             >
               <Code className="ue:h-3.5 ue:w-3.5" /> {t('手写条件')}
             </ui.Button>
@@ -170,19 +207,45 @@ export function GtSkipIf({
           </div>
         </div>
       ) : (
-        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-          <p className="ue:min-w-0 ue:flex-1 ue:text-footnote ue:text-subtle">
-            {t('回放总是照做。界面已经是这一步想要的样子时（勾已勾上、按钮已是「已领取」）可以跳过它')}
+        <div className="ue:flex ue:flex-col ue:gap-2">
+          <p className="ue:text-footnote ue:text-subtle">
+            {t('默认照做，不跳过。界面已经是这一步想要的样子时（按钮已是「已领取」、勾已勾上）想跳过它，选一类条件：')}
           </p>
-          <ui.Button
-            size="sm"
-            variant="secondary"
-            disabled={off}
-            onClick={() => setText(JSON.stringify(cands[0] ? skipFromCand(cands[0]) : { checked: true }, null, 2))}
-          >
-            <Plus className="ue:h-3.5 ue:w-3.5" /> {t('加跳过条件')}
-          </ui.Button>
+          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+            <ui.Button size="sm" variant="secondary" disabled={off} onClick={() => openQuick('text')}>
+              <Type className="ue:h-3.5 ue:w-3.5" /> {t('文字是…')}
+            </ui.Button>
+            <ui.Button size="sm" variant="secondary" disabled={off} onClick={() => openQuick('visible')}>
+              <Eye className="ue:h-3.5 ue:w-3.5" /> {t('控件显示')}
+            </ui.Button>
+            <ui.Button size="sm" variant="secondary" disabled={off} onClick={() => openQuick('checked')}>
+              <SquareCheck className="ue:h-3.5 ue:w-3.5" /> {t('已勾上')}
+            </ui.Button>
+            <ui.Button
+              size="sm"
+              variant="ghost"
+              disabled={off}
+              onClick={() => {
+                setQuick(undefined)
+                setText(
+                  JSON.stringify(cands[0] ? skipFromCand(cands[0], undefined, st?.also) : { checked: true }, null, 2),
+                )
+              }}
+            >
+              <Code className="ue:h-3.5 ue:w-3.5" /> {t('手写条件')}
+            </ui.Button>
+          </div>
         </div>
+      )}
+      {quick && (
+        <GtSkipQuick
+          key={`${quick.kind}:${quick.target}:${quick.value}`}
+          init={quick}
+          disabled={off}
+          onKind={quickInit}
+          onSave={saveQuick}
+          onCancel={() => setQuick(undefined)}
+        />
       )}
       {text !== undefined && (
         <div className="ue:flex ue:flex-col ue:gap-1.5">
@@ -210,7 +273,9 @@ export function GtSkipIf({
       {cands.length > 0 && (
         <div className="ue:flex ue:flex-col">
           <span className="ue:pb-1 ue:text-caption ue:text-subtle">
-            {t('录制时点完变了的（点一个就用它，游戏不用开着）')}
+            {skip
+              ? t('录制时点完变了的（点一个就换成它，游戏不用开着）')
+              : t('录制时点完变了的（点一个就用它当跳过条件，游戏不用开着）')}
           </span>
           {cands.map((c, k) => (
             <CandRow
@@ -218,7 +283,7 @@ export function GtSkipIf({
               c={c}
               current={sameAsCand(skip, c)}
               disabled={off}
-              onPick={() => void save(skipFromCand(c, skip), t('跳过条件换成：{s}', { s: condSay(c.cond) }))}
+              onPick={() => void save(skipFromCand(c, skip, st?.also), t('跳过条件换成：{s}', { s: condSay(c.cond) }))}
             />
           ))}
           <span className="ue:pt-1 ue:text-caption ue:text-subtle">{t('只变了数字、倒计时的已经去掉')}</span>
