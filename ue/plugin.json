@@ -230,6 +230,57 @@
       "unit": "秒"
     },
     {
+      "key": "gtWatchMs",
+      "type": "number",
+      "group": "GameTest 连着游戏",
+      "label": "此刻结果多久刷新",
+      "desc": "编辑脚本时条件、表达式、抓到的控件的状态和字段多久重算一次；只在结果变了时推过来",
+      "default": 200,
+      "min": 100,
+      "max": 2000,
+      "unit": "毫秒"
+    },
+    {
+      "key": "gtLiveFrames",
+      "type": "boolean",
+      "group": "GameTest 连着游戏",
+      "label": "抓控件时显示实时画面",
+      "desc": "关掉后只能在游戏里按 Ctrl+Alt 点；画面是 GameTest 截的游戏视口，截图会让游戏稍微掉帧",
+      "default": true
+    },
+    {
+      "key": "gtLiveFps",
+      "type": "number",
+      "group": "GameTest 连着游戏",
+      "label": "实时画面帧率",
+      "desc": "每秒截几张；画面没变时不推",
+      "default": 2,
+      "min": 0.5,
+      "max": 10,
+      "unit": "帧/秒"
+    },
+    {
+      "key": "gtLiveWidth",
+      "type": "number",
+      "group": "GameTest 连着游戏",
+      "label": "实时画面宽度",
+      "desc": "更宽的等比缩小",
+      "default": 640,
+      "min": 160,
+      "max": 1920,
+      "unit": "像素"
+    },
+    {
+      "key": "gtLiveQuality",
+      "type": "number",
+      "group": "GameTest 连着游戏",
+      "label": "实时画面清晰度",
+      "desc": "JPEG 质量，越高越清楚、推送越大",
+      "default": 70,
+      "min": 30,
+      "max": 95
+    },
+    {
       "key": "perfShareLow",
       "type": "number",
       "group": "性能：占比配色",

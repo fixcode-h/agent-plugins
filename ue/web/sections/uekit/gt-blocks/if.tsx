@@ -4,6 +4,7 @@ import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { condSummary } from '../gt-cond/summary.ts'
 import { StateBranch } from './StateBranch.tsx'
+import { applyPreset, presetFor } from './state-presets.ts'
 import { registerBlockUi } from './registry.ts'
 
 type Elif = { cond?: unknown; then?: GtStep[] }
@@ -28,7 +29,12 @@ function IfInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) =
   return (
     <div className="ue:flex ue:flex-col ue:gap-3">
       <span className="ue:text-footnote ue:font-medium ue:text-fg">{t('如果')}</span>
-      <CondEditor elseSettle value={step.cond} onChange={(c) => onChange({ ...step, cond: c })} />
+      <CondEditor
+        elseSettle
+        value={step.cond}
+        onChange={(c) => onChange({ ...step, cond: c })}
+        onSplit={(target, kind) => onChange(applyPreset(step, presetFor(target, kind)))}
+      />
       {elifs.map((e, i) => (
         <div key={i} className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:pt-3">
           <div className="ue:flex ue:items-center">

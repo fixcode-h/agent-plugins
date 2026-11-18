@@ -19,6 +19,9 @@ export const EXT_TOPICS = [
   'gt.record',
   // gt.flow：GameTest 1.9 流程图运行高亮（节点进出、循环换轮、守护触发）
   'gt.flow',
+  // gt.pick / gt.watch：GameTest 1.10 连着游戏编辑（抓控件的实时画面和点到的控件、条件和字段此刻的结果）
+  'gt.pick',
+  'gt.watch',
   'uelink.outliner',
   'uelink.selection',
   'uelink.luaErrors',
