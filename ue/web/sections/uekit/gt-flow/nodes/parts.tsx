@@ -28,8 +28,22 @@ export function Handles({ node }: { node: FlowNode }) {
   const top = { top: node.anchorY }
   return (
     <>
-      <Handle id="in" type="target" position={Position.Left} style={top} isConnectable={false} className="ue:opacity-0" />
-      <Handle id="out" type="source" position={Position.Right} style={top} isConnectable={false} className="ue:opacity-0" />
+      <Handle
+        id="in"
+        type="target"
+        position={Position.Left}
+        style={top}
+        isConnectable={false}
+        className="ue:opacity-0"
+      />
+      <Handle
+        id="out"
+        type="source"
+        position={Position.Right}
+        style={top}
+        isConnectable={false}
+        className="ue:opacity-0"
+      />
       <Handle id="b-out" type="source" position={Position.Bottom} isConnectable={false} className="ue:opacity-0" />
       <Handle id="b-in" type="target" position={Position.Bottom} isConnectable={false} className="ue:opacity-0" />
     </>
