@@ -3,6 +3,7 @@ import { useEditCtx } from '../gt-edit/ctx.ts'
 import { t } from '../../../host.ts'
 import { useSearchIndex } from '../../../jump/index-data.ts'
 import { SuggestInput } from '../../../SuggestInput.tsx'
+import { selectorLabel } from '../gt-selector-label.ts'
 import { matchWidgets } from '../gt-widget-match.ts'
 
 /**
@@ -43,6 +44,7 @@ export function TargetInput({
       onChange={onChange}
       suggest={suggest}
       inputClassName="ue:font-mono"
+      display={selectorLabel}
       placeholder={placeholder ?? t('界面:路径，例如 WBP_Shop:Root/BtnBuy')}
       empty={t('写界面名找 WBP，或直接写选择器')}
     />

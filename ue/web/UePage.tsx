@@ -187,6 +187,15 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, sectionId, sub])
 
+  const projectCard = (
+    <ProjectCard
+      pinned={!!fixed}
+      list={list}
+      onAdd={() => setAdding(true)}
+      onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${sectionId}`)}
+    />
+  )
+
   const ctx: UeCtx | null = useMemo(
     () =>
       project
@@ -208,11 +217,12 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
             openShot: () => setShot(true),
             openJump: () => setJump(true),
             setWide,
+            switcher: ui.SectionRail && !fixed ? projectCard : undefined,
           }
         : null,
     // go、list 每次渲染都是新的，按数据变化重建就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [project, state.data, pidTarget, sectionId, sub, badges.data],
+    [project, state.data, pidTarget, sectionId, sub, badges.data, projects.data],
   )
 
   if (projects.loading && !projects.data)
@@ -270,14 +280,6 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
     assets: b?.dirty ? { text: t('{n} 未存', { n: b.dirty }), tone: 'warn' } : undefined,
     plugins: ups ? { text: t('{n} 可升级', { n: ups }), title: t('有 {n} 个 UE 插件能升级', { n: ups }) } : undefined,
   }
-  const projectCard = (
-    <ProjectCard
-      pinned={!!fixed}
-      list={list}
-      onAdd={() => setAdding(true)}
-      onPick={(id) => route.go('main', `${encodeURIComponent(id)}/${section.id}`)}
-    />
-  )
   return (
     <Ctx.Provider value={ctx}>
       <PendingPie />
@@ -288,11 +290,10 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
           current={{ id: section.id, label: section.label(), icon: section.icon, group: section.group() }}
           counts={counts}
           onPick={(id) => go(id, kept<string>(`${project.id}/sub/${id}`))}
-          projectCard={projectCard}
+          pinned={!!fixed}
           wide={wide}
           onShot={() => setShot(true)}
           onJump={() => setJump(true)}
-          onAdd={fixed ? undefined : () => setAdding(true)}
         >
           <View key={`${project.id}/${section.id}`} />
         </RailLayout>

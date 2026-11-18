@@ -3,6 +3,7 @@ import { pget, ppost, useAction, useLoad } from '../api.ts'
 import { useToChat } from '../chat.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { DockCol } from '../nav/slot.tsx'
 import { SplitHandle, usePane } from '../split.tsx'
 import { Confirm, ErrorText, Note, PageHead, fmtSize, fmtTime, useTargetInfo } from '../ui.tsx'
 import { captureItems, RenameDialog } from './perf/CaptureMenu.tsx'
@@ -89,6 +90,26 @@ export function Perf() {
       }),
     )
 
+  const sessions = (
+    <Sessions
+      items={items}
+      totalKB={state.data?.totalKB ?? 0}
+      sel={sel}
+      onSel={setSel}
+      picked={picked}
+      onPick={toggle}
+      onCompare={() => setSel('cmp')}
+      onDelete={setDel}
+      onMenu={menuFor}
+      live={{
+        running: !!inst,
+        active,
+        fps: frameNow ? Math.round(1000 / frameNow) : undefined,
+        memGB: buf?.last ? buf.last.memory.usedPhysicalMB / 1024 : undefined,
+      }}
+    />
+  )
+
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead
@@ -121,30 +142,20 @@ export function Perf() {
       </PageHead>
       {sel === 'live' && inst && buf && <StatsBar items={liveItems(buf)} badge="stat unit" />}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:md:flex-row">
-        <aside
-          ref={paneRef}
-          style={pane.style('calc(100% - 480px)')}
-          className="ue:relative ue:flex ue:max-h-72 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
-        >
-          <Sessions
-            items={items}
-            totalKB={state.data?.totalKB ?? 0}
-            sel={sel}
-            onSel={setSel}
-            picked={picked}
-            onPick={toggle}
-            onCompare={() => setSel('cmp')}
-            onDelete={setDel}
-            onMenu={menuFor}
-            live={{
-              running: !!inst,
-              active,
-              fps: frameNow ? Math.round(1000 / frameNow) : undefined,
-              memGB: buf?.last ? buf.last.memory.usedPhysicalMB / 1024 : undefined,
-            }}
-          />
-          <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 480} edge />
-        </aside>
+        {/* 记录列表整栏放进左边二级面板（用户 2026-11-18 定）；面板太旧或二级面板收起时照旧是页里左边一栏 */}
+        <DockCol
+          body={() => <div className="ue:-mx-2.5 ue:-mb-2.5 ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">{sessions}</div>}
+          fallback={
+            <aside
+              ref={paneRef}
+              style={pane.style('calc(100% - 480px)')}
+              className="ue:relative ue:flex ue:max-h-72 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+            >
+              {sessions}
+              <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 480} edge />
+            </aside>
+          }
+        />
         <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col">
           <ErrorText>{state.error}</ErrorText>
           <div key={sel} className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:motion-safe:animate-rise">

@@ -4,6 +4,7 @@ import { ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
+import { DockCol, DockHead } from '../../nav/slot.tsx'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { TreeList } from '../../TreeList.tsx'
 import { TreeSearch } from '../../tree-search.tsx'
@@ -89,6 +90,20 @@ export function IniBrowser() {
   }, [section, secs.data])
   const live = keys.data?.live ?? secs.data?.live
 
+  const col = (docked: boolean) => (
+    <>
+      {docked && <DockHead title={file} aside={t('{n} 个 section', { n: total })} />}
+      <TreeSearch value={filter} onChange={setFilter} placeholder={t('section 名包含…')} hits={hits} />
+      <ErrorText>{secs.error}</ErrorText>
+      {!secs.loading && !total && !secs.error && (
+        <p className="ue:p-4 ue:text-footnote ue:text-subtle">
+          {t('磁盘上没找到这个配置的 ini（引擎目录没找到时只看项目里的）')}
+        </p>
+      )}
+      <TreeList lines={lines} label={t('section 树')} reveal={reveal} />
+    </>
+  )
+
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
@@ -153,24 +168,25 @@ export function IniBrowser() {
         </Card>
       )}
       <div className={SPLIT_ROW}>
-        <Card
-          ref={left}
-          className={PANE_FIXED}
-          style={pane.style('60%')}
-          bodyClass="ue:flex ue:min-h-0 ue:flex-col"
-          title={file}
-          aside={t('{n} 个 section', { n: total })}
-        >
-          <TreeSearch value={filter} onChange={setFilter} placeholder={t('section 名包含…')} hits={hits} />
-          <ErrorText>{secs.error}</ErrorText>
-          {!secs.loading && !total && !secs.error && (
-            <p className="ue:p-4 ue:text-footnote ue:text-subtle">
-              {t('磁盘上没找到这个配置的 ini（引擎目录没找到时只看项目里的）')}
-            </p>
-          )}
-          <TreeList lines={lines} label={t('section 树')} reveal={reveal} />
-        </Card>
-        <SplitHandle pane={pane} paneRef={left} reserve={() => 360} />
+        {/* section 树整栏放进左边二级面板（用户 2026-11-18 定） */}
+        <DockCol
+          body={col}
+          fallback={
+            <>
+              <Card
+                ref={left}
+                className={PANE_FIXED}
+                style={pane.style('60%')}
+                bodyClass="ue:flex ue:min-h-0 ue:flex-col"
+                title={file}
+                aside={t('{n} 个 section', { n: total })}
+              >
+                {col(false)}
+              </Card>
+              <SplitHandle pane={pane} paneRef={left} reserve={() => 360} />
+            </>
+          }
+        />
         <Card
           className="ue:min-w-0 ue:lg:flex-1"
           bodyClass="ue:overflow-auto"

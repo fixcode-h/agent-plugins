@@ -2611,6 +2611,7 @@
   "录制截图": "Recording screenshots",
   "点的地方": "Clicked area",
   "整个界面": "Whole screen",
+  "{w}（整个界面）": "{w} (whole screen)",
   "认出的字": "Recognized text",
   "这一步叫什么（写进步骤说明）": "Name this step (saved as the step note)",
   "没认出来": "Nothing recognized",
@@ -3778,13 +3779,13 @@
   "选中事件": "Selection",
   "属性改动": "Property",
   "资产事件": "Asset event",
-  "收起二级面板 · {s}": "Collapse side panel · {s}",
-  "展开二级面板 · {s}": "Expand side panel · {s}",
   "VS · {s}，点一下到概览看 VS 调试": "VS · {s}. Click to see VS debugging in Overview",
   "后台编辑器运行中{pid}。点一下关掉：正在做的导入导出会中断": "Background editor running{pid}. Click to stop: imports/exports in progress will be interrupted",
   "后台编辑器出错：{e}。点一下重新启动": "Background editor error: {e}. Click to start again",
   "后台编辑器没开。点一下启动：编辑器没开时读资源、导入导出用；首次 30–60 秒，占 2–6 GB 内存": "Background editor is off. Click to start: used to read assets and import/export when the editor isn't open; first start takes 30–60 s and 2–6 GB of memory",
   "后台": "Background",
-  "浏览": "Browse",
-  "VS {s}": "VS {s}"
+  "VS {s}": "VS {s}",
+  "记录": "History",
+  "展开二级面板": "Expand side panel",
+  "测试": "Tests"
 }

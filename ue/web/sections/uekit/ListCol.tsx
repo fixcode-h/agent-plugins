@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h } from '../../host.ts'
+import { DockCol } from '../../nav/slot.tsx'
 import { SplitHandle, usePane } from '../../split.tsx'
 
 /**
@@ -40,18 +41,17 @@ export function ListCol({
 }) {
   const pane = usePane(`list-${id}`, '316px', 240)
   const ref = useRef<HTMLElement>(null)
-  return (
-    <aside
-      ref={ref}
-      style={pane.style('calc(100% - 420px)')}
-      className="ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:bg-panel ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
-    >
+  // docked：放进二级面板时面板标题已经是分区名，栏自己的大标题不再画
+  const body = (docked: boolean) => (
+    <>
       <div className="ue:flex ue:flex-col ue:gap-2.5 ue:px-4 ue:pt-4 ue:pb-2.5">
         {/* 栏拖窄时按钮整组换到下一行，不挤出栏外盖住右边的页面 */}
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-x-2 ue:gap-y-2">
-          <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
-            {title}
-          </h1>
+          {!docked && (
+            <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
+              {title}
+            </h1>
+          )}
           <span className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:text-footnote ue:text-muted ue:tabular-nums">
             {count}
           </span>
@@ -85,8 +85,26 @@ export function ListCol({
           {footer}
         </div>
       )}
-      <SplitHandle pane={pane} paneRef={ref} reserve={() => 420} edge />
-    </aside>
+    </>
+  )
+  return (
+    // 整栏放进左边二级面板（用户 2026-11-18 定：列表和二级面板并到一起）；面板太旧或二级面板收起时照旧是页里左边一栏。
+    // 放进面板时抵掉面板自己的内边距，栏里的排版不用改
+    <DockCol
+      body={() => (
+        <div className="ue:-mx-2.5 ue:-mb-2.5 ue:-mt-1 ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">{body(true)}</div>
+      )}
+      fallback={
+        <aside
+          ref={ref}
+          style={pane.style('calc(100% - 420px)')}
+          className="ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:bg-panel ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+        >
+          {body(false)}
+          <SplitHandle pane={pane} paneRef={ref} reserve={() => 420} edge />
+        </aside>
+      }
+    />
   )
 }
 

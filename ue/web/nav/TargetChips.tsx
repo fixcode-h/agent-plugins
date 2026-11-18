@@ -9,9 +9,10 @@ import { phaseLine, phaseOf } from '../vs-debug/model.ts'
 /**
  * 二级面板顶上的目标卡（设计稿方案 C 的样子，用户 2026-11-18 定用在方案 B 里）：一行世界下拉，
  * 下面一排状态小块：目标进程（PIE 18616）、VS 调试、后台编辑器。绿点在跑、灰点没开，点小块直接做对应的事。
- * 原来目标卡的四行（目标 / 已连接、下拉、PID · 地图、VS 一行、后台一行）收成两行
+ * 原来目标卡的四行（目标 / 已连接、下拉、PID · 地图、VS 一行、后台一行）收成两行。
+ * bar：概览页头下面的一整行（用户 2026-11-18 定：目标卡从二级面板挪进概览），下拉和小块排成一行
  */
-export function TargetChips() {
+export function TargetChips({ bar = false }: { bar?: boolean } = {}) {
   const { state, setTarget, go } = useUe()
   const { list, inst, world } = useTargetInfo()
   const { ui } = h()
@@ -53,10 +54,16 @@ export function TargetChips() {
   return (
     <section
       aria-label={t('目标')}
-      className="ue:flex ue:flex-col ue:gap-1.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:p-2 ue:shadow-card"
+      className={
+        bar
+          ? 'ue:flex ue:min-w-0 ue:flex-wrap ue:items-center ue:gap-2'
+          : 'ue:flex ue:flex-col ue:gap-1.5 ue:rounded-xl ue:border ue:border-line ue:bg-card ue:p-2 ue:shadow-card'
+      }
     >
+      {bar && <span className="ue:text-footnote ue:text-subtle">{t('目标')}</span>}
       {list.length > 0 && (
         <ui.Select
+          className={bar ? 'ue:w-72 ue:max-w-full' : undefined}
           size="sm"
           aria-label={t('目标')}
           value={inst ? `${inst.pid}|${world?.id ?? ''}` : ''}
