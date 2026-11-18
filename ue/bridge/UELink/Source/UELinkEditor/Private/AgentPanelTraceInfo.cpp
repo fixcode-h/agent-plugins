@@ -94,9 +94,9 @@ namespace UELinkTrace
 		const int32 Top = FMath::Clamp(AgentPanel::Int(A, TEXT("top"), 200), 1, 2000);
 		TArray<TSharedPtr<FJsonValue>> Items;
 		int32 Total = 0;
-		RP->EnumerateRegions(T0, T1, [&](const TraceServices::FTimeRegion& R) -> bool
+		UELINK_REGION_ENUM(RP, T0, T1, [&](const TraceServices::FTimeRegion& R) -> bool
 		{
-			const FString Text = R.Text ? R.Text : TEXT("");
+			const FString Text = UELINK_REGION_NAME(R);
 			if (!Filter.IsEmpty() && !Text.Contains(Filter))
 			{
 				return true;
