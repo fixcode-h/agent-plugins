@@ -112,7 +112,7 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
       </div>
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
-          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。游戏窗口右上角也有这条工具栏，鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
+          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。游戏视口中下方也悬浮着这条工具栏（可以拖动），鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
         )}
       </p>
       {status.handlerSource === 'hitPath' && (
