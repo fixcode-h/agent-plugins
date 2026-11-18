@@ -199,6 +199,7 @@ export function GtMatchMode(o: {
         <FieldsDialog
           project={o.project}
           target={target}
+          cache={typeof hint?.fields === 'string' ? hint.fields : undefined}
           onClose={() => setFields(false)}
           onApply={(cond) => {
             setFields(false)
@@ -319,11 +320,13 @@ function OtherCands({ k, busy, onPick }: { k: StepKey; busy: boolean; onPick: (c
 function FieldsDialog({
   project,
   target,
+  cache,
   onClose,
   onApply,
 }: {
   project: string
   target: string
+  cache?: string
   onClose: () => void
   onApply: (cond: string) => void
 }) {
@@ -350,10 +353,12 @@ function FieldsDialog({
       }
     >
       <p className="ue:text-footnote ue:text-subtle">
-        {t('要游戏开着、这个界面在屏上：按这一步现在的选择器找到条目，列出它的全部字段。勾几个就是组合条件')}
+        {cache
+          ? t('列出录制时这个条目的全部字段，游戏不用开着。勾几个就是组合条件')
+          : t('要游戏开着、这个界面在屏上：按这一步现在的选择器找到条目，列出它的全部字段。勾几个就是组合条件')}
       </p>
       <div className="ue:flex ue:h-96 ue:min-h-0 ue:flex-col">
-        <GtKeyFields project={project} where={{ target }} picked={picked} onPick={setPicked} />
+        <GtKeyFields project={project} where={{ target }} cache={cache} picked={picked} onPick={setPicked} />
       </div>
     </ui.Modal>
   )

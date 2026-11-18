@@ -2862,7 +2862,7 @@
   "左右外扩上限": "Horizontal margin limit",
   "上下外扩比例": "Vertical margin",
   "上下外扩上限": "Vertical margin limit",
-  "上下每边最多扩这么多": "Maximum extra capture above and below",
+  "上下每边最多扩这么多": "Caps the margin above and below",
   "回放": "Playback",
   "保存运行设置": "Save run settings",
   "说明": "Details",
@@ -2947,5 +2947,14 @@
   "沿用同一列表的": "Same as this list",
   "每个列表第一次都暂停问我": "Ask the first time for each list",
   "点到列表、格子里的条目时怎么挑唯一字段；同一列表挑过一次就不再问": "How to pick a field that uniquely identifies a clicked list or grid entry; asked once per list",
-  "录制时点到有规则的条目直接按规则认，不再暂停问": "Recording matches entries that have a rule by that rule without asking"
+  "录制时点到有规则的条目直接按规则认，不再暂停问": "Recording matches entries that have a rule by that rule without asking",
+  "只能读 Saved 里的条目字段缓存：{p}": "Only entry field caches under Saved can be read: {p}",
+  "录制时存的字段文件没了（{p}）：开游戏、打开那个界面再挑": "The fields saved during recording are gone ({p}); start the game and open that screen to pick",
+  "字段缓存文件太大，不像是录制时存的：{p}": "The field cache file is too large to be one saved during recording: {p}",
+  "字段缓存文件读不了（{p}）：开游戏、打开那个界面再挑": "Couldn't read the field cache ({p}); start the game and open that screen to pick",
+  "录制时存下的字段，值和命中数是录制那一刻的": "Fields saved during recording; values and hit counts are from that moment",
+  "游戏里现在的字段": "Current fields in the game",
+  "读游戏里现在的": "Read from the game now",
+  "用录制时存的": "Use the recorded ones",
+  "列出录制时这个条目的全部字段，游戏不用开着。勾几个就是组合条件": "Lists every field of this entry as recorded; the game doesn't need to be running. Tick several to combine them"
 }
