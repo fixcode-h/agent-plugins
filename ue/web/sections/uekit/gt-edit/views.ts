@@ -14,6 +14,8 @@ export interface ViewProps {
   onSelect: (paths: GtPath[]) => void
   /** 试一下这一步（连着编辑器时才有） */
   onTry?: (path: GtPath) => void
+  /** 撤销、重做（流程图放在画布底部的工具条上，效果图 1） */
+  history?: { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean }
   /** 运行中的进度：按步骤 id 标状态，视图自己决定怎么画 */
   run?: { at?: string; status?: Record<string, 'ok' | 'fail' | 'run' | 'skip'> }
 }
