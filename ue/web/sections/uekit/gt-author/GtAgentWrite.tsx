@@ -1,73 +1,33 @@
 import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
-import { useToChat } from '../../../chat.tsx'
 import { agentWritePrompt } from './agent-write-prompt.ts'
+import { useGtAgentChat } from './useGtAgentChat.tsx'
 
 /**
  * GameTest 页「新建 → 让 Agent 写」（定稿 11.1）：写一句要测什么，用「游戏测试」角色开一个对话，
  * Agent 按技能 ue-gametest-authoring 读代码、写脚本、校验、跑；写好的脚本出现在场景库（tags 带 agent）。
- * 项目里还没加「游戏测试」角色时，把同样的话放进新对话的输入框（用户看过再发），技能照样能用。
  */
-const ROLE = 'builtin:ue-gametest'
-
-interface AgentLite {
-  id: string
-  origin?: string
-}
-
 export function useGtAgentWrite(root: string) {
-  const { project } = useUe()
-  const { hooks, panel, toast, ui } = h()
-  const data = hooks.useData() as unknown as { agents?: AgentLite[]; upsertTask?: (x: unknown) => void }
-  const nav = hooks.useNav()
-  const chat = useToChat()
+  const agent = useGtAgentChat()
   const [dir, setDir] = useState<string>()
-  const role = data.agents?.find((a) => a.origin === ROLE)
-
-  const send = async (need: string, refs: string) => {
-    const prompt = agentWritePrompt({ need, refs, root, dir: dir ?? '' })
-    setDir(undefined)
-    if (!role) {
-      chat.send(prompt)
-      toast.success(t('在 Agent 角色里添加「游戏测试」后，可以直接用它开对话'))
-      return
-    }
-    try {
-      const task = await panel.createTask({
-        projectId: project.id,
-        mode: 'agent',
-        workflowId: '',
-        agentId: role.id,
-        cli: '',
-        model: '',
-        effort: '',
-        params: {},
-        prompt,
-        attachments: [],
-      })
-      data.upsertTask?.(task)
-      nav.go({ page: 'projects', id: project.id, sub: task.id })
-    } catch (e) {
-      toast.error((e as Error).message)
-    }
-  }
 
   const dialog = (
     <>
       {dir !== undefined && (
         <AgentWriteDialog
           dir={dir}
-          hasRole={!!role}
+          hasRole={agent.hasRole}
           onClose={() => setDir(undefined)}
-          onSend={(need, refs) => void send(need, refs)}
+          onSend={(need, refs) => {
+            agent.start(agentWritePrompt({ need, refs, root, dir }))
+            setDir(undefined)
+          }}
         />
       )}
-      {chat.dialog}
+      {agent.dialog}
     </>
   )
-  void ui
   return { open: (inDir: string) => setDir(inDir), dialog }
 }
 
