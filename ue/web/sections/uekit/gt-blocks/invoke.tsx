@@ -25,7 +25,10 @@ function InvokeInspector({ step, onChange }: { step: GtStep; onChange: (s: GtSte
         <TextField step={step} k="function" mono onChange={onChange} placeholder="AcceptQuest" />
       </Row>
       <Row label={t('参数')}>
-        <ArgsEdit value={(step.args as Record<string, unknown>) ?? {}} onChange={(a) => onChange({ ...step, args: a })} />
+        <ArgsEdit
+          value={(step.args as Record<string, unknown>) ?? {}}
+          onChange={(a) => onChange({ ...step, args: a })}
+        />
       </Row>
       <Row label={t('返回值存到')}>
         <TextField step={step} k="saveAs" mono onChange={onChange} placeholder={t('变量名（可不填）')} />

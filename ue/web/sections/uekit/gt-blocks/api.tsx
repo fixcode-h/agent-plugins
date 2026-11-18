@@ -18,7 +18,11 @@ function ApiInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) 
       </Row>
       {api?.note && <p className="ue:pl-[80px] ue:text-footnote ue:text-subtle">{api.note}</p>}
       <Row label={t('参数')}>
-        <ArgsEdit api={api} value={(step.args as Record<string, unknown>) ?? {}} onChange={(a) => onChange({ ...step, args: a })} />
+        <ArgsEdit
+          api={api}
+          value={(step.args as Record<string, unknown>) ?? {}}
+          onChange={(a) => onChange({ ...step, args: a })}
+        />
       </Row>
       <Row label={t('返回值存到')}>
         <TextField step={step} k="saveAs" mono onChange={onChange} placeholder={t('变量名（可不填）')} />

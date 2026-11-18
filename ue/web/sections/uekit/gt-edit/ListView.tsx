@@ -72,7 +72,13 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
       const b = stepRows.findIndex((r) => samePath(r.path, p))
       if (a >= 0 && b >= 0) {
         const [lo, hi] = a < b ? [a, b] : [b, a]
-        return onSelect([selected[0], ...stepRows.slice(lo, hi + 1).map((r) => r.path).filter((x) => !samePath(x, selected[0]))])
+        return onSelect([
+          selected[0],
+          ...stepRows
+            .slice(lo, hi + 1)
+            .map((r) => r.path)
+            .filter((x) => !samePath(x, selected[0])),
+        ])
       }
     }
     onSelect([p])
@@ -150,7 +156,12 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
           <button
             type="button"
             className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-sm ue:px-1 ue:hover:text-fg"
-            onClick={(e) => openMenu(e, insertMenuItems((it) => onChange(insertStep(doc, r.path, 0, it.make()))))}
+            onClick={(e) =>
+              openMenu(
+                e,
+                insertMenuItems((it) => onChange(insertStep(doc, r.path, 0, it.make()))),
+              )
+            }
           >
             <Plus className="ue:h-3 ue:w-3" />
             {t('空的，加一步')}
@@ -223,13 +234,23 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
               toggle(k)
             }}
           >
-            {r.collapsed ? <ChevronRight className="ue:h-3.5 ue:w-3.5" /> : <ChevronDown className="ue:h-3.5 ue:w-3.5" />}
+            {r.collapsed ? (
+              <ChevronRight className="ue:h-3.5 ue:w-3.5" />
+            ) : (
+              <ChevronDown className="ue:h-3.5 ue:w-3.5" />
+            )}
           </button>
         ) : null}
         <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', TONE_TEXT[ui.tone])} />
         {block && <span className="ue:shrink-0 ue:font-medium ue:text-fg">{ui.title()}</span>}
-        <span className={cn('ue:min-w-0 ue:truncate', block ? 'ue:text-subtle' : 'ue:text-fg')}>{ui.summary(r.step)}</span>
-        {r.collapsed && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{t('（收起了 {n} 步）', { n: r.hidden ?? 0 })}</span>}
+        <span className={cn('ue:min-w-0 ue:truncate', block ? 'ue:text-subtle' : 'ue:text-fg')}>
+          {ui.summary(r.step)}
+        </span>
+        {r.collapsed && (
+          <span className="ue:shrink-0 ue:text-caption ue:text-subtle">
+            {t('（收起了 {n} 步）', { n: r.hidden ?? 0 })}
+          </span>
+        )}
         {typeof r.step.note === 'string' && r.step.note && (
           <span className="ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">· {r.step.note}</span>
         )}
@@ -246,7 +267,9 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
             />
           )}
           {r.step.onFail === 'continue' && <span className="ue:text-caption ue:text-warning">{t('失败接着走')}</span>}
-          <span className="ue:font-mono ue:text-caption ue:text-subtle">{typeof r.step.id === 'string' ? r.step.id : ''}</span>
+          <span className="ue:font-mono ue:text-caption ue:text-subtle">
+            {typeof r.step.id === 'string' ? r.step.id : ''}
+          </span>
           <button
             type="button"
             aria-label={t('在下面加一步')}
@@ -255,7 +278,11 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
               e.stopPropagation()
               onSelect([r.path])
               const p = placeOf(doc, r.path)
-              if (p) openMenu(e, insertMenuItems((it) => onChange(insertStep(doc, p.slot, p.index + 1, it.make()))))
+              if (p)
+                openMenu(
+                  e,
+                  insertMenuItems((it) => onChange(insertStep(doc, p.slot, p.index + 1, it.make()))),
+                )
             }}
           >
             <Plus className="ue:h-3.5 ue:w-3.5" />
@@ -310,7 +337,14 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
                   openMenu(
                     e,
                     insertMenuItems((it) =>
-                      onChange(insertStep(doc, s.slot, ((getAt(doc, s.slot) as unknown[] | undefined) ?? []).length, it.make())),
+                      onChange(
+                        insertStep(
+                          doc,
+                          s.slot,
+                          ((getAt(doc, s.slot) as unknown[] | undefined) ?? []).length,
+                          it.make(),
+                        ),
+                      ),
                     ),
                   )
                 }
@@ -326,7 +360,12 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
         <button
           type="button"
           className="ue:mx-3 ue:mt-2 ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
-          onClick={(e) => openMenu(e, insertMenuItems((it) => onChange(insertStep(doc, ['setup'], 0, it.make()))))}
+          onClick={(e) =>
+            openMenu(
+              e,
+              insertMenuItems((it) => onChange(insertStep(doc, ['setup'], 0, it.make()))),
+            )
+          }
         >
           {t('+ 加准备步骤（每次运行先做、不算进结果，例如开关卡、设 GM 状态）')}
         </button>

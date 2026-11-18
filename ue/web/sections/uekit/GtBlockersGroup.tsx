@@ -42,104 +42,104 @@ export function GtBlockersGroup({ rules, onChange }: { rules: BlockerRule[]; onC
           n: matchWidgets(index.idx, '', 0).all,
         })
   return (
-  <SettingGroup
-    page="guards"
-    title={t('阻挡界面')}
-    action={<AddButton onClick={() => onChange([...rules, blank()])} />}
-    hint={t(
-      '公告、新手引导、活动弹窗这类不定时弹出的界面：跑测试时一出现就按规则处理掉，不让它挡住后面的步骤。正在等的那一步要点的就是它时不处理；每次处理都记在那一步的结果里。',
-    )}
-  >
-    <SettingList count={rules.length}>
-      {rules.map((r, i) => (
-        <div
-          key={i}
-          className={cn(
-            'ue:flex ue:flex-col ue:gap-2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:p-2.5',
-            r.enabled === false && 'ue:opacity-60',
-          )}
-        >
-          <div className="ue:flex ue:items-center ue:gap-2">
-            <SuggestInput
-              className="ue:min-w-0 ue:flex-1"
-              inputClassName="ue:font-mono"
-              placeholder={t('WBP 类名或资产路径，例如 WBP_Notice')}
-              value={r.widget}
-              onChange={(v) => patch(i, { widget: v })}
-              suggest={suggestWidgets}
-              status={indexStatus}
-              empty={t('索引里没找到控件蓝图，可以直接填类名或资产路径')}
-            />
-            <ui.Select
-              size="sm"
-              className="ue:w-36"
-              value={r.action}
-              onChange={(e: { target: { value: string } }) =>
-                patch(i, { action: e.target.value as BlockerRule['action'] })
-              }
-              options={[
-                { value: 'close', label: t('关闭') },
-                { value: 'call', label: t('调用函数') },
-                { value: 'command', label: t('执行指令') },
-              ]}
-            />
-            <ui.IconButton
-              icon={Trash2}
-              size="sm"
-              label={t('删除这条')}
-              onClick={() => onChange(rules.filter((_, k) => k !== i))}
-            />
-          </div>
-          {r.action === 'call' && (
-            <ui.Input
-              size="sm"
-              className="ue:font-mono"
-              placeholder={t('界面上的无参函数名，例如 Close')}
-              value={r.function ?? ''}
-              onChange={(e: { target: { value: string } }) => patch(i, { function: e.target.value })}
-            />
-          )}
-          {r.action === 'command' && (
-            <ui.Input
-              size="sm"
-              className="ue:font-mono"
-              placeholder={t('控制台指令或 GM，例如 gm.SkipGuide')}
-              value={r.command ?? ''}
-              onChange={(e: { target: { value: string } }) => patch(i, { command: e.target.value })}
-            />
-          )}
-          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-            <span className={label}>{t('出现后等')}</span>
-            <ui.Input
-              size="sm"
-              className="ue:w-20"
-              inputMode="numeric"
-              value={String(r.delayMs ?? 0)}
-              onChange={(e: { target: { value: string } }) =>
-                patch(i, { delayMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-              }
-            />
-            <span className={label}>{t('毫秒再处理')}</span>
-            <ui.Input
-              size="sm"
-              className="ue:min-w-0 ue:flex-1"
-              placeholder={t('说明（可选）')}
-              value={r.note ?? ''}
-              onChange={(e: { target: { value: string } }) => patch(i, { note: e.target.value || undefined })}
-            />
-            <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
-              <input
-                type="checkbox"
-                className="ue:accent-(--accent)"
-                checked={r.enabled !== false}
-                onChange={(e) => patch(i, { enabled: e.target.checked ? undefined : false })}
+    <SettingGroup
+      page="guards"
+      title={t('阻挡界面')}
+      action={<AddButton onClick={() => onChange([...rules, blank()])} />}
+      hint={t(
+        '公告、新手引导、活动弹窗这类不定时弹出的界面：跑测试时一出现就按规则处理掉，不让它挡住后面的步骤。正在等的那一步要点的就是它时不处理；每次处理都记在那一步的结果里。',
+      )}
+    >
+      <SettingList count={rules.length}>
+        {rules.map((r, i) => (
+          <div
+            key={i}
+            className={cn(
+              'ue:flex ue:flex-col ue:gap-2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:p-2.5',
+              r.enabled === false && 'ue:opacity-60',
+            )}
+          >
+            <div className="ue:flex ue:items-center ue:gap-2">
+              <SuggestInput
+                className="ue:min-w-0 ue:flex-1"
+                inputClassName="ue:font-mono"
+                placeholder={t('WBP 类名或资产路径，例如 WBP_Notice')}
+                value={r.widget}
+                onChange={(v) => patch(i, { widget: v })}
+                suggest={suggestWidgets}
+                status={indexStatus}
+                empty={t('索引里没找到控件蓝图，可以直接填类名或资产路径')}
               />
-              {t('启用')}
-            </label>
+              <ui.Select
+                size="sm"
+                className="ue:w-36"
+                value={r.action}
+                onChange={(e: { target: { value: string } }) =>
+                  patch(i, { action: e.target.value as BlockerRule['action'] })
+                }
+                options={[
+                  { value: 'close', label: t('关闭') },
+                  { value: 'call', label: t('调用函数') },
+                  { value: 'command', label: t('执行指令') },
+                ]}
+              />
+              <ui.IconButton
+                icon={Trash2}
+                size="sm"
+                label={t('删除这条')}
+                onClick={() => onChange(rules.filter((_, k) => k !== i))}
+              />
+            </div>
+            {r.action === 'call' && (
+              <ui.Input
+                size="sm"
+                className="ue:font-mono"
+                placeholder={t('界面上的无参函数名，例如 Close')}
+                value={r.function ?? ''}
+                onChange={(e: { target: { value: string } }) => patch(i, { function: e.target.value })}
+              />
+            )}
+            {r.action === 'command' && (
+              <ui.Input
+                size="sm"
+                className="ue:font-mono"
+                placeholder={t('控制台指令或 GM，例如 gm.SkipGuide')}
+                value={r.command ?? ''}
+                onChange={(e: { target: { value: string } }) => patch(i, { command: e.target.value })}
+              />
+            )}
+            <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+              <span className={label}>{t('出现后等')}</span>
+              <ui.Input
+                size="sm"
+                className="ue:w-20"
+                inputMode="numeric"
+                value={String(r.delayMs ?? 0)}
+                onChange={(e: { target: { value: string } }) =>
+                  patch(i, { delayMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+                }
+              />
+              <span className={label}>{t('毫秒再处理')}</span>
+              <ui.Input
+                size="sm"
+                className="ue:min-w-0 ue:flex-1"
+                placeholder={t('说明（可选）')}
+                value={r.note ?? ''}
+                onChange={(e: { target: { value: string } }) => patch(i, { note: e.target.value || undefined })}
+              />
+              <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
+                <input
+                  type="checkbox"
+                  className="ue:accent-(--accent)"
+                  checked={r.enabled !== false}
+                  onChange={(e) => patch(i, { enabled: e.target.checked ? undefined : false })}
+                />
+                {t('启用')}
+              </label>
+            </div>
           </div>
-        </div>
-      ))}
-    </SettingList>
-  </SettingGroup>
+        ))}
+      </SettingList>
+    </SettingGroup>
   )
 }

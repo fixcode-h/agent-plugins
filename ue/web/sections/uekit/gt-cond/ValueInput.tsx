@@ -20,9 +20,7 @@ export function ValueInput({
 }) {
   const { ui, cn } = h()
   if (value.startsWith('='))
-    return (
-      <ExprInput className={className} value={value.slice(1)} onChange={(v) => onChange(`=${v}`)} autoFocus />
-    )
+    return <ExprInput className={className} value={value.slice(1)} onChange={(v) => onChange(`=${v}`)} autoFocus />
   return (
     <ui.Input
       size="sm"

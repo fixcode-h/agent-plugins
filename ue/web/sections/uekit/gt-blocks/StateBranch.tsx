@@ -37,7 +37,12 @@ const PRESETS = (target: string): { label: string; ways: CondNode[]; rest: boole
     label: t('能点 / 显示但不能点 / 其余'),
     ways: [
       { target, enabled: true },
-      { all: [{ target, visible: true }, { target, enabled: false }] },
+      {
+        all: [
+          { target, visible: true },
+          { target, enabled: false },
+        ],
+      },
     ],
     rest: true,
   },
@@ -107,7 +112,9 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
   return (
     <div className="ue:flex ue:flex-col ue:gap-2.5">
       <p className="ue:text-footnote ue:text-subtle">
-        {t('从上往下判断，走第一条成立的路；都不成立走「其余情况」。反面的路要稳住才走，免得把「还没刷出来」当成「不显示」。')}
+        {t(
+          '从上往下判断，走第一条成立的路；都不成立走「其余情况」。反面的路要稳住才走，免得把「还没刷出来」当成「不显示」。',
+        )}
       </p>
       <div className="ue:flex ue:items-start ue:gap-1.5">
         <div className="ue:min-w-0 ue:flex-1">
@@ -188,7 +195,11 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
         )}
         {ctx.live && (
           <ui.Button size="sm" variant="ghost" disabled={checking} onClick={() => void which()}>
-            {checking ? <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" /> : <ScanEye className="ue:h-3.5 ue:w-3.5" />}
+            {checking ? (
+              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
+            ) : (
+              <ScanEye className="ue:h-3.5 ue:w-3.5" />
+            )}
             {t('此刻走哪条')}
           </ui.Button>
         )}
@@ -205,7 +216,9 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
           {t('画成普通如果')}
         </ui.Button>
       </div>
-      {now === -1 && <p className="ue:text-footnote ue:text-warning">{t('此刻哪条路都不成立，也没有「其余情况」：会直接往下走')}</p>}
+      {now === -1 && (
+        <p className="ue:text-footnote ue:text-warning">{t('此刻哪条路都不成立，也没有「其余情况」：会直接往下走')}</p>
+      )}
     </div>
   )
 }

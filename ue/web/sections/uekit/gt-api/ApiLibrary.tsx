@@ -86,7 +86,9 @@ export function ApiLibrary({
       size="xl"
       onOpenChange={(o: boolean) => !o && onClose()}
       title={t('接口库')}
-      description={t('脚本里「调接口」能用的接口：自带的、项目 C++ 里标了的、Lua 接口文件夹里的。只读的可以用在条件里。')}
+      description={t(
+        '脚本里「调接口」能用的接口：自带的、项目 C++ 里标了的、Lua 接口文件夹里的。只读的可以用在条件里。',
+      )}
       footer={
         <>
           <span className="ue:mr-auto ue:truncate ue:text-footnote ue:text-subtle">
@@ -94,7 +96,11 @@ export function ApiLibrary({
             {folders?.length ? ` · ${t('Lua 文件夹：{f}', { f: folders.join('、') })}` : ''}
           </span>
           <ui.Button variant="secondary" disabled={scanning || !root} onClick={() => void scan()}>
-            {scanning ? <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" /> : <RefreshCw className="ue:h-3.5 ue:w-3.5" />}
+            {scanning ? (
+              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
+            ) : (
+              <RefreshCw className="ue:h-3.5 ue:w-3.5" />
+            )}
             {t('重扫 Lua 接口')}
           </ui.Button>
           <ui.Button onClick={onClose}>{t('关闭')}</ui.Button>
@@ -139,7 +145,9 @@ export function ApiLibrary({
                   ) : (
                     <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:text-subtle" />
                   )}
-                  <span className="ue:rounded-sm ue:bg-hover ue:px-1.5 ue:text-caption ue:text-muted">{srcLabel(g.src)}</span>
+                  <span className="ue:rounded-sm ue:bg-hover ue:px-1.5 ue:text-caption ue:text-muted">
+                    {srcLabel(g.src)}
+                  </span>
                   <span className="ue:text-fg">{g.cat}</span>
                   <span className="ue:ml-auto ue:text-caption ue:text-subtle ue:tabular-nums">{g.items.length}</span>
                 </button>

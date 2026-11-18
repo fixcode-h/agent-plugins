@@ -7,8 +7,7 @@ import type { CheckKind } from './registry.ts'
 /** 文字里的数字（「剩 2 次」→ 2、「1,200」→ 1200）：number: {eq/ne/gt/gte/lt/lte/between} */
 const OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between'] as const
 type Op = (typeof OPS)[number]
-const opLabel = (o: Op) =>
-  ({ eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', between: t('在…之间') })[o]
+const opLabel = (o: Op) => ({ eq: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤', between: t('在…之间') })[o]
 
 const numOf = (c: CondNode) => (c.number && typeof c.number === 'object' ? (c.number as Record<string, unknown>) : {})
 const opOf = (c: CondNode): Op => OPS.find((o) => o in numOf(c)) ?? 'gte'

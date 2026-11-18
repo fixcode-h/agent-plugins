@@ -18,7 +18,14 @@ const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.i
 
 const cleanList = (v: unknown) =>
   Array.isArray(v)
-    ? [...new Set(v.filter((x): x is string => typeof x === 'string').map((x) => x.trim().replace(/\\/g, '/')).filter(Boolean))]
+    ? [
+        ...new Set(
+          v
+            .filter((x): x is string => typeof x === 'string')
+            .map((x) => x.trim().replace(/\\/g, '/'))
+            .filter(Boolean),
+        ),
+      ]
     : undefined
 
 async function readSettings(file: string): Promise<Obj> {

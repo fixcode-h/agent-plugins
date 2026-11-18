@@ -107,7 +107,9 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
               size="sm"
               className="ue:min-w-0 ue:flex-1 ue:font-mono"
               value={scalarText(v)}
-              onChange={(e: { target: { value: string } }) => set('vars', { ...vars, [k]: parseScalar(e.target.value) })}
+              onChange={(e: { target: { value: string } }) =>
+                set('vars', { ...vars, [k]: parseScalar(e.target.value) })
+              }
             />
             <ui.IconButton icon={Trash2} size="xs" label={t('删掉')} onClick={() => set('vars', omit(vars, k))} />
           </div>
@@ -143,7 +145,9 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
         hint={t('只在跑这个脚本（和它调用的脚本）时生效，先于全局守护')}
         onAdd={() => set('guards', [...guards, blankGuard(new Set(guards.map((g) => g.id ?? '')))])}
       >
-        {guards.length > 0 && <GuardList value={guards} onChange={(v: GtGuard[]) => set('guards', v.length ? v : undefined)} />}
+        {guards.length > 0 && (
+          <GuardList value={guards} onChange={(v: GtGuard[]) => set('guards', v.length ? v : undefined)} />
+        )}
       </Section>
 
       {obj && (
@@ -168,7 +172,17 @@ function omit<T>(rec: Record<string, T>, k: string) {
   return out
 }
 
-function Section({ title, hint, onAdd, children }: { title: string; hint?: string; onAdd?: () => void; children: ReactNode }) {
+function Section({
+  title,
+  hint,
+  onAdd,
+  children,
+}: {
+  title: string
+  hint?: string
+  onAdd?: () => void
+  children: ReactNode
+}) {
   const { ui } = h()
   return (
     <section className="ue:flex ue:flex-col ue:gap-1.5">

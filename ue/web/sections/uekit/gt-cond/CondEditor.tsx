@@ -102,7 +102,8 @@ export function CondEditor({
             const next = addTo(root, group, k.make())
             if (!next) return
             // 新加的那条直接展开，接着填
-            const g = (group.reduce<unknown>((n, key) => (n as Record<string | number, unknown>)[key], next) ?? {}) as CondNode
+            const g = (group.reduce<unknown>((n, key) => (n as Record<string | number, unknown>)[key], next) ??
+              {}) as CondNode
             set(next)
             setOpen(keyOf([...group, groupKind(g) ?? 'all', childrenOf(g).length - 1]))
           },
@@ -114,7 +115,13 @@ export function CondEditor({
       e,
       ctx.aliases.length
         ? ctx.aliases.map((a) => ({ label: a, onClick: () => set(addTo(root, group, { alias: a }) ?? root) }))
-        : [{ label: t('_vars.json 里还没有常用名：在行的菜单里「存成常用」'), disabled: true, onClick: () => undefined }],
+        : [
+            {
+              label: t('_vars.json 里还没有常用名：在行的菜单里「存成常用」'),
+              disabled: true,
+              onClick: () => undefined,
+            },
+          ],
     )
 
   const saveAlias = async () => {
@@ -145,7 +152,8 @@ export function CondEditor({
       <div
         className={cn(
           'ue:flex ue:flex-col ue:gap-1.5',
-          depth > 0 && 'ue:rounded-(--c-row-radius) ue:border ue:border-dashed ue:border-warning/50 ue:bg-warning/4 ue:p-2',
+          depth > 0 &&
+            'ue:rounded-(--c-row-radius) ue:border ue:border-dashed ue:border-warning/50 ue:bg-warning/4 ue:p-2',
         )}
       >
         <div className="ue:flex ue:items-center ue:gap-2">
@@ -237,7 +245,9 @@ export function CondEditor({
           <span
             draggable
             title={t('拖动排序')}
-            onDragStart={(e) => e.dataTransfer.setData('text/gt-cond', JSON.stringify({ group: keyOf(group), from: index }))}
+            onDragStart={(e) =>
+              e.dataTransfer.setData('text/gt-cond', JSON.stringify({ group: keyOf(group), from: index }))
+            }
             className="ue:cursor-grab ue:text-subtle"
           >
             <GripVertical className="ue:h-3.5 ue:w-3.5" />
@@ -324,7 +334,11 @@ export function CondEditor({
       {ctx.live && (
         <div className="ue:flex ue:items-center ue:gap-2 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2.5 ue:py-1.5 ue:text-footnote">
           <ui.Button size="sm" variant="ghost" disabled={checking} onClick={() => void check()}>
-            {checking ? <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" /> : <ScanEye className="ue:h-3.5 ue:w-3.5" />}
+            {checking ? (
+              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
+            ) : (
+              <ScanEye className="ue:h-3.5 ue:w-3.5" />
+            )}
             {t('现在核对')}
           </ui.Button>
           {resolved && (
@@ -383,7 +397,10 @@ export function CondEditor({
             </>
           }
         >
-          <ui.Field label={t('名字')} hint={t('存进场景根的 _vars.json，进版本库，团队共用；条件里写 {"alias": "名字"}')}>
+          <ui.Field
+            label={t('名字')}
+            hint={t('存进场景根的 _vars.json，进版本库，团队共用；条件里写 {"alias": "名字"}')}
+          >
             <ui.Input
               autoFocus
               value={aliasDraft.name}

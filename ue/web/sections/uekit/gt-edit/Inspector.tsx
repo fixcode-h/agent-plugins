@@ -28,7 +28,12 @@ export function Inspector({
         <p className="ue:text-footnote ue:text-fg">{t('选了 {n} 步', { n: selected.length })}</p>
         <div className="ue:flex ue:flex-wrap ue:gap-1.5">
           {COMMANDS.filter((c) => c.multi && canRun(c, ctx)).map((c) => (
-            <ui.Button key={c.id} size="sm" variant={c.danger ? 'danger-outline' : 'secondary'} onClick={() => c.run(ctx)}>
+            <ui.Button
+              key={c.id}
+              size="sm"
+              variant={c.danger ? 'danger-outline' : 'secondary'}
+              onClick={() => c.run(ctx)}
+            >
               <c.icon className="ue:h-3.5 ue:w-3.5" />
               {c.label()}
             </ui.Button>
@@ -48,7 +53,9 @@ export function Inspector({
       <div className="ue:flex ue:items-center ue:gap-2">
         <bu.icon className={cn('ue:h-4 ue:w-4 ue:shrink-0', TONE_TEXT[bu.tone])} />
         <span className="ue:text-body ue:font-medium ue:text-fg">{bu.title()}</span>
-        <code className="ue:font-mono ue:text-caption ue:text-subtle">{typeof step.id === 'string' ? step.id : ''}</code>
+        <code className="ue:font-mono ue:text-caption ue:text-subtle">
+          {typeof step.id === 'string' ? step.id : ''}
+        </code>
         {onTry && (
           <ui.Button size="sm" variant="secondary" className="ue:ml-auto" onClick={() => onTry(path)}>
             <Play className="ue:h-3.5 ue:w-3.5" />

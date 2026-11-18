@@ -101,7 +101,15 @@ export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: G
             size="sm"
             label={t('失败了')}
             value={onFail}
-            onChange={(v: string) => onChange(patch(patch(step, 'onFail', v === 'stop' ? undefined : v), 'retries', v === 'retry' ? (step.retries ?? 2) : undefined))}
+            onChange={(v: string) =>
+              onChange(
+                patch(
+                  patch(step, 'onFail', v === 'stop' ? undefined : v),
+                  'retries',
+                  v === 'retry' ? (step.retries ?? 2) : undefined,
+                ),
+              )
+            }
             options={[
               { id: 'stop', label: t('停下') },
               { id: 'continue', label: t('接着往下') },
@@ -148,7 +156,9 @@ export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: G
       </div>
       {skip && (
         <div className="ue:flex ue:flex-col ue:gap-1.5">
-          <span className="ue:text-footnote ue:text-subtle">{t('这些条件成立时跳过这一步（目标已经是想要的状态）')}</span>
+          <span className="ue:text-footnote ue:text-subtle">
+            {t('这些条件成立时跳过这一步（目标已经是想要的状态）')}
+          </span>
           <CondEditor compact value={step.skipIf} onChange={(c) => onChange({ ...step, skipIf: c })} />
         </div>
       )}

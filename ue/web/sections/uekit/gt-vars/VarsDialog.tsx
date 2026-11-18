@@ -88,9 +88,7 @@ export function VarsDialog({ onClose, onPick }: { onClose: () => void; onPick: (
       size="xl"
       onOpenChange={(o: boolean) => !o && onClose()}
       title={t('选一个变量当条件')}
-      description={t(
-        '从 C++、蓝图和 Lua 里列出来：游戏没开也能选，开着时显示此刻的值。只读字段和不带参数的只读函数。',
-      )}
+      description={t('从 C++、蓝图和 Lua 里列出来：游戏没开也能选，开着时显示此刻的值。只读字段和不带参数的只读函数。')}
       footer={
         <>
           <span className="ue:mr-auto ue:flex ue:items-center ue:gap-1 ue:text-footnote ue:text-subtle">
@@ -145,7 +143,11 @@ export function VarsDialog({ onClose, onPick }: { onClose: () => void; onPick: (
                 value={cvar}
                 onChange={(e: { target: { value: string } }) => {
                   setCvar(e.target.value)
-                  setPick(e.target.value.trim() ? { key: 'cvar', cond: { value: `@cvar.${e.target.value.trim()}` } } : undefined)
+                  setPick(
+                    e.target.value.trim()
+                      ? { key: 'cvar', cond: { value: `@cvar.${e.target.value.trim()}` } }
+                      : undefined,
+                  )
                 }}
               />
               {icon(Terminal)}
@@ -163,8 +165,7 @@ export function VarsDialog({ onClose, onPick }: { onClose: () => void; onPick: (
             <>
               {(vars.error || (!ctx.live && scope.scope !== 'lua')) && (
                 <p className="ue:border-b ue:border-line ue:px-3 ue:py-1.5 ue:text-caption ue:text-warning">
-                  {vars.error ||
-                    t('编辑器没开：只列得出 Lua 文件里扫到的字段；C++ 和蓝图要编辑器开着按反射读')}
+                  {vars.error || t('编辑器没开：只列得出 Lua 文件里扫到的字段；C++ 和蓝图要编辑器开着按反射读')}
                 </p>
               )}
               {vars.loading && !vars.data ? (
@@ -188,7 +189,9 @@ export function VarsDialog({ onClose, onPick }: { onClose: () => void; onPick: (
                 </span>
               </div>
               <CompareEdit value={pick.cond} onChange={(c) => setPick({ ...pick, cond: c })} />
-              <code className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">{JSON.stringify(pick.cond)}</code>
+              <code className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
+                {JSON.stringify(pick.cond)}
+              </code>
             </div>
           )}
         </div>

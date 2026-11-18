@@ -115,7 +115,7 @@ export function useApis(project: string, root: string, live: boolean) {
       if (live) {
         try {
           const got: ApiItem[] = []
-          for (let offset = 0; offset < 2000; ) {
+          for (let offset = 0; offset < 2000;) {
             const r = await op<{ items: ApiItem[]; hasMore?: boolean }>(project, 'gt.api', { offset, limit: 200 })
             got.push(...(r.items ?? []))
             if (!r.hasMore) break

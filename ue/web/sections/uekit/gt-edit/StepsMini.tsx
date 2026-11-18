@@ -44,7 +44,12 @@ export function StepsMini({ value, onChange }: { value: GtStep[]; onChange: (v: 
               <ui.IconButton size="sm" label={t('往上挪')} disabled={i === 0} onClick={() => swap(i, i - 1)}>
                 <ArrowUp className="ue:h-3.5 ue:w-3.5" />
               </ui.IconButton>
-              <ui.IconButton size="sm" label={t('往下挪')} disabled={i === value.length - 1} onClick={() => swap(i, i + 1)}>
+              <ui.IconButton
+                size="sm"
+                label={t('往下挪')}
+                disabled={i === value.length - 1}
+                onClick={() => swap(i, i + 1)}
+              >
                 <ArrowDown className="ue:h-3.5 ue:w-3.5" />
               </ui.IconButton>
               <ui.IconButton

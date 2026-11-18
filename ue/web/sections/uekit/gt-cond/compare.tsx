@@ -53,7 +53,13 @@ export function parseScalar(s: string): unknown {
 }
 
 export const scalarText = (v: unknown) =>
-  v === undefined ? '' : Array.isArray(v) ? v.map((x) => String(x)).join(', ') : typeof v === 'string' ? v : JSON.stringify(v)
+  v === undefined
+    ? ''
+    : Array.isArray(v)
+      ? v.map((x) => String(x)).join(', ')
+      : typeof v === 'string'
+        ? v
+        : JSON.stringify(v)
 
 /** 比较方式 + 值：一行里的下拉和输入框（值可以写成 = 开头的表达式） */
 export function CompareEdit({ value, onChange }: { value: CondNode; onChange: (c: CondNode) => void }) {

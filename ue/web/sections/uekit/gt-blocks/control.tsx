@@ -58,16 +58,55 @@ const ins = (id: string, label: () => string, hint: () => string): InsertItem =>
 })
 
 registerBlockUi(
-  { action: 'break', title: () => t('跳出循环'), icon: CircleSlash, tone: 'danger', summary: (s) => t('跳出循环') + when(s), Inspector: CondOnly },
-  [ins('break', () => t('跳出循环'), () => t('出最内层的循环'))],
+  {
+    action: 'break',
+    title: () => t('跳出循环'),
+    icon: CircleSlash,
+    tone: 'danger',
+    summary: (s) => t('跳出循环') + when(s),
+    Inspector: CondOnly,
+  },
+  [
+    ins(
+      'break',
+      () => t('跳出循环'),
+      () => t('出最内层的循环'),
+    ),
+  ],
 )
 registerBlockUi(
-  { action: 'continue', title: () => t('下一轮'), icon: StepForward, tone: 'accent', summary: (s) => t('进下一轮') + when(s), Inspector: CondOnly },
-  [ins('continue', () => t('下一轮'), () => t('跳过这一轮剩下的步骤'))],
+  {
+    action: 'continue',
+    title: () => t('下一轮'),
+    icon: StepForward,
+    tone: 'accent',
+    summary: (s) => t('进下一轮') + when(s),
+    Inspector: CondOnly,
+  },
+  [
+    ins(
+      'continue',
+      () => t('下一轮'),
+      () => t('跳过这一轮剩下的步骤'),
+    ),
+  ],
 )
 registerBlockUi(
-  { action: 'return', title: () => t('结束脚本'), icon: CornerDownLeft, tone: 'subtle', summary: (s) => t('结束脚本') + when(s), Inspector: CondOnly },
-  [ins('return', () => t('结束脚本'), () => t('被调用时回到调用处，可以带返回值'))],
+  {
+    action: 'return',
+    title: () => t('结束脚本'),
+    icon: CornerDownLeft,
+    tone: 'subtle',
+    summary: (s) => t('结束脚本') + when(s),
+    Inspector: CondOnly,
+  },
+  [
+    ins(
+      'return',
+      () => t('结束脚本'),
+      () => t('被调用时回到调用处，可以带返回值'),
+    ),
+  ],
 )
 registerBlockUi(
   {
@@ -78,10 +117,19 @@ registerBlockUi(
     summary: (s) => t('失败：{m}', { m: String(s.message ?? '') }),
     Inspector: ({ step, onChange }) => (
       <Row label={t('原因')} hint={t('可以用 = 开头的表达式拼')}>
-        <ValueInput mono={false} value={String(step.message ?? '')} onChange={(v) => onChange({ ...step, message: v })} />
+        <ValueInput
+          mono={false}
+          value={String(step.message ?? '')}
+          onChange={(v) => onChange({ ...step, message: v })}
+        />
       </Row>
     ),
   },
-  [ins('fail', () => t('主动失败'), () => t('检查不过时直接让这次运行失败，写清原因'))],
+  [
+    ins(
+      'fail',
+      () => t('主动失败'),
+      () => t('检查不过时直接让这次运行失败，写清原因'),
+    ),
+  ],
 )
-

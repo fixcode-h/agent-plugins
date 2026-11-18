@@ -48,7 +48,9 @@ export function GtGuardsGroup({
         {value.length ? (
           <GuardList value={value} onChange={onChange} />
         ) : (
-          <p className="ue:py-3 ue:text-footnote ue:text-subtle">{t('还没有守护：点「添加」，例如「公告出现就关掉」')}</p>
+          <p className="ue:py-3 ue:text-footnote ue:text-subtle">
+            {t('还没有守护：点「添加」，例如「公告出现就关掉」')}
+          </p>
         )}
       </EditContext.Provider>
     </SettingGroup>

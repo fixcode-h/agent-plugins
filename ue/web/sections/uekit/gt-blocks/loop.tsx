@@ -132,7 +132,12 @@ function loopSummary(s: GtStep) {
     case 'each':
       return t('对 {c} 的每个条目 {a}', { c: String(s.each), a: String(s.as ?? 'item') }) + max
     case 'in':
-      return t('对 {c} 里的每个 {a}', { c: typeof s.in === 'string' ? s.in : JSON.stringify(s.in), a: String(s.as ?? 'item') }) + max
+      return (
+        t('对 {c} 里的每个 {a}', {
+          c: typeof s.in === 'string' ? s.in : JSON.stringify(s.in),
+          a: String(s.as ?? 'item'),
+        }) + max
+      )
     default:
       return t('循环（没写方式）')
   }
@@ -149,12 +154,39 @@ const item = (id: LoopMode, label: () => string, hint: () => string) => ({
 })
 
 registerBlockUi(
-  { action: 'loop', title: () => t('循环'), icon: Repeat, tone: 'accent', summary: loopSummary, Inspector: LoopInspector },
+  {
+    action: 'loop',
+    title: () => t('循环'),
+    icon: Repeat,
+    tone: 'accent',
+    summary: loopSummary,
+    Inspector: LoopInspector,
+  },
   [
-    item('until', () => t('直到条件成立'), () => t('每次做完里面的步骤看一次条件，成立就出来（翻引导、等加载）')),
-    item('times', () => t('重复 N 次'), () => t('固定次数，也可以写 $变量')),
-    item('each', () => t('对每个条目'), () => t('列表、格子里每一格做一遍，条目叫 item')),
-    item('while', () => t('当条件成立时'), () => t('每轮开始前看条件，不成立就出来')),
-    item('in', () => t('对一组值'), () => t('对一组账号、数量各做一遍')),
+    item(
+      'until',
+      () => t('直到条件成立'),
+      () => t('每次做完里面的步骤看一次条件，成立就出来（翻引导、等加载）'),
+    ),
+    item(
+      'times',
+      () => t('重复 N 次'),
+      () => t('固定次数，也可以写 $变量'),
+    ),
+    item(
+      'each',
+      () => t('对每个条目'),
+      () => t('列表、格子里每一格做一遍，条目叫 item'),
+    ),
+    item(
+      'while',
+      () => t('当条件成立时'),
+      () => t('每轮开始前看条件，不成立就出来'),
+    ),
+    item(
+      'in',
+      () => t('对一组值'),
+      () => t('对一组账号、数量各做一遍'),
+    ),
   ],
 )

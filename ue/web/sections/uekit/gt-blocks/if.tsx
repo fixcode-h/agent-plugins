@@ -33,7 +33,12 @@ function IfInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) =
         <div key={i} className="ue:flex ue:flex-col ue:gap-2 ue:border-t ue:border-line ue:pt-3">
           <div className="ue:flex ue:items-center">
             <span className="ue:text-footnote ue:font-medium ue:text-fg">{t('否则如果 {n}', { n: i + 1 })}</span>
-            <ui.IconButton size="sm" className="ue:ml-auto" label={t('删掉这个分支')} onClick={() => setElif(i, undefined)}>
+            <ui.IconButton
+              size="sm"
+              className="ue:ml-auto"
+              label={t('删掉这个分支')}
+              onClick={() => setElif(i, undefined)}
+            >
               <Trash2 className="ue:h-3.5 ue:w-3.5" />
             </ui.IconButton>
           </div>
@@ -41,7 +46,11 @@ function IfInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) =
         </div>
       ))}
       <div className="ue:flex ue:flex-wrap ue:gap-1 ue:border-t ue:border-line ue:pt-2">
-        <ui.Button size="sm" variant="ghost" onClick={() => onChange({ ...step, elif: [...elifs, { cond: { all: [] }, then: [] }] })}>
+        <ui.Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onChange({ ...step, elif: [...elifs, { cond: { all: [] }, then: [] }] })}
+        >
           <Plus className="ue:h-3.5 ue:w-3.5" />
           {t('否则如果')}
         </ui.Button>

@@ -45,15 +45,16 @@ export function exprProblems(
     const fn = exprFunction(c.name)
     if (fn) continue
     const api = o.apis.get(c.name)
-    if (!api)
-      return o.apis.size
-        ? { at: c.at, text: t('没有叫 {n} 的函数或接口', { n: c.name }) }
-        : undefined
+    if (!api) return o.apis.size ? { at: c.at, text: t('没有叫 {n} 的函数或接口', { n: c.name }) } : undefined
     if (o.readOnly && !api.readOnly)
       return { at: c.at, text: t('{n} 会改游戏状态，条件和表达式里只能用只读接口', { n: c.name }) }
   }
   const unknown = [...refs.vars].map((v) => v.split(/[.[]/)[0]).find((v) => o.names.size && !o.names.has(v))
-  if (unknown) return { at: src.indexOf(`$${unknown}`), text: t('${n} 没有定义：在变量、参数里加上，或先用「设变量」', { n: unknown }) }
+  if (unknown)
+    return {
+      at: src.indexOf(`$${unknown}`),
+      text: t('${n} 没有定义：在变量、参数里加上，或先用「设变量」', { n: unknown }),
+    }
   return undefined
 }
 
@@ -115,7 +116,13 @@ export function ExprInput({
     }))
     const apis: Item[] = ctx.apis
       .filter((a) => (!readOnly || a.readOnly) && a.name.toLowerCase().includes(low))
-      .map((a) => ({ key: `a:${a.name}`, insert: `${a.name}(`, label: sigOf(a), detail: a.display ?? a.category, kind: 'api' }))
+      .map((a) => ({
+        key: `a:${a.name}`,
+        insert: `${a.name}(`,
+        label: sigOf(a),
+        detail: a.display ?? a.category,
+        kind: 'api',
+      }))
     return [...fns, ...apis]
   }, [word, names, ctx.apis, readOnly])
   const shown = items.slice(0, MAX)

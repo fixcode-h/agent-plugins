@@ -85,7 +85,11 @@ function GuardCard({
       )}
     >
       <div className="ue:flex ue:min-h-9 ue:items-center ue:gap-2 ue:px-2.5">
-        <button type="button" className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-2 ue:text-left" onClick={onToggle}>
+        <button
+          type="button"
+          className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-2 ue:text-left"
+          onClick={onToggle}
+        >
           {open ? (
             <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
           ) : (

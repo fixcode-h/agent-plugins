@@ -1,13 +1,6 @@
 import { ArrowLeft, Info, Loader2, Redo2, Save, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  getAt,
-  parseScript,
-  versionOf,
-  wrap,
-  type GtPath,
-  type GtStep,
-} from '../../../../shared/gt-script/index.ts'
+import { getAt, parseScript, versionOf, wrap, type GtPath, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { Confirm, ErrorText } from '../../../ui.tsx'
@@ -76,10 +69,14 @@ export function GtEditor({
       const step = s.doc && (getAt(s.doc, path) as GtStep | undefined)
       if (!step) return
       try {
-        const r = await op<{ ok?: boolean; succeeded?: boolean; message?: string; runId?: string }>(project, 'gt.step', {
-          step,
-          ...(s.doc?.vars ? { vars: s.doc.vars } : {}),
-        })
+        const r = await op<{ ok?: boolean; succeeded?: boolean; message?: string; runId?: string }>(
+          project,
+          'gt.step',
+          {
+            step,
+            ...(s.doc?.vars ? { vars: s.doc.vars } : {}),
+          },
+        )
         if (r.runId) h().toast.success(t('块在后台跑了，结果看「最近运行」'))
         else if (r.ok === false || r.succeeded === false) h().toast.error(r.message || t('这一步没通过'))
         else h().toast.success(r.message || t('这一步通过了'))
@@ -118,7 +115,13 @@ export function GtEditor({
   })
 
   const onTry = live ? (p: GtPath) => void tryStep(p) : undefined
-  const cmdCtx: CmdCtx | undefined = s.doc && { doc: s.doc, selected: s.selected, apply: s.apply, select: s.select, onTry }
+  const cmdCtx: CmdCtx | undefined = s.doc && {
+    doc: s.doc,
+    selected: s.selected,
+    apply: s.apply,
+    select: s.select,
+    onTry,
+  }
   const old = !!gtVersion && !guardsSupported(gtVersion)
   const steps = (s.doc?.steps ?? []) as GtStep[]
 
@@ -153,7 +156,11 @@ export function GtEditor({
           <ui.IconButton icon={Redo2} size="sm" label={t('重做（Ctrl+Y）')} disabled={!s.canRedo} onClick={s.redo} />
           <span className="ue:text-caption ue:text-subtle">{s.dirty ? t('改过，没存') : t('已保存')}</span>
           <ui.Button size="sm" disabled={!s.dirty || s.saving} onClick={() => void save()}>
-            {s.saving ? <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" /> : <Save className="ue:h-3.5 ue:w-3.5" />}
+            {s.saving ? (
+              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
+            ) : (
+              <Save className="ue:h-3.5 ue:w-3.5" />
+            )}
             {t('保存')}
           </ui.Button>
         </header>

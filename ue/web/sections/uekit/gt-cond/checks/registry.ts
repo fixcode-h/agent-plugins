@@ -32,4 +32,5 @@ export function registerCheck(k: CheckKind) {
 
 export const allChecks = () => kinds
 
-export const checkKindOf = (c: CondNode) => kinds.find((k) => !k.hidden && k.match(c)) ?? kinds.find((k) => k.id === 'raw')!
+export const checkKindOf = (c: CondNode) =>
+  kinds.find((k) => !k.hidden && k.match(c)) ?? kinds.find((k) => k.id === 'raw')!
