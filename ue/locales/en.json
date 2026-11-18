@@ -3565,5 +3565,6 @@
   "在左边挑一个界面、游戏对象、子系统或 Lua 模块": "Pick a widget, game object, subsystem or Lua module on the left",
   "编辑器没开：只列得出 Lua 文件里扫到的字段；C++ 和蓝图要编辑器开着按反射读": "Editor isn't running: only fields scanned from Lua files are listed; C++ and Blueprint need the editor for reflection",
   "GameTest · 脚本编辑": "GameTest · Script editor",
-  "流程图": "Flow"
+  "流程图": "Flow",
+  "让 Agent 看": "Ask Agent to look"
 }
