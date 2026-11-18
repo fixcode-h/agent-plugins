@@ -7,4 +7,4 @@ import { t } from '../../../host.ts'
 import { registerView } from '../gt-edit/views.ts'
 import { FlowEditView } from './FlowEditView.tsx'
 
-registerView({ id: 'flow', label: () => t('流程图'), icon: Workflow, order: 20, Component: FlowEditView })
+registerView({ id: 'flow', label: () => t('流程图'), icon: Workflow, order: 5, Component: FlowEditView })

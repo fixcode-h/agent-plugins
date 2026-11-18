@@ -66,7 +66,8 @@ export function useScript(o: { project: string; root: string; path: string; wrap
       const v3 = toV3(p.doc, { wrapFlat: o.wrapFlat && versionOf(p.doc) < 3, groupName: t('录制') })
       setBase(r.text.replace(/^﻿/, ''))
       setDoc(v3)
-      saved.current = versionOf(p.doc) >= 3 && serialize(v3) === r.text ? v3 : undefined
+      // 只是格式不同（UE 写的缩进、旧版本、补 id）不算改过：用户没动就不提示「没存」，下次存盘时一起整理
+      saved.current = v3
       past.current = []
       future.current = []
       setError('')

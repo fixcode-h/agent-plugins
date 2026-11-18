@@ -1,8 +1,70 @@
-import { Play } from 'lucide-react'
+import { Ellipsis, Layers, Play, X, type LucideIcon } from 'lucide-react'
+import type { MouseEvent, ReactNode } from 'react'
 import { getAt, replace, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { blockUi, CommonFields, TONE_TEXT } from '../gt-blocks/index.ts'
-import { canRun, COMMANDS, type CmdCtx } from './commands.ts'
+import { openMenu } from '../../../menu.tsx'
+import { blockUi, CommonFields, TONE_TEXT, type BlockTone } from '../gt-blocks/index.ts'
+import { canRun, commandMenuItems, COMMANDS, type CmdCtx } from './commands.ts'
+
+/** 图标底下的浅色调小方块（效果图 1、11 右上）：和 TONE_TEXT 同一套色调，只是做成底色 */
+const TONE_TINT: Record<BlockTone, string> = {
+  accent: 'ue:bg-accent/10',
+  warning: 'ue:bg-warning/10',
+  success: 'ue:bg-success/10',
+  run: 'ue:bg-run/10',
+  danger: 'ue:bg-danger/10',
+  subtle: 'ue:bg-hover',
+}
+
+/** 检查器头部：图标、标题、步骤 id，右边「⋯」出命令菜单、X 取消选中（右栏回到脚本设置） */
+function Head({
+  icon: Icon,
+  tone,
+  title,
+  id,
+  ctx,
+}: {
+  icon: LucideIcon
+  tone: BlockTone
+  title: ReactNode
+  id?: string
+  ctx: CmdCtx
+}) {
+  const { ui, cn } = h()
+  return (
+    <div className="ue:flex ue:h-12 ue:shrink-0 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:pr-2 ue:pl-4">
+      <span
+        className={cn(
+          'ue:flex ue:h-6 ue:w-6 ue:shrink-0 ue:items-center ue:justify-center ue:rounded-md',
+          TONE_TINT[tone],
+        )}
+      >
+        <Icon className={cn('ue:h-3.5 ue:w-3.5', TONE_TEXT[tone])} />
+      </span>
+      <span className="ue:truncate ue:text-body ue:font-medium ue:text-fg">{title}</span>
+      {id && <code className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">#{id}</code>}
+      <span className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-0.5">
+        <ui.IconButton
+          icon={Ellipsis}
+          size="sm"
+          label={t('更多')}
+          onClick={(e: MouseEvent) => openMenu(e, commandMenuItems(ctx))}
+        />
+        <ui.IconButton icon={X} size="sm" label={t('取消选中')} onClick={() => ctx.select([])} />
+      </span>
+    </div>
+  )
+}
+
+/** 内容分节：小字灰色节标题，节之间用分隔线（外层 divide-y） */
+function Section({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section className="ue:flex ue:flex-col ue:gap-2.5 ue:px-4 ue:py-3.5">
+      {title && <h3 className="ue:text-caption ue:font-normal ue:text-subtle">{title}</h3>}
+      {children}
+    </section>
+  )
+}
 
 /**
  * 右栏检查器：选中一步时上面是这种块自己的字段（块 UI 注册表的 Inspector），下面是所有步骤共用的字段；
@@ -21,25 +83,31 @@ export function Inspector({
   ctx: CmdCtx
   onTry?: (p: GtPath) => void
 }) {
-  const { ui, cn } = h()
+  const { ui } = h()
   if (selected.length > 1)
     return (
-      <div className="ue:flex ue:flex-col ue:gap-2 ue:p-4">
-        <p className="ue:text-footnote ue:text-fg">{t('选了 {n} 步', { n: selected.length })}</p>
-        <div className="ue:flex ue:flex-wrap ue:gap-1.5">
-          {COMMANDS.filter((c) => c.multi && canRun(c, ctx)).map((c) => (
-            <ui.Button
-              key={c.id}
-              size="sm"
-              variant={c.danger ? 'danger-outline' : 'secondary'}
-              onClick={() => c.run(ctx)}
-            >
-              <c.icon className="ue:h-3.5 ue:w-3.5" />
-              {c.label()}
-            </ui.Button>
-          ))}
+      <div className="ue:flex ue:flex-col">
+        <Head icon={Layers} tone="subtle" title={t('选了 {n} 步', { n: selected.length })} ctx={ctx} />
+        <div className="ue:divide-y ue:divide-line">
+          <Section title={t('批量操作')}>
+            <div className="ue:flex ue:flex-wrap ue:gap-1.5">
+              {COMMANDS.filter((c) => c.multi && canRun(c, ctx)).map((c) => (
+                <ui.Button
+                  key={c.id}
+                  size="sm"
+                  variant={c.danger ? 'danger-outline' : 'secondary'}
+                  onClick={() => c.run(ctx)}
+                >
+                  <c.icon className="ue:h-3.5 ue:w-3.5" />
+                  {c.label()}
+                </ui.Button>
+              ))}
+            </div>
+            <p className="ue:text-caption ue:text-subtle">
+              {t('Ctrl 点选加减，Shift 点选连选；包成块要选同一层的步骤')}
+            </p>
+          </Section>
         </div>
-        <p className="ue:text-caption ue:text-subtle">{t('Ctrl 点选加减，Shift 点选连选；包成块要选同一层的步骤')}</p>
       </div>
     )
   const path = selected[0]
@@ -48,24 +116,29 @@ export function Inspector({
   const bu = blockUi(step.action)
   const set = (s: GtStep) => onChange(replace(doc, path, s))
   const Own = bu.Inspector
+  const id = typeof step.id === 'string' ? step.id : undefined
   return (
-    <div className="ue:flex ue:flex-col ue:gap-4 ue:p-4">
-      <div className="ue:flex ue:items-center ue:gap-2">
-        <bu.icon className={cn('ue:h-4 ue:w-4 ue:shrink-0', TONE_TEXT[bu.tone])} />
-        <span className="ue:text-body ue:font-medium ue:text-fg">{bu.title()}</span>
-        <code className="ue:font-mono ue:text-caption ue:text-subtle">
-          {typeof step.id === 'string' ? step.id : ''}
-        </code>
-        {onTry && (
-          <ui.Button size="sm" variant="secondary" className="ue:ml-auto" onClick={() => onTry(path)}>
-            <Play className="ue:h-3.5 ue:w-3.5" />
-            {t('试这一步')}
-          </ui.Button>
+    <div className="ue:flex ue:flex-col">
+      <Head icon={bu.icon} tone={bu.tone} title={bu.title()} id={id} ctx={ctx} />
+      <div className="ue:divide-y ue:divide-line">
+        {Own && (
+          <Section>
+            <Own key={id ?? path.join('.')} step={step} onChange={set} />
+          </Section>
         )}
-      </div>
-      {Own && <Own key={typeof step.id === 'string' ? step.id : path.join('.')} step={step} onChange={set} />}
-      <div className="ue:border-t ue:border-line ue:pt-3">
-        <CommonFields step={step} onChange={set} />
+        {onTry && (
+          <Section title={t('在游戏里试')}>
+            <div>
+              <ui.Button size="sm" variant="secondary" onClick={() => onTry(path)}>
+                <Play className="ue:h-3.5 ue:w-3.5" />
+                {t('只做这一步')}
+              </ui.Button>
+            </div>
+          </Section>
+        )}
+        <Section title={t('出错和说明')}>
+          <CommonFields step={step} onChange={set} />
+        </Section>
       </div>
     </div>
   )

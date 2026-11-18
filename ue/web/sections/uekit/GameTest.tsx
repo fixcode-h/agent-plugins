@@ -57,7 +57,7 @@ interface ScenarioList {
 }
 
 export function GameTest() {
-  const { project, state, sub, go } = useUe()
+  const { project, state, sub, go, setWide } = useUe()
   const { ui, cn } = h()
   const { busy, run } = useAction()
   const installed = state?.extensions?.some((x) => x.name === 'GameTest')
@@ -328,6 +328,13 @@ export function GameTest() {
       setRec({ ...r, last: [] })
     })
 
+  // 编辑脚本时整页给编辑器（效果图 1）：场景列表和 UE 页的分区栏都收起来，编辑器左栏自带脚本库
+  const fullEdit = !!(selected && editing === selected.relativePath && list && !recording)
+  useEffect(() => {
+    setWide(fullEdit)
+    return () => setWide(false)
+  }, [fullEdit, setWide])
+
   if (state && !installed) return <NotInstalled name="GameTest" />
   // 录制、运行、批量要编辑器：没连上时按钮置灰，悬停说明为什么
   const needEditor = live ? '' : t('要先启动编辑器')
@@ -338,208 +345,210 @@ export function GameTest() {
       onContextMenu={pageMenu}
       className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:md:flex-row ue:md:overflow-hidden"
     >
-      <ListCol
-        id="gametest"
-        title="GameTest"
-        count={list?.scenarios.length ?? '…'}
-        query={query}
-        onQuery={setQuery}
-        placeholder={t('按名字找场景')}
-        // 空白处右键：在场景根新建脚本、文件夹（「最近运行」页签没有可新建的，交给整页兜底）
-        onBodyMenu={tab === 'scenarios' ? lib.blankMenu : undefined}
-        extra={
-          <div className="ue:flex ue:items-center ue:gap-0.5">
-            <ui.Button
-              size="sm"
-              title={needEditor || undefined}
-              disabled={!live || !selected || running || recording || !!busy}
-              onClick={() => selected && runScenario(selected)}
-            >
-              <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
-            </ui.Button>
-            <ui.IconButton
-              icon={ChevronDown}
-              size="sm"
-              label={tip(t('更多运行方式：全部照做、批量运行'))}
-              disabled={!live || running || recording || !!busy}
-              onClick={(e: React.MouseEvent<HTMLElement>) =>
-                openMenuAt(e.currentTarget, [
-                  selected && { label: t('运行'), icon: Play, onClick: () => runScenario(selected) },
-                  selected && {
-                    label: t('全部照做'),
-                    icon: Play,
-                    hint: t('忽略已达成就跳过，每一步都真做'),
-                    disabled: !skipSupported(gtVersion),
-                    onClick: () => runScenario(selected, true),
-                  },
-                  selected && 'sep',
-                  ...batchItems(),
-                ])
-              }
-            />
-          </div>
-        }
-        searchExtra={
-          <>
-            {/* 列表栏默认只有 316px 宽，标题行放不下一整排按钮（以前挤出栏外、盖住右边编辑页的返回按钮，用户 2026-11-18 截图）：
+      {!fullEdit && (
+        <ListCol
+          id="gametest"
+          title="GameTest"
+          count={list?.scenarios.length ?? '…'}
+          query={query}
+          onQuery={setQuery}
+          placeholder={t('按名字找场景')}
+          // 空白处右键：在场景根新建脚本、文件夹（「最近运行」页签没有可新建的，交给整页兜底）
+          onBodyMenu={tab === 'scenarios' ? lib.blankMenu : undefined}
+          extra={
+            <div className="ue:flex ue:items-center ue:gap-0.5">
+              <ui.Button
+                size="sm"
+                title={needEditor || undefined}
+                disabled={!live || !selected || running || recording || !!busy}
+                onClick={() => selected && runScenario(selected)}
+              >
+                <Play className="ue:h-3.5 ue:w-3.5" /> {t('运行')}
+              </ui.Button>
+              <ui.IconButton
+                icon={ChevronDown}
+                size="sm"
+                label={tip(t('更多运行方式：全部照做、批量运行'))}
+                disabled={!live || running || recording || !!busy}
+                onClick={(e: React.MouseEvent<HTMLElement>) =>
+                  openMenuAt(e.currentTarget, [
+                    selected && { label: t('运行'), icon: Play, onClick: () => runScenario(selected) },
+                    selected && {
+                      label: t('全部照做'),
+                      icon: Play,
+                      hint: t('忽略已达成就跳过，每一步都真做'),
+                      disabled: !skipSupported(gtVersion),
+                      onClick: () => runScenario(selected, true),
+                    },
+                    selected && 'sep',
+                    ...batchItems(),
+                  ])
+                }
+              />
+            </div>
+          }
+          searchExtra={
+            <>
+              {/* 列表栏默认只有 316px 宽，标题行放不下一整排按钮（以前挤出栏外、盖住右边编辑页的返回按钮，用户 2026-11-18 截图）：
                 新建、录制和低频的设置入口挪到搜索框旁边，批量运行并进「运行」旁的下拉 */}
-            <ui.IconButton
-              icon={MoreHorizontal}
+              <ui.IconButton
+                icon={MoreHorizontal}
+                size="sm"
+                label={t('更多：运行设置、接口库、条目规则')}
+                onClick={(e: React.MouseEvent<HTMLElement>) =>
+                  openMenuAt(e.currentTarget, [
+                    {
+                      label: t('运行设置'),
+                      icon: SlidersHorizontal,
+                      hint: t('UI 等待上限、全局守护'),
+                      disabled: !live,
+                      onClick: () => setSettings(true),
+                    },
+                    {
+                      label: t('接口库'),
+                      icon: BookOpen,
+                      hint: t('脚本里「调接口」能用的接口'),
+                      disabled: !list?.absoluteRootDir,
+                      onClick: () => setApiLib(true),
+                    },
+                    {
+                      label: t('条目规则'),
+                      icon: ListTree,
+                      hint: t('列表、格子里的条目按什么字段认'),
+                      disabled: !list?.absoluteRootDir,
+                      onClick: () => setKeyRules(true),
+                    },
+                  ])
+                }
+              />
+              <ui.IconButton
+                icon={Plus}
+                size="sm"
+                label={t('新建：脚本（编写 / 录制）、文件夹，建在选中的文件夹里')}
+                disabled={!list?.absoluteRootDir}
+                onClick={lib.newMenu}
+              />
+              <ui.IconButton
+                icon={CircleDot}
+                size="sm"
+                label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
+                disabled={!live || recording || running || !!busy}
+                onClick={() => {
+                  setRecordDir(undefined)
+                  setAsking(true)
+                }}
+              />
+            </>
+          }
+          tabs={
+            <ui.Segmented
               size="sm"
-              label={t('更多：运行设置、接口库、条目规则')}
-              onClick={(e: React.MouseEvent<HTMLElement>) =>
-                openMenuAt(e.currentTarget, [
-                  {
-                    label: t('运行设置'),
-                    icon: SlidersHorizontal,
-                    hint: t('UI 等待上限、全局守护'),
-                    disabled: !live,
-                    onClick: () => setSettings(true),
-                  },
-                  {
-                    label: t('接口库'),
-                    icon: BookOpen,
-                    hint: t('脚本里「调接口」能用的接口'),
-                    disabled: !list?.absoluteRootDir,
-                    onClick: () => setApiLib(true),
-                  },
-                  {
-                    label: t('条目规则'),
-                    icon: ListTree,
-                    hint: t('列表、格子里的条目按什么字段认'),
-                    disabled: !list?.absoluteRootDir,
-                    onClick: () => setKeyRules(true),
-                  },
-                ])
-              }
+              fill
+              label={t('场景 / 最近运行')}
+              value={tab}
+              onChange={setTab}
+              options={[
+                { id: 'scenarios', label: t('场景') },
+                { id: 'runs', label: `${t('最近运行')} ${runs.length}` },
+              ]}
             />
-            <ui.IconButton
-              icon={Plus}
-              size="sm"
-              label={t('新建：脚本（编写 / 录制）、文件夹，建在选中的文件夹里')}
-              disabled={!list?.absoluteRootDir}
-              onClick={lib.newMenu}
-            />
-            <ui.IconButton
-              icon={CircleDot}
-              size="sm"
-              label={tip(t('录制：在游戏窗口里操作一遍，录成场景'))}
-              disabled={!live || recording || running || !!busy}
-              onClick={() => {
-                setRecordDir(undefined)
-                setAsking(true)
+          }
+          footer={
+            <>
+              <span>
+                {t('场景根')} <code className="ue:font-mono ue:text-muted">{list?.rootDir || '…'}</code>
+              </span>
+              {shots.footer}
+            </>
+          }
+        >
+          {error ? (
+            <ErrorText>{error}</ErrorText>
+          ) : !list ? (
+            <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
+              <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
+            </div>
+          ) : tab === 'runs' ? (
+            <RunList
+              runs={runs}
+              offline={!live}
+              onMenu={menus.runMenu}
+              onOpen={(r) => {
+                const s = list.scenarios.find((x) => (r.scenario ? x.relativePath === r.scenario : x.name === r.name))
+                if (s) go('gametest', s.relativePath)
               }}
             />
-          </>
-        }
-        tabs={
-          <ui.Segmented
-            size="sm"
-            fill
-            label={t('场景 / 最近运行')}
-            value={tab}
-            onChange={setTab}
-            options={[
-              { id: 'scenarios', label: t('场景') },
-              { id: 'runs', label: `${t('最近运行')} ${runs.length}` },
-            ]}
-          />
-        }
-        footer={
-          <>
-            <span>
-              {t('场景根')} <code className="ue:font-mono ue:text-muted">{list?.rootDir || '…'}</code>
-            </span>
-            {shots.footer}
-          </>
-        }
-      >
-        {error ? (
-          <ErrorText>{error}</ErrorText>
-        ) : !list ? (
-          <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
-            <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
-          </div>
-        ) : tab === 'runs' ? (
-          <RunList
-            runs={runs}
-            offline={!live}
-            onMenu={menus.runMenu}
-            onOpen={(r) => {
-              const s = list.scenarios.find((x) => (r.scenario ? x.relativePath === r.scenario : x.name === r.name))
-              if (s) go('gametest', s.relativePath)
-            }}
-          />
-        ) : (
-          <FileTree
-            label={t('测试场景')}
-            items={items}
-            searching={!!q}
-            active={selected?.relativePath.replace(/\.json$/i, '')}
-            onOpen={(_p, s) => {
-              lib.setActiveFolder(undefined)
-              go('gametest', s.relativePath)
-            }}
-            onLeafMenu={menus.leafMenu}
-            onFolderMenu={lib.folderMenu}
-            // 搜索时只看命中的场景，空文件夹不掺进来
-            folders={q ? undefined : lib.folders}
-            activeFolder={lib.activeFolder}
-            onFolderClick={lib.setActiveFolder}
-            onMove={lib.onMove}
-            leafIcon={(s) =>
-              recording && rec?.name === s.name
-                ? { icon: CircleDot, tone: 'ue:text-danger' }
-                : { icon: FileJson, tone: s.parseError ? 'ue:text-danger' : 'ue:text-subtle' }
-            }
-            leafRight={(s) => {
-              const r = lastOf(s)
-              const marks = history[s.relativePath]
-              return (
-                <>
-                  {(s.tags ?? []).includes('recorded') && (
-                    <span className="ue:rounded-(--c-badge-radius) ue:bg-accent-soft ue:px-1.5 ue:text-accent-text">
-                      {t('录制')}
-                    </span>
-                  )}
-                  {marks ? (
-                    <GtHistoryBar marks={marks} />
-                  ) : (
-                    r &&
-                    (r.succeeded ? (
-                      <CircleCheck className="ue:h-3 ue:w-3 ue:text-success" />
+          ) : (
+            <FileTree
+              label={t('测试场景')}
+              items={items}
+              searching={!!q}
+              active={selected?.relativePath.replace(/\.json$/i, '')}
+              onOpen={(_p, s) => {
+                lib.setActiveFolder(undefined)
+                go('gametest', s.relativePath)
+              }}
+              onLeafMenu={menus.leafMenu}
+              onFolderMenu={lib.folderMenu}
+              // 搜索时只看命中的场景，空文件夹不掺进来
+              folders={q ? undefined : lib.folders}
+              activeFolder={lib.activeFolder}
+              onFolderClick={lib.setActiveFolder}
+              onMove={lib.onMove}
+              leafIcon={(s) =>
+                recording && rec?.name === s.name
+                  ? { icon: CircleDot, tone: 'ue:text-danger' }
+                  : { icon: FileJson, tone: s.parseError ? 'ue:text-danger' : 'ue:text-subtle' }
+              }
+              leafRight={(s) => {
+                const r = lastOf(s)
+                const marks = history[s.relativePath]
+                return (
+                  <>
+                    {(s.tags ?? []).includes('recorded') && (
+                      <span className="ue:rounded-(--c-badge-radius) ue:bg-accent-soft ue:px-1.5 ue:text-accent-text">
+                        {t('录制')}
+                      </span>
+                    )}
+                    {marks ? (
+                      <GtHistoryBar marks={marks} />
                     ) : (
-                      <CircleX className="ue:h-3 ue:w-3 ue:text-danger" />
-                    ))
-                  )}
-                  <span className={cn(s.parseError && 'ue:text-danger')}>
-                    {s.parseError ? t('解析失败') : t('{n} 步', { n: s.steps })}
-                  </span>
-                </>
-              )
-            }}
-            folderRight={(leaves) => {
-              // 最近一次失败的：有历史看历史的最新一次（跨编辑器会话），没有看本次会话的最近一次
-              const failed = leaves.filter((s) =>
-                history[s.relativePath] ? history[s.relativePath][0] === 'f' : lastOf(s)?.succeeded === false,
-              ).length
-              return (
-                <>
-                  {failed > 0 && <span className="ue:text-danger">{t('{n} 失败', { n: failed })}</span>}
-                  <span>{leaves.length}</span>
-                </>
-              )
-            }}
-            empty={
-              <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:leading-relaxed ue:text-subtle">
-                {q
-                  ? t('没有名字里带「{q}」的场景', { q: query })
-                  : t('场景根里还没有场景：点搜索框旁的录制按钮录一个，或让 Agent 用 ue_gametest 写')}
-              </p>
-            }
-          />
-        )}
-      </ListCol>
+                      r &&
+                      (r.succeeded ? (
+                        <CircleCheck className="ue:h-3 ue:w-3 ue:text-success" />
+                      ) : (
+                        <CircleX className="ue:h-3 ue:w-3 ue:text-danger" />
+                      ))
+                    )}
+                    <span className={cn(s.parseError && 'ue:text-danger')}>
+                      {s.parseError ? t('解析失败') : t('{n} 步', { n: s.steps })}
+                    </span>
+                  </>
+                )
+              }}
+              folderRight={(leaves) => {
+                // 最近一次失败的：有历史看历史的最新一次（跨编辑器会话），没有看本次会话的最近一次
+                const failed = leaves.filter((s) =>
+                  history[s.relativePath] ? history[s.relativePath][0] === 'f' : lastOf(s)?.succeeded === false,
+                ).length
+                return (
+                  <>
+                    {failed > 0 && <span className="ue:text-danger">{t('{n} 失败', { n: failed })}</span>}
+                    <span>{leaves.length}</span>
+                  </>
+                )
+              }}
+              empty={
+                <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:leading-relaxed ue:text-subtle">
+                  {q
+                    ? t('没有名字里带「{q}」的场景', { q: query })
+                    : t('场景根里还没有场景：点搜索框旁的录制按钮录一个，或让 Agent 用 ue_gametest 写')}
+                </p>
+              }
+            />
+          )}
+        </ListCol>
+      )}
       <main className="ue:flex ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-hidden">
         {state && !live && <GtOfflineBar />}
         {batch && !recording && (
@@ -582,10 +591,37 @@ export function GameTest() {
             project={project.id}
             root={list.absoluteRootDir ?? ''}
             scenario={selected}
+            scenarios={list.scenarios.filter((x) => !/(^|\/)_[^/]*$/.test(x.relativePath))}
             live={live}
             gtVersion={gtVersion}
             onClose={() => setEditing(undefined)}
             onSaved={reload}
+            onOpen={(p) => {
+              // 在编辑页里换脚本：留在编辑页
+              setEditing(p)
+              go('gametest', p)
+            }}
+            onRecord={
+              live && !running && !recording && !busy
+                ? () => {
+                    setRecordDir(selected.relativePath.split('/').slice(0, -1).join('/') || undefined)
+                    setAsking(true)
+                  }
+                : undefined
+            }
+            onRun={
+              live && !recording && !busy
+                ? (from) =>
+                    void (from
+                      ? runFrom(selected, from.doc as unknown as GtScenarioFile, from.index)
+                      : runScenario(selected))
+                : undefined
+            }
+            run={
+              running && job?.busy && !job.batch && job.name === selected.name
+                ? { done: job.total, planned: job.planned ?? 0, failed: job.failed, onStop: () => void stop() }
+                : undefined
+            }
           />
         ) : selected ? (
           <GtRun

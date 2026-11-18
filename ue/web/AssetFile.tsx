@@ -65,15 +65,7 @@ export function AssetFile({ path, projectId, close }: FileViewerProps) {
   return <Loaded key={project.id} project={project} file={path} openPage={openPage} />
 }
 
-function Loaded({
-  project,
-  file,
-  openPage,
-}: {
-  project: UeProject
-  file: string
-  openPage: (sub?: string) => void
-}) {
+function Loaded({ project, file, openPage }: { project: UeProject; file: string; openPage: (sub?: string) => void }) {
   const state = useLoad(() => pget<ProjectState>(project.id, 'state'), [project.id], 5000)
   const s = state.data
   // 编辑器开着就读编辑器里的（可能有没保存的改动，和用户眼前的一致）；没开时不指定，服务端起后台编辑器
@@ -103,8 +95,7 @@ function Loaded({
   const isTable = cur ? /\/DT_/.test(cur) : asset?.class === 'DataTable'
   // 和资源分区同一个判断：点引用跳过来的没有类名，按常见前缀猜；组件模板这类子对象路径带冒号，不算
   const isBlueprint =
-    !path.includes(':') &&
-    (cur ? /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(cur) : /Blueprint$/.test(asset?.class ?? ''))
+    !path.includes(':') && (cur ? /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(cur) : /Blueprint$/.test(asset?.class ?? ''))
   const [view, setView] = useState<'main' | 'graph' | 'info'>('main')
   const tab = view === 'graph' && !isBlueprint ? 'main' : view
   const { ui } = h()
@@ -128,6 +119,7 @@ function Loaded({
       reloadBadges: noop,
       openShot: noop,
       openJump: noop,
+      setWide: noop,
     }),
     // openPage、state.reload 每次渲染都是新的，按数据变化重建就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -144,9 +136,7 @@ function Loaded({
             <ErrorText>{state.error || found.error}</ErrorText>
           </div>
         ) : !found.data ? (
-          <Hint>
-            {s && starting ? t('UE 没在运行，正在启动后台编辑器，第一次要 30–60 秒…') : t('读取中…')}
-          </Hint>
+          <Hint>{s && starting ? t('UE 没在运行，正在启动后台编辑器，第一次要 30–60 秒…') : t('读取中…')}</Hint>
         ) : !path ? (
           <Hint>
             {t('在 UE 的资源里没有找到这个文件。可能是刚新建还没被 UE 扫到，或者不在这个项目的 Content 目录里。')}
@@ -218,4 +208,3 @@ function Hint({ children, action }: { children: ReactNode; action?: ReactNode })
     </div>
   )
 }
-
