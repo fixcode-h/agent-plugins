@@ -184,7 +184,13 @@ export function GtRun({
   const planned = job?.planned || scenario.steps
   const liveRow = running ? (rows.filter((r) => r.res).at(-1)?.i ?? offset - 1) + 1 : -1
   const toWidget = useToWidget({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
-  const stepEdit = useStepEdit({ project: project.id, root, path: scenario.relativePath, onDone: onChanged })
+  const stepEdit = useStepEdit({
+    project: project.id,
+    root,
+    path: scenario.relativePath,
+    onDone: onChanged,
+    onPick: setPick,
+  })
   const tidy = useGtTidy({
     project: project.id,
     root,
@@ -221,7 +227,7 @@ export function GtRun({
         onClick: () => void toWidget.convert(file.data!, coord),
       },
       'sep',
-      ...stepEdit.menuItems(r.i, r.def, running || !!scenario.parseError),
+      ...(r.def ? stepEdit.menuItems(r.i, file.data?.steps ?? [], running || !!scenario.parseError) : []),
       'sep',
       r.def && { label: t('复制这一步（JSON）'), icon: Copy, onClick: () => copyText(JSON.stringify(r.def, null, 2)) },
       s.target && { label: t('复制目标选择器'), icon: Crosshair, onClick: () => copyText(s.target!) },

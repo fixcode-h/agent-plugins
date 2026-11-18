@@ -4,7 +4,7 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 
 /**
- * 录制条上的快捷动作（GameTest 1.3.0 的 gt.record.move）：和游戏窗口右上角的工具栏、Alt+数字同一个入口。
+ * 录制条上的快捷动作（GameTest 1.3.0 的 gt.record.move）：和录制时悬浮的工具栏小窗口、Alt+数字同一个入口。
  * 录移动时其他操作都不录，所以这里一直显示「正在录移动 · 已走多少米」，让人知道现在点什么都不会进场景。
  */
 export interface RecordQuick {

@@ -1,10 +1,11 @@
-import { ListTree, Plus, Trash2 } from 'lucide-react'
+import { ListTree, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { op } from '../../api.ts'
 import { ASSET_KINDS } from '../../asset-icons.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useSearchIndex } from '../../jump/index-data.ts'
+import { AddButton, SettingGroup, SettingList, SettingRow } from '../../SettingRows.tsx'
 import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
@@ -69,8 +70,9 @@ function waitText(ms: number) {
 }
 
 /**
- * 两处用：GameTest 页的「运行设置」弹窗（给 onClose），UE 插件页里 GameTest 的设置页（不给，直接画在卡片里、
- * 下面自带保存按钮）。用户 2026-11-17 要每个插件有自己的设置页，两处是同一份表单、同一个文件
+ * 两处用：GameTest 页的「运行设置」弹窗（给 onClose），UE 插件页里 GameTest 的设置页（不给，按节画成几张卡片、
+ * 底部贴一条保存栏）。用户 2026-11-17 要每个插件有自己的设置页，两处是同一份表单、同一个文件；
+ * 2026-11-18 嫌一项一摞（名字、输入框、长说明三行）太乱，改用 SettingRows 的两栏行，和面板画的插件参数一致
  */
 export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onOpenRules?: () => void }) {
   const { project } = useUe()
@@ -151,7 +153,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
     }
   }
 
-  const label = 'ue:text-caption ue:text-subtle'
+  const label = 'ue:text-footnote ue:text-subtle'
   const suggestWidgets = (q: string) => widgetRows(matchWidgets(index.idx, q, WIDGET_LIMIT))
   const indexStatus = index.error
     ? t('读索引失败：{e}', { e: index.error })
@@ -161,233 +163,236 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
           src: index.idx.source.assets === 'uetovs' ? t('来自 UEToVS 索引') : t('扫磁盘'),
           n: matchWidgets(index.idx, '', 0).all,
         })
-  const body = (
-    <div className="ue:flex ue:flex-col ue:gap-4 ue:text-body">
-      <ui.Field
-        label={t('UI 等待上限（秒）')}
-        hint={t('点击、输入、等界面出现时最多等多久，0 是一直等到界面出现（卡住时点停止）。空着用项目设置：{d}', {
-          d: waitText(reply?.settingsUiWaitTimeoutMs ?? 0),
-        })}
-      >
-        <ui.Input
-          size="sm"
-          className="ue:w-32"
-          inputMode="decimal"
-          placeholder={t('默认')}
-          value={wait}
-          onChange={(e: { target: { value: string } }) => setWait(e.target.value)}
-        />
-      </ui.Field>
+  // 弹窗里卡片之间没有分隔线，每节自己描边；设置页里卡片贴边、由外层的堆叠容器画分隔线
+  const framed = !!onClose
+  const where = t('这个项目 · 存在场景根的 _settings.json，全组共用')
+  const sections = (
+    <>
+      <SettingGroup title={t('回放')} aside={framed ? undefined : where} framed={framed}>
+        <SettingRow
+          title={t('UI 等待上限（秒）')}
+          desc={t('点击、输入、等界面出现时最多等多久，0 是一直等到界面出现（卡住时点停止）。空着用项目设置：{d}', {
+            d: waitText(reply?.settingsUiWaitTimeoutMs ?? 0),
+          })}
+        >
+          <ui.Input
+            size="sm"
+            className="ue:w-full"
+            inputMode="decimal"
+            placeholder={t('默认')}
+            value={wait}
+            onChange={(e: { target: { value: string } }) => setWait(e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t('UI 操作间隔（秒）')}
+          desc={t(
+            '回放时相邻两个 UI 操作（点击、拖动、输入、选择……）之间至少隔多久，和录制时点得多快无关；中间等待步骤用掉的时间也算。0 是不隔，空着按 1 秒。需要 GameTest 1.2.6。',
+          )}
+        >
+          <ui.Input
+            size="sm"
+            className="ue:w-full"
+            inputMode="decimal"
+            placeholder={t('1（默认）')}
+            value={gap}
+            onChange={(e: { target: { value: string } }) => setGap(e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t('点击方式')}
+          desc={t(
+            '不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。',
+          )}
+        >
+          <ui.Select
+            size="sm"
+            className="ue:w-full"
+            value={clickVia}
+            onChange={(e: { target: { value: string } }) => setClickVia(e.target.value as 'code' | 'pointer')}
+            options={[
+              { value: 'code', label: t('不动鼠标（默认）') },
+              { value: 'pointer', label: t('真实鼠标') },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t('随机种子')}
+          desc={t(
+            '填整数时每次开跑前固定引擎的全局随机（蓝图 Random 节点、FMath::Rand）；游戏自己的随机流、Lua 的 math.random 管不到，用前置步骤里的 GM 固定。空着不固定。',
+          )}
+        >
+          <ui.Input
+            size="sm"
+            className="ue:w-full"
+            inputMode="numeric"
+            placeholder={t('不固定')}
+            value={seed}
+            onChange={(e: { target: { value: string } }) => setSeed(e.target.value)}
+          />
+        </SettingRow>
+      </SettingGroup>
 
-      <ui.Field
-        label={t('UI 操作间隔（秒）')}
-        hint={t(
-          '回放时相邻两个 UI 操作（点击、拖动、输入、选择……）之间至少隔多久，和录制时点得多快无关；中间等待步骤用掉的时间也算。0 是不隔，空着按 1 秒。需要 GameTest 1.2.6。',
-        )}
-      >
-        <ui.Input
-          size="sm"
-          className="ue:w-32"
-          inputMode="decimal"
-          placeholder={t('1（默认）')}
-          value={gap}
-          onChange={(e: { target: { value: string } }) => setGap(e.target.value)}
-        />
-      </ui.Field>
-
-      <ui.Field
-        label={t('点击方式')}
-        hint={t(
-          '不动鼠标：直接调按钮的点击（按下、点击、松开），找不到按钮时发虚拟鼠标事件，回放时可以照常用鼠标。真实鼠标：移光标按下松开，能测出遮挡和悬停，但回放时别动鼠标。单个步骤写 via 时以步骤为准。',
-        )}
-      >
-        <ui.Select
-          size="sm"
-          className="ue:w-48"
-          value={clickVia}
-          onChange={(e: { target: { value: string } }) => setClickVia(e.target.value as 'code' | 'pointer')}
-          options={[
-            { value: 'code', label: t('不动鼠标（默认）') },
-            { value: 'pointer', label: t('真实鼠标') },
-          ]}
-        />
-      </ui.Field>
-
-      <ui.Field
-        label={t('前置步骤')}
-        hint={t(
+      <SettingGroup
+        title={t('前置步骤')}
+        framed={framed}
+        desc={t(
           '每次从场景文件跑都先跑这几步（写法和场景步骤一样），用来清引导、重置任务、发道具，让回放从同一个存档状态开始。场景写 "setup": false 的跳过；「从这一步开始运行」不跑。需要 GameTest 1.2.5。',
         )}
       >
-        <ui.Textarea
-          rows={4}
-          className="ue:font-mono"
-          placeholder={SETUP_PLACEHOLDER}
-          value={setup}
-          onChange={(e: { target: { value: string } }) => setSetup(e.target.value)}
-        />
-      </ui.Field>
+        <div className="ue:px-4 ue:py-3">
+          <ui.Textarea
+            rows={4}
+            className="ue:font-mono"
+            placeholder={SETUP_PLACEHOLDER}
+            value={setup}
+            onChange={(e: { target: { value: string } }) => setSetup(e.target.value)}
+          />
+        </div>
+      </SettingGroup>
 
-      <ui.Field
-        label={t('随机种子')}
-        hint={t(
-          '填整数时每次开跑前固定引擎的全局随机（蓝图 Random 节点、FMath::Rand）；游戏自己的随机流、Lua 的 math.random 管不到，用前置步骤里的 GM 固定。空着不固定。',
-        )}
-      >
-        <ui.Input
-          size="sm"
-          className="ue:w-32"
-          inputMode="numeric"
-          placeholder={t('不固定')}
-          value={seed}
-          onChange={(e: { target: { value: string } }) => setSeed(e.target.value)}
-        />
-      </ui.Field>
+      <GtMoveSettings value={move} onChange={setMove} framed={framed} />
 
-      <GtMoveSettings value={move} onChange={setMove} />
-
-      <section className="ue:flex ue:flex-col ue:gap-1.5">
-        <div className="ue:flex ue:items-center ue:gap-2">
-          <h3 className="ue:text-body ue:font-medium ue:text-fg">{t('条目怎么认')}</h3>
-          <span className="ue:text-footnote ue:text-subtle">{t('{n} 条规则', { n: keyRules.length })}</span>
-          {onOpenRules && (
-            <ui.Button size="sm" variant="ghost" className="ue:ml-auto" onClick={onOpenRules}>
+      <SettingGroup
+        title={t('条目怎么认')}
+        framed={framed}
+        aside={
+          onOpenRules ? (
+            <ui.Button size="sm" variant="ghost" onClick={onOpenRules}>
               <ListTree className="ue:h-3.5 ue:w-3.5" /> {t('管理规则')}
             </ui.Button>
-          )}
-        </div>
-        <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
-          {t(
-            '录制时点到列表、格子里有规则的条目直接按规则认，不再暂停问。规则在 GameTest 页右上角的「条目规则」里按树形看、搜、改。',
-          )}
-        </p>
-      </section>
-
-      <section className="ue:flex ue:flex-col ue:gap-2">
-        <div className="ue:flex ue:items-center ue:gap-2">
-          <h3 className="ue:text-body ue:font-medium ue:text-fg">{t('阻挡界面')}</h3>
-          <ui.Button size="sm" variant="ghost" className="ue:ml-auto" onClick={() => setRules([...rules, blank()])}>
-            <Plus className="ue:h-3.5 ue:w-3.5" /> {t('添加')}
-          </ui.Button>
-        </div>
-        <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">
-          {t(
-            '公告、新手引导、活动弹窗这类不定时弹出的界面：跑测试时一出现就按规则处理掉，不让它挡住后面的步骤。正在等的那一步要点的就是它时不处理；每次处理都记在那一步的结果里。',
-          )}
-        </p>
-        {!rules.length && (
-          <p className="ue:rounded-(--c-row-radius) ue:border ue:border-dashed ue:border-line ue:px-3 ue:py-4 ue:text-center ue:text-footnote ue:text-subtle">
-            {t('还没有规则')}
-          </p>
+          ) : undefined
+        }
+        desc={t(
+          '录制时点到列表、格子里有规则的条目直接按规则认，不再暂停问。规则在 GameTest 页右上角的「条目规则」里按树形看、搜、改。',
         )}
-        {rules.map((r, i) => (
-          <div
-            key={i}
-            className={cn(
-              'ue:flex ue:flex-col ue:gap-2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:p-2.5',
-              r.enabled === false && 'ue:opacity-60',
-            )}
-          >
-            <div className="ue:flex ue:items-center ue:gap-2">
-              <SuggestInput
-                className="ue:min-w-0 ue:flex-1"
-                inputClassName="ue:font-mono"
-                placeholder={t('WBP 类名或资产路径，例如 WBP_Notice')}
-                value={r.widget}
-                onChange={(v) => patch(i, { widget: v })}
-                suggest={suggestWidgets}
-                status={indexStatus}
-                empty={t('索引里没找到控件蓝图，可以直接填类名或资产路径')}
-              />
-              <ui.Select
-                size="sm"
-                className="ue:w-36"
-                value={r.action}
-                onChange={(e: { target: { value: string } }) =>
-                  patch(i, { action: e.target.value as GtBlockerRule['action'] })
-                }
-                options={[
-                  { value: 'close', label: t('关闭') },
-                  { value: 'call', label: t('调用函数') },
-                  { value: 'command', label: t('执行指令') },
-                ]}
-              />
-              <ui.IconButton
-                icon={Trash2}
-                size="sm"
-                label={t('删除这条')}
-                onClick={() => setRules(rules.filter((_, k) => k !== i))}
-              />
-            </div>
-            {r.action === 'call' && (
-              <ui.Input
-                size="sm"
-                className="ue:font-mono"
-                placeholder={t('界面上的无参函数名，例如 Close')}
-                value={r.function ?? ''}
-                onChange={(e: { target: { value: string } }) => patch(i, { function: e.target.value })}
-              />
-            )}
-            {r.action === 'command' && (
-              <ui.Input
-                size="sm"
-                className="ue:font-mono"
-                placeholder={t('控制台指令或 GM，例如 gm.SkipGuide')}
-                value={r.command ?? ''}
-                onChange={(e: { target: { value: string } }) => patch(i, { command: e.target.value })}
-              />
-            )}
-            <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-              <span className={label}>{t('出现后等')}</span>
-              <ui.Input
-                size="sm"
-                className="ue:w-20"
-                inputMode="numeric"
-                value={String(r.delayMs ?? 0)}
-                onChange={(e: { target: { value: string } }) =>
-                  patch(i, { delayMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-                }
-              />
-              <span className={label}>{t('毫秒再处理')}</span>
-              <ui.Input
-                size="sm"
-                className="ue:min-w-0 ue:flex-1"
-                placeholder={t('说明（可选）')}
-                value={r.note ?? ''}
-                onChange={(e: { target: { value: string } }) => patch(i, { note: e.target.value || undefined })}
-              />
-              <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
-                <input
-                  type="checkbox"
-                  className="ue:accent-(--accent)"
-                  checked={r.enabled !== false}
-                  onChange={(e) => patch(i, { enabled: e.target.checked ? undefined : false })}
-                />
-                {t('启用')}
-              </label>
-            </div>
-          </div>
-        ))}
-      </section>
+      >
+        <p className="ue:px-4 ue:py-3 ue:text-footnote ue:text-subtle">{t('{n} 条规则', { n: keyRules.length })}</p>
+      </SettingGroup>
 
+      <SettingGroup
+        title={t('阻挡界面')}
+        framed={framed}
+        aside={<AddButton onClick={() => setRules([...rules, blank()])} />}
+        desc={t(
+          '公告、新手引导、活动弹窗这类不定时弹出的界面：跑测试时一出现就按规则处理掉，不让它挡住后面的步骤。正在等的那一步要点的就是它时不处理；每次处理都记在那一步的结果里。',
+        )}
+      >
+        <SettingList count={rules.length}>
+          {rules.map((r, i) => (
+            <div
+              key={i}
+              className={cn(
+                'ue:flex ue:flex-col ue:gap-2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:p-2.5',
+                r.enabled === false && 'ue:opacity-60',
+              )}
+            >
+              <div className="ue:flex ue:items-center ue:gap-2">
+                <SuggestInput
+                  className="ue:min-w-0 ue:flex-1"
+                  inputClassName="ue:font-mono"
+                  placeholder={t('WBP 类名或资产路径，例如 WBP_Notice')}
+                  value={r.widget}
+                  onChange={(v) => patch(i, { widget: v })}
+                  suggest={suggestWidgets}
+                  status={indexStatus}
+                  empty={t('索引里没找到控件蓝图，可以直接填类名或资产路径')}
+                />
+                <ui.Select
+                  size="sm"
+                  className="ue:w-36"
+                  value={r.action}
+                  onChange={(e: { target: { value: string } }) =>
+                    patch(i, { action: e.target.value as GtBlockerRule['action'] })
+                  }
+                  options={[
+                    { value: 'close', label: t('关闭') },
+                    { value: 'call', label: t('调用函数') },
+                    { value: 'command', label: t('执行指令') },
+                  ]}
+                />
+                <ui.IconButton
+                  icon={Trash2}
+                  size="sm"
+                  label={t('删除这条')}
+                  onClick={() => setRules(rules.filter((_, k) => k !== i))}
+                />
+              </div>
+              {r.action === 'call' && (
+                <ui.Input
+                  size="sm"
+                  className="ue:font-mono"
+                  placeholder={t('界面上的无参函数名，例如 Close')}
+                  value={r.function ?? ''}
+                  onChange={(e: { target: { value: string } }) => patch(i, { function: e.target.value })}
+                />
+              )}
+              {r.action === 'command' && (
+                <ui.Input
+                  size="sm"
+                  className="ue:font-mono"
+                  placeholder={t('控制台指令或 GM，例如 gm.SkipGuide')}
+                  value={r.command ?? ''}
+                  onChange={(e: { target: { value: string } }) => patch(i, { command: e.target.value })}
+                />
+              )}
+              <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+                <span className={label}>{t('出现后等')}</span>
+                <ui.Input
+                  size="sm"
+                  className="ue:w-20"
+                  inputMode="numeric"
+                  value={String(r.delayMs ?? 0)}
+                  onChange={(e: { target: { value: string } }) =>
+                    patch(i, { delayMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+                  }
+                />
+                <span className={label}>{t('毫秒再处理')}</span>
+                <ui.Input
+                  size="sm"
+                  className="ue:min-w-0 ue:flex-1"
+                  placeholder={t('说明（可选）')}
+                  value={r.note ?? ''}
+                  onChange={(e: { target: { value: string } }) => patch(i, { note: e.target.value || undefined })}
+                />
+                <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
+                  <input
+                    type="checkbox"
+                    className="ue:accent-(--accent)"
+                    checked={r.enabled !== false}
+                    onChange={(e) => patch(i, { enabled: e.target.checked ? undefined : false })}
+                  />
+                  {t('启用')}
+                </label>
+              </div>
+            </div>
+          ))}
+        </SettingList>
+      </SettingGroup>
+    </>
+  )
+  const foot = (
+    <>
       {error && <ErrorText>{error}</ErrorText>}
       {reply && (
-        <p className="ue:text-caption ue:text-subtle">
+        <p className="ue:text-footnote ue:text-subtle">
           {t('存在 {p}（跟着场景进版本管理，全组共用）', { p: reply.path })}
         </p>
       )}
-    </div>
+    </>
   )
   if (!onClose)
     return (
-      <div className="ue:flex ue:flex-col ue:gap-4 ue:p-4">
-        {body}
-        <div className="ue:flex ue:justify-end">
+      <>
+        {sections}
+        {/* 保存条贴在滚动区底部：表单很长，改了上面的项不用滚到底才能保存 */}
+        <div className="ue:sticky ue:bottom-0 ue:z-10 ue:flex ue:border-t ue:border-line ue:flex-wrap ue:items-center ue:gap-3 ue:bg-card ue:px-4 ue:py-2.5">
+          <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">{foot}</div>
           <ui.Button size="sm" disabled={!reply || saving} onClick={() => void save()}>
-            {t('保存')}
+            {t('保存运行设置')}
           </ui.Button>
         </div>
-      </div>
+      </>
     )
   return (
     <ui.Modal
@@ -405,7 +410,10 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         </>
       }
     >
-      {body}
+      <div className="ue:flex ue:flex-col ue:gap-3 ue:text-body">
+        {sections}
+        {foot}
+      </div>
     </ui.Modal>
   )
 }
