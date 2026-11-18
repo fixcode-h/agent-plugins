@@ -548,6 +548,7 @@
   "受影响的蓝图里有编译出错的：": "Affected blueprints with compile errors: ",
   "图": "Graphs",
   "变量": "Variables",
+  "变量太多，只记了一部分": "Too many variables; only some were recorded",
   "接口": "Interfaces",
   "太长，后面的没有显示；切到「节点」分页看": "Too long, the rest isn't shown; switch to Nodes to page through it",
   "有错误": "Error",
