@@ -74,3 +74,30 @@
 #define UELINK_TIMER_LINE(TimerPtr) ((TimerPtr)->Line)
 // 计时器总数（luainfo 遍历全部计时器用）
 #define UELINK_TIMER_COUNT(ReaderPtr) ((ReaderPtr)->GetTimerCount())
+
+// ---------- trace 专项数据（2.11，AgentPanelTraceInfo / Memory / Load / Tasks / Net.cpp） ----------
+// 按 5.4 的 TraceServices 写，5.8 还没在本地编过。哪一类在某个引擎版本上编不过，先把对应的开关改成 0（查询会回「编译时关掉了」），
+// 再按那个版本的头文件改下面的宏。各开关互不影响。
+#define UELINK_TRACE_SESSION 1
+#define UELINK_TRACE_REGIONS 1
+#define UELINK_TRACE_MEMTAGS 1
+#define UELINK_TRACE_ALLOCS 1
+#define UELINK_TRACE_LOADS 1
+#define UELINK_TRACE_FILES 1
+#define UELINK_TRACE_TASKS 1
+#define UELINK_TRACE_SWITCHES 1
+#define UELINK_TRACE_NET 1
+
+// 区域（Timing Regions）：5.4 的 ReadRegionProvider 返回引用；回调返回 bool（false 停）
+#define UELINK_REGION_PROVIDER(Session) (&TraceServices::ReadRegionProvider(Session))
+// LLM 标签：5.5 起多了标签集合，EnumerateTags 的形参在变，统一走这里
+#define UELINK_MEM_ENUM_TAGS(Provider, Fn) (Provider)->EnumerateTags(Fn)
+// 内存分配查询的规则：某一时刻还活着的（a ≤ A < f）、A 到 B 之间分配且到 B 还没释放的（A ≤ a ≤ B < f）
+#define UELINK_ALLOC_RULE_LIVE TraceServices::IAllocationsProvider::EQueryRule::aAf
+#define UELINK_ALLOC_RULE_GROWTH TraceServices::IAllocationsProvider::EQueryRule::AaBf
+// 分配的标签名
+#define UELINK_ALLOC_TAG_NAME(Provider, Alloc) (Provider)->GetTagName((Alloc)->GetTag())
+// 调用栈一帧的符号名（还没解析出来时是空）
+#define UELINK_SYMBOL_NAME(Frame) ((Frame)->Symbol ? (Frame)->Symbol->Name : nullptr)
+// 任务：按「这段时间里活着的任务」枚举
+#define UELINK_TASK_ENUM_OPTION TraceServices::ETaskEnumerationOption::Alive

@@ -315,7 +315,14 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
       const snaps = (state.lua.snaps ??= [])
       if (a.action === 'add') {
         if (!a.file || !a.line) throw new Error('要给 file 和 line')
-        const s = { id: snaps.length + 1, file: a.file, line: a.line, hits: 1, max: a.hits ?? 1, active: (a.hits ?? 1) > 1 }
+        const s = {
+          id: snaps.length + 1,
+          file: a.file,
+          line: a.line,
+          hits: 1,
+          max: a.hits ?? 1,
+          active: (a.hits ?? 1) > 1,
+        }
         s.created = new Date().toISOString()
         s.expiresIn = 600
         s.captures = [
@@ -340,7 +347,9 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
         state.lua.snaps = a.id ? snaps.filter((s) => s.id !== a.id) : []
         return { removed: before - state.lua.snaps.length }
       }
-      const items = snaps.filter((s) => !a.id || s.id === a.id).map(({ captures, ...s }) => (a.id ? { ...s, captures } : s))
+      const items = snaps
+        .filter((s) => !a.id || s.id === a.id)
+        .map(({ captures, ...s }) => (a.id ? { ...s, captures } : s))
       if (a.id && !items.length) throw new Error(`没有编号 ${a.id} 的快照点`)
       return { items }
     },
@@ -354,14 +363,24 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
         return { stopped: true }
       }
       if (!state.lua.prof) throw new Error('还没有采样过：先 action=start')
-      if (Date.now() < state.lua.prof) return { running: true, remaining: Math.ceil((state.lua.prof - Date.now()) / 1000) }
+      if (Date.now() < state.lua.prof)
+        return { running: true, remaining: Math.ceil((state.lua.prof - Date.now()) / 1000) }
       return {
         running: false,
         seconds: 5,
         events: 12000,
         total: 2,
         items: [
-          { fn: 'Tick', src: 'UI/BagPanel.lua:88', file: 'UI/BagPanel.lua', line: 88, c: false, calls: 300, totalMs: 40.2, selfMs: 12.5 },
+          {
+            fn: 'Tick',
+            src: 'UI/BagPanel.lua:88',
+            file: 'UI/BagPanel.lua',
+            line: 88,
+            c: false,
+            calls: 300,
+            totalMs: 40.2,
+            selfMs: 12.5,
+          },
           { fn: 'SetText', src: '[C]', line: 0, c: true, calls: 900, totalMs: 6.1, selfMs: 6.1 },
         ],
         report: path.join(root, 'Saved', 'UELink', 'lua-profile', 'profile-fake.json'),
@@ -381,6 +400,12 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
       // 性能抓取：和引擎一样把文件写进 Saved/Profiling，不在输出里说写到哪了（面板要自己找新文件）
       const prof = path.join(root, 'Saved', 'Profiling')
       if (/^csvprofile start/i.test(a.command)) state.perf.csv = true
+      // trace：Trace.File <相对 Saved/Profiling 的路径> 时就把文件放好（假 trace 的内容由 fake-trace.mjs 生成，不读文件）
+      const tf = /^Trace\.File\s+(\S+)/i.exec(a.command)
+      if (tf) {
+        mkdirSync(path.dirname(path.join(prof, tf[1])), { recursive: true })
+        writeFileSync(path.join(prof, tf[1]), 'utrace')
+      }
       if (/^csvprofile stop/i.test(a.command) && state.perf.csv) {
         state.perf.csv = false
         mkdirSync(path.join(prof, 'CSV'), { recursive: true })
@@ -739,7 +764,12 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
       compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
     }),
   }
-  Object.assign(ops, luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }), traceOps(root), extraOps)
+  Object.assign(
+    ops,
+    luaDevOps({ state, hero: HERO, gi: GI, bp: BP, luaRoot, luaWalk, luaDesc }),
+    traceOps(root),
+    extraOps,
+  )
   const server = createServer((req, res) => {
     const send = (code, body) => {
       res.writeHead(code, { 'Content-Type': 'application/json' })
