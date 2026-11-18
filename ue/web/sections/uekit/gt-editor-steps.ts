@@ -1,10 +1,15 @@
 import { t } from '../../host.ts'
+import { satisfies } from './plugins/model.ts'
 
 /**
- * 录 UE 编辑器操作的步骤（GameTest 1.10.0 的 editor.*）给人看的写法。
+ * 录 UE 编辑器操作的步骤（GameTest 1.11.0 的 editor.*）给人看的写法。
  * 录制时每步的 hint 是 {via, label}：via 说明这一步是从哪录来的（编辑器事件、界面点击、快捷键、Ctrl+Alt 点），
  * label 是给人看的对象名（大纲里的标签、资源名、「停靠页 · 控件」）。执行时不读 hint，只在列表和详情里显示
  */
+
+/** 编辑器里的 GameTest 到 1.11.0 才有 gt.editrec.*，旧版本不给选「录编辑器」 */
+export const editorRecordSupported = (gameTestVersion?: string) =>
+  !!gameTestVersion && satisfies(gameTestVersion, '>=1.11.0')
 
 /** editor.ensure 是 1.x 就有的「等编辑器就绪」，不算录编辑器操作 */
 export const isEditorStep = (action?: unknown) =>

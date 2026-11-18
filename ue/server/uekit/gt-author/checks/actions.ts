@@ -10,7 +10,7 @@ const V1 = [
   'wait', 'click', 'drag', 'wheel', 'type', 'select', 'scroll', 'screenshot', 'console', 'input.cursor', 'key', 'move',
   'actor.get', 'net.compare', 'assert', 'probe', 'stack.push', 'stack.pop', 'ability.input', 'input.start', 'input.stop', 'gm',
 ]
-/** 录 UE 编辑器操作的回放（GameTest 1.10.0，只在开着界面的编辑器里跑；docs/game-test-script.md 第 15 节） */
+/** 录 UE 编辑器操作的回放（GameTest 1.11.0，只在开着界面的编辑器里跑；docs/game-test-script.md 第 15 节） */
 const EDITOR = [
   'editor.open', 'editor.select', 'editor.prop', 'editor.spawn', 'editor.command', 'editor.save', 'editor.compile',
   'editor.click', 'editor.assert',

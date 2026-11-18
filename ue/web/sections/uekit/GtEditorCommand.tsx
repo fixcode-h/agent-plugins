@@ -6,7 +6,7 @@ import { patchStep } from './gt-step-patch.ts'
 import type { StepDef } from './GtStepDetail.tsx'
 
 /**
- * 步骤详情里的「换成命令」（GameTest 1.10.0）：录编辑器时点的工具栏、菜单按钮，录制器找得到同名编辑器命令时记在 suggest 里。
+ * 步骤详情里的「换成命令」（GameTest 1.11.0）：录编辑器时点的工具栏、菜单按钮，录制器找得到同名编辑器命令时记在 suggest 里。
  * 界面点击要按停靠页、文字、第几个找按钮，布局一换就找不到；换成 editor.command 只按命令名执行，回放更稳
  */
 export function GtEditorCommand(o: {
