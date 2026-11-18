@@ -35,6 +35,7 @@ import {
   type GtStep,
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
+import type { MenuItem } from '../../../menu.tsx'
 
 /**
  * 编辑命令表：快捷键、右键菜单、工具栏都从这里取，一条命令一处定义（加命令就往表里加一项）。
@@ -280,4 +281,27 @@ export function runKey(e: React.KeyboardEvent, c: CmdCtx) {
   e.preventDefault()
   cmd.run(c)
   return true
+}
+
+/**
+ * 右键菜单：整张命令表按组排，组之间画分隔线，做不了的灰掉。列表视图的行、流程图的节点都用这一份，
+ * 插入单独走插入菜单（这里不列）
+ */
+export function commandMenuItems(c: CmdCtx): MenuItem[] {
+  const items: MenuItem[] = []
+  let g = -1
+  for (const cmd of COMMANDS) {
+    if (cmd.id === 'insert') continue
+    if (g >= 0 && cmd.group !== g) items.push('sep')
+    g = cmd.group
+    items.push({
+      label: cmd.label(),
+      icon: cmd.icon,
+      hint: cmd.keys,
+      danger: cmd.danger,
+      disabled: !canRun(cmd, c),
+      onClick: () => cmd.run(c),
+    })
+  }
+  return items
 }

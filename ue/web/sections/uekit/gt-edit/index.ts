@@ -6,6 +6,7 @@ import { t } from '../../../host.ts'
 import { JsonView } from './JsonView.tsx'
 import { ListView } from './ListView.tsx'
 import { registerView } from './views.ts'
+import '../gt-flow/register.ts'
 
 registerView({ id: 'list', label: () => t('列表'), icon: ListTree, order: 10, Component: ListView })
 registerView({ id: 'json', label: () => t('JSON'), icon: Braces, order: 90, Component: JsonView })

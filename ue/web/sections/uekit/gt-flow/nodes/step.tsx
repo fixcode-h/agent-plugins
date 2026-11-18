@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { useFlow } from '../ctx.ts'
 import { faceOf } from '../faces.tsx'
@@ -32,12 +33,7 @@ export const StepNode = memo(function StepNode({ data }: FlowNodeProps) {
     >
       <Handles node={n} />
       <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-body">
-        <Icon
-          className={h().cn(
-            'ue:h-3.5 ue:w-3.5 ue:shrink-0',
-            n.kind === 'branch' ? 'ue:text-warning' : 'ue:text-subtle',
-          )}
-        />
+        <Icon className={h().cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', face.tone)} />
         <span
           className={h().cn('ue:min-w-0 ue:flex-1 ue:truncate ue:font-medium', disabled && 'ue:line-through')}
           title={face.title}
@@ -50,6 +46,7 @@ export const StepNode = memo(function StepNode({ data }: FlowNodeProps) {
         {st?.ms !== undefined && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{msText(st.ms)}</span>}
       </div>
       <Sub>{n.hidden !== undefined ? t('双击展开') : face.sub}</Sub>
+      <CountBadge corner count={st?.runs ?? 0} />
     </div>
   )
 })

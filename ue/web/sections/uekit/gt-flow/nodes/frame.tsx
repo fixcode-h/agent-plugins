@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { ChevronsDownUp } from 'lucide-react'
 import { h, t } from '../../../../host.ts'
 import { useFlow } from '../ctx.ts'
@@ -37,7 +38,7 @@ export const FrameNode = memo(function FrameNode({ data }: FlowNodeProps) {
     >
       <Handles node={n} />
       <div className="ue:flex ue:h-[30px] ue:items-center ue:gap-1.5 ue:px-3 ue:text-caption ue:text-muted">
-        {Icon && <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />}
+        {Icon && <Icon className={h().cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', face?.tone)} />}
         <span className="ue:truncate ue:font-medium ue:text-fg">
           {n.role === 'setup' ? t('前置步骤') : face?.title}
         </span>
@@ -62,6 +63,7 @@ export const FrameNode = memo(function FrameNode({ data }: FlowNodeProps) {
           </button>
         )}
       </div>
+      <CountBadge corner count={st?.runs ?? 0} />
     </div>
   )
 })

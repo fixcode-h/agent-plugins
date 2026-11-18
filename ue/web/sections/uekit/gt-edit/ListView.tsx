@@ -13,10 +13,10 @@ import {
   type ListRow,
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu, type MenuItem } from '../../../menu.tsx'
+import { openMenu } from '../../../menu.tsx'
 import { blockUi, TONE_BAR, TONE_TEXT } from '../gt-blocks/index.ts'
 import { condSummary } from '../gt-cond/summary.ts'
-import { canRun, COMMANDS, runKey, type CmdCtx } from './commands.ts'
+import { commandMenuItems, runKey, type CmdCtx } from './commands.ts'
 import { insertPlace, insertStep, openInsertAt, insertMenuItems } from './insert-menu.ts'
 import type { ViewProps } from './views.ts'
 
@@ -102,22 +102,7 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
     e.preventDefault()
     if (!isSel(p)) onSelect([p])
     const c = { ...ctx, selected: isSel(p) ? selected : [p] }
-    const items: MenuItem[] = []
-    let g = -1
-    for (const cmd of COMMANDS) {
-      if (cmd.id === 'insert') continue
-      if (g >= 0 && cmd.group !== g) items.push('sep')
-      g = cmd.group
-      items.push({
-        label: cmd.label(),
-        icon: cmd.icon,
-        hint: cmd.keys,
-        danger: cmd.danger,
-        disabled: !canRun(cmd, c),
-        onClick: () => cmd.run(c),
-      })
-    }
-    openMenu(e, items)
+    openMenu(e, commandMenuItems(c))
   }
 
   const drop = (slot: GtPath, index: number) => {

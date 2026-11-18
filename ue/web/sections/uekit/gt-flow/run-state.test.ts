@@ -10,8 +10,8 @@ test('节点进出、循环换轮、守护次数', () => {
   s = applyFlowEvent(s, { runId: 'r1', phase: 'leave', id: 's2', status: 'failed', ms: 120 })
   s = applyFlowEvent(s, { runId: 'r1', phase: 'guard', guard: 'g1' })
   assert.equal(s.at, 's2')
-  assert.deepEqual(s.steps.loop1, { status: 'running', iter: 3 })
-  assert.deepEqual(s.steps.s2, { status: 'failed', ms: 120 })
+  assert.deepEqual(s.steps.loop1, { status: 'running', iter: 3, runs: 1 })
+  assert.deepEqual(s.steps.s2, { status: 'failed', ms: 120, runs: 1 })
   assert.equal(s.guards.g1, 1)
   assert.equal(s.guardActive, 'g1')
   s = applyFlowEvent(s, { runId: 'r1', phase: 'guardEnd', guard: 'g1' })
@@ -42,4 +42,15 @@ test('gt.job 的守护次数为准；跑完收起运行态但留着结果', () =
   assert.equal(s.at, undefined)
   assert.equal(s.guards.g2, 1200)
   assert.equal(s.steps.s1.status, 'running')
+})
+
+test('循环里的步骤每进一次 runs +1，换一次运行清零', () => {
+  let s = emptyRun()
+  for (let i = 0; i < 3; i++) {
+    s = applyFlowEvent(s, { runId: 'r', phase: 'enter', id: 's5' })
+    s = applyFlowEvent(s, { runId: 'r', phase: 'leave', id: 's5', status: 'passed' })
+  }
+  assert.equal(s.steps.s5.runs, 3)
+  s = applyFlowEvent(s, { runId: 'r2', phase: 'enter', id: 's5' })
+  assert.equal(s.steps.s5.runs, 1)
 })

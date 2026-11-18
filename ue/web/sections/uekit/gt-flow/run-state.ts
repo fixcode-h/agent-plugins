@@ -12,6 +12,8 @@ export interface StepRun {
   /** 循环第几轮（从 1 数，界面直接显示） */
   iter?: number
   ms?: number
+  /** 这次运行里进过这一步几次（循环里的步骤每轮 +1），节点右上角的次数角标照它画 */
+  runs?: number
 }
 
 export interface FlowRunState {
@@ -56,12 +58,14 @@ export function applyFlowEvent(s: FlowRunState, e: GtFlowEvent): FlowRunState {
     key ? { ...base.steps, [key]: { ...(base.steps[key] ?? { status: 'running' as const }), ...patch } } : base.steps
   switch (e.phase) {
     case 'enter':
-      // 再次进入（下一轮循环）从头记：上一轮的耗时、轮次不留
+      // 再次进入（下一轮循环）从头记：上一轮的耗时、轮次不留，只累计进过几次
       return {
         ...base,
         active: true,
         at: key || base.at,
-        steps: key ? { ...base.steps, [key]: { status: 'running' } } : base.steps,
+        steps: key
+          ? { ...base.steps, [key]: { status: 'running', runs: (base.steps[key]?.runs ?? 0) + 1 } }
+          : base.steps,
       }
     case 'leave': {
       const status = (DONE.has(e.status ?? '') ? e.status : 'passed') as StepRunStatus
