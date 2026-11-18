@@ -26,6 +26,7 @@
 #include "Misc/Paths.h"
 #include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
+#include "Async/Async.h"
 #include "TraceServices/AnalysisService.h"
 #include "TraceServices/ITraceServicesModule.h"
 #include "TraceServices/Model/AnalysisSession.h"
@@ -264,6 +265,73 @@ namespace
 
 	// ---------- 和 AgentPanelTraceLua.cpp 共用的（声明在 AgentPanelTraceShared.h，不能放匿名命名空间） ----------
 
+	/** 编辑器退出 / 模块卸载：所有后台查询马上收尾 */
+	std::atomic<bool> GCancelQueries{ false };
+
+	namespace
+	{
+		/** 每个后台线程一份：这次查询的截止时间、问了多少次、超没超 */
+		struct FBudget
+		{
+			double Deadline = 0;
+			uint32 Ticks = 0;
+			bool bHit = false;
+		};
+		thread_local FBudget GBudget;
+	}
+
+	void BeginBudget(double Seconds)
+	{
+		GBudget.Deadline = FPlatformTime::Seconds() + Seconds;
+		GBudget.Ticks = 0;
+		GBudget.bHit = false;
+	}
+
+	bool OverBudget()
+	{
+		if (GBudget.bHit)
+		{
+			return true;
+		}
+		// 看时钟也要花时间：几千个事件才看一次，一次查询多花不到几毫秒
+		if ((++GBudget.Ticks & 4095u) != 0)
+		{
+			return false;
+		}
+		if (GCancelQueries.load() || (GBudget.Deadline > 0 && FPlatformTime::Seconds() > GBudget.Deadline))
+		{
+			GBudget.bHit = true;
+		}
+		return GBudget.bHit;
+	}
+
+	bool BudgetHit()
+	{
+		return GBudget.bHit;
+	}
+
+	void ReadFrames(const IAnalysisSession& S, bool bRender, TArray<double>& OutStart, TArray<double>& OutEnd)
+	{
+		const IFrameProvider& FP = ReadFrameProvider(S);
+		const ETraceFrameType Type = bRender ? TraceFrameType_Rendering : TraceFrameType_Game;
+		const uint64 Count = FMath::Min<uint64>(FP.GetFrameCount(Type), 200000);
+		const double Last = S.GetDurationSeconds();
+		OutStart.Reset();
+		OutEnd.Reset();
+		OutStart.Reserve(Count);
+		OutEnd.Reserve(Count);
+		// 起点写成 uint64：5.8 起 EnumerateFrames 另有按时间（double）取的重载，写 0 两边都能转、重载不明确
+		FP.EnumerateFrames(Type, uint64(0), Count, [&](const TraceServices::FFrame& F)
+		{
+			if (!FMath::IsFinite(F.StartTime))
+			{
+				return;
+			}
+			OutStart.Add(F.StartTime);
+			OutEnd.Add(FMath::IsFinite(F.EndTime) ? F.EndTime : FMath::Max(F.StartTime, Last));
+		});
+	}
+
 	double Num(const TSharedPtr<FJsonObject>& A, const TCHAR* Key, double Default)
 	{
 		double V = Default;
@@ -321,6 +389,11 @@ namespace
 			double Last = T0;
 			TL.EnumerateEvents(T0, T1, [&](bool bStart, double Time, const TraceServices::FTimingProfilerEvent& Ev)
 			{
+				// 查询超时或编辑器在退出（2.11）：不再往下走，已经走过的照常收尾
+				if (OverBudget())
+				{
+					return EEventEnumerate::Stop;
+				}
 				Last = Time;
 				if (bStart)
 				{
@@ -460,32 +533,26 @@ namespace
 		return T;
 	}
 
-	void QueryFrames(const IAnalysisSession& S, TSharedPtr<FJsonObject>& Out)
+	/** 帧（2.11 起 type=render 取渲染帧，默认游戏帧）：10 分钟 60 帧也才 3.6 万帧，整段给，网页自己按宽度画 */
+	void QueryFrames(const IAnalysisSession& S, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out)
 	{
+		const bool bRender = Str(A, TEXT("type")) == TEXT("render");
 		const IFrameProvider& FP = ReadFrameProvider(S);
-		const uint64 Count = FP.GetFrameCount(TraceFrameType_Game);
-		// 10 分钟 60 帧也才 3.6 万帧：整段给，网页自己按宽度画
-		const uint64 End = FMath::Min<uint64>(Count, 200000);
+		TArray<double> Begin;
+		TArray<double> End;
+		ReadFrames(S, bRender, Begin, End);
 		TArray<double> Start;
 		TArray<double> Dur;
-		Start.Reserve(End);
-		Dur.Reserve(End);
-		// 5.8 起 FrameProvider 另有按时间（double）取的重载：起点写成 uint64，不然 0 两边都能转、重载不明确
-		const double Last = S.GetDurationSeconds();
-		FP.EnumerateFrames(TraceFrameType_Game, uint64(0), End, [&](const TraceServices::FFrame& F)
+		Start.Reserve(Begin.Num());
+		Dur.Reserve(Begin.Num());
+		for (int32 i = 0; i < Begin.Num(); ++i)
 		{
-			if (!FMath::IsFinite(F.StartTime))
-			{
-				return;
-			}
-			// 还没结束的帧（录制停在半帧）EndTime 是无穷大：按 trace 结尾收
-			const double FrameEnd = FMath::IsFinite(F.EndTime) ? F.EndTime : FMath::Max(F.StartTime, Last);
-			Start.Add(FMath::RoundToDouble(F.StartTime * 100000.0) / 100000.0);
-			Dur.Add(Ms(FrameEnd - F.StartTime));
-		});
+			Start.Add(FMath::RoundToDouble(Begin[i] * 100000.0) / 100000.0);
+			Dur.Add(Ms(End[i] - Begin[i]));
+		}
 		Out->SetField(TEXT("start"), NumArr(Start));
 		Out->SetField(TEXT("ms"), NumArr(Dur));
-		Out->SetNumberField(TEXT("total"), static_cast<double>(Count));
+		Out->SetNumberField(TEXT("total"), static_cast<double>(FP.GetFrameCount(bRender ? TraceFrameType_Rendering : TraceFrameType_Game)));
 	}
 
 	bool QueryTiming(const IAnalysisSession& S, const ITimingProfilerProvider& TP, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
@@ -804,6 +871,7 @@ namespace
 		const double T0 = Num(A, TEXT("t0"), 0);
 		const double T1 = Num(A, TEXT("t1"), S.GetDurationSeconds());
 		const int32 Px = FMath::Clamp(Int(A, TEXT("px"), 600), 10, 4000);
+		const bool bStats = BoolArg(A, TEXT("stats"));
 		const double Step = FMath::Max(1e-9, (T1 - T0) / Px);
 		TArray<TSharedPtr<FJsonValue>> List;
 		CP.EnumerateCounters([&](uint32, const TraceServices::ICounter& C)
@@ -813,6 +881,45 @@ namespace
 			{
 				TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 				O->SetStringField(TEXT("name"), Name);
+				// 2.11：stats=true 时顺便给范围内的统计（一遍扫完），Agent 不用一条条取走势才知道哪个在涨
+				if (bStats && !OverBudget())
+				{
+					int64 N = 0;
+					double Sum = 0, Min = 0, Max = 0, First = 0, Lastv = 0, FirstT = 0, LastT = 0;
+					auto Take = [&](double Time, double Value)
+					{
+						if (N == 0)
+						{
+							Min = Max = First = Value;
+							FirstT = Time;
+						}
+						Min = FMath::Min(Min, Value);
+						Max = FMath::Max(Max, Value);
+						Sum += Value;
+						Lastv = Value;
+						LastT = Time;
+						++N;
+					};
+					if (C.IsFloatingPoint())
+					{
+						C.EnumerateFloatValues(T0, T1, false, [&](double Time, double Value) { Take(Time, Value); });
+					}
+					else
+					{
+						C.EnumerateValues(T0, T1, false, [&](double Time, int64 Value) { Take(Time, static_cast<double>(Value)); });
+					}
+					O->SetNumberField(TEXT("n"), static_cast<double>(N));
+					if (N > 0)
+					{
+						O->SetNumberField(TEXT("min"), Fin(Min));
+						O->SetNumberField(TEXT("max"), Fin(Max));
+						O->SetNumberField(TEXT("avg"), Fin(Sum / N));
+						O->SetNumberField(TEXT("first"), Fin(First));
+						O->SetNumberField(TEXT("last"), Fin(Lastv));
+						O->SetNumberField(TEXT("firstT"), Fin(FirstT));
+						O->SetNumberField(TEXT("lastT"), Fin(LastT));
+					}
+				}
 				List.Add(MakeShared<FJsonValueObject>(O));
 				return;
 			}
@@ -899,6 +1006,224 @@ namespace
 		Out->SetArrayField(TEXT("items"), Items);
 	}
 }
+	// ---------- 查询在后台线程跑（2.11） ----------
+	// 以前 trace.query 在游戏线程上同步算：大 trace 查一次编辑器卡几秒，几个子任务一起查只能排队、编辑器一直卡。
+	// 现在游戏线程只做「找会话」（缓存表只在游戏线程上动），计算交给线程池，最多同时 MaxParallel 个，多的排队。
+	// 会话的引用在查询期间放在 Busy 里（游戏线程持有）：被挤出缓存也不会在后台线程上释放，编辑器退出时等查询收尾再一起放掉。
+
+	/** 同时跑的查询上限：多个子任务一起查也只占这么几个线程池线程，不把编辑器拖慢 */
+	constexpr int32 MaxParallel = 4;
+	/** 单次查询的时间上限（秒）：超了返回已经算出的部分，标 truncated */
+	constexpr double QuerySeconds = 20.0;
+
+	/** 实际执行一次查询（后台线程，持有会话读锁）。What 不认识时返回 false */
+	bool RunQuery(const IAnalysisSession& S, const FTraceFollow& Follow, const FString& What, const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+	{
+		// 分析线程在往里写：读之前拿读锁（Insights 也这么读）
+		FAnalysisSessionReadScope Scope(S);
+		const bool bDone = S.IsAnalysisComplete();
+		Out->SetBoolField(TEXT("analyzing"), !bDone);
+		Out->SetNumberField(TEXT("duration"), S.GetDurationSeconds());
+		// 读取进度（2.8.1）：没分析完时网页显示「已读 X / Y MB」，录制中追上了（caughtUp）就先把已有的部分显示出来
+		Out->SetNumberField(TEXT("readBytes"), static_cast<double>(Follow.ReadBytes.load()));
+		Out->SetNumberField(TEXT("fileBytes"), static_cast<double>(Follow.FileBytes.load()));
+		if (!bDone && Follow.Following())
+		{
+			Out->SetBoolField(TEXT("live"), true);
+		}
+		if (Follow.bAtEnd.load())
+		{
+			Out->SetBoolField(TEXT("caughtUp"), true);
+		}
+		// 第一帧的开始时间（2.8.1）：trace 的时间从进程启动算，面板按它换成「从录制开始算」
+		Out->SetNumberField(TEXT("origin"), FirstFrameTime(S));
+		if (What == TEXT("info"))
+		{
+			QueryInfo(S, Out);
+			return true;
+		}
+		if (What == TEXT("frames"))
+		{
+			QueryFrames(S, A, Out);
+			return true;
+		}
+		if (What == TEXT("bookmarks"))
+		{
+			QueryBookmarks(S, Out);
+			return true;
+		}
+		if (What == TEXT("log"))
+		{
+			QueryLog(S, A, Out);
+			return true;
+		}
+		if (What == TEXT("counters"))
+		{
+			QueryCounters(S, A, Out);
+			return true;
+		}
+		// 2.11：不靠计时器的几类（各自的 Provider 不在时返回 false 并说明要录哪个通道）
+		if (What == TEXT("session"))
+		{
+			QuerySession(S, Out);
+			return true;
+		}
+		if (What == TEXT("regions"))
+		{
+			return QueryRegions(S, A, Out, Error);
+		}
+		if (What == TEXT("memtags"))
+		{
+			return QueryMemTags(S, A, Out, Error);
+		}
+		if (What == TEXT("allocs"))
+		{
+			return QueryAllocs(S, A, Out, Error);
+		}
+		if (What == TEXT("loads"))
+		{
+			return QueryLoads(S, A, Out, Error);
+		}
+		if (What == TEXT("files"))
+		{
+			return QueryFiles(S, A, Out, Error);
+		}
+		if (What == TEXT("tasks"))
+		{
+			return QueryTasks(S, A, Out, Error);
+		}
+		if (What == TEXT("switches"))
+		{
+			return QuerySwitches(S, A, Out, Error);
+		}
+		if (What == TEXT("net"))
+		{
+			return QueryNet(S, A, Out, Error);
+		}
+		const ITimingProfilerProvider* TP = ReadTimingProfilerProvider(S);
+		if (!TP)
+		{
+			Error = TEXT("这份 trace 里没有 CPU / GPU 计时数据：录制时要开 cpu 通道");
+			return false;
+		}
+		if (What == TEXT("timing"))
+		{
+			return QueryTiming(S, *TP, A, Out, Error);
+		}
+		if (What == TEXT("timers"))
+		{
+			QueryTimers(S, *TP, A, Out);
+			return true;
+		}
+		if (What == TEXT("butterfly"))
+		{
+			return QueryButterfly(S, *TP, A, Out, Error);
+		}
+		if (What == TEXT("stack"))
+		{
+			return QueryStack(S, *TP, A, Out, Error);
+		}
+		if (What == TEXT("instances"))
+		{
+			return QueryInstances(S, *TP, A, Out, Error);
+		}
+		// 2.9.0：Lua 计时器的文件和行号、自上而下的调用树（AgentPanelTraceLua.cpp）
+		if (What == TEXT("luainfo"))
+		{
+			QueryLuaInfo(*TP, Out);
+			return true;
+		}
+		if (What == TEXT("tree"))
+		{
+			return QueryTree(S, *TP, A, Out, Error);
+		}
+		// 2.11：帧内各线程耗时、卡顿归因（AgentPanelTraceFrames.cpp）
+		if (What == TEXT("framestats"))
+		{
+			return QueryFrameStats(S, *TP, A, Out, Error);
+		}
+		if (What == TEXT("framediff"))
+		{
+			return QueryFrameDiff(S, *TP, A, Out, Error);
+		}
+		Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / instances / tree / luainfo / counters / log / bookmarks / framestats / framediff / session / regions / memtags / allocs / loads / files / tasks / switches / net）"), *What);
+		return false;
+	}
+
+	namespace
+	{
+		struct FQueryJob
+		{
+			int32 Id = 0;
+			TSharedPtr<const IAnalysisSession> Session;
+			TSharedPtr<FTraceFollow, ESPMode::ThreadSafe> Follow;
+			FString What;
+			TSharedPtr<FJsonObject> Args;
+			FAgentPanelReply Reply;
+		};
+
+		/** 下面这些只在游戏线程上动 */
+		struct FQueryQueue
+		{
+			TArray<FQueryJob> Pending;
+			/** 正在后台算的查询持有的会话（按查询编号） */
+			TMap<int32, TSharedPtr<const IAnalysisSession>> Busy;
+			int32 NextId = 1;
+		};
+
+		FQueryQueue& Queue()
+		{
+			// 和会话缓存一样不静态析构（见 Sessions()）
+			static FQueryQueue* Q = new FQueryQueue();
+			return *Q;
+		}
+
+		/** 正在后台跑的查询数（后台线程结束时减，退出时等它归零） */
+		std::atomic<int32> GRunning{ 0 };
+
+		void Pump();
+
+		void Launch(FQueryJob&& Job)
+		{
+			FQueryQueue& Q = Queue();
+			Q.Busy.Add(Job.Id, Job.Session);
+			const IAnalysisSession* S = Job.Session.Get();
+			GRunning.fetch_add(1);
+			Async(EAsyncExecution::ThreadPool, [S, Follow = Job.Follow, What = Job.What, Args = Job.Args, Reply = MoveTemp(Job.Reply), Id = Job.Id]()
+			{
+				TSharedPtr<FJsonObject> Out = MakeShared<FJsonObject>();
+				FString Error;
+				BeginBudget(QuerySeconds);
+				const bool bOk = S && Follow.IsValid() && RunQuery(*S, *Follow, What, Args, Out, Error);
+				if (bOk && BudgetHit())
+				{
+					Out->SetBoolField(TEXT("truncated"), true);
+					Out->SetStringField(TEXT("truncatedNote"), GCancelQueries.load()
+						? TEXT("编辑器正在退出，查询没算完")
+						: FString::Printf(TEXT("查询超过 %.0f 秒，只算了一部分：缩小范围（from / to、frame、lane）再查"), QuerySeconds));
+				}
+				Reply(bOk, Out, Error);
+				// 会话引用回到游戏线程再放（不在后台线程上释放分析会话），顺便放下一个排队的查询进来
+				AsyncTask(ENamedThreads::GameThread, [Id]()
+				{
+					Queue().Busy.Remove(Id);
+					Pump();
+				});
+				GRunning.fetch_sub(1);
+			});
+		}
+
+		void Pump()
+		{
+			FQueryQueue& Q = Queue();
+			while (Q.Busy.Num() < MaxParallel && Q.Pending.Num() > 0 && !GCancelQueries.load())
+			{
+				FQueryJob Job = MoveTemp(Q.Pending[0]);
+				Q.Pending.RemoveAt(0);
+				Launch(MoveTemp(Job));
+			}
+		}
+	}
 } // namespace UELinkTrace
 
 namespace AgentPanelEd
@@ -909,13 +1234,27 @@ namespace AgentPanelEd
 	{
 		FCoreDelegates::OnEnginePreExit.Remove(GTracePreExit);
 		GTracePreExit.Reset();
-		UELinkTrace::FSessionCache& Cache = UELinkTrace::Sessions();
-		if (FModuleManager::Get().IsModuleLoaded(TEXT("TraceServices")))
+		// 先叫停后台查询（走事件的循环几千个事件内就会停），排队的直接回「在退出」，等正在跑的收尾（最多 3 秒）
+		UELinkTrace::GCancelQueries.store(true);
+		UELinkTrace::FQueryQueue& Q = UELinkTrace::Queue();
+		for (UELinkTrace::FQueryJob& Job : Q.Pending)
 		{
+			Job.Reply(false, nullptr, TEXT("编辑器正在退出，查询取消了"));
+		}
+		Q.Pending.Empty();
+		const double Until = FPlatformTime::Seconds() + 3.0;
+		while (UELinkTrace::GRunning.load() > 0 && FPlatformTime::Seconds() < Until)
+		{
+			FPlatformProcess::Sleep(0.01f);
+		}
+		UELinkTrace::FSessionCache& Cache = UELinkTrace::Sessions();
+		if (FModuleManager::Get().IsModuleLoaded(TEXT("TraceServices")) && UELinkTrace::GRunning.load() == 0)
+		{
+			Q.Busy.Empty();
 			Cache.Clear();
 			return;
 		}
-		// TraceServices 已经卸载（没走到引擎退出前的回调）：会话不能再释放，叫停读取后整个丢给进程退出回收
+		// TraceServices 已经卸载，或者还有查询没收尾：会话不能再释放，叫停读取后整个丢给进程退出回收
 		for (TPair<FString, UELinkTrace::FEntry>& P : Cache.Map)
 		{
 			UELinkTrace::FSessionCache::Drop(P.Value);
@@ -923,111 +1262,43 @@ namespace AgentPanelEd
 		static TMap<FString, UELinkTrace::FEntry>* Leaked = nullptr;
 		Leaked = new TMap<FString, UELinkTrace::FEntry>(MoveTemp(Cache.Map));
 		Cache.Map.Reset();
+		static TMap<int32, TSharedPtr<const TraceServices::IAnalysisSession>>* LeakedBusy = nullptr;
+		LeakedBusy = new TMap<int32, TSharedPtr<const TraceServices::IAnalysisSession>>(MoveTemp(Q.Busy));
+		Q.Busy.Reset();
 	}
 
 	void RegisterTraceOps()
 	{
 		// 引擎退出前（TraceServices 还在）就把分析会话放掉；模块卸载时 ShutdownTraceOps 再兜一次
 		GTracePreExit = FCoreDelegates::OnEnginePreExit.AddStatic(&ShutdownTraceOps);
+		UELinkTrace::GCancelQueries.store(false);
 		// 块作用域的 using 不会漏到别的文件（见文件头）
 		using namespace UELinkTrace;
 		using namespace TraceServices;
-		FAgentPanelBridge::Get().AddOp(TEXT("trace.query"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
+		// 2.11 起是异步操作：游戏线程上只找会话（必要时开始分析），计算在线程池里做，编辑器不卡
+		FAgentPanelBridge::Get().AddAsyncOp(TEXT("trace.query"), [](const TSharedPtr<FJsonObject>& A, FAgentPanelReply Reply)
 		{
 			const FString File = FPaths::ConvertRelativePathToFull(Str(A, TEXT("file")));
-			const FString What = Str(A, TEXT("what"), TEXT("info"));
 			bool bLive = false;
 			A->TryGetBoolField(TEXT("live"), bLive);
 			FEntry* Entry = nullptr;
+			FString Error;
 			TSharedPtr<const IAnalysisSession> Session = SessionFor(File, bLive, Entry, Error);
 			if (!Session.IsValid() || !Entry)
 			{
-				return false;
+				Reply(false, nullptr, Error);
+				return;
 			}
-			const IAnalysisSession& S = *Session;
-			// 分析线程在往里写：读之前拿读锁（Insights 也这么读），读完马上放
-			FAnalysisSessionReadScope Scope(S);
-			const bool bDone = S.IsAnalysisComplete();
-			Out->SetBoolField(TEXT("analyzing"), !bDone);
-			Out->SetNumberField(TEXT("duration"), S.GetDurationSeconds());
-			// 读取进度（2.8.1）：没分析完时网页显示「已读 X / Y MB」，录制中追上了（caughtUp）就先把已有的部分显示出来
-			Out->SetNumberField(TEXT("readBytes"), static_cast<double>(Entry->Follow->ReadBytes.load()));
-			Out->SetNumberField(TEXT("fileBytes"), static_cast<double>(Entry->Follow->FileBytes.load()));
-			if (!bDone && Entry->Follow->Following())
-			{
-				Out->SetBoolField(TEXT("live"), true);
-			}
-			if (Entry->Follow->bAtEnd.load())
-			{
-				Out->SetBoolField(TEXT("caughtUp"), true);
-			}
-			// 第一帧的开始时间（2.8.1）：trace 的时间从进程启动算，录制中途才开始时第一帧在几百上千秒处，
-			// 面板按它把时间换成「从录制开始算」（以前网页的「已分析到第 1700 秒」其实是编辑器开了 28 分钟）
-			Out->SetNumberField(TEXT("origin"), FirstFrameTime(S));
-			if (What == TEXT("info"))
-			{
-				QueryInfo(S, Out);
-				return true;
-			}
-			if (What == TEXT("frames"))
-			{
-				QueryFrames(S, Out);
-				return true;
-			}
-			if (What == TEXT("bookmarks"))
-			{
-				QueryBookmarks(S, Out);
-				return true;
-			}
-			if (What == TEXT("log"))
-			{
-				QueryLog(S, A, Out);
-				return true;
-			}
-			if (What == TEXT("counters"))
-			{
-				QueryCounters(S, A, Out);
-				return true;
-			}
-			const ITimingProfilerProvider* TP = ReadTimingProfilerProvider(S);
-			if (!TP)
-			{
-				Error = TEXT("这份 trace 里没有 CPU / GPU 计时数据：录制时要开 cpu 通道");
-				return false;
-			}
-			if (What == TEXT("timing"))
-			{
-				return QueryTiming(S, *TP, A, Out, Error);
-			}
-			if (What == TEXT("timers"))
-			{
-				QueryTimers(S, *TP, A, Out);
-				return true;
-			}
-			if (What == TEXT("butterfly"))
-			{
-				return QueryButterfly(S, *TP, A, Out, Error);
-			}
-			if (What == TEXT("stack"))
-			{
-				return QueryStack(S, *TP, A, Out, Error);
-			}
-			if (What == TEXT("instances"))
-			{
-				return QueryInstances(S, *TP, A, Out, Error);
-			}
-			// 2.9.0：Lua 计时器的文件和行号、自上而下的调用树（AgentPanelTraceLua.cpp）
-			if (What == TEXT("luainfo"))
-			{
-				QueryLuaInfo(*TP, Out);
-				return true;
-			}
-			if (What == TEXT("tree"))
-			{
-				return QueryTree(S, *TP, A, Out, Error);
-			}
-			Error = FString::Printf(TEXT("不认识的查询：%s（info / frames / timing / timers / butterfly / stack / instances / tree / luainfo / counters / log / bookmarks）"), *What);
-			return false;
+			FQueryQueue& Q = Queue();
+			FQueryJob Job;
+			Job.Id = Q.NextId++;
+			Job.Session = Session;
+			Job.Follow = Entry->Follow;
+			Job.What = Str(A, TEXT("what"), TEXT("info"));
+			Job.Args = A;
+			Job.Reply = MoveTemp(Reply);
+			Q.Pending.Add(MoveTemp(Job));
+			Pump();
 		});
 	}
 }
