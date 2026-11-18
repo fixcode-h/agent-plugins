@@ -24,6 +24,7 @@ import { EditContext } from './ctx.ts'
 import { EditorHeader } from './EditorHeader.tsx'
 import { Inspector } from './Inspector.tsx'
 import { useRecordHere } from './record-here.ts'
+import { useTidyHere } from './tidy-here.ts'
 import { EditRail } from './rail/EditRail.tsx'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
@@ -209,6 +210,7 @@ export function GtEditor({
 
   const onTry = live ? (p: GtPath) => void tryStep(p) : undefined
   const onRecordHereAt = useRecordHere(s, onSaved, live ? onRecordHere : undefined)
+  const tidyHere = useTidyHere(s, { project, root, path: scenario.relativePath, name: scenario.name, onSaved })
   const cmdCtx: CmdCtx | undefined = s.doc && {
     doc: s.doc,
     selected: s.selected,
@@ -216,6 +218,7 @@ export function GtEditor({
     select: s.select,
     onTry,
     onRecordHere: onRecordHereAt,
+    onTidy: tidyHere.onTidy,
   }
   const steps = (s.doc?.steps ?? []) as GtStep[]
 
@@ -367,6 +370,7 @@ export function GtEditor({
       >
         <p className="ue:text-footnote ue:text-fg">{t('打开别的脚本，这次的改动就丢了。要留着就先点「保存」。')}</p>
       </Confirm>
+      {tidyHere.dialogs}
     </EditContext.Provider>
   )
 }

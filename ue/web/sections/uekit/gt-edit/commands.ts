@@ -15,6 +15,7 @@ import {
   Trash2,
   Ungroup,
   type LucideIcon,
+  Sparkles,
 } from 'lucide-react'
 import {
   comparePath,
@@ -52,6 +53,8 @@ export interface CmdCtx {
   onTry?: (path: GtPath) => void
   /** 从这一步后面接着录（GameTest 1.10.0，编辑器连着时才有） */
   onRecordHere?: (path: GtPath) => void
+  /** 录制段交给 Agent 整理成流程（gt-edit/tidy-here.ts） */
+  onTidy?: (path: GtPath) => void
 }
 
 export interface EditCommand {
@@ -123,6 +126,15 @@ export const COMMANDS: EditCommand[] = [
     icon: CircleDot,
     enabled: (c) => !!c.onRecordHere && c.selected.length === 1,
     run: (c) => c.onRecordHere?.(first(c)),
+  },
+  {
+    id: 'tidy-segment',
+    group: 0,
+    label: () => t('整理成流程'),
+    icon: Sparkles,
+    // 只给录制段：手写的段没有截图和录制线索，Agent 整理不出东西
+    enabled: (c) => !!c.onTidy && c.selected.length === 1 && stepAt(c, first(c))?.recorded === true,
+    run: (c) => c.onTidy?.(first(c)),
   },
   {
     id: 'insert',

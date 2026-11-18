@@ -15,7 +15,8 @@ import { tidyPrompt, type TidySource } from './gt-tidy-prompt.ts'
 export function useGtTidy(o: { project: string; root: string; path: string; name: string; onSaved: () => void }) {
   const { toast } = h()
   const [backup, setBackup] = useState('')
-  const [asking, setAsking] = useState(false)
+  // 打开「要验证什么」弹窗时预填的话；undefined 是没开（录制段节点上的入口会预填「只整理这一段」）
+  const [asking, setAsking] = useState<string>()
   const [restoring, setRestoring] = useState(false)
   const call = <T,>(action: string, extra: Record<string, unknown> = {}) =>
     ppost<T>(o.project, 'ext/gt/tidy', { root: o.root, path: o.path, action, ...extra })
@@ -36,7 +37,7 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
   }, [o.project, o.root, o.path])
 
   const send = (need: string) => {
-    setAsking(false)
+    setAsking(undefined)
     let steps = 0
     runPromptInProject({
       projectId: o.project,
@@ -76,7 +77,7 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
 
   const dialogs = (
     <>
-      {asking && <TidyAsk onClose={() => setAsking(false)} onSend={send} />}
+      {asking !== undefined && <TidyAsk initial={asking} onClose={() => setAsking(undefined)} onSend={send} />}
       <Confirm
         open={restoring}
         danger
@@ -94,16 +95,24 @@ export function useGtTidy(o: { project: string; root: string; path: string; name
 
   return {
     hasBackup: !!backup,
-    ask: () => setAsking(true),
+    ask: (need = '') => setAsking(need),
     restore: () => setRestoring(true),
     dialogs,
   }
 }
 
 /** 交给 Agent 前问一句：这份测试要验证什么（可以不填，Agent 按录制自己判断） */
-function TidyAsk({ onClose, onSend }: { onClose: () => void; onSend: (need: string) => void }) {
+function TidyAsk({
+  initial,
+  onClose,
+  onSend,
+}: {
+  initial: string
+  onClose: () => void
+  onSend: (need: string) => void
+}) {
   const { ui } = h()
-  const [need, setNeed] = useState('')
+  const [need, setNeed] = useState(initial)
   return (
     <ui.Modal
       open
@@ -149,9 +158,11 @@ export function TidyButtons({ tidy, disabled }: { tidy: ReturnType<typeof useGtT
       <ui.IconButton
         icon={Sparkles}
         size="sm"
-        label={t('整理成流程：Agent 看截图、读项目代码，把录制改成循环、守护、调用和参数，每步写中文说明；逐条确认后再写回')}
+        label={t(
+          '整理成流程：Agent 看截图、读项目代码，把录制改成循环、守护、调用和参数，每步写中文说明；逐条确认后再写回',
+        )}
         disabled={disabled}
-        onClick={tidy.ask}
+        onClick={() => tidy.ask()}
       />
       {tidy.hasBackup && (
         <ui.IconButton

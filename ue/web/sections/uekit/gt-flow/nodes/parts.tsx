@@ -3,7 +3,8 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { Plus } from 'lucide-react'
 import { h, t } from '../../../../host.ts'
 import { useFlow } from '../ctx.ts'
-import { canDrop, readDrop } from '../dnd.ts'
+import { canDrop, readDrop, wantsCopy } from '../dnd.ts'
+import { callCopy } from '../../gt-edit/call-copy.ts'
 import type { FlowNode, InsertAt } from '../layout.ts'
 import type { StepRun } from '../run-state.ts'
 
@@ -73,6 +74,15 @@ export function useDropInsert(at: InsertAt | undefined) {
         if (!steps) return
         e.preventDefault()
         e.stopPropagation()
+        // 按着 Alt 拖进来的脚本：插那个脚本的副本，不插「调用脚本」
+        if (wantsCopy(e) && steps.length === 1 && steps[0].action === 'call')
+          return void callCopy(steps[0]).then(
+            (r) => {
+              insertAt(at, [r.group])
+              if (r.warn) h().toast.error(r.warn)
+            },
+            (err: Error) => h().toast.error(err.message),
+          )
         insertAt(at, steps)
       },
       onClick: (e: React.MouseEvent) => {
