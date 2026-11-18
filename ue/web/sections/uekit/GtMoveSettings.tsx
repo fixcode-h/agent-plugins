@@ -1,4 +1,5 @@
 import { h, t } from '../../host.ts'
+import { SettingGroup, SettingRow } from '../../SettingRows.tsx'
 
 /**
  * 运行设置里的「移动」一节（GameTest 1.3.0，_settings.json 的 move 段）：move 步骤走不到时要不要瞬移、怎么推角色、
@@ -33,24 +34,32 @@ export function tidyMove(m: GtMoveConfig): GtMoveConfig | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
-export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onChange: (v: GtMoveConfig) => void }) {
+export function GtMoveSettings({
+  value,
+  onChange,
+  framed,
+}: {
+  value: GtMoveConfig
+  onChange: (v: GtMoveConfig) => void
+  framed?: boolean
+}) {
   const { ui } = h()
   const set = (p: Partial<GtMoveConfig>) => onChange({ ...value, ...p })
   return (
-    <section className="ue:flex ue:flex-col ue:gap-3">
-      <h3 className="ue:text-body ue:font-medium ue:text-fg">{t('移动')}</h3>
-      <p className="ue:-mt-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
-        {t(
-          'move 步骤（录移动录出来的）让角色自己走到目标点：先按导航网格寻路，没有就按录的轨迹走，再不行运行时探路。需要 GameTest 1.3.0；场景里写的 move 覆盖这里。',
-        )}
-      </p>
-      <ui.Field
-        label={t('走不到时')}
-        hint={t('瞬移兜底能让后面的步骤接着跑，但这一步就没测到「走得过去」；结果里会写明用了瞬移。')}
+    <SettingGroup
+      title={t('移动')}
+      framed={framed}
+      desc={t(
+        'move 步骤（录移动录出来的）让角色自己走到目标点：先按导航网格寻路，没有就按录的轨迹走，再不行运行时探路。需要 GameTest 1.3.0；场景里写的 move 覆盖这里。',
+      )}
+    >
+      <SettingRow
+        title={t('走不到时')}
+        desc={t('瞬移兜底能让后面的步骤接着跑，但这一步就没测到「走得过去」；结果里会写明用了瞬移。')}
       >
         <ui.Select
           size="sm"
-          className="ue:w-48"
+          className="ue:w-full"
           value={value.fallback ?? 'none'}
           onChange={(e: { target: { value: string } }) => set({ fallback: e.target.value as 'none' | 'teleport' })}
           options={[
@@ -58,31 +67,31 @@ export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onCha
             { value: 'teleport', label: t('瞬移过去') },
           ]}
         />
-      </ui.Field>
+      </SettingRow>
       {value.fallback === 'teleport' && (
-        <ui.Field
-          label={t('瞬移命令')}
-          hint={t('项目有自己的传送 GM 时填控制台命令，{x} {y} {z} {yaw} 换成目标坐标；空着直接设角色位置。')}
+        <SettingRow
+          title={t('瞬移命令')}
+          desc={t('项目有自己的传送 GM 时填控制台命令，{x} {y} {z} {yaw} 换成目标坐标；空着直接设角色位置。')}
         >
           <ui.Input
             size="sm"
-            className="ue:font-mono"
+            className="ue:w-full ue:font-mono"
             placeholder="gm.Teleport {x} {y} {z}"
             value={value.teleportCommand ?? ''}
             onChange={(e: { target: { value: string } }) => set({ teleportCommand: e.target.value })}
           />
-        </ui.Field>
+        </SettingRow>
       )}
-      <ui.Field
-        label={t('怎么推角色')}
-        hint={t(
+      <SettingRow
+        title={t('怎么推角色')}
+        desc={t(
           '推摇杆直接给角色移动输入，不经过按键绑定；项目只认按键（Enhanced Input 上做了自己的移动逻辑）时改成按住前进键。',
         )}
       >
-        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+        <div className="ue:flex ue:items-center ue:gap-2">
           <ui.Select
             size="sm"
-            className="ue:w-48"
+            className="ue:min-w-0 ue:flex-1"
             value={value.drive ?? 'input'}
             onChange={(e: { target: { value: string } }) => set({ drive: e.target.value as 'input' | 'keys' })}
             options={[
@@ -93,23 +102,23 @@ export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onCha
           {value.drive === 'keys' && (
             <ui.Input
               size="sm"
-              className="ue:w-32 ue:font-mono"
+              className="ue:w-20 ue:font-mono"
               placeholder="W"
               value={value.forwardKey ?? ''}
               onChange={(e: { target: { value: string } }) => set({ forwardKey: e.target.value })}
             />
           )}
         </div>
-      </ui.Field>
-      <ui.Field
-        label={t('录制快捷键')}
-        hint={t(
+      </SettingRow>
+      <SettingRow
+        title={t('录制快捷键')}
+        desc={t(
           '录制时 Alt+1 录移动、Alt+2 记下位置、Alt+3 在这附近、Alt+4 断言、Alt+5 检查点、Alt+0 放弃这段；游戏自己用了 Alt+数字时关掉，改用工具栏。',
         )}
       >
         <ui.Select
           size="sm"
-          className="ue:w-48"
+          className="ue:w-full"
           value={value.hotkeys === false ? 'off' : 'on'}
           onChange={(e: { target: { value: string } }) => set({ hotkeys: e.target.value !== 'off' })}
           options={[
@@ -117,7 +126,7 @@ export function GtMoveSettings({ value, onChange }: { value: GtMoveConfig; onCha
             { value: 'off', label: t('关') },
           ]}
         />
-      </ui.Field>
-    </section>
+      </SettingRow>
+    </SettingGroup>
   )
 }

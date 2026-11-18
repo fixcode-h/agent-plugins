@@ -14,7 +14,7 @@ import { GtSettings } from '../GtSettings.tsx'
  * 录制截图和 OCR 在面板设置 → 插件参数 → UE 里，UELink 的更新源也在那，找起来要翻好几处。这里按插件收拢：
  * - 面板参数（清单 settings）按分组挑出来用面板的表单画（host.ui.PluginParams），和设置页改的是同一份值；
  *   旧面板没有这个组件时给去设置页的按钮。
- * - 跟着项目走的（GameTest 的 _settings.json）用原来的表单；UE 项目设置里的目录只读显示，不改 ini。
+ * - 跟着项目走的（GameTest 的 _settings.json）用原来的表单（按节拆成几张卡片，和面板参数同一种两栏行）；UE 项目设置里的目录只读显示，不改 ini。
  */
 export const SETTINGS_PLUGINS = ['UELink', 'AssetForge', 'GameTest'] as const
 export type SettingsPlugin = (typeof SETTINGS_PLUGINS)[number]
@@ -51,9 +51,9 @@ function PanelParams({ groups }: { groups: string[] }) {
 /** 只读的目录行：实际用的路径、是设置里填的还是按约定找的、在不在 */
 function PathRow({ label, entry, where }: { label: string; entry?: PathEntry; where: string }) {
   return (
-    <div className="ue:flex ue:flex-col ue:gap-1 ue:px-4 ue:py-3">
+    <div className="ue:flex ue:flex-col ue:gap-1 ue:px-4 ue:py-3.5">
       <div className="ue:flex ue:items-center ue:gap-2">
-        <span className="ue:text-body ue:font-medium ue:text-fg">{label}</span>
+        <span className="ue:text-prose ue:font-medium ue:text-fg">{label}</span>
         {entry && (
           <Badge tone={entry.fromSetting ? 'run' : undefined}>
             {entry.fromSetting ? t('项目设置里填的') : t('按约定找的')}
@@ -135,9 +135,8 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
         )}
         {name === 'GameTest' && (
           <>
-            <Card title={t('运行设置')} aside={t('这个项目 · 存在场景根的 _settings.json，全组共用')}>
-              <GtSettings />
-            </Card>
+            {/* 运行设置按节画成几张卡片，底部自带保存栏 */}
+            <GtSettings />
             <Card title={t('录制截图')} aside={t('所有项目共用')}>
               <PanelParams groups={['GameTest 录制']} />
             </Card>
