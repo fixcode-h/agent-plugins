@@ -231,7 +231,7 @@ using namespace TraceServices;
 	/** 编译时关掉的查询（UELinkCompat.h 的 UELINK_TRACE_* 开关） */
 	inline FString Disabled(const TCHAR* What)
 	{
-		return FString::Printf(TEXT("这个 UELink 编译时关掉了%s的分析（这个引擎版本的接口还没适配）：把编译报错发给面板维护者"), What);
+		return FString::Printf(TEXT("这个 UELink 编译时关掉了%s的分析（这个引擎版本没有对应的 TraceServices 接口，或者还没适配）"), What);
 	}
 
 	// AgentPanelTraceLua.cpp

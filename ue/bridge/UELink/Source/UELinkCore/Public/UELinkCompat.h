@@ -76,19 +76,58 @@
 #define UELINK_TIMER_COUNT(ReaderPtr) ((ReaderPtr)->GetTimerCount())
 
 // ---------- trace 专项数据（2.11，AgentPanelTraceInfo / Memory / Load / Tasks / Net.cpp） ----------
-// 按 5.4 的 TraceServices 写，5.8 还没在本地编过。哪一类在某个引擎版本上编不过，先把对应的开关改成 0（查询会回「编译时关掉了」），
-// 再按那个版本的头文件改下面的宏。各开关互不影响。
+// 先看引擎里有没有对应的 TraceServices 头文件（__has_include），没有就整类关掉（查询会回「编译时关掉了」），不让编译失败：
+// 5.4 没有 TraceServices/Model/FileActivity.h（用户 2026-11-18 在 5.4 上编出 C1083）。
+// 区域、LLM 标签集合、内存分配的查询接口在 5.5 之后才是现在这套写法，5.4 上也一并关掉，只在 5.8 上开。
+// 哪一类在某个引擎版本上还编不过，把对应的开关改成 0 即可，各开关互不影响。
+// 这个头文件 UELinkCore 也会包含，那里没有 TraceServices 的包含路径，开关都算 0，但 UELinkCore 不用它们。
+#if __has_include("TraceServices/Model/Diagnostics.h")
 #define UELINK_TRACE_SESSION 1
+#else
+#define UELINK_TRACE_SESSION 0
+#endif
+#if UELINK_UE58 && __has_include("TraceServices/Model/Regions.h")
 #define UELINK_TRACE_REGIONS 1
+#else
+#define UELINK_TRACE_REGIONS 0
+#endif
+#if UELINK_UE58 && __has_include("TraceServices/Model/Memory.h")
 #define UELINK_TRACE_MEMTAGS 1
+#else
+#define UELINK_TRACE_MEMTAGS 0
+#endif
+#if UELINK_UE58 && __has_include("TraceServices/Model/AllocationsProvider.h") && __has_include("TraceServices/Model/Callstack.h")
 #define UELINK_TRACE_ALLOCS 1
+#else
+#define UELINK_TRACE_ALLOCS 0
+#endif
+#if __has_include("TraceServices/Model/LoadTimeProfiler.h") && __has_include("TraceServices/Containers/Tables.h")
 #define UELINK_TRACE_LOADS 1
+#else
+#define UELINK_TRACE_LOADS 0
+#endif
+#if __has_include("TraceServices/Model/FileActivity.h") && __has_include("TraceServices/Containers/Tables.h")
 #define UELINK_TRACE_FILES 1
+#else
+#define UELINK_TRACE_FILES 0
+#endif
+#if __has_include("TraceServices/Model/TasksProfiler.h")
 #define UELINK_TRACE_TASKS 1
+#else
+#define UELINK_TRACE_TASKS 0
+#endif
+#if __has_include("TraceServices/Model/ContextSwitches.h")
 #define UELINK_TRACE_SWITCHES 1
+#else
+#define UELINK_TRACE_SWITCHES 0
+#endif
+#if __has_include("TraceServices/Model/NetProfiler.h")
 #define UELINK_TRACE_NET 1
+#else
+#define UELINK_TRACE_NET 0
+#endif
 
-// 区域（Timing Regions）：5.4 的 ReadRegionProvider 返回引用；回调返回 bool（false 停）
+// 区域（Timing Regions）：ReadRegionProvider 返回引用；回调返回 bool（false 停）
 #define UELINK_REGION_PROVIDER(Session) (&TraceServices::ReadRegionProvider(Session))
 // LLM 标签：5.5 起多了标签集合，EnumerateTags 的形参在变，统一走这里
 #define UELINK_MEM_ENUM_TAGS(Provider, Fn) (Provider)->EnumerateTags(Fn)
