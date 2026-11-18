@@ -92,6 +92,18 @@ export function copyText(text: string) {
     .catch(() => toast.error(t('复制失败：浏览器不让写剪贴板')))
 }
 
+/**
+ * 整页兜底的右键（GameTest 页，用户 2026-11-18：整页都用自己的菜单，不弹浏览器的）：行、空白处各有菜单的会先拦下，
+ * 冒泡到这里的是其余地方——选中了文字给「复制」，输入框里留浏览器自己的（要粘贴、拼写建议），其余什么也不弹
+ */
+export function pageMenu(e: MouseEvent | globalThis.MouseEvent) {
+  const el = e.target as HTMLElement | null
+  if (el?.closest('input, textarea, [contenteditable="true"]')) return
+  const text = window.getSelection()?.toString() ?? ''
+  if (text.trim()) openMenu(e, [{ label: t('复制'), icon: Copy, onClick: () => copyText(text) }])
+  else e.preventDefault()
+}
+
 /** 挂着的 MenuHost：同一页里可能挂了好几个（性能页、检视区、分类栏、设置里的示例），只让最早挂上的那个画，免得一个菜单画两份 */
 const hosts: string[] = []
 

@@ -175,22 +175,35 @@ export function useScenarioLibrary(o: {
     void ppost(o.project, 'ext/gt/file', { root: o.root, path, action: 'reveal' }).catch(fail)
   const fullPath = (rel: string) => `${o.root.replace(/[\\/]+$/, '')}/${rel}`
 
+  /** 「新建」的几项：建在 dir 里（标题栏的建在选中的文件夹，空白处右键的建在场景根） */
+  const createItems = (dir: string) => [
+    { label: t('新建脚本（编写）…'), icon: FilePlus, onClick: () => newScript(dir) },
+    {
+      label: t('新建脚本（录制）…'),
+      icon: CircleDot,
+      hint: o.recordIn ? undefined : t('要先启动编辑器'),
+      disabled: !o.recordIn || o.locked,
+      onClick: () => o.recordIn?.(dir),
+    },
+    o.agentWriteIn && { label: t('让 Agent 写…'), icon: Sparkles, onClick: () => o.agentWriteIn?.(dir) },
+    'sep' as const,
+    { label: t('新建文件夹…'), icon: FolderPlus, onClick: () => newFolder(dir) },
+  ]
+
   /** 标题栏「新建」 */
-  const newMenu = (e: MouseEvent) =>
+  const newMenu = (e: MouseEvent) => openMenu(e, [{ title: where(newDir) }, ...createItems(newDir)])
+
+  /** 场景列表空白处右键：在场景根新建，以及场景根的路径操作（行上的右键各有自己的菜单，不会冒泡到这里） */
+  const blankMenu = (e: MouseEvent) => {
+    if (!o.root) return e.preventDefault()
     openMenu(e, [
-      { title: where(newDir) },
-      { label: t('新建脚本（编写）…'), icon: FilePlus, onClick: () => newScript(newDir) },
-      {
-        label: t('新建脚本（录制）…'),
-        icon: CircleDot,
-        hint: o.recordIn ? undefined : t('要先启动编辑器'),
-        disabled: !o.recordIn || o.locked,
-        onClick: () => o.recordIn?.(newDir),
-      },
-      o.agentWriteIn && { label: t('让 Agent 写…'), icon: Sparkles, onClick: () => o.agentWriteIn?.(newDir) },
+      { title: t('场景根') },
+      ...createItems(''),
       'sep',
-      { label: t('新建文件夹…'), icon: FolderPlus, onClick: () => newFolder(newDir) },
+      { label: t('复制完整路径'), icon: Copy, onClick: () => copyText(o.root) },
+      { label: t('在文件夹中显示'), icon: FolderOpen, onClick: () => reveal('') },
     ])
+  }
 
   const folderMenu = (e: MouseEvent, path: string, leaves: Scenario[]) => {
     const runnable = leaves.filter((s) => !s.parseError)
@@ -271,6 +284,7 @@ export function useScenarioLibrary(o: {
     activeFolder,
     setActiveFolder,
     newMenu,
+    blankMenu,
     folderMenu,
     onMove,
     moveTo,
