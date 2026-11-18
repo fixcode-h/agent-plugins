@@ -1,7 +1,7 @@
 import { CircleArrowUp, Loader2, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { DiagItem } from '../../../server/editor-tools/diagnose.ts'
-import { pget, ppost, useAction, useLoad } from '../../api.ts'
+import { pget, ppost, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { MenuHost } from '../../menu.tsx'
@@ -10,11 +10,12 @@ import { Confirm, ErrorText, PageHead } from '../../ui.tsx'
 import { DiagPanel } from './LinkDiagnose.tsx'
 import { CardsSection } from './plugins/CardsSection.tsx'
 import { JobBar, useJob } from './plugins/JobBar.tsx'
-import { extView, isStale, upgradePlan, uelinkView, type ExtList, type PluginView } from './plugins/model.ts'
+import { extView, isStale, upgradePlan, uelinkView, type PluginView } from './plugins/model.ts'
 import { NotesModal } from './plugins/NotesModal.tsx'
 import { isSettingsPlugin, PluginSettings } from './plugins/PluginSettings.tsx'
 import { StatusStrip } from './plugins/StatusStrip.tsx'
 import { Todos } from './plugins/Todos.tsx'
+import { useExtList } from './plugins/use-ext-list.ts'
 
 /**
  * UE 插件页：UEKit 插件库（UELink 和挂在它上面的 AssetForge、GameTest）在这个项目里的安装情况。
@@ -44,19 +45,11 @@ function PluginList() {
   const { project, state, reload, go } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
-  const [refresh, setRefresh] = useState(0)
   const [jobId, setJobId] = useState('')
   const [removing, setRemoving] = useState<PluginView>()
   const [notesOf, setNotesOf] = useState<PluginView>()
   const [diag, setDiag] = useState<{ items: DiagItem[]; at: string }>()
-  const list = useLoad(
-    () =>
-      pget<ExtList>(project.id, `ext${refresh ? '?refresh=1' : ''}`).then((r) => {
-        if (refresh) reload()
-        return r
-      }),
-    [project.id, refresh],
-  )
+  const { list, checking, check } = useExtList(project.id, reload)
   // 没有自己起的作业时显示这个项目最近一个装卸 / 编译作业
   const latest = jobId || state?.jobs.filter((j) => j.kind !== 'background' && j.kind !== 'editor').at(-1)?.id || ''
   const job = useJob(latest)
@@ -126,13 +119,8 @@ function PluginList() {
         title={t('UE 插件')}
         desc={t('UEKit 插件库：装进项目的 Plugins/，装完要完整编译一次；界面和 Agent 工具都在面板里')}
       >
-        <ui.Button
-          size="sm"
-          variant="secondary"
-          disabled={list.loading || running}
-          onClick={() => setRefresh((n) => n + 1)}
-        >
-          {list.loading ? (
+        <ui.Button size="sm" variant="secondary" disabled={checking || running} onClick={() => void check()}>
+          {checking ? (
             <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
           ) : (
             <RefreshCw className="ue:h-3.5 ue:w-3.5" />
