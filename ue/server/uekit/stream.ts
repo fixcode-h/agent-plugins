@@ -17,6 +17,8 @@ export const EXT_TOPICS = [
   'forge.reveal',
   'gt.job',
   'gt.record',
+  // gt.flow：GameTest 1.9 流程图运行高亮（节点进出、循环换轮、守护触发）
+  'gt.flow',
   'uelink.outliner',
   'uelink.selection',
   'uelink.luaErrors',

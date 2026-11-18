@@ -31,3 +31,34 @@ declare module '@panel/web/src/lib/assist-conv' {
     resolve: (reply: string) => Promise<{ error?: string }>
   }): void
 }
+
+/**
+ * 网页：面板的通用流程图画布（点状底、缩放、右下小地图、底部工具条，面板 web/src/components/flow/GraphCanvas.tsx）。
+ * GameTest 流程图用它，外观和工作流编辑器一致；节点用同样开放的 @xyflow/react 写（和面板共用一份实例）
+ */
+declare module '@panel/web/src/components/flow/GraphCanvas' {
+  import type { ComponentType, HTMLAttributes, ReactElement, ReactNode } from 'react'
+  import type { Edge, Node, ReactFlowProps } from '@xyflow/react'
+  export type GraphCanvasProps<N extends Node = Node, E extends Edge = Edge> = ReactFlowProps<N, E> & {
+    editable?: boolean
+    panMode?: boolean
+    minimap?: number | false
+    miniColor?: (n: N) => string
+    autoFit?: boolean
+    frameClassName?: string
+    children?: ReactNode
+  }
+  export function GraphCanvas<N extends Node = Node, E extends Edge = Edge>(p: GraphCanvasProps<N, E>): ReactElement
+  export function CanvasToolbar(p: HTMLAttributes<HTMLDivElement>): ReactElement
+  export const CanvasToolbarSep: ComponentType
+}
+
+/** 网页：圆底数字角标（没发生不画，超过 999 写「999+」，面板 web/src/components/ui/count-badge.tsx） */
+declare module '@panel/web/src/components/ui/count-badge' {
+  import type { HTMLAttributes, ReactElement } from 'react'
+  export const COUNT_BADGE_MAX: number
+  export function countBadgeText(n: number, max?: number): string
+  export function CountBadge(
+    p: Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & { count: number; max?: number; corner?: boolean },
+  ): ReactElement | null
+}
