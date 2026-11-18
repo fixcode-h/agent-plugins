@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import { copyFile, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { t } from '../util.ts'
-import { applyTidyPlan, parseTidyPlan } from './gt-tidy-plan.ts'
+import { applyTidyDoc, parseTidyPlan } from './gt-tidy-plan.ts'
+import { flowifyHints } from './gt-flowify/index.ts'
+import { prepareGlobalGuards, withFlow } from './gt-tidy-write.ts'
 import { scenarioFile } from './gt-paths.ts'
 
 /**
@@ -81,12 +83,14 @@ export async function tidyAction(projectRoot: string, b: Record<string, unknown>
         rel: f.rel,
         projectRoot: slash(projectRoot),
         backup: (await exists(backup)) ? backupRel : '',
+        // 「整理成流程」的规则建议（gt-flowify）：提示词里交给 Agent 参考，它判断后写进方案
+        hints: await flowifyHints(Array.isArray(doc.steps) ? (doc.steps as Record<string, unknown>[]) : [], f.rootAbs, f.abs),
       }
     }
     case 'apply': {
       const text = await readOrig()
       if (sha1(text) !== String(b.hash ?? ''))
-        throw new Error(t('场景文件在 AI 整理之后被改过（{p}），步骤号对不上了：重新点「AI 整理」', { p: f.rel }))
+        throw new Error(t('场景文件在整理之后被改过（{p}），步骤号对不上了：重新点「整理成流程」', { p: f.rel }))
       const orig = parseJson(text, t('原场景'))
       const steps = Array.isArray(orig.steps) ? (orig.steps as Record<string, unknown>[]) : []
       let plan
@@ -96,14 +100,19 @@ export async function tidyAction(projectRoot: string, b: Record<string, unknown>
         throw new Error(t('整理方案不对：{e}', { e: (e as Error).message }), { cause: e })
       }
       const picked = Array.isArray(b.picked) ? b.picked.filter((x): x is number => typeof x === 'number') : []
-      const next = applyTidyPlan(steps, plan, picked, b.notes === true)
+      const out = applyTidyDoc(steps, plan, picked, b.notes === true)
+      const next = out.steps
       if (!next.length) throw new Error(t('应用后一步都不剩了，不能保存'))
-      const merged = mergeScenario(orig, { steps: next })
+      const merged = mergeScenario(orig, withFlow(orig, out))
+      // 全局守护写进 _settings.json：先读好、查好，场景写成功了再落盘，免得只写了一半
+      const commitSettings = out.globalGuards.length ? await prepareGlobalGuards(f.rootAbs, out.globalGuards) : undefined
       const keptOld = await exists(backup)
       if (!keptOld) await copyFile(f.abs, backup)
       // UE 写场景用 tab 缩进，照它写
       await writeFile(f.abs, JSON.stringify(merged, null, '\t') + '\n', 'utf8')
+      const settings = commitSettings ? await commitSettings() : ''
       return {
+        ...(settings ? { settings } : {}),
         path: f.rel,
         steps: next.length,
         hash: sha1(JSON.stringify(merged, null, '\t') + '\n'),
