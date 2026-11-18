@@ -13,6 +13,7 @@ import {
   ScanText,
   Settings2,
   ShieldX,
+  SquareFunction,
   SkipForward,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -111,6 +112,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
         title: t('运行设置 · 这个项目'),
         items: [
           { id: 'playback', label: t('回放'), icon: Play },
+          { id: 'script', label: t('脚本'), icon: SquareFunction },
           { id: 'setup', label: t('前置步骤'), icon: ListStart },
           { id: 'move', label: t('移动'), icon: Footprints },
           { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },

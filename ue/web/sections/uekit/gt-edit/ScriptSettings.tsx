@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import type { GtGuard, GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
+import { FlattenAction } from './FlattenAction.tsx'
 import { GuardList } from '../gt-guards/GuardList.tsx'
 import { blankGuard } from '../gt-guards/model.ts'
 import { ObjectKeyDialog, type Locator } from '../gt-vars/ObjectKeyDialog.tsx'
@@ -148,6 +149,13 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
         {guards.length > 0 && (
           <GuardList value={guards} onChange={(v: GtGuard[]) => set('guards', v.length ? v : undefined)} />
         )}
+      </Section>
+
+      <Section
+        title={t('给旧版 GameTest')}
+        hint={t('1.9 以前的 GameTest 不认块和守护：一条路走到底的脚本可以另存一份平铺的')}
+      >
+        <FlattenAction doc={doc} />
       </Section>
 
       {obj && (

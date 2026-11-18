@@ -207,8 +207,9 @@ export function GameTest() {
       )
     })
   /** ignoreSkipIf：全部照做（GameTest 1.7.0），每一步都真做，测第一次领取、新号这类路径 */
-  const runScenario = (s: Scenario, ignoreSkipIf?: boolean) =>
-    startRun(s.name, { scenario: s.relativePath, ...(ignoreSkipIf ? { ignoreSkipIf: true } : {}) }, 0)
+  /** extra：编辑页的调试参数（params、from / to、breakpoints，GameTest 1.9 的 gt.run），原样并进去 */
+  const runScenario = (s: Scenario, ignoreSkipIf?: boolean, extra?: Record<string, unknown>) =>
+    startRun(s.name, { scenario: s.relativePath, ...(ignoreSkipIf ? { ignoreSkipIf: true } : {}), ...extra }, 0)
   /** 批量：一个接一个跑（GameTest 1.2），进度和结果从 gt.job 事件的 batch 来 */
   const startBatch = (args: { tag?: string; scenarios?: string[]; name?: string }) =>
     run('run', async () => {
@@ -611,10 +612,10 @@ export function GameTest() {
             }
             onRun={
               live && !recording && !busy
-                ? (from) =>
+                ? (from, extra) =>
                     void (from
                       ? runFrom(selected, from.doc as unknown as GtScenarioFile, from.index)
-                      : runScenario(selected))
+                      : runScenario(selected, false, extra))
                 : undefined
             }
             run={

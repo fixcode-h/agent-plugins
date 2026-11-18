@@ -3,6 +3,7 @@ import { blockOf, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { t } from '../../../host.ts'
 import { ArgsEdit } from '../gt-api/ApiPick.tsx'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
+import { InvokeFnPick } from './invoke-pick.tsx'
 import { Row, TextField } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
 
@@ -22,7 +23,12 @@ function InvokeInspector({ step, onChange }: { step: GtStep; onChange: (s: GtSte
         )}
       </Row>
       <Row label={t('函数')}>
-        <TextField step={step} k="function" mono onChange={onChange} placeholder="AcceptQuest" />
+        <div className="ue:flex ue:items-center ue:gap-1.5">
+          <div className="ue:min-w-0 ue:flex-1">
+            <TextField step={step} k="function" mono onChange={onChange} placeholder="AcceptQuest" />
+          </div>
+          <InvokeFnPick step={step} onChange={onChange} />
+        </div>
       </Row>
       <Row label={t('参数')}>
         <ArgsEdit

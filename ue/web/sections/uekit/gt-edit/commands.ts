@@ -71,7 +71,7 @@ const mod = (e: KeyboardEvent | React.KeyboardEvent) => e.ctrlKey || e.metaKey
 const first = (c: CmdCtx) => c.selected[0]
 const stepAt = (c: CmdCtx, p: GtPath) => getAt(c.doc, p) as GtStep | undefined
 /** 选中的按文件顺序排；父块和它里面的步骤都选了时只留父块 */
-const roots = (sel: GtPath[]) => {
+export const roots = (sel: GtPath[]) => {
   const s = [...sel].sort(comparePath)
   return s.filter((p, i) => !s.slice(0, i).some((q) => q.length < p.length && q.every((x, k) => x === p[k])))
 }
@@ -270,6 +270,21 @@ export const COMMANDS: EditCommand[] = [
     },
   },
 ]
+
+/**
+ * 别的模块加命令（调试的 F9、运行到这里，转化的包进守护、展开调用）：插在 after 那条后面，没给插在同组最后。
+ * 同 id 的替换掉
+ */
+export function registerCommand(cmd: EditCommand, after?: string) {
+  const old = COMMANDS.findIndex((x) => x.id === cmd.id)
+  if (old >= 0) COMMANDS.splice(old, 1)
+  let at = after ? COMMANDS.findIndex((x) => x.id === after) + 1 : 0
+  if (at <= 0) {
+    const last = COMMANDS.map((x) => x.group).lastIndexOf(cmd.group)
+    at = last >= 0 ? last + 1 : COMMANDS.length
+  }
+  COMMANDS.splice(at, 0, cmd)
+}
 
 export const canRun = (cmd: EditCommand, c: CmdCtx) =>
   (cmd.enabled ? cmd.enabled(c) : c.selected.length > 0) && (cmd.multi || c.selected.length <= 1 || cmd.id === 'paste')

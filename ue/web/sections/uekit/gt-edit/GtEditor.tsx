@@ -1,4 +1,4 @@
-import { Info, Loader2, TriangleAlert } from 'lucide-react'
+import { Info, ListChecks, Loader2, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   getAt,
@@ -13,6 +13,11 @@ import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { Confirm, ErrorText } from '../../../ui.tsx'
 import { useApis } from '../gt-api/model.ts'
+import { RunControls } from '../gt-debug/RunControls.tsx'
+import { RunPanel } from '../gt-debug/RunPanel.tsx'
+import { RunParams } from '../gt-debug/RunParams.tsx'
+import { useDebug } from '../gt-debug/use-debug.ts'
+import { stepKey } from '../gt-flow/layout.ts'
 import { guardsSupported, GUARD_MIN_VERSION } from '../gt-guards/model.ts'
 import type { CmdCtx } from './commands.ts'
 import { EditContext } from './ctx.ts'
@@ -76,8 +81,11 @@ export function GtEditor({
   onOpen: (relativePath: string) => void
   /** 开始录制（录成新脚本，放在这个脚本的文件夹里） */
   onRecord?: () => void
-  /** 跑这个脚本：不给 from 跑整个文件，给了就用编辑中的数据从第 index 步跑到底 */
-  onRun?: (from?: { doc: GtScript; index: number }) => void
+  /**
+   * 跑这个脚本：不给 from 跑整个文件，给了就用编辑中的数据从第 index 步跑到底（旧版 GameTest 用）；
+   * extra 是调试参数（params、from / to 步骤 id、breakpoints），并进 gt.run
+   */
+  onRun?: (from?: { doc: GtScript; index: number }, extra?: Record<string, unknown>) => void
   /** 正在跑这个脚本时的进度 */
   run?: EditRun
 }) {
@@ -89,6 +97,8 @@ export function GtEditor({
   const [leaving, setLeaving] = useState(false)
   // 有改动时在脚本库里点了另一个脚本：先问一句
   const [switchTo, setSwitchTo] = useState<string>()
+  // 右栏换成运行面板（开跑时自动打开，跑完留着看报告，关掉回到检查器）
+  const [panel, setPanel] = useState(false)
   const views = allViews()
   const View = (views.find((v) => v.id === view) ?? views[0]).Component
   const fileVersion = (() => {
@@ -137,15 +147,39 @@ export function GtEditor({
       // 存不了就每次从流程图开始
     }
   }
-  // 跑之前先存盘：UE 跑的是磁盘上的文件
-  const runAll =
-    onRun &&
-    (async () => {
-      if (s.dirty) await save()
-      onRun()
-    })
+  const old = !!gtVersion && !guardsSupported(gtVersion)
+  // 跑之前先存盘：UE 跑的是磁盘上的文件（断点、从哪到哪按步骤 id，存了才有 id）
+  const debug = useDebug({
+    project,
+    root,
+    scenario: scenario.relativePath,
+    doc: s.doc,
+    start:
+      onRun &&
+      ((extra) =>
+        void (async () => {
+          if (s.dirty) await save()
+          onRun(undefined, extra)
+        })()),
+  })
+  useEffect(() => {
+    if (debug.flow.active) setPanel(true)
+  }, [debug.flow.active])
   const sel = s.selected.length === 1 ? s.selected[0] : undefined
+  const selStep = sel && s.doc && (getAt(s.doc, sel) as GtStep | undefined)
+  const selKey = selStep && typeof selStep === 'object' ? stepKey(selStep, sel!) : undefined
   const topIndex = sel && sel.length === 2 && sel[0] === 'steps' && typeof sel[1] === 'number' ? sel[1] : undefined
+  // 旧版 GameTest 不认 gt.run 的 from：用编辑中的数据从主流程第几步跑（只能选主流程的步）
+  const runFrom =
+    !onRun || run
+      ? undefined
+      : old
+        ? topIndex !== undefined && s.doc
+          ? () => onRun({ doc: s.doc!, index: topIndex })
+          : undefined
+        : selKey && debug.run
+          ? () => debug.run?.({ from: selKey })
+          : undefined
 
   // 整页快捷键：输入框里也要能 Ctrl+S；撤销重做在输入框里交给输入框自己
   useEffect(() => {
@@ -177,11 +211,12 @@ export function GtEditor({
     select: s.select,
     onTry,
   }
-  const old = !!gtVersion && !guardsSupported(gtVersion)
   const steps = (s.doc?.steps ?? []) as GtStep[]
 
   return (
-    <EditContext.Provider value={{ project, root, live, doc: s.doc, apis: apis.items, aliases }}>
+    <EditContext.Provider
+      value={{ project, root, path: scenario.relativePath, live, doc: s.doc, apis: apis.items, aliases }}
+    >
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
         <EditorHeader
           name={scenario.name}
@@ -196,13 +231,16 @@ export function GtEditor({
           saving={s.saving}
           onSave={() => void save()}
           onTry={onTry && sel ? () => onTry(sel) : undefined}
-          onRun={runAll && !run ? () => void runAll() : undefined}
-          onRunFrom={
-            onRun && !run && topIndex !== undefined && s.doc ? () => onRun({ doc: s.doc!, index: topIndex }) : undefined
-          }
+          onRun={debug.run && !run ? () => debug.run?.() : undefined}
+          onRunFrom={runFrom}
+          onRunTo={!old && !run && selKey && debug.run ? () => debug.run?.({ to: selKey }) : undefined}
           running={!!run}
         />
-        {run && <RunBanner run={run} />}
+        {run && (
+          <RunBanner run={run} paused={debug.flow.paused}>
+            {!old && <RunControls debug={debug} />}
+          </RunBanner>
+        )}
         {old && (
           <p className="ue:flex ue:items-center ue:gap-1.5 ue:border-b ue:border-line ue:bg-warning/8 ue:px-4 ue:py-1.5 ue:text-footnote ue:text-warning">
             <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
@@ -265,15 +303,37 @@ export function GtEditor({
               />
             </section>
             <aside className="ue:min-h-0 ue:shrink-0 ue:overflow-auto ue:border-t ue:border-line ue:lg:w-[380px] ue:lg:border-t-0 ue:lg:border-l">
-              {s.selected.length && cmdCtx ? (
+              {panel ? (
+                <RunPanel
+                  project={project}
+                  doc={s.doc}
+                  debug={debug}
+                  onSelect={(p) => s.select([p])}
+                  onClose={() => setPanel(false)}
+                />
+              ) : s.selected.length && cmdCtx ? (
                 <Inspector doc={s.doc} selected={s.selected} onChange={s.apply} ctx={cmdCtx} onTry={onTry} />
               ) : (
                 <ScriptSettings doc={s.doc} onChange={(d) => s.apply(d)} />
+              )}
+              {!panel && debug.log.entries.length > 0 && (
+                <ui.Button size="sm" variant="ghost" className="ue:m-3" onClick={() => setPanel(true)}>
+                  <ListChecks className="ue:h-3.5 ue:w-3.5" />
+                  {t('看上次运行的记录和报告')}
+                </ui.Button>
               )}
             </aside>
           </div>
         )}
       </div>
+      {debug.pending && s.doc && (
+        <RunParams
+          doc={s.doc}
+          scenario={scenario.relativePath}
+          onRun={debug.confirmParams}
+          onCancel={debug.cancelParams}
+        />
+      )}
       <Confirm
         open={leaving}
         title={t('有改动没存')}

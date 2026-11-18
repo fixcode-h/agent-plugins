@@ -19,6 +19,7 @@ import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
 import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { EditSpecimen } from './sections/uekit/gt-edit/EditSpecimen.tsx'
+import { DebugSpecimen } from './sections/uekit/gt-debug/DebugSpecimen.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { GtTidyReport } from './sections/uekit/GtTidyReport.tsx'
 import { TIDY_LANG } from '../server/uekit/gt-tidy-plan.ts'
@@ -84,6 +85,7 @@ const activate: ActivateWeb = (host) => {
       { id: 'gt-flow', label: t('GameTest · 流程图'), tune: ['canvas', 'countBadge'], Specimen: FlowSpecimen },
       // GameTest 脚本编辑页（定稿 9.2–9.5）：列表视图、检查器、条件组编辑器，跟面板「行」「输入框」「菜单」的调节项
       { id: 'gt-edit', label: t('GameTest · 脚本编辑'), tune: ['row', 'input', 'menu'], Specimen: EditSpecimen },
+      { id: 'gt-debug', label: t('GameTest · 调试和运行面板'), tune: ['row', 'input'], Specimen: DebugSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项

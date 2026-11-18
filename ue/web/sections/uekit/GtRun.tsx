@@ -170,12 +170,15 @@ export function GtRun({
     const defs = file.data?.steps ?? []
     const byRow = new Map(results.map((r) => [r.index + offset, r]))
     const n = Math.max(defs.length, ...[...byRow.keys()].map((k) => k + 1))
-    return Array.from({ length: n }, (_, i): StepRow => ({
-      i,
-      def: defs[i],
-      res: byRow.get(i),
-      check: check?.byStep.get(i),
-    }))
+    return Array.from(
+      { length: n },
+      (_, i): StepRow => ({
+        i,
+        def: defs[i],
+        res: byRow.get(i),
+        check: check?.byStep.get(i),
+      }),
+    )
   }, [file.data, results, offset, check])
   const [pick, setPick] = useState<number>()
   // 运行中跟着最新一步走；跑完停在第一个失败的步骤上（没有失败、没跑过就第一步）
@@ -400,7 +403,7 @@ export function GtRun({
  * 一次运行每一步的结果：gt.report 直接回报告本身（不是 { report }）；超过 12000 字时 UE 把整份写进文件、
  * 只回 file，这时由面板读那份文件。disk：编辑器没连上，由面板从产物目录里的 report.json 读
  */
-async function loadReport(project: string, runId: string, disk: boolean): Promise<GtStep[]> {
+export async function loadReport(project: string, runId: string, disk: boolean): Promise<GtStep[]> {
   const r = await op<{ steps?: GtStep[]; truncated?: boolean; file?: string }>(project, 'gt.report', {
     runId,
     ...(disk ? { disk: true } : {}),

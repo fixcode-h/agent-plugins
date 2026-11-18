@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { ChevronsDownUp } from 'lucide-react'
 import { h, t } from '../../../../host.ts'
+import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
 import { useFlow } from '../ctx.ts'
 import { faceOf } from '../faces.tsx'
 import type { FrameTone } from '../looks.ts'
@@ -37,6 +38,7 @@ export const FrameNode = memo(function FrameNode({ data }: FlowNodeProps) {
       )}
     >
       <Handles node={n} />
+      <BreakpointDot k={n.key} />
       <div className="ue:flex ue:h-[30px] ue:items-center ue:gap-1.5 ue:px-3 ue:text-caption ue:text-muted">
         {Icon && <Icon className={h().cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', face?.tone)} />}
         <span className="ue:truncate ue:font-medium ue:text-fg">

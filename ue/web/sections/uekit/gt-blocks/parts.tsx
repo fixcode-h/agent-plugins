@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import type { GtStep } from '../../../../shared/gt-script/index.ts'
+import { isBlock, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
+import { BlockGuards } from '../gt-guards/BlockGuards.tsx'
 
 /** 改一个字段：值是 undefined / 空字符串时删掉这个字段，存进文件的步骤保持短 */
 export function patch(step: GtStep, k: string, v: unknown): GtStep {
@@ -160,6 +161,11 @@ export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: G
             {t('这些条件成立时跳过这一步（目标已经是想要的状态）')}
           </span>
           <CondEditor compact value={step.skipIf} onChange={(c) => onChange({ ...step, skipIf: c })} />
+        </div>
+      )}
+      {isBlock(step) && (
+        <div className="ue:border-t ue:border-line ue:pt-3">
+          <BlockGuards step={step} onChange={onChange} />
         </div>
       )}
     </div>
