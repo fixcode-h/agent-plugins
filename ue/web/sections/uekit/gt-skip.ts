@@ -52,6 +52,8 @@ export interface GtStateCand {
 export interface GtHintState {
   cands: GtStateCand[]
   picked?: number
+  /** GameTest 1.8.0：没自动写条件时，录制算好的「连带跳过几步」建议值，加条件时带上 */
+  also?: number
 }
 
 /** 跳过时写进步骤结果的 payload.skip；连带跳过的只有 with（带头那一步的序号） */
@@ -88,7 +90,11 @@ export function stateOf(hint?: Record<string, unknown>): GtHintState | undefined
   const cands = (s.cands as unknown[]).filter(
     (c): c is GtStateCand => isObj(c) && typeof c.kind === 'string' && isObj(c.cond) && typeof c.score === 'number',
   )
-  return { cands, picked: typeof s.picked === 'number' ? s.picked : undefined }
+  return {
+    cands,
+    picked: typeof s.picked === 'number' ? s.picked : undefined,
+    also: typeof s.also === 'number' && s.also > 0 ? s.also : undefined,
+  }
 }
 
 const q = (v: unknown) => (typeof v === 'string' ? `「${v}」` : JSON.stringify(v))
@@ -135,13 +141,71 @@ export const candLevel = (score: number) => (score >= 7 ? t('把握高') : score
  * 候选 → 跳过条件：条件字段 + 看的控件（候选没写 target 就是这一步自己的控件），保留原来的 also / verify 这些配置。
  * by 改成 user：人挑过了就不再是录制自动加的
  */
-export function skipFromCand(cand: GtStateCand, old?: GtSkipIf): GtSkipIf {
+export function skipFromCand(cand: GtStateCand, old?: GtSkipIf, also?: number): GtSkipIf {
+  return withConfig({ ...cand.cond, ...(cand.target ? { target: cand.target } : {}) }, old, also)
+}
+
+/** 新条件带上原来的 also / verify 这些配置（没有原来的就用录制的 also 建议值），by 记 user */
+function withConfig(cond: GtSkipIf, old?: GtSkipIf, also?: number): GtSkipIf {
   const keep = old
     ? Object.fromEntries(
         Object.entries(old).filter(([k]) => (SKIP_CONFIG_KEYS as readonly string[]).includes(k) && k !== 'target'),
       )
-    : {}
-  return { ...cand.cond, ...(cand.target ? { target: cand.target } : {}), ...keep, by: 'user' }
+    : also
+      ? { also }
+      : {}
+  return { ...cond, ...keep, by: 'user' }
+}
+
+/** 快捷设置的三类条件（用户 2026-11-18：文本是不是某个文本、某个控件显不显示、某个勾选框勾没勾） */
+export type QuickKind = 'text' | 'visible' | 'checked'
+
+export interface QuickCond {
+  kind: QuickKind
+  /** 看哪个控件；空 = 这一步自己的控件 */
+  target: string
+  /** text：文字；visible / checked：'yes' | 'no' */
+  value: string
+}
+
+/** 快捷设置 → 跳过条件。文字用 textLike（忽略数字和标点，「已领取(1/3)」也算「已领取」） */
+export function skipFromQuick(q: QuickCond, old?: GtSkipIf, also?: number): GtSkipIf | undefined {
+  const target = q.target.trim()
+  const base: GtSkipIf = target ? { target } : {}
+  if (q.kind === 'text') {
+    const text = q.value.trim()
+    if (!text) return undefined
+    return withConfig({ ...base, textLike: text }, old, also)
+  }
+  return withConfig({ ...base, [q.kind]: q.value !== 'no' }, old, also)
+}
+
+/** 现有条件能不能用快捷设置改（只有一个条件、是这三类之一），能就读出来 */
+export function quickOf(skip?: GtSkipIf): QuickCond | undefined {
+  if (!skip) return undefined
+  const cond = condOf(skip)
+  const keys = Object.keys(cond)
+  if (keys.length !== 1) return undefined
+  const target = skip.target ?? ''
+  if (typeof cond.textLike === 'string') return { kind: 'text', target, value: cond.textLike }
+  if (typeof cond.text === 'string') return { kind: 'text', target, value: cond.text }
+  if (typeof cond.visible === 'boolean') return { kind: 'visible', target, value: cond.visible ? 'yes' : 'no' }
+  if (typeof cond.checked === 'boolean') return { kind: 'checked', target, value: cond.checked ? 'yes' : 'no' }
+  return undefined
+}
+
+/** 快捷设置的初值：按录制候选里同类的那个填（文字填点完变成的字），没有就用默认 */
+export function quickDefault(kind: QuickKind, cands: GtStateCand[], stepText?: string): QuickCond {
+  const c = cands.find((x) =>
+    kind === 'text'
+      ? typeof x.cond.textLike === 'string' || typeof x.cond.text === 'string'
+      : typeof x.cond[kind] === 'boolean',
+  )
+  if (kind === 'text') {
+    const v = c ? String(c.cond.textLike ?? c.cond.text) : (stepText ?? '')
+    return { kind, target: c?.target ?? '', value: v }
+  }
+  return { kind, target: c?.target ?? '', value: c && c.cond[kind] === false ? 'no' : 'yes' }
 }
 
 /** 这个候选是不是现在用着的条件（条件和看的控件都一样） */
@@ -186,7 +250,8 @@ export function skipPayload(payload?: Record<string, unknown>): GtSkipPayload | 
 export function recordSkipArgs(gameTestVersion?: string): Record<string, string | number> {
   if (gameTestVersion && !skipSupported(gameTestVersion)) return {}
   const c = h().config()
-  const mode = c.gtInferSkip === 'suggest' || c.gtInferSkip === 'off' ? c.gtInferSkip : 'auto'
+  // 默认 suggest（用户 2026-11-18：默认不跳过，需要用户设置）：只列候选，不自动写条件
+  const mode = c.gtInferSkip === 'auto' || c.gtInferSkip === 'off' ? c.gtInferSkip : 'suggest'
   const sec = typeof c.gtStateWindow === 'number' && c.gtStateWindow > 0 ? c.gtStateWindow : 2
   return { inferSkip: mode as string, stateWindowMs: Math.round(Math.min(10, Math.max(0.3, sec)) * 1000) }
 }
