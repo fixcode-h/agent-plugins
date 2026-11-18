@@ -3,7 +3,8 @@ import path from 'node:path'
 import { liveCards, type Card } from './instances.ts'
 import { backgroundExitWhy, editorStartingWhy } from './launch/bg-guard.ts'
 import { watchForeground } from './launch/fg-watch.ts'
-import { trackLaunch } from './launch/track.ts'
+import { childSource, trackLaunch } from './launch/track.ts'
+import { startViaVs, vsLaunchable } from './launch/via-vs.ts'
 import { runningJob } from './jobs.ts'
 import type { UeProject } from './types.ts'
 import { alive, c, exists, t } from './util.ts'
@@ -168,7 +169,10 @@ export function stopAllBackground() {
   for (const id of bgs.keys()) stopBackground(id)
 }
 
-/** 启动编辑器（不等它就绪：编辑器加载完桥接自己写名片；这期间读日志把启动进度推给网页，见 launch/track.ts） */
+/**
+ * 启动编辑器（不等它就绪：编辑器加载完桥接自己写名片；这期间读日志把启动进度推给网页，见 launch/track.ts）。
+ * VS 开着这个项目的解决方案时优先经 VS 按 F5 启动（带调试器，用户 2026-11-18，launch/via-vs.ts），不然直接起 UnrealEditor
+ */
 export async function launchEditor(p: UeProject) {
   const file = exe(p, false)
   if (!exists(file)) throw new Error(t('没找到 {f}：确认引擎目录，或在「权限与设置」里指定', { f: file }))
@@ -180,9 +184,11 @@ export async function launchEditor(p: UeProject) {
         pid: running.pid,
       }),
     )
-  // 同时只开一个编辑器：先关后台编辑器再起前台（用户 2026-11-16）
+  const vs = await vsLaunchable(p)
+  // 同时只开一个编辑器：先关后台编辑器再起前台（用户 2026-11-16）；经 VS 启动也一样，后台编辑器占着模块 DLL 时 F5 前的编译链接不上
   await closeBackground(p, 'launch')
+  if (vs) return trackLaunch(p, await startViaVs(p, vs))
   const child = spawn(file, [p.uproject], { cwd: p.root, detached: true, stdio: 'ignore' })
   child.unref()
-  return trackLaunch(p, child)
+  return trackLaunch(p, childSource(child))
 }

@@ -416,7 +416,7 @@ const DEFS = [
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
+    '编辑器控制：start_editor 启动编辑器（VS 开着这个项目时经 VS 按 F5 带调试器启动）；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
       'spawn 在编辑器打开的关卡里放 Actor（class 写类名或蓝图路径，location [x,y,z]、rotation [pitch,yaw,roll]、label、level、folder 可选），destroy 删掉 actors（Actor 路径数组，ue_find kind=actor 找）。spawn / destroy 进撤销栈（ue_undo 能撤）、按结构性操作权限确认，PIE 运行中不能用，改完关卡要 ue_save 才落盘。',
     {
       action: {
@@ -449,11 +449,17 @@ const DEFS = [
     ['action'],
     async (a, ctx) => {
       switch (a.action) {
-        case 'start_editor':
-          return out({
-            pid: (await launchEditor(ctx.project)).pid,
-            note: '编辑器启动中：用 ue_editor action=wait_ready 等它可用',
-          })
+        case 'start_editor': {
+          const lp = await launchEditor(ctx.project)
+          return out(
+            lp.via === 'vs'
+              ? {
+                  via: 'vs',
+                  note: 'VS 开着这个项目：已经让 VS 按 F5 启动（先编译再起编辑器，挂着调试器）。用 ue_editor action=wait_ready 等它可用；停在断点时用 ue_vs_inspect 看',
+                }
+              : { pid: lp.pid, note: '编辑器启动中：用 ue_editor action=wait_ready 等它可用' },
+          )
+        }
         case 'wait_ready':
           return out(await waitEditorReady(ctx.project, Number(a.timeoutMs) || undefined))
         case 'pie_start':

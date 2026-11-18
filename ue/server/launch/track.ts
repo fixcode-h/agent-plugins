@@ -27,6 +27,32 @@ interface Track {
   timer?: ReturnType<typeof setTimeout>
   /** 引擎初始化完了的时刻：之后久等不到名片，多半是 UELink 没加载 */
   engineDoneAt?: number
+  src: LaunchSource
+  /** 估算百分比、记启动用时从哪一刻算：经 VS 启动时是 VS 编完的那一刻，编译多久不算进编辑器的启动用时 */
+  t0: number
+}
+
+/** 启动进程的一方每秒报的状态（经 VS 启动时由 via-vs.ts 问 VS 得来） */
+export interface LaunchPoll {
+  /** VS 还在编译 */
+  building?: boolean
+  /** 编辑器进程起来了 */
+  pid?: number
+  /** VS 一时没回应 */
+  waiting?: 'vs'
+  /** 没起来：原样报给用户 */
+  failed?: string
+}
+
+/**
+ * 编辑器是谁起的：面板自己起的子进程（pid + 退出事件），或经 VS 启动（via-vs.ts，每秒问一次 VS）。
+ * 进度、阶段、完成判断两边共用这一份
+ */
+export interface LaunchSource {
+  pid?: number
+  via?: 'vs'
+  onExit?: (cb: (code: number) => void) => void
+  poll?: () => Promise<LaunchPoll>
 }
 
 const tracks = new Map<string, Track>()
@@ -96,12 +122,34 @@ function finish(tr: Track, status: LaunchProgress['status'], error?: string) {
   }, KEEP_MS)
 }
 
+/** 问一次启动方（经 VS 启动时）：返回 true 表示这一秒已经处理完（还在编译、失败了） */
+async function pollSource(tr: Track): Promise<boolean> {
+  if (!tr.src.poll) return false
+  const s = await tr.src.poll()
+  if (s.failed) {
+    finish(tr, 'failed', s.failed)
+    return true
+  }
+  if (s.pid) tr.progress = { ...tr.progress, pid: s.pid }
+  if (s.building) {
+    tr.t0 = Date.now()
+    tr.progress = { ...tr.progress, stage: 'build', percent: 0, waiting: undefined }
+    push(tr)
+    tr.timer = setTimeout(() => void tick(tr), 1000)
+    return true
+  }
+  tr.progress = { ...tr.progress, waiting: s.waiting }
+  return false
+}
+
 async function tick(tr: Track) {
   if (tracks.get(tr.p.id) !== tr) return
-  const elapsed = Date.now() - tr.progress.startedAt
+  if (await pollSource(tr)) return
+  const elapsed = Date.now() - tr.t0
   const card = (await liveCards(tr.p.root)).find(
     (x) =>
-      x.kind === 'editor' && (x.pid === tr.progress.pid || Date.parse(x.startedAt) >= tr.progress.startedAt - 5000),
+      x.kind === 'editor' &&
+      ((!!tr.progress.pid && x.pid === tr.progress.pid) || Date.parse(x.startedAt) >= tr.progress.startedAt - 5000),
   )
   if (card && cardReady(card)) {
     await saveTime(tr.p.id, elapsed).catch(() => undefined)
@@ -110,7 +158,8 @@ async function tick(tr: Track) {
   await readNew(tr).catch(() => undefined)
   if (tr.exited !== undefined)
     return finish(tr, 'failed', t('编辑器启动后退出了（退出码 {code}），看 Saved/Logs 里的日志', { code: tr.exited }))
-  if (elapsed > TIMEOUT_MS) return finish(tr, 'failed', t('等了 60 分钟编辑器还没就绪，不再跟进度'))
+  if (Date.now() - tr.progress.startedAt > TIMEOUT_MS)
+    return finish(tr, 'failed', t('等了 60 分钟编辑器还没就绪，不再跟进度'))
   const { scan } = tr
   // 名片出来了（UELink 连上）但编辑器还没就绪：至少走到最后一段，也不再提示 UELink 没连上
   if (card)
@@ -126,18 +175,26 @@ async function tick(tr: Track) {
     shadersLeft: scan.shadersLeft || undefined,
     shadersMax: scan.shadersMax || undefined,
     waiting:
-      scan.rebuildAt !== undefined
-        ? 'rebuild'
-        : !card && tr.engineDoneAt && Date.now() - tr.engineDoneAt > NO_LINK_MS
-          ? 'link'
-          : undefined,
+      tr.progress.waiting === 'vs'
+        ? 'vs'
+        : scan.rebuildAt !== undefined
+          ? 'rebuild'
+          : !card && tr.engineDoneAt && Date.now() - tr.engineDoneAt > NO_LINK_MS
+            ? 'link'
+            : undefined,
   }
   push(tr)
   tr.timer = setTimeout(() => void tick(tr), 1000)
 }
 
+/** 面板自己起的子进程当启动方 */
+export const childSource = (child: ChildProcess): LaunchSource => ({
+  pid: child.pid,
+  onExit: (cb) => child.once('exit', (code) => cb(code ?? -1)),
+})
+
 /** 开始跟一次启动（同一项目重复点启动时换成新的这一份） */
-export async function trackLaunch(p: UeProject, child: ChildProcess) {
+export async function trackLaunch(p: UeProject, src: LaunchSource) {
   const prev = tracks.get(p.id)
   if (prev) clearTimeout(prev.timer)
   const st = await stat(logFile(p)).catch(() => null)
@@ -145,17 +202,20 @@ export async function trackLaunch(p: UeProject, child: ChildProcess) {
     p,
     scan: { stage: 0 },
     offset: 0,
+    src,
+    t0: Date.now(),
     old: st ? { size: st.size, mtime: st.mtimeMs } : undefined,
     progress: {
-      pid: child.pid ?? 0,
+      pid: src.pid ?? 0,
       startedAt: Date.now(),
       expectedMs: await expectedMs(p.id),
-      stage: 'spawn',
+      stage: src.via === 'vs' ? 'vs' : 'spawn',
+      ...(src.via && { via: src.via }),
       percent: 0,
       status: 'running',
     },
   }
-  child.once('exit', (code) => (tr.exited = code ?? -1))
+  src.onExit?.((code) => (tr.exited = code))
   tracks.set(p.id, tr)
   push(tr)
   tr.timer = setTimeout(() => void tick(tr), 1000)

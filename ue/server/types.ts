@@ -354,8 +354,10 @@ export interface LaunchProgress {
   percent: number
   shadersLeft?: number
   shadersMax?: number
-  /** rebuild：UE 弹窗问要不要重新编译模块，等人点；link：引擎起来了但 UELink 一直没连上 */
-  waiting?: 'rebuild' | 'link'
+  /** rebuild：UE 弹窗问要不要重新编译模块，等人点；link：引擎起来了但 UELink 一直没连上；vs：经 VS 启动时 VS 一时没回应（多半弹着对话框） */
+  waiting?: 'rebuild' | 'link' | 'vs'
+  /** vs：VS 开着这个项目，经 VS 按 F5 启动（挂着调试器，launch/via-vs.ts）；直接启动时没有 */
+  via?: 'vs'
   status: 'running' | 'ready' | 'failed'
   error?: string
 }
