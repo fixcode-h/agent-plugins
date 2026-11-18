@@ -7,6 +7,9 @@ import { remoteManifest } from '../uelink.ts'
 import { extensionStatus } from './catalog.ts'
 import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
+import { readApiFile, scanLuaApi } from './gt-api.ts'
+import { readAliases } from './gt-vars-file.ts'
+import { luaFields } from './gt-lua-fields.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { configBaseline } from './forge-baseline.ts'
@@ -88,6 +91,17 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
       return scenarioAction(p.root, b)
+    case 'POST ext/gt/api':
+      // 接口库页：场景根的 _api.json（编辑器没开也能看项目接口）；scan 重扫 Lua 接口文件夹写回 lua 段（gt-api.ts）
+      return b.action === 'scan'
+        ? scanLuaApi(p, String(b.root ?? ''), b.dryRun === true)
+        : readApiFile(p, String(b.root ?? ''))
+    case 'POST ext/gt/luafields':
+      // 代码变量弹窗、对象标识的 Lua 组：游戏没开时扫界面绑的 Lua 文件（gt-lua-fields.ts）
+      return luaFields(p, String(b.module ?? ''))
+    case 'POST ext/gt/aliases':
+      // 条件里的「常用」：场景根 _vars.json 的常用名（gt-vars-file.ts）；save 时加一条
+      return readAliases(p.root, String(b.root ?? ''), b)
     case 'POST ext/gt/keyrules':
       // 条目规则面板：场景根 _settings.json 的 itemKeys（gt-keys.ts），编辑器没开也能改
       return keyRulesAction(p.root, b)

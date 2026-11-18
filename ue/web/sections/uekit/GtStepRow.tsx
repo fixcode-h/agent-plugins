@@ -25,7 +25,7 @@ import { stepTitle } from './gt-step-title.ts'
 import { skipLabel, skipOf, skipWith } from './gt-skip.ts'
 
 /** 动作 → 行首的小图标：一眼分出点击、等待、按键，不用读动作名 */
-function actionIcon(a?: string): LucideIcon {
+export function actionIcon(a?: string): LucideIcon {
   switch (a) {
     case 'click':
     case 'select':

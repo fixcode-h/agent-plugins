@@ -121,6 +121,28 @@ async function replaceSteps(abs: string, rel: string, doc: Record<string, unknow
 }
 
 /**
+ * 编辑页存盘（GameTest 脚本 v3）：整份原文写回。expectText 是编辑页打开时读到的原文：文件在这期间被重新录制、
+ * Agent 或别人改过就对不上，报错让用户重新打开，不覆盖别人的改动。写之前确认是合法的 JSON 对象
+ */
+async function saveScript(abs: string, rel: string, b: Record<string, unknown>) {
+  const text = typeof b.text === 'string' ? b.text : ''
+  try {
+    const v = JSON.parse(text) as unknown
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object')
+  } catch (e) {
+    throw new BridgeError(t('不是合法的 JSON：{p}（{e}）', { p: rel, e: (e as Error).message }))
+  }
+  const now = await readFile(abs, 'utf8').then(
+    (x) => x.replace(/^\uFEFF/, ''),
+    () => undefined,
+  )
+  if (typeof b.expectText === 'string' && now !== undefined && now !== b.expectText)
+    throw new BridgeError(t('场景文件在这期间被改过（{p}），重新打开后再改', { p: rel }))
+  await writeFile(abs, text, 'utf8')
+  return { path: rel, text }
+}
+
+/**
  * 场景的右键菜单：改名（文件名和场景里的 name 一起改）、复制一份、删除、在文件夹中显示、读原文（raw，复制 / 导出 JSON）；
  * 步骤的「转成控件步骤」（replace）。
  * 删除前网页已经弹窗确认过；同一个目录里重名时报错，不覆盖
@@ -143,6 +165,7 @@ export async function scenarioAction(
     })
     return { path: f.rel, text: text.replace(/^\uFEFF/, '') }
   }
+  if (action === 'save') return saveScript(f.abs, f.rel, b)
   if (action === 'delete') {
     await rm(f.abs).catch(() => {
       throw new BridgeError(t('删不掉 {p}：文件不存在或被占用', { p: f.rel }))

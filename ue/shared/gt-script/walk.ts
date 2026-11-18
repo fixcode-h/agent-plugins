@@ -22,9 +22,6 @@ export interface GuardEntry {
   owner?: GtPath
 }
 
-const asSteps = (v: unknown): GtStep[] =>
-  Array.isArray(v) ? (v.filter((s) => s && typeof s === 'object') as GtStep[]) : []
-
 /** 场景根上的步骤槽：setup、steps，以及顶层每条守护的 do */
 export function rootSlots(doc: GtScript): { slot: GtPath; kind: SlotKind; inGuard: boolean }[] {
   const out: { slot: GtPath; kind: SlotKind; inGuard: boolean }[] = [

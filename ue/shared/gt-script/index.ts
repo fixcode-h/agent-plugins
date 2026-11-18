@@ -27,3 +27,4 @@ export {
   loopModeOf,
   type LoopMode,
 } from './blocks/index.ts'
+export * from './names.ts'

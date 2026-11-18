@@ -113,7 +113,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
           { id: 'move', label: t('移动'), icon: Footprints },
           { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },
           { id: 'keys', label: t('条目怎么认'), icon: KeyRound },
-          { id: 'blockers', label: t('阻挡界面'), icon: ShieldX },
+          { id: 'guards', label: t('全局守护'), icon: ShieldX },
         ],
       },
       {

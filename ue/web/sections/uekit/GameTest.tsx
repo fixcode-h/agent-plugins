@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   ChevronDown,
   CircleCheck,
   CircleDot,
@@ -31,6 +32,8 @@ import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
 import { recordSkipArgs, skipSupported } from './gt-skip.ts'
 import { GtSettings } from './GtSettings.tsx'
+import { GtEditor } from './gt-edit/index.ts'
+import { ApiLibrary } from './gt-api/ApiLibrary.tsx'
 import { GtRun, type GtJob, type GtRunSummary, type GtScenarioFile } from './GtRun.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
@@ -61,6 +64,9 @@ export function GameTest() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<'scenarios' | 'runs'>('scenarios')
+  /** 正在编辑的场景（相对路径）：换了场景就回到运行结果 */
+  const [editing, setEditing] = useState<string>()
+  const [apiLib, setApiLib] = useState(false)
   const [job, setJob] = useState<GtJob>()
   const [rec, setRec] = useState<RecordStatus>()
   const [asking, setAsking] = useState(false)
@@ -320,9 +326,16 @@ export function GameTest() {
             <ui.IconButton
               icon={SlidersHorizontal}
               size="sm"
-              label={tip(t('运行设置：UI 等待上限、自动关掉的阻挡界面'))}
+              label={tip(t('运行设置：UI 等待上限、全局守护'))}
               disabled={!live}
               onClick={() => setSettings(true)}
+            />
+            <ui.IconButton
+              icon={BookOpen}
+              size="sm"
+              label={t('接口库：脚本里「调接口」能用的接口')}
+              disabled={!list?.absoluteRootDir}
+              onClick={() => setApiLib(true)}
             />
             <ui.IconButton
               icon={ListTree}
@@ -495,8 +508,20 @@ export function GameTest() {
               if (saved) void ocrAfterRecord(project.id, list?.absoluteRootDir ?? '', saved, reload)
             }}
           />
+        ) : selected && editing === selected.relativePath && list ? (
+          <GtEditor
+            key={selected.relativePath}
+            project={project.id}
+            root={list.absoluteRootDir ?? ''}
+            scenario={selected}
+            live={live}
+            gtVersion={gtVersion}
+            onClose={() => setEditing(undefined)}
+            onSaved={reload}
+          />
         ) : selected ? (
           <GtRun
+            onEdit={() => setEditing(selected.relativePath)}
             key={selected.relativePath}
             scenario={selected}
             root={list?.absoluteRootDir ?? ''}
@@ -534,6 +559,9 @@ export function GameTest() {
       )}
       {keyRules && list?.absoluteRootDir && (
         <GtKeyRulesPanel project={project.id} root={list.absoluteRootDir} onClose={() => setKeyRules(false)} />
+      )}
+      {apiLib && list?.absoluteRootDir && (
+        <ApiLibrary project={project.id} root={list.absoluteRootDir} live={live} onClose={() => setApiLib(false)} />
       )}
       <MenuHost />
       <Confirm
