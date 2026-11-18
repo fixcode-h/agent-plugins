@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost, openMenuAt, type MenuItem } from '../../menu.tsx'
+import { MenuHost, openMenuAt, pageMenu, type MenuItem } from '../../menu.tsx'
 import { Confirm, ErrorText } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
 import { useScenarioLibrary } from './GtLibrary.tsx'
@@ -334,7 +334,10 @@ export function GameTest() {
   const tip = (s: string) => (needEditor ? `${s}（${needEditor}）` : s)
 
   return (
-    <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:md:flex-row ue:md:overflow-hidden">
+    <div
+      onContextMenu={pageMenu}
+      className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:md:flex-row ue:md:overflow-hidden"
+    >
       <ListCol
         id="gametest"
         title="GameTest"
@@ -342,6 +345,8 @@ export function GameTest() {
         query={query}
         onQuery={setQuery}
         placeholder={t('按名字找场景')}
+        // 空白处右键：在场景根新建脚本、文件夹（「最近运行」页签没有可新建的，交给整页兜底）
+        onBodyMenu={tab === 'scenarios' ? lib.blankMenu : undefined}
         extra={
           <div className="ue:flex ue:items-center ue:gap-0.5">
             <ui.Button
