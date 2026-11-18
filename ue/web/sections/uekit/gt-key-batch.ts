@@ -46,7 +46,11 @@ export function planListEdits(steps: Record<string, unknown>[], self: number, ke
       cond = condFromCands(k, choice.fields)
       // 单个字段要在那一步也唯一（录制时算好的 unique）；组合的没法离线核对，照写，回放认不出会报错并列出现有的值
       const single = choice.fields.length === 1 && (k.cands ?? []).find((c) => !c.combo && c.cond === cond)
-      if (!cond || (single && !single.unique)) {
+      // 那一步这个字段点一下就变（最近用过的列表、数量）：不能当它的标识，留给用户自己看
+      const changed = choice.fields.some(
+        (f) => (k.cands ?? []).find((c) => !c.combo && c.by.toLowerCase() === f.toLowerCase())?.changed,
+      )
+      if (!cond || changed || (single && !single.unique)) {
         skipped.push(index)
         return
       }
