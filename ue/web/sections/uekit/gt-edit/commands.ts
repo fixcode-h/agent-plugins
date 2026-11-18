@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  CircleDot,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -49,6 +50,8 @@ export interface CmdCtx {
   /** 打开插入菜单（插在选中这一步后面） */
   openInsert?: () => void
   onTry?: (path: GtPath) => void
+  /** 从这一步后面接着录（GameTest 1.10.0，编辑器连着时才有） */
+  onRecordHere?: (path: GtPath) => void
 }
 
 export interface EditCommand {
@@ -112,6 +115,14 @@ export const COMMANDS: EditCommand[] = [
     match: (e) => mod(e) && e.key === 'Enter',
     enabled: (c) => !!c.onTry && c.selected.length === 1,
     run: (c) => c.onTry?.(first(c)),
+  },
+  {
+    id: 'record-here',
+    group: 0,
+    label: () => t('从这里接着录'),
+    icon: CircleDot,
+    enabled: (c) => !!c.onRecordHere && c.selected.length === 1,
+    run: (c) => c.onRecordHere?.(first(c)),
   },
   {
     id: 'insert',

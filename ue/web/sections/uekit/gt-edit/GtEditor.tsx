@@ -23,6 +23,7 @@ import type { CmdCtx } from './commands.ts'
 import { EditContext } from './ctx.ts'
 import { EditorHeader } from './EditorHeader.tsx'
 import { Inspector } from './Inspector.tsx'
+import { useRecordHere } from './record-here.ts'
 import { EditRail } from './rail/EditRail.tsx'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
@@ -64,6 +65,7 @@ export function GtEditor({
   onSaved,
   onOpen,
   onRecord,
+  onRecordHere,
   onRun,
   run,
 }: {
@@ -81,6 +83,8 @@ export function GtEditor({
   onOpen: (relativePath: string) => void
   /** 开始录制（录成新脚本，放在这个脚本的文件夹里） */
   onRecord?: () => void
+  /** 从选中这一步后面接着录（GameTest 1.10.0）：after 是步骤 id；不给时菜单项灰掉 */
+  onRecordHere?: (after?: string) => Promise<void> | void
   /**
    * 跑这个脚本：不给 from 跑整个文件，给了就用编辑中的数据从第 index 步跑到底（旧版 GameTest 用）；
    * extra 是调试参数（params、from / to 步骤 id、breakpoints），并进 gt.run
@@ -204,12 +208,14 @@ export function GtEditor({
   })
 
   const onTry = live ? (p: GtPath) => void tryStep(p) : undefined
+  const onRecordHereAt = useRecordHere(s, onSaved, live ? onRecordHere : undefined)
   const cmdCtx: CmdCtx | undefined = s.doc && {
     doc: s.doc,
     selected: s.selected,
     apply: s.apply,
     select: s.select,
     onTry,
+    onRecordHere: onRecordHereAt,
   }
   const steps = (s.doc?.steps ?? []) as GtStep[]
 

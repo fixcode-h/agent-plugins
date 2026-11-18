@@ -1,7 +1,8 @@
-import { Crosshair, Footprints, LocateFixed, MapPin, Square, X } from 'lucide-react'
+import { Crosshair, Footprints, GitBranch, Hourglass, LocateFixed, MapPin, Square, X } from 'lucide-react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
+import { segmentSupported } from './gt-record-segment.ts'
 
 /**
  * 录制条上的快捷动作（GameTest 1.3.0 的 gt.record.move）：和录制时悬浮的工具栏小窗口、Alt+数字同一个入口。
@@ -10,26 +11,30 @@ import { h, t } from '../../host.ts'
 export interface RecordQuick {
   /** 录制快捷键开着没有（运行配置 move.hotkeys，默认开） */
   hotkeys?: boolean
-  /** 下一次点击录成断言 */
+  /** 下一次点击录成断言（或 pickKind 说的那种） */
   pickArmed?: boolean
+  /** 下一次点到的控件录成什么（GameTest 1.10.0）：断言、等到、按状态分支 */
+  pickKind?: 'assert' | 'wait' | 'branch'
   /** 工具栏上那行提示（录移动自动结束、作废的原因），几秒后自己消失 */
   notice?: string
   moving?: { meters?: number; seconds?: number; points?: number }
 }
 
-type Phase = 'toggle' | 'cancel' | 'here' | 'near' | 'pick'
+type Phase = 'toggle' | 'cancel' | 'here' | 'near' | 'pick' | 'wait' | 'branch'
 
 /** 按钮后面的快捷键提示：关了快捷键就不显示 */
 function Key({ k, on }: { k: string; on: boolean }) {
   return on ? <span className="ue:ml-1 ue:text-caption ue:text-subtle">Alt+{k}</span> : null
 }
 
-export function GtRecordQuick({ status }: { status: RecordQuick }) {
+export function GtRecordQuick({ status, gtVersion }: { status: RecordQuick; gtVersion?: string }) {
   const { project } = useUe()
   const { ui } = h()
   const { busy, run } = useAction()
   const keys = status.hotkeys !== false
   const moving = status.moving
+  // 旧版 GameTest 只有 pickArmed（只会是断言）
+  const armed = status.pickArmed ? (status.pickKind ?? 'assert') : undefined
   const quick = (phase: Phase) =>
     run(`move-${phase}`, async () => {
       await op(project.id, 'gt.record.move', { phase })
@@ -74,13 +79,37 @@ export function GtRecordQuick({ status }: { status: RecordQuick }) {
       </ui.Button>
       <ui.Button
         size="sm"
-        variant={status.pickArmed ? 'primary' : 'secondary'}
+        variant={armed === 'assert' ? 'primary' : 'secondary'}
         disabled={!!busy}
         onClick={() => quick('pick')}
       >
-        <Crosshair className="ue:h-3.5 ue:w-3.5" /> {status.pickArmed ? t('点一个控件…') : t('断言')}
+        <Crosshair className="ue:h-3.5 ue:w-3.5" /> {armed === 'assert' ? t('点一个控件…') : t('断言')}
         <Key k="4" on={keys} />
       </ui.Button>
+      {segmentSupported(gtVersion) && (
+        <>
+          <ui.Button
+            size="sm"
+            variant={armed === 'wait' ? 'primary' : 'secondary'}
+            disabled={!!busy}
+            title={t('再点一个控件，录成「等到它能点 / 出现」')}
+            onClick={() => quick('wait')}
+          >
+            <Hourglass className="ue:h-3.5 ue:w-3.5" /> {armed === 'wait' ? t('点一个控件…') : t('等到')}
+            <Key k="6" on={keys} />
+          </ui.Button>
+          <ui.Button
+            size="sm"
+            variant={armed === 'branch' ? 'primary' : 'secondary'}
+            disabled={!!busy}
+            title={t('再点一个控件，录成空的按状态分支，各条路在编辑页里填')}
+            onClick={() => quick('branch')}
+          >
+            <GitBranch className="ue:h-3.5 ue:w-3.5" /> {armed === 'branch' ? t('点一个控件…') : t('分支')}
+            <Key k="7" on={keys} />
+          </ui.Button>
+        </>
+      )}
       {status.notice && <span className="ue:text-footnote ue:text-muted">{status.notice}</span>}
     </div>
   )

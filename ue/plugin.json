@@ -164,6 +164,14 @@
       "default": true
     },
     {
+      "key": "gtRecordGroup",
+      "type": "boolean",
+      "group": "GameTest 录制",
+      "label": "录完装成一个录制段",
+      "desc": "录到的步骤装进一个步骤段，编辑页里折成一个录制段（要 GameTest 1.10.0）；场景详情页的逐步工具（换标识、转成控件步骤、从这步运行）只认平铺的步骤，要用它们就别开",
+      "default": false
+    },
+    {
       "key": "gtAskKey",
       "type": "select",
       "group": "GameTest 录制",

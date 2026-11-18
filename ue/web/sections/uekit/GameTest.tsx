@@ -34,6 +34,7 @@ import { GtKeyRulesPanel } from './GtKeyRulesPanel.tsx'
 import { useShotMenus } from './GtShotMenus.tsx'
 import { batchDone, batchTags, loadHistory, mergeJobEvent } from './gt-batch.ts'
 import { legacySteps } from './gt-steps.ts'
+import { recordSegmentArgs, segmentSupported } from './gt-record-segment.ts'
 import { recordSkipArgs, skipSupported } from './gt-skip.ts'
 import { GtSettings } from './GtSettings.tsx'
 import { GtEditor } from './gt-edit/index.ts'
@@ -316,15 +317,19 @@ export function GameTest() {
     rename: lib.renameScenario,
     remove: lib.removeScenario,
   })
-  const startRecord = () =>
+  /** insert：编辑页「从这里接着录」，录到的段插进这个场景 after 这一步后面（GameTest 1.10.0） */
+  const startRecord = (insert?: { scenario: string; after?: string }) =>
     run('record', async () => {
       setAsking(false)
+      // 接着录存回原场景，不挪文件夹
+      if (insert) setRecordDir(undefined)
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
-        name: recName.trim() || t('新录制'),
+        name: insert ? t('接着录') : recName.trim() || t('新录制'),
         keepPace,
         shots: shotsArg(gtVersion),
         ...keyAskArgs(),
         ...recordSkipArgs(gtVersion),
+        ...recordSegmentArgs(gtVersion, insert),
       })
       setRec({ ...r, last: [] })
     })
@@ -572,6 +577,7 @@ export function GameTest() {
         {recording && rec ? (
           <GtRecord
             status={rec}
+            gtVersion={gtVersion}
             onDone={(saved) => {
               setRec(undefined)
               shots.refresh()
@@ -597,6 +603,11 @@ export function GameTest() {
             gtVersion={gtVersion}
             onClose={() => setEditing(undefined)}
             onSaved={reload}
+            onRecordHere={
+              segmentSupported(gtVersion) && !running && !busy
+                ? (after) => startRecord({ scenario: selected.relativePath, after })
+                : undefined
+            }
             onOpen={(p) => {
               // 在编辑页里换脚本：留在编辑页
               setEditing(p)
@@ -674,7 +685,7 @@ export function GameTest() {
         open={asking}
         title={t('开始录制')}
         okText={t('开始录制')}
-        onOk={startRecord}
+        onOk={() => startRecord()}
         onCancel={() => {
           setAsking(false)
           setRecordDir(undefined)
