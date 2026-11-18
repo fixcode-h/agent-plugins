@@ -169,7 +169,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       if (tidyKeyRules(fresh).length) config.itemKeys = tidyKeyRules(fresh)
       // 这份表单不管的字段（接口库文件夹 api、守护 guards、objectKeys 这些脚本化以后加的）原样带回去，整份重写时不丢
       for (const [k, v] of Object.entries(latest))
-        if (!FORM_KEYS.has(k) && !(k in config)) (config as Record<string, unknown>)[k] = v
+        if (!FORM_KEYS.has(k) && !(k in config)) (config as unknown as Record<string, unknown>)[k] = v
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
       onClose?.()

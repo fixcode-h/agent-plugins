@@ -68,7 +68,7 @@ export async function apiSettingsAction(p: UeProject, b: Obj) {
         if (list) api[k] = list
       }
     }
-    const next = { ...settings, api }
+    const next: Obj = { ...settings, api }
     if (!Object.keys(api).length) delete next.api
     const tmp = `${file}.tmp`
     await writeFile(tmp, JSON.stringify(next, null, '\t') + '\n', 'utf8')
