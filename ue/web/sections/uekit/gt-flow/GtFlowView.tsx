@@ -193,6 +193,8 @@ export function GtFlowView({
         selectionOnDrag={false}
         panOnDrag
         deleteKeyCode={null}
+        // 选中的框不抬高：xyflow 默认把选中的节点 z-index 提到最上面，段、循环、如果的框会盖住里面的节点和连线上的 +，点不到
+        elevateNodesOnSelect={false}
         minimap={6}
         miniColor={miniOf(run)}
         onNodeClick={(_, n) => onSelect?.(selOf(n.data.node))}
