@@ -6,7 +6,8 @@ import { h, t } from '../../host.ts'
 import { Note } from '../../ui.tsx'
 import { humanStep } from './gt-steps.ts'
 import { moveLine } from './gt-move.ts'
-import type { KeyAsk } from './gt-key.ts'
+import { byLabel, keyOf, type KeyAsk } from './gt-key.ts'
+import { GtKeyAsk } from './GtKeyAsk.tsx'
 import { GtRecordQuick, type RecordQuick } from './GtRecordQuick.tsx'
 
 /**
@@ -57,6 +58,8 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
   const { ui, cn, toast } = h()
   const { busy, run } = useAction()
   const [mark, setMark] = useState('')
+  // 录制中改前面某一步的条目标识（GameTest 1.5.0）：候选在那一步的 hint.key.cands 里
+  const [editing, setEditing] = useState<KeyAsk>()
   const steps = status.last ?? []
   const secs = Math.round(status.seconds ?? 0)
   const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
@@ -112,7 +115,7 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
       </div>
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
-          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。游戏视口中下方也悬浮着这条工具栏（可以拖动），鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
+          '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。还有一个悬浮的工具栏小窗口（默认在游戏视口中下方，可以拖到视口外），鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
         )}
       </p>
       {status.handlerSource === 'hitPath' && (
@@ -123,17 +126,18 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
       <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
         {steps.map((s, i) => {
           const newest = i === steps.length - 1
+          const index = (status.steps ?? steps.length) - steps.length + i
+          const hint = s.hint && typeof s.hint === 'object' ? (s.hint as Record<string, unknown>) : undefined
+          const key = keyOf(hint)
           return (
             <div
               key={i}
               className={cn(
-                'ue:grid ue:h-9 ue:grid-cols-[22px_18px_104px_minmax(0,1fr)] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4',
+                'ue:grid ue:h-9 ue:grid-cols-[22px_18px_104px_minmax(0,1fr)_auto] ue:items-center ue:gap-2 ue:border-b ue:border-line/55 ue:px-4',
                 newest && 'ue:bg-run/8',
               )}
             >
-              <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">
-                {(status.steps ?? steps.length) - steps.length + i + 1}
-              </span>
+              <span className="ue:text-right ue:text-caption ue:text-subtle ue:tabular-nums">{index + 1}</span>
               {newest ? (
                 <CircleDot className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
               ) : (
@@ -141,11 +145,39 @@ export function GtRecord({ status, onDone }: { status: RecordStatus; onDone: (sa
               )}
               <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{String(s.action ?? '')}</span>
               <span className="ue:truncate ue:text-footnote ue:text-muted">{describe(s)}</span>
+              {key ? (
+                <button
+                  type="button"
+                  title={t('改这一步在列表里怎么认：{c}', { c: key.cond || t('按位置') })}
+                  disabled={!!status.ask}
+                  onClick={() =>
+                    setEditing({
+                      step: index,
+                      target: typeof s.target === 'string' ? s.target : '',
+                      key,
+                      shot: typeof hint?.shot === 'string' ? hint.shot : undefined,
+                      text: typeof hint?.text === 'string' ? hint.text : undefined,
+                    })
+                  }
+                  className={cn(
+                    'ue:max-w-48 ue:truncate ue:rounded-sm ue:px-1.5 ue:py-0.5 ue:text-caption ue:hover:bg-hover',
+                    key.by === 'pending' ? 'ue:text-warning' : 'ue:text-subtle',
+                  )}
+                >
+                  {byLabel(key.by)}
+                  {key.cond ? ` · ${key.cond}` : ''}
+                </button>
+              ) : (
+                <span />
+              )}
             </div>
           )
         })}
         {!steps.length && (
           <p className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">{t('还没录到操作')}</p>
+        )}
+        {editing && (
+          <GtKeyAsk key={editing.step} project={project.id} ask={editing} edit onDone={() => setEditing(undefined)} />
         )}
       </div>
     </div>

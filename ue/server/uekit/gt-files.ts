@@ -3,6 +3,7 @@ import path from 'node:path'
 import { BridgeError } from '../instances.ts'
 import { revealInFolder } from '../reveal.ts'
 import { t } from '../util.ts'
+import { replaceMany } from './gt-keys.ts'
 import { insideProject, scenarioFile, within } from './gt-paths.ts'
 
 export { insideProject }
@@ -150,6 +151,7 @@ export async function scenarioAction(
   }
   const doc = await readDoc(f.abs, f.rel)
   if (action === 'replace') return replaceSteps(f.abs, f.rel, doc, b)
+  if (action === 'replaceMany') return replaceMany(f.abs, f.rel, doc as unknown as Record<string, unknown>, b)
   const dir = path.dirname(f.abs)
   const toRel = (abs: string) => path.relative(f.rootAbs, abs).replace(/\\/g, '/')
   if (action === 'rename') {

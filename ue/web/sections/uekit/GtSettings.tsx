@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { ListTree, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { op } from '../../api.ts'
 import { ASSET_KINDS } from '../../asset-icons.ts'
@@ -10,7 +10,7 @@ import { SuggestInput, type SuggestRow } from '../../SuggestInput.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { matchWidgets } from './gt-widget-match.ts'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
-import { GtKeyRules, tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
+import { tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
 /**
@@ -74,7 +74,7 @@ function waitText(ms: number) {
  * 底部贴一条保存栏）。用户 2026-11-17 要每个插件有自己的设置页，两处是同一份表单、同一个文件；
  * 2026-11-18 嫌一项一摞（名字、输入框、长说明三行）太乱，改用 SettingRows 的两栏行，和面板画的插件参数一致
  */
-export function GtSettings({ onClose }: { onClose?: () => void }) {
+export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onOpenRules?: () => void }) {
   const { project } = useUe()
   const { ui, cn } = h()
   const [reply, setReply] = useState<ConfigReply>()
@@ -139,9 +139,10 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
         ...(setupParsed.steps?.length ? { setup: setupParsed.steps } : {}),
         ...(seedParsed.seed === undefined ? {} : { randomSeed: seedParsed.seed }),
         ...(tidyMove(move) ? { move: tidyMove(move) } : {}),
-        // 录制弹窗里存的规则也在这份文件里：表单整份重写，不带上就丢了
-        ...(tidyKeyRules(keyRules).length ? { itemKeys: tidyKeyRules(keyRules) } : {}),
       }
+      // 条目规则也在这份文件里、由规则面板和录制弹窗改：表单整份重写，保存前现取一遍最新的带上，不然就丢了
+      const fresh = (await op<ConfigReply>(project.id, 'gt.config')).config.itemKeys ?? keyRules
+      if (tidyKeyRules(fresh).length) config.itemKeys = tidyKeyRules(fresh)
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
       onClose?.()
@@ -252,7 +253,22 @@ export function GtSettings({ onClose }: { onClose?: () => void }) {
 
       <GtMoveSettings value={move} onChange={setMove} framed={framed} />
 
-      <GtKeyRules value={keyRules} onChange={setKeyRules} framed={framed} />
+      <SettingGroup
+        title={t('条目怎么认')}
+        framed={framed}
+        aside={
+          onOpenRules ? (
+            <ui.Button size="sm" variant="ghost" onClick={onOpenRules}>
+              <ListTree className="ue:h-3.5 ue:w-3.5" /> {t('管理规则')}
+            </ui.Button>
+          ) : undefined
+        }
+        desc={t(
+          '录制时点到列表、格子里有规则的条目直接按规则认，不再暂停问。规则在 GameTest 页右上角的「条目规则」里按树形看、搜、改。',
+        )}
+      >
+        <p className="ue:px-4 ue:py-3 ue:text-footnote ue:text-subtle">{t('{n} 条规则', { n: keyRules.length })}</p>
+      </SettingGroup>
 
       <SettingGroup
         title={t('阻挡界面')}
