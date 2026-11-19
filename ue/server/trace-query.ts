@@ -102,8 +102,7 @@ export async function traceQuery(ctx: OpCtx, id: string, args: Record<string, un
 /** 分析进度：桥接 2.8.1 起按字节，旧桥接只有分析到的秒数 */
 export function progressText(res: TraceRes) {
   const mb = (n: number) => (n / 1048576).toFixed(n >= 1048576 * 100 ? 0 : 1)
-  if (res.fileBytes)
-    return t('已读 {a} / {b} MB', { a: mb(res.readBytes ?? 0), b: mb(res.fileBytes) })
+  if (res.fileBytes) return t('已读 {a} / {b} MB', { a: mb(res.readBytes ?? 0), b: mb(res.fileBytes) })
   return t('已经分析到第 {s} 秒', { s: Math.round(res.duration * 100) / 100 })
 }
 

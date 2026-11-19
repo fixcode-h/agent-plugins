@@ -98,11 +98,11 @@ user-invocable: true
 
 **默认用 `ue_*` 工具，批量也一样**：一批（`select` 不限个数）就是一次调用，和一个 Python 脚本来回次数相同，还带演练、整批撤回、改前改后对比、编译通过才存、P4 签出和改动记录。Python 要写代码、5.4 / 5.8 的 API 有差异，常常试错几轮，实际更慢。
 
-一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除（`ue_asset`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
+一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除和导入（`ue_asset`）、编辑器函数库（`ue_call class=...`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
 
 只有这些情况写 `ue_python`，并在回复里一句话说明为什么工具不行：
 
-1. 工具没有的编辑器能力：导入 / 重新导入外部文件；资源上的编辑器函数（LOD、碰撞、Nanite、贴图压缩、合并重定向器）；材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑。
+1. 工具没有的编辑器能力：材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑；编辑器函数库里没有、只有 Python API 才有的操作。导入外部文件用 `ue_asset action=import`、重新导入用 `action=reimport`；LOD、碰撞、贴图设置这类编辑器函数先 `ue_call class=<函数库> action=list`（不知道类名用 `query` 搜）找，一批资源用 `select` + `args` 里的 `"{path}"` 一次调（UELink 2.16）。
 2. 每项的值要复杂计算，而且没法「一次批量读 → 算好 → `items` 一次批量写」（先试这条路）。
 3. 只读的全项目统计（用 Asset Registry，不加载资源）。只读脚本不受下面 2–4 条限制。
 

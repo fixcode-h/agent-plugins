@@ -30,6 +30,13 @@ registerBatch('ue_asset.set', {
   write: true,
 })
 
+registerBatch('ue_asset.reimport', {
+  op: 'asset.reimport',
+  args: (a) => ({ dryRun: !!a.dryRun }),
+  timeoutMs: 1800000,
+  write: true,
+})
+
 for (const action of ['duplicate', 'rename', 'delete'])
   registerBatch(`ue_asset.${action}`, {
     op: `asset.${action}`,

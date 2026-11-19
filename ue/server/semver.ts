@@ -18,7 +18,6 @@ export function cmpVersion(a: string, b: string) {
   return pa.pre.localeCompare(pb.pre, 'en', { numeric: true })
 }
 
-
 /** installed 比 available 旧，可以升级（没装、读不出版本时不算） */
 export function canUpgrade(installed?: string, available?: string) {
   return !!installed && installed !== '?' && !!available && cmpVersion(installed, available) < 0

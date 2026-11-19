@@ -74,8 +74,7 @@ const activate: ActivateServer = async (ctx) => {
       // 设计文档 3.6：只认 Agent 模式（项目里执行）的对话，聊天和设计模式不挂。
       // 旧面板把项目里的对话、子对话也交成 mode=chat（它们存的 task.mode 就是 chat），只看 mode 会让所有项目对话都不挂：
       // Chat 页的对话没有项目，带着项目的一律当项目里的对话
-      if (run.mode === 'chat' && !run.projectId)
-        return { skip: t('Chat 页的对话不挂，只在项目里的 Agent 对话挂') }
+      if (run.mode === 'chat' && !run.projectId) return { skip: t('Chat 页的对话不挂，只在项目里的 Agent 对话挂') }
       if (run.pluginTask) return { skip: t('其他插件的设计模式对话不挂') }
       const project = await projectForRun(run.projectId, run.cwd)
       if (!project) return { skip: t('这个项目还没在 UE 页接入') }

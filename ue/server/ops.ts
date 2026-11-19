@@ -64,6 +64,11 @@ const ASSET_OPS = new Set([
   'asset.rename',
   'asset.delete',
   'asset.undo',
+  // UELink 2.16：导入外部文件、重新导入、编辑器函数库
+  'asset.import',
+  'asset.reimport',
+  'editor.functions',
+  'editor.call',
   'bp.outline',
   'bp.graph',
   'bp.find',
@@ -138,6 +143,13 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return args.dryRun ? 'read' : 'struct'
     case 'asset.delete':
       return args.dryRun ? 'read' : 'delete'
+    // 导入外部文件、重新导入：会新建或整个换掉资源，不进撤销栈，按结构性操作确认
+    case 'asset.import':
+    case 'asset.reimport':
+      return args.dryRun ? 'read' : 'struct'
+    // 编辑器函数库的静态函数什么都能做（删资源、改设置……），和执行 Python 同一档权限
+    case 'editor.call':
+      return 'python'
     // 修复重定向器会改写、保存引用方并删掉重定向器；在关卡里放 / 删 Actor 改的是关卡：都按结构性操作确认
     case 'asset.redirectors':
       return args.fix ? 'struct' : 'read'
@@ -210,6 +222,12 @@ function describe(op: string, args: Record<string, unknown>) {
       return `${t('撤回')} ${args.path ?? ''} · ${args.tx}`
     case 'asset.redirectors':
       return `${t('修复重定向器')} ${args.path}`
+    case 'asset.import':
+      return `${t('导入')} → ${args.dest}${args.replace ? ` · ${t('覆盖已有的')}` : ''}\n${((args.files as string[]) ?? []).join('\n')}`
+    case 'asset.reimport':
+      return `${t('重新导入')} ${args.path}`
+    case 'editor.call':
+      return `${args.class}.${args.function}(${v(args.args ?? [])})${args.path ? ` · ${args.path}` : ''}`
     case 'editor.spawn':
       return `${t('在关卡里放')} ${args.class}${Array.isArray(args.location) ? ` @ ${(args.location as unknown[]).join(', ')}` : ''}${args.level ? ` · ${args.level}` : ''}`
     case 'editor.destroy':
@@ -413,6 +431,9 @@ function undoOf(op: string, args: Record<string, unknown>, res: Record<string, u
   // 包在编辑器事务里的资源修改：按事务 id 撤同一步（之后编辑器里又有别的修改时桥接会拒绝）
   if (typeof res.tx === 'string' && res.tx && op !== 'asset.undo')
     return { undo: { op: 'asset.undo', args: { tx: res.tx, path: args.path } } }
+  if (op === 'asset.import' || op === 'asset.reimport')
+    return { noUndo: t('导入不能自动撤回：没保存前用「放弃改动」丢掉，已有资源被覆盖的用版本管理还原') }
+  if (op === 'editor.call') return { noUndo: t('这个函数没有改动能记进撤销栈的对象，不能自动撤回') }
   if (op === 'python') return { noUndo: t('这次 Python 没有改资源，或者没包进事务，不能自动撤回') }
   if (op.startsWith('forge.')) return { noUndo: t('AssetForge 的导入导出不能自动撤回：用版本管理还原文件') }
   if (op.startsWith('gt.')) return { noUndo: t('测试步骤和录制不能撤回') }

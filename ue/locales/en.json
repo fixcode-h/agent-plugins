@@ -4039,5 +4039,9 @@
   "批量时逐个列出的上限": "Max assets listed one by one in a batch",
   "Agent 批量改资源时 paths / items 里逐个列出的资源超过这么多个，这次调用直接拦下不执行，让它改用 select 按目录、类型、父类、名字通配符选（select 不限个数）": "When an agent batch-edits assets and lists more than this many in paths / items, the call is blocked without running and the agent is told to use select (by folder, type, parent class or name wildcard; select has no limit) instead",
   "这次 Python 没有改资源，或者没包进事务，不能自动撤回": "This Python run changed no assets or wasn't wrapped in a transaction, so it can't be undone automatically",
-  "这些包另一个对话也改过、还没保存，脚本改动已经混在一起：{list}": "Another conversation also changed these packages and hasn't saved them; the script's changes are now mixed in: {list}"
+  "这些包另一个对话也改过、还没保存，脚本改动已经混在一起：{list}": "Another conversation also changed these packages and hasn't saved them; the script's changes are now mixed in: {list}",
+  "覆盖已有的": "overwrite existing",
+  "重新导入": "Reimport",
+  "导入不能自动撤回：没保存前用「放弃改动」丢掉，已有资源被覆盖的用版本管理还原": "Imports can't be undone automatically: discard changes before saving, and restore overwritten assets from version control",
+  "这个函数没有改动能记进撤销栈的对象，不能自动撤回": "This function changed nothing the undo stack could record, so it can't be undone automatically"
 }

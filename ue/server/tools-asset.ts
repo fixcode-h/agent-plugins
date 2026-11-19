@@ -31,6 +31,8 @@ export const ASSET_ACTIONS = [
   'dirty',
   'revert',
   'open',
+  'import',
+  'reimport',
   'help',
 ]
 
@@ -51,6 +53,9 @@ const HELP: Record<string, unknown> = {
       delete: 'path, force?, dryRun?',
       'dirty / revert': 'packages?（不给就是所有改了没保存的）；保存用 ue_save 工具',
       open: 'path',
+      import:
+        'files（磁盘文件路径数组）, to（导到哪个 /Game 目录）, force?（覆盖已有的）, dryRun?：FBX、贴图、音频等，不弹对话框、不自动保存（UELink 2.16）',
+      reimport: 'path，或 paths / select 一批：按资源记下的源文件重新导入，dryRun? 先看能不能（UELink 2.16）',
     },
   },
   DataTable: {
@@ -164,6 +169,18 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
         need('path', 'to') ??
         out(await runOp(ctx, `asset.${a.action}`, { path: a.path, to: a.to, dryRun: !!a.dryRun }, 300000, JOB))
       )
+    case 'import': {
+      const files = Array.isArray(a.files) ? a.files.map(String) : typeof a.files === 'string' ? [a.files] : []
+      if (!files.length) return mcpText('action=import 要给 files（磁盘文件路径数组）', true)
+      return (
+        need('to') ??
+        out(
+          await runOp(ctx, 'asset.import', { files, dest: a.to, replace: !!a.force, dryRun: !!a.dryRun }, 1800000, JOB),
+        )
+      )
+    }
+    case 'reimport':
+      return need('path') ?? out(await runOp(ctx, 'asset.reimport', { path: a.path, dryRun: !!a.dryRun }, 600000, JOB))
     case 'delete':
       return (
         need('path') ??
