@@ -7,13 +7,20 @@ import { c, now, readJson, writeJson } from './util.ts'
 const dir = () => path.join(c().dataDir, 'projects')
 const file = (id: string) => path.join(dir(), `${encodeURIComponent(id)}.json`)
 
-export const DEFAULT_PERMS: UeProject['perms'] = { runtime: 'write', asset: 'save', struct: 'ask', python: true }
+export const DEFAULT_PERMS: UeProject['perms'] = { runtime: 'write', asset: 'save', struct: 'allow', python: 'allow' }
+
+/** 老数据的 python 是布尔值：开着的照旧每次问，关着的不允许 */
+function pythonPerm(v: unknown): UeProject['perms']['python'] {
+  if (v === true) return 'ask'
+  if (v === false) return 'read'
+  return v === 'read' || v === 'ask' || v === 'allow' ? v : DEFAULT_PERMS.python
+}
 
 /** 补齐老数据缺的字段 */
 function norm(p: UeProject): UeProject {
   return {
     ...p,
-    perms: { ...DEFAULT_PERMS, ...p.perms },
+    perms: { ...DEFAULT_PERMS, ...p.perms, python: pythonPerm(p.perms?.python) },
     gmStore: p.gmStore ?? 'project',
     favStore: p.favStore === 'project' ? 'project' : 'docs',
     buildCmd: p.buildCmd ?? '',

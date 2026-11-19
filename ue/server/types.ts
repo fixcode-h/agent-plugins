@@ -8,8 +8,10 @@ import type { LuaGmBinding } from './lua-gm/types.ts'
 export type RuntimePerm = 'read' | 'write' | 'ask'
 /** Agent 对资源的权限：只读 / 可改、保存前问我 / 直接保存 */
 export type AssetPerm = 'read' | 'ask' | 'save'
-/** Agent 对结构性操作（新建、复制、改名 / 移动资源）的权限：不允许 / 每次问我 / 允许。删除不看这个，每次都问 */
+/** Agent 对结构性操作（新建、复制、改名 / 移动、删除资源）的权限：不允许 / 每次问我 / 允许，不用问我 */
 export type StructPerm = 'read' | 'ask' | 'allow'
+/** Agent 在编辑器里执行 Python 的权限：不允许 / 允许，每次问我 / 允许，不用问我（老数据是布尔值，读时换算） */
+export type PythonPerm = 'read' | 'ask' | 'allow'
 export type Vcs = 'git' | 'p4' | 'svn' | 'none'
 /** 桥接插件装进项目的方式：只在本机（写进 ignore）/ 加入版本管理 */
 export type InstallMode = 'local' | 'vcs'
@@ -39,8 +41,8 @@ export interface UeProject {
   cpp: boolean
   vcs: Vcs
   install?: { mode: InstallMode; version: string; at: string }
-  /** python：允许 Agent 在编辑器里执行 Python（默认关；开了也每次确认） */
-  perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: boolean }
+  /** 默认全都放开不问（用户 2026-11-19 定），想收紧在 UE 页「权限与设置」里改 */
+  perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: PythonPerm }
   /** GM 预设和宏存哪：项目里 .agent-panel/ue/gm.json（团队共用）/ 插件数据目录（只自己用） */
   gmStore: 'project' | 'local'
   /** 资源页收藏的文件夹存哪：项目文档根 docs/AgentPanel/UE（默认）/ 项目里 .agent-panel/ue，都在项目里、团队共用 */

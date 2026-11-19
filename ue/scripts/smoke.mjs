@@ -4,7 +4,7 @@
 // UnLua：按模块找对象、读实例表和全局表、改 Lua 字段并撤回、执行 Lua 每次都要确认（权限设成可写也一样）。
 // 性能和内存：CSV 抓取（开始、书签、停止、找到新文件）、摘要和卡顿查询、两份 memreport 对比、询问权限下要确认、只读权限拒绝、删除要确认。
 // 资源和蓝图：大纲、图表伪代码、搜节点；操作列表演练不留改动、正式修改能撤回、失败整批取消；另一个对话改同一个没保存的包会被拒绝；
-// 结构性操作按权限确认，删除每次确认；Python 默认关。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
+// 结构性操作和删除按权限确认；Python 按三档权限；新项目默认全放开。（图表和编译本身只有引擎里有，这里只查参数、权限和确认流程）
 // 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
@@ -94,6 +94,11 @@ try {
   const added = await api('POST', '/projects', { id: 'p1', name: 'Fake', path: proj, mode: 'none' })
   assert.equal(added.project.uname, 'Fake', JSON.stringify(added))
   await api('POST', '/projects', { id: 'p2', name: 'Offline', path: offline, mode: 'none' })
+  // 新项目默认全都放开不问；老数据的 python 布尔值读时换算。下面的用例按「要确认」的档位测确认流程
+  assert.deepEqual(added.project.perms, { runtime: 'write', asset: 'save', struct: 'allow', python: 'allow' })
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: true } })
+  assert.equal((await api('GET', '/p/p1/state')).project.perms.python, 'ask')
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: 'read' } })
   // 在 UE 页接入就顺手在项目「能力」里打开；按目录推荐、还缺什么（插件接口 9）
   assert.deepEqual([...enabledFor].sort(), ['p1', 'p2'])
   assert.match((await plugin.detect({ path: proj })) ?? '', /Fake\.uproject/)
@@ -288,8 +293,8 @@ try {
   )
   assert.ok(!(await call('ue_asset', { action: 'create', path: '/Game/BP_New', parent: 'Actor' }, yes)).isError)
   assert.deepEqual(bridge.state.bp.created, ['/Game/BP_New'])
-  // 删除：权限设成「允许」也照样确认；有引用方时桥接拒绝，原样报出来
-  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'allow', python: false } })
+  // 删除：结构性操作「每次问我」时要确认；有引用方时桥接拒绝，原样报出来
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: 'read' } })
   assert.ok(
     !(await call('ue_asset', { action: 'duplicate', path: bridge.bp, to: '/Game/BP_Copy', dryRun: true })).isError,
   )
@@ -298,13 +303,17 @@ try {
   assert.ok(refBlocked.isError && /还被 1 个资源引用/.test(text(refBlocked)), text(refBlocked))
   assert.ok(!(await call('ue_asset', { action: 'delete', path: '/Game/BP_New' }, yes)).isError)
   assert.deepEqual(bridge.state.bp.deleted, ['/Game/BP_New'])
-  // Python：默认关；打开后每次确认
+  // Python：不允许时拒绝；「允许，每次问我」时确认；「允许，不用问我」时直接执行
   const pyOff = await call('ue_python', { code: 'print(1)' }, yes)
   assert.ok(pyOff.isError && /执行 Python/.test(text(pyOff)), text(pyOff))
-  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: true } })
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: 'ask' } })
   assert.ok((await call('ue_python', { code: 'print(1)' })).isError)
   const py = await call('ue_python', { code: 'print(1)' }, yes)
   assert.ok(!py.isError && bridge.state.calls.some((c) => /^py ".*run-\d+\.py"$/.test(c)), text(py))
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'allow', python: 'allow' } })
+  const pyAllow = await call('ue_python', { code: 'print(2)' })
+  assert.ok(!pyAllow.isError, text(pyAllow))
+  await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: 'ask' } })
 
   // 编辑器小工具（UELink 2.4）：配置分层 + 进程里的最终值、Tag（进程 + ini 注释）、放删 Actor 按结构性操作确认并能撤回、修复重定向器
   mkdirSync(path.join(proj, 'Config'), { recursive: true })

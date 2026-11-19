@@ -362,7 +362,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_python',
-    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。默认允许（用户可在 UE 页「权限与设置」里关掉），每次都会请用户确认；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它：那些有事务、撤回和编译回读，Python 没有。',
+    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它：那些有事务、撤回和编译回读，Python 没有。',
     { code: { type: 'string' }, timeoutMs: { type: 'number' }, target: TARGET },
     ['code'],
     async (a, ctx) => {
