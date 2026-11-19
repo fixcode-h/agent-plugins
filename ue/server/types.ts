@@ -164,6 +164,8 @@ export interface Instance {
   extensions?: { name: string; version: string }[]
   /** 这个进程的桥接认得的操作（/info 的 ops）：网页按它决定显示不显示新功能（选中跟随、Lua 检视……），旧 UELink 没有 */
   ops?: string[]
+  /** 能批量（paths / items）的操作（UELink 2.14 /info 的 batchOps），旧 UELink 没有 */
+  batchOps?: string[]
 }
 
 export interface Target {

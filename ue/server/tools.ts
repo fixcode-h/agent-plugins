@@ -12,6 +12,8 @@ import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction, JOB_HINT } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+import { BATCH_HINT, BATCH_PROPS, runBatch } from './batch/run.ts'
+import { isBatch } from './batch/targets.ts'
 import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
 import { EXT_TOOLS } from './uekit/tools-ext.ts'
@@ -147,7 +149,9 @@ const DEFS = [
   ),
   tool(
     'ue_get',
-    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。props 给属性路径数组时一次读几个（最多 30 个）。file=true 把整个对象不截断写成 JSON 文件、只回路径和条数（Actor 带上各组件的属性，components=false 不带；写了 prop 时只导这个属性的完整值），要看全部数据、或值太大被截断时用它。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。functions=true 时再列函数签名（参数名、定义的文件和行、继承自元表链第几层）、元表链和模块顶部的 local。',
+    '读对象属性。path 是对象路径（ue_find 给的，或资源路径 /Game/...；蓝图资源读的是类默认值）。不写 prop 列出所有属性（名字、类型、分类、是否同步、值；大的值是摘要），filter 按属性名前缀筛；写 prop 取一个属性的完整值，支持路径 Stats.MaxHP、Items[2].Count、Tags["Fire"]、Comp.Owner.Health。DataTable 的一行用 ue_asset。对象引用只给路径，要看子对象就用那个路径再读。UMG 控件（UserWidget 实例或里面的控件）写 tree=true 取控件树（名字、类、路径、可见性、子控件），再按控件路径读它的属性。属性结果里 readOnly=true 的不能改（readOnlyWhy 是原因）。props 给属性路径数组时一次读几个（最多 30 个）。file=true 把整个对象不截断写成 JSON 文件、只回路径和条数（Actor 带上各组件的属性，components=false 不带；写了 prop 时只导这个属性的完整值），要看全部数据、或值太大被截断时用它。\nUnLua 项目读 Lua 侧：写 lua 读对象 Lua 实例表里的字段（lua="" 列出实例表一层和模块函数，lua="Bag.Items[3]" 往下取）；不写 path 只写 lua 时从全局表 _G 开始（如 GameSystemManager.Players、package.loaded["Game.Core"]）。表一次列一层（offset / limit 分页），子表按路径再取。functions=true 时再列函数签名（参数名、定义的文件和行、继承自元表链第几层）、元表链和模块顶部的 local。' +
+      '\n多个资源读同一个属性（比较一批蓝图的默认值）用 paths / select + prop。' +
+      BATCH_HINT,
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -160,10 +164,13 @@ const DEFS = [
       limit: { type: 'number' },
       tree: { type: 'boolean' },
       functions: { type: 'boolean' },
+      ...BATCH_PROPS,
       target: TARGET,
     },
     [],
     async (a, ctx) => {
+      // 批量：同一个属性（prop）或属性列表（filter）在多个资源上读，比较一批蓝图的默认值用
+      if (isBatch(a)) return runBatch('ue_get', a, ctx)
       const keys = luaKeys(a.lua)
       // functions=true：字段之外列出函数签名（参数名、定义行、继承自哪层）、元表链和模块顶部的 local（UELink 2.4 的 lua.inspect）
       if (keys && a.functions)
@@ -206,7 +213,9 @@ const DEFS = [
     '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\n' +
       '容器加删元素用 array，不整体替换（实例化子对象里的数据不会丢）：数组 add 末尾加、insert 在 index 前插、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；add / insert 可带 value（新元素的值）或 class（元素是对象时新建这个类的内嵌子对象）。集合和映射按 key 增删：add / remove 给 key（元素或键），映射 add 可带 value 或 class；改映射已有键的值用 prop=名字[键] + value。\n' +
       '新建内嵌子对象（细节面板实例化属性的「选类」下拉，如输入触发器、修饰器、DataAsset 里的内嵌对象）：只给 class（原生类名或蓝图类路径），prop 可以是 Triggers[2] 这样的元素；结果里 created 是新子对象路径，接着用 ue_set path=created 改它的属性。集合 / 映射按键和 class 要 UELink 2.13。\n' +
-      'UnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
+      'UnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。' +
+      '\n同一处修改作用到多个资源用 paths / select（Lua 字段和运行时对象不支持批量）。' +
+      BATCH_HINT,
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -216,10 +225,13 @@ const DEFS = [
       index: { type: 'number' },
       key: {},
       class: { type: 'string' },
+      ...BATCH_PROPS,
       target: TARGET,
     },
     [],
     async (a, ctx) => {
+      // 批量：同一处修改作用到多个资源；资源上的 set 没有事务，失败回滚靠原值设回去
+      if (isBatch(a)) return runBatch('ue_set', a, ctx)
       const keys = luaKeys(a.lua)
       if (keys) {
         if (!keys.length) return mcpText('lua 要写到具体字段，例如 Bag.Gold', true)
@@ -305,7 +317,9 @@ const DEFS = [
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
       'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。' +
-      JOB_HINT,
+      JOB_HINT +
+      ' describe / refs / export / duplicate / rename / delete 能批量（export 批量时一律写文件）。' +
+      BATCH_HINT,
     {
       action: { type: 'string', enum: ASSET_ACTIONS },
       path: { type: 'string' },
@@ -326,8 +340,8 @@ const DEFS = [
       offset: { type: 'number' },
       limit: { type: 'number' },
       packages: { type: 'array', items: { type: 'string' } },
-      paths: { type: 'array', items: { type: 'string' } },
       job: { type: 'string' },
+      ...BATCH_PROPS,
       target: TARGET,
     },
     ['action'],

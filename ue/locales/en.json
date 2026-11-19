@@ -3753,5 +3753,8 @@
   "双击写说明": "Double-click to add a note",
   "只解析，不执行": "Resolve only, don't run",
   "加了守护「{id}」：从它的引脚拖出处理步骤，触发条件在右边「这个脚本的守护」里填": "Added guard \"{id}\": drag its handling steps out of its pin, and set the trigger under \"Guards of this script\" on the right",
-  "在这一步失败": "Failed here"
+  "在这一步失败": "Failed here",
+  "读不到批量作业的结果文件，撤不回：没保存前用「放弃改动」": "Can't read the batch job's result file, so it can't be undone: use Revert before saving",
+  "这一批没有改动留下": "This batch left no changes",
+  "这一批改动不能自动撤回：没保存前用「放弃改动」": "This batch can't be undone automatically: use Revert before saving"
 }

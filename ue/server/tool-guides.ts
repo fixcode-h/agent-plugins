@@ -44,7 +44,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '读属性',
     summary: '读对象或资源的属性（一个、几个或整个对象导出成文件）、UMG 控件树、UnLua 实例表和全局表',
     useWhen:
-      '查看运行时数值、资源默认值、控件层级，或 UnLua 项目里 Lua 侧的字段时；要一个对象的全部数据（含 Actor 的组件）或值太大被截断时写 file=true，再读返回的文件',
+      '查看运行时数值、资源默认值、控件层级，或 UnLua 项目里 Lua 侧的字段时；要一个对象的全部数据（含 Actor 的组件）或值太大被截断时写 file=true，再读返回的文件；多个资源读同一个属性用 paths / select 一次读',
     avoidWhen: 'DataTable 的行用 ue_asset，蓝图的图和节点用 ue_blueprint',
     group: RUN,
   },
@@ -52,7 +52,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '改属性',
     summary: '改对象或资源的属性，数组 / 集合 / 映射加删元素、新建内嵌子对象，UnLua 的简单字段，可以 ue_undo 撤回',
     useWhen:
-      '验证改一个数值能不能修好问题、调整资源默认值、给数组或映射加删一项、给实例化属性新建子对象（如输入触发器）时；资源的修改之后要 ue_save 才写盘',
+      '验证改一个数值能不能修好问题、调整资源默认值、给数组或映射加删一项、给实例化属性新建子对象（如输入触发器）时；资源的修改之后要 ue_save 才写盘；同一处修改作用到多个资源用 paths / select 一次改',
     avoidWhen:
       'Lua 里的表和函数用 ue_lua；改蓝图逻辑用 ue_blueprint；结果提醒资源由 AssetForge 配置管着时，要保留的改动改配置再 ue_forge import',
     group: RUN,
@@ -78,7 +78,8 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_asset: {
     title: '资源读写',
     summary: '资源的通用读写、改名移动、引用关系和 DataTable 的行',
-    useWhen: '查资源信息和引用、改 DataTable、新建 / 改名 / 移动资源时；修改只在编辑器里，ue_save 才写盘',
+    useWhen:
+      '查资源信息和引用、改 DataTable、新建 / 改名 / 移动资源时；修改只在编辑器里，ue_save 才写盘；多个资源一起 describe / refs / 改名 / 删除用 paths、items 或 select 一次调',
     avoidWhen:
       '蓝图的图和变量用 ue_blueprint；单个属性用 ue_get / ue_set；结果提醒资源由 AssetForge 配置管着时，改 DataTable 等要保留的修改改配置再 ue_forge import，改名删除要同步改配置',
     group: ASSET,
@@ -86,7 +87,8 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_blueprint: {
     title: '蓝图',
     summary: '由粗到细读蓝图（大纲、伪代码、节点），按操作列表改图和变量',
-    useWhen: '要看懂或修改蓝图逻辑时：先 outline，再 graph 读伪代码，改完 ue_compile',
+    useWhen:
+      '要看懂或修改蓝图逻辑时：先 outline，再 graph 读伪代码，改完 ue_compile；多个蓝图读大纲或做同一组修改时用 paths / select 一次调，不要逐个调',
     avoidWhen:
       '跨蓝图搜调用点用 ue_find kind=node；只改类默认值用 ue_set；结果提醒蓝图由 AssetForge 配置管着时，改完用 ue_forge export 写回配置，否则下次导入会被覆盖',
     group: ASSET,
@@ -102,7 +104,7 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_compile: {
     title: '编译蓝图',
     summary: '编译蓝图，给出错误和警告所在的图和节点；通过的结果进完成依据',
-    useWhen: '改完蓝图、保存之前，确认编译通过时',
+    useWhen: '改完蓝图、保存之前，确认编译通过时；多个蓝图用 paths / select 一次编',
     avoidWhen: 'C++ 代码用面板的 request_build 编译，或 ue_editor 的 livecoding 热重载',
     group: ASSET,
   },

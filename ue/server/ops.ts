@@ -7,7 +7,8 @@ import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
-import { keepJob, runAsJob } from './long-ops.ts'
+import { isBatchArgs, keepJob, runAsJob } from './long-ops.ts'
+import { batchUndo, itemPaths } from './batch/undo.ts'
 import { followJob } from './uekit/follow.ts'
 import { FORGE_DISK_OPS, forgeFromDisk } from './uekit/forge-disk.ts'
 import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
@@ -455,7 +456,11 @@ export async function runOp(
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world
   const added = op === 'asset.save' ? await checkout(ctx.project, card, (args.packages as string[]) ?? []) : []
-  if (kind === 'asset' && op !== 'asset.revert' && op !== 'asset.undo') await claim(ctx, card, packageOf(args.path))
+  const batch = isBatchArgs(args)
+  // 批量：每个资源都要占住（别的对话正改着没保存的不让动）；批量一律走作业
+  if (kind === 'asset' && op !== 'asset.revert' && op !== 'asset.undo')
+    for (const p of batch ? itemPaths(args) : [args.path]) await claim(ctx, card, packageOf(p))
+  if (batch) opts = { ...opts, job: true }
 
   if (op === 'assets') return searchAssets(ctx, card, args, timeoutMs)
   // 蓝图演练：真实执行后桥接自己取消，不留改动，也不进操作记录
@@ -501,7 +506,7 @@ export async function runOp(
       prev: res.prev,
       value: res.value ?? args.value,
       ok: true,
-      ...undoOf(op, args, res, String(res.world ?? world)),
+      ...(res.batch ? await batchUndo(op, res) : undoOf(op, args, res, String(res.world ?? world))),
     })
     return { ...res, instance, history: item.id }
   }
