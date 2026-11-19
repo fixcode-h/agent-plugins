@@ -33,7 +33,7 @@ export interface OpCtx {
 
 /**
  * read 只读；runtime 改正在运行的 UE；asset 改资源内容（含蓝图图表）；save 写回磁盘；
- * struct 结构性操作（新建、复制、改名 / 移动）；delete 删除资源（每次确认）；python 执行 Python（每次确认）
+ * struct 结构性操作（新建、复制、改名 / 移动）；delete 删除资源（跟结构性操作同一档）；python 执行 Python（按 Python 权限）
  */
 type Kind = 'read' | 'runtime' | 'asset' | 'save' | 'struct' | 'delete' | 'python'
 
@@ -330,13 +330,12 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
   } else if (kind === 'delete') {
     if (struct === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
-    // 删除不管权限设成什么，每次都确认
-    await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
+    // 删除跟结构性操作同一档：设成「允许，不用问我」就不再确认（用户 2026-11-19 定）
+    if (struct === 'ask') await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
   } else if (kind === 'python') {
-    if (!python)
+    if (python === 'read')
       throw new BridgeError(t('UE 页「权限与设置」里没有打开「执行 Python」，Agent 不能在编辑器里执行 Python'))
-    // 任意 Python 能做的事没有边界：和 Lua 一样每次都确认
-    await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
+    if (python === 'ask') await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
   } else if (kind === 'save') {
     if (asset === 'read') throw new BridgeError(t('UE 页「权限与设置」里 Agent 对资源是只读，不能保存'))
     if (asset === 'ask')

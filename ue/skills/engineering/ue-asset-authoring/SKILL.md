@@ -16,6 +16,16 @@ user-invocable: true
 - 蓝图有两个面：在 `ue_get` / `ue_set` 里 `/Game/BP_Hero` 是**类默认值**；在 `ue_blueprint` / `ue_asset` 里是**蓝图资源本身**（变量定义、组件树、图表）。
 - 图里的节点用 id（8 位十六进制，伪代码每行行尾 `#` 后面那段）；引脚写成 `节点id.引脚名`。
 
+## 多个资源做同一件事：一次调用
+
+对一批资源做同样的读或改（读几个蓝图的大纲、给一批蓝图的同一个组件改属性、编译一批蓝图），**只调一次工具**，不要一个资源调一次，也不要并行发十几次：
+
+- `paths=[...]` 给全部路径；或 `select={path, class, parent, tags}` 按条件选，关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
+- 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
+- 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。
+- 写操作先整批演练，全部通过才真改，失败自动撤回整批；`where` 只改当前值对得上的；`retry=<上一批作业号>` 只重做没成的；改完 `ue_save compile=true` 先编译再保存。
+- 报「UELink 不支持批量」时才逐个调，并提醒用户在 UE 页升级 UELink 到 2.14 后本地编译。
+
 ## 读：由粗到细
 
 1. `ue_find kind=asset` 找资源；`ue_asset action=describe` 看类、文件、标签、引用数量；`action=refs` 看它用了谁、谁用了它。

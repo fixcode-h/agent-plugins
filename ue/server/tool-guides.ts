@@ -111,7 +111,7 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_python: {
     title: '执行 Python',
     summary: '在编辑器里执行 Python 脚本（兜底）',
-    useWhen: '只在别的 ue_* 工具都做不到的编辑器操作时用，要用户在 UE 页打开',
+    useWhen: '只在别的 ue_* 工具都做不到的编辑器操作时用',
     avoidWhen: '能用 ue_asset、ue_blueprint、ue_get / ue_set 做的都别用它：那些有事务、撤回和编译回读',
     confirms: true,
     group: ASSET,

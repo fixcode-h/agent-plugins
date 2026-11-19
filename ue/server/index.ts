@@ -37,7 +37,7 @@ const HINT = `## UE 工具
 - C++ 逻辑要断点调试：ue_vs_debug（start / attach、wait、step、continue）、ue_vs_breakpoints、ue_vs_inspect（stack、locals、eval），要 VS 装 UEToVS 0.8.0；UE 停在断点时其他 ue_* 都不通，先 continue。
 - 卡顿、掉帧、内存高：ue_perf 抓帧数据（CSV Profiler）或内存报告，ue_capture 看摘要、下钻、对比；抓取文件不要直接读。
 - 改资源（DataTable、DataAsset）先在运行时验证；资源改动只是暂存，要 ue_save 才写回（会请用户确认）。
-- 看资源：ue_asset describe / export / refs；新建、复制、改名、删除也在 ue_asset（先 dryRun，删除每次请用户确认），不认识的类型用 ue_asset help。
+- 看资源：ue_asset describe / export / refs；新建、复制、改名、删除也在 ue_asset（先 dryRun；要不要请用户确认看结构性操作权限），不认识的类型用 ue_asset help。
 - 蓝图：ue_blueprint outline 看大纲 → graph 读一张图的伪代码 → edit 按操作列表改（先 dryRun 演练，改完看返回的编译结果，有错按节点 id 接着修），保存前用 ue_compile 编译确认通过；ue_find kind=node 跨蓝图搜节点。蓝图资源路径在 ue_get / ue_set 里是类默认值，在 ue_blueprint / ue_asset 里是蓝图本身。
 - 工具报错原样告诉用户，不要绕过权限或换别的办法偷偷重试；运行时修改和没保存的资源修改可以 ue_undo 撤回。`
 

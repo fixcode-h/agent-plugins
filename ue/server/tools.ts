@@ -12,6 +12,7 @@ import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction, JOB_HINT } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+import { batchNudge } from './batch/nudge.ts'
 import { BATCH_HINT, BATCH_PROPS, runBatch } from './batch/run.ts'
 import { isBatch } from './batch/targets.ts'
 import { dumpObject, readProps } from './object-dump.ts'
@@ -210,7 +211,7 @@ const DEFS = [
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\n' +
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。**多个资源 / 组件改同一个属性时只调一次：paths=[全部路径]（或 select），不要逐个调、也不要并行发多次。**运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\n' +
       '容器加删元素用 array，不整体替换（实例化子对象里的数据不会丢）：数组 add 末尾加、insert 在 index 前插、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；add / insert 可带 value（新元素的值）或 class（元素是对象时新建这个类的内嵌子对象）。集合和映射按 key 增删：add / remove 给 key（元素或键），映射 add 可带 value 或 class；改映射已有键的值用 prop=名字[键] + value。\n' +
       '新建内嵌子对象（细节面板实例化属性的「选类」下拉，如输入触发器、修饰器、DataAsset 里的内嵌对象）：只给 class（原生类名或蓝图类路径），prop 可以是 Triggers[2] 这样的元素；结果里 created 是新子对象路径，接着用 ue_set path=created 改它的属性。集合 / 映射按键和 class 要 UELink 2.13。\n' +
       'UnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。' +
@@ -596,7 +597,8 @@ export function ueTools(projectId: string, root: string, agent: string): McpTool
         target: target && (target.instance !== undefined || target.world) ? target : undefined,
       }
       try {
-        const r = await fn(args, ctx)
+        // 对多个资源逐个调同一件事时提醒改用批量（batch/nudge.ts）
+        const r = batchNudge(mctx.taskId, def.name, args, await fn(args, ctx))
         // 改到 AssetForge 纳管的资产时提醒先改配置（uekit/forge-guard.ts）
         return FORGE_GUARDED.has(def.name) ? await forgeNotice(def.name, args, ctx, r) : r
       } catch (e) {
