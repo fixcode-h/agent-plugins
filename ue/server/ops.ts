@@ -7,6 +7,7 @@ import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
+import { keepJob, runAsJob } from './long-ops.ts'
 import { followJob } from './uekit/follow.ts'
 import { FORGE_DISK_OPS, forgeFromDisk } from './uekit/forge-disk.ts'
 import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
@@ -182,8 +183,8 @@ function describe(op: string, args: Record<string, unknown>) {
     case 'gm.run':
       return `${args.name} ${((args.args as unknown[]) ?? []).map(v).join(' ')}`.trim()
     case 'set':
-      if (args.array)
-        return `${args.path} · ${args.prop} ${args.array}${args.index !== undefined ? ` [${args.index}]` : ''}`
+      if (args.array || args.class)
+        return `${args.path} · ${args.prop} ${args.array ?? t('新建')}${args.index !== undefined ? ` [${args.index}]` : ''}${args.key !== undefined ? ` ${t('键')} ${v(args.key)}` : ''}${args.class ? ` ${args.class}` : ''}${args.array && args.value !== undefined ? ` = ${v(args.value)}` : ''}`
       return `${args.path} · ${args.prop} = ${v(args.value)}`
     case 'call':
       return `${args.path} · ${args.function}(${v(args.args ?? [])})`
@@ -421,6 +422,8 @@ export async function runOp(
   op: string,
   rawArgs: Record<string, unknown> = {},
   timeoutMs = 30000,
+  /** 长操作交给 UE 当作业跑（long-ops.ts）：没等到结果时回作业号，只给 Agent 工具用（网页按同步结果写的） */
+  opts: { job?: boolean } = {},
 ): Promise<Record<string, unknown>> {
   const args = { ...rawArgs }
   const kind = kindOf(op, args)
@@ -457,8 +460,19 @@ export async function runOp(
   if (op === 'assets') return searchAssets(ctx, card, args, timeoutMs)
   // 蓝图演练：真实执行后桥接自己取消，不留改动，也不进操作记录
   if (kind === 'read' || (op === 'bp.edit' && args.dryRun)) {
+    const instance = { pid: card.pid, kind: card.kind }
+    if (opts.job) {
+      const r = await runAsJob(card, op, args, timeoutMs)
+      if (!r.done)
+        keepJob(ctx.project.id, String(r.res.job), {
+          card,
+          finish: async (x) => ({ ...x, instance }),
+          fail: async () => {},
+        })
+      return { ...r.res, instance }
+    }
     const res = await rpc(card, op, args, timeoutMs)
-    return { ...res, instance: { pid: card.pid, kind: card.kind } }
+    return { ...res, instance }
   }
   const base: Omit<HistoryItem, 'id' | 'at' | 'ok' | 'summary'> = {
     actor: ctx.actor,
@@ -468,14 +482,12 @@ export async function runOp(
     world: kind === 'runtime' ? world : '',
     op,
   }
-  try {
-    const res =
-      op === 'python'
-        ? await python(ctx.project, card, String(args.code ?? ''), timeoutMs)
-        : op === 'lua.gm'
-          ? // Lua GM（lua-gm/run.ts）：面板按扫描结果拼好的代码，桥接上就是 lua.exec；单独的操作名只为权限按「运行时」走
-            await rpc(card, 'lua.exec', { code: args.code, timeoutMs: args.timeoutMs, world: args.world }, timeoutMs)
-          : await rpc(card, op, args, timeoutMs)
+  const instance = { pid: card.pid, kind: card.kind }
+  const fail = async (e: Error) => {
+    await record(ctx.project.id, { ...base, summary: describe(op, args), ok: false, error: e.message })
+  }
+  // 拿到桥接的结果之后的收尾：P4、作业跟踪、释放占用、操作记录（作业晚到的结果也走这里）
+  const finish = async (res: Record<string, unknown>) => {
     if (op === 'asset.save') res.vcs = await p4After(ctx.project, 'add', added)
     if (op === 'asset.delete' && res.onDisk)
       res.vcs = await p4After(ctx.project, 'delete', [String(res.file)], !!res.fileRemoved)
@@ -491,9 +503,25 @@ export async function runOp(
       ok: true,
       ...undoOf(op, args, res, String(res.world ?? world)),
     })
-    return { ...res, instance: { pid: card.pid, kind: card.kind }, history: item.id }
+    return { ...res, instance, history: item.id }
+  }
+  try {
+    if (opts.job && op !== 'python' && op !== 'lua.gm') {
+      const r = await runAsJob(card, op, args, timeoutMs)
+      if (r.done) return await finish(r.res)
+      keepJob(ctx.project.id, String(r.res.job), { card, finish, fail })
+      return { ...r.res, instance }
+    }
+    const res =
+      op === 'python'
+        ? await python(ctx.project, card, String(args.code ?? ''), timeoutMs)
+        : op === 'lua.gm'
+          ? // Lua GM（lua-gm/run.ts）：面板按扫描结果拼好的代码，桥接上就是 lua.exec；单独的操作名只为权限按「运行时」走
+            await rpc(card, 'lua.exec', { code: args.code, timeoutMs: args.timeoutMs, world: args.world }, timeoutMs)
+          : await rpc(card, op, args, timeoutMs)
+    return await finish(res)
   } catch (e) {
-    await record(ctx.project.id, { ...base, summary: describe(op, args), ok: false, error: (e as Error).message })
+    await fail(e as Error)
     throw e
   }
 }

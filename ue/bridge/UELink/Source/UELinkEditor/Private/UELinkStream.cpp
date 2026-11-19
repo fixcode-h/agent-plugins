@@ -106,8 +106,8 @@ TArray<FString> FUELinkStream::Features()
 {
 	// extEvents：订阅时可以带扩展的主题（forge.job、gt.record……），见协议文档「扩展插件」
 	// selection：uelink.selection 事件（2.4）；luaDecl：uelink.luadecl 事件（2.5）；luaErrors：uelink.luaErrors 事件（2.4，编进 Lua 支持时才有）
-	// editorReady：名片 ready 字段和 uelink.ready 事件（2.7）
-	TArray<FString> Out = {TEXT("log"), TEXT("tests"), TEXT("extEvents"), TEXT("selection"), TEXT("luaDecl"), TEXT("editorReady")};
+	// editorReady：名片 ready 字段和 uelink.ready 事件（2.7）；jobs：job.* 操作和 uelink.job 事件（2.13）
+	TArray<FString> Out = {TEXT("log"), TEXT("tests"), TEXT("extEvents"), TEXT("selection"), TEXT("luaDecl"), TEXT("editorReady"), TEXT("jobs")};
 	if (FAgentPanelLua::IsCompiledIn())
 	{
 		Out.Add(TEXT("luaErrors"));

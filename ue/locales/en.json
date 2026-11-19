@@ -3711,6 +3711,7 @@
   "，{u} 次是旧记录、分不出段里哪一步": ", {u} older runs can't tell which step in the segment",
   "场景里找不到这一段步骤（{s}）：文件可能刚被改过，刷新后再试": "Can't find this group of steps in the scenario ({s}): the file may have just changed, refresh and try again",
   "步骤路径不对：{p}": "Invalid step path: {p}",
+  "键": "key",
   "没有对上的": "No matches",
   "跑这个文件夹": "Run this folder",
   "找节点": "Find nodes",

@@ -50,8 +50,9 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_set: {
     title: '改属性',
-    summary: '改对象或资源的属性、数组元素、UnLua 的简单字段，可以 ue_undo 撤回',
-    useWhen: '验证改一个数值能不能修好问题、调整资源默认值时；资源的修改之后要 ue_save 才写盘',
+    summary: '改对象或资源的属性，数组 / 集合 / 映射加删元素、新建内嵌子对象，UnLua 的简单字段，可以 ue_undo 撤回',
+    useWhen:
+      '验证改一个数值能不能修好问题、调整资源默认值、给数组或映射加删一项、给实例化属性新建子对象（如输入触发器）时；资源的修改之后要 ue_save 才写盘',
     avoidWhen:
       'Lua 里的表和函数用 ue_lua；改蓝图逻辑用 ue_blueprint；结果提醒资源由 AssetForge 配置管着时，要保留的改动改配置再 ue_forge import',
     group: RUN,
