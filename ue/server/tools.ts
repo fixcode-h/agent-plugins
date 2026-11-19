@@ -9,7 +9,7 @@ import { parseLuaPath } from './luapath.ts'
 import { getProject } from './registry.ts'
 import { PERF_DEFS } from './tools-perf.ts'
 import type { Target } from './types.ts'
-import { ASSET_ACTIONS, ASSET_TOOLS, assetAction } from './tools-asset.ts'
+import { ASSET_ACTIONS, ASSET_TOOLS, assetAction, JOB_HINT } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
 import { dumpObject, readProps } from './object-dump.ts'
@@ -203,7 +203,10 @@ const DEFS = [
   ),
   tool(
     'ue_set',
-    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。数组加删元素用 array（add 末尾加一个默认元素、insert 在 index 前插入、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；集合和映射只能 clear），这时不写 value；实例化子对象数组（Instanced）也这样改，不用整体替换。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\nUnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
+    '改属性：path + prop（同 ue_get 的属性路径）+ value（JSON 值，或 UE 文本格式如 (X=1,Y=2,Z=3)）。运行时对象的修改进操作记录、可用 ue_undo 撤回，停止 PIE 后不保留；同步属性在客户端改会被服务器盖掉，结果里 client=true 时改到服务器世界再试。资源（/Game/...）的修改只暂存在编辑器里（标脏），要用 ue_save 保存。\n' +
+      '容器加删元素用 array，不整体替换（实例化子对象里的数据不会丢）：数组 add 末尾加、insert 在 index 前插、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；add / insert 可带 value（新元素的值）或 class（元素是对象时新建这个类的内嵌子对象）。集合和映射按 key 增删：add / remove 给 key（元素或键），映射 add 可带 value 或 class；改映射已有键的值用 prop=名字[键] + value。\n' +
+      '新建内嵌子对象（细节面板实例化属性的「选类」下拉，如输入触发器、修饰器、DataAsset 里的内嵌对象）：只给 class（原生类名或蓝图类路径），prop 可以是 Triggers[2] 这样的元素；结果里 created 是新子对象路径，接着用 ue_set path=created 改它的属性。集合 / 映射按键和 class 要 UELink 2.13。\n' +
+      'UnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。',
     {
       path: { type: 'string' },
       prop: { type: 'string' },
@@ -211,6 +214,8 @@ const DEFS = [
       value: {},
       array: { type: 'string', enum: ['add', 'insert', 'duplicate', 'remove', 'clear'] },
       index: { type: 'number' },
+      key: {},
+      class: { type: 'string' },
       target: TARGET,
     },
     [],
@@ -221,13 +226,16 @@ const DEFS = [
         return out(await runOp(ctx, 'lua.set', { path: a.path ?? '', keys, value: a.value ?? null }))
       }
       if (!a.path || !a.prop) return mcpText('要给 path 和 prop（改 Lua 字段时给 lua）', true)
-      if (a.array)
+      if (a.array || a.class)
         return out(
           await runOp(ctx, 'set', {
             path: a.path,
             prop: a.prop,
-            array: a.array,
+            ...(a.array ? { array: a.array } : {}),
             ...(a.index !== undefined ? { index: Number(a.index) } : {}),
+            ...(a.key !== undefined ? { key: a.key } : {}),
+            ...(a.value !== undefined ? { value: a.value } : {}),
+            ...(a.class ? { class: String(a.class) } : {}),
           }),
         )
       return out(await runOp(ctx, 'set', { path: a.path, prop: a.prop, value: a.value }))
@@ -296,7 +304,8 @@ const DEFS = [
       '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
-      'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。',
+      'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。' +
+      JOB_HINT,
     {
       action: { type: 'string', enum: ASSET_ACTIONS },
       path: { type: 'string' },
@@ -318,6 +327,7 @@ const DEFS = [
       limit: { type: 'number' },
       packages: { type: 'array', items: { type: 'string' } },
       paths: { type: 'array', items: { type: 'string' } },
+      job: { type: 'string' },
       target: TARGET,
     },
     ['action'],
