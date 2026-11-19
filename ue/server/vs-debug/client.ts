@@ -32,7 +32,7 @@ export const pipePathOf = (pipe: string) => '\\\\.\\pipe\\' + pipe
 /** 怎么让管道出现：开 VS、装对版本、打开设置。几种连不上的错误都接这一句 */
 export const howToEnable = () =>
   t(
-    '打开 VS 和这个项目的解决方案（UE 页「VS 调试」的「打开 VS」，或 ue_vs_debug 的 start / attach / build 会自动打开），确认装的是 UEToVS 0.8.0 以上，并且 VS 里 UEToVS 设置「MCP > 允许 Agent 通过 VS 调试 UE」开着',
+    '用 VS 打开这个项目的解决方案（UE 页「VS 调试」卡片的「用 VS 打开这个项目」，或 ue_vs_debug 的 start / attach / build 会自动打开），确认装的是 UEToVS 0.8.0 以上，并且 VS 里 UEToVS 设置「MCP > 允许 Agent 通过 VS 调试 UE」开着',
   )
 
 let seq = 0

@@ -53,12 +53,15 @@ UnLua 由项目自己带，面板不安装。桥接编译时检测 `<项目>/Plu
 UEToVS（VS 扩展）0.8.0 起在 VS 进程里开一条调试控制管道，用 VS 自带的调试器启停、下断点、单步、读变量（协议见 UEToVS 仓库 `docs/design/VS-调试控制.md`）。面板这一侧在 `server/vs-debug/`：
 
 - **发现**：在项目目录、外层目录和引擎根目录（和读 UEToVS 索引同一组候选目录，`search-index/uetovs.ts` 的 `solutionDirs`）找 `.vs/UEToVS/Debug/endpoint.json`，写着这个 `.uproject` 的优先；管道 `\\.\pipe\<pipe>`，一行一个 JSON，带文件里的令牌。连接超时 2 秒，`wait` / `step` 这类会阻塞的按等待时间再加 5 秒。连不上、文件不在、协议版本不对都给中文原因和办法（开 VS、装 UEToVS 0.8.0、打开设置「允许 Agent 通过 VS 调试 UE」），不重试。只支持 Windows。
-- **打开 VS**：VS 没开时用 vswhere 找 devenv，`devenv <sln>` 分离启动，按退避间隔检查发现文件和管道，最多等 3 分钟。网页「打开 VS」和 Agent 的 start / attach / build 共用。
+- **用 VS 打开这个项目**：VS 没开时用 vswhere 找 devenv，`devenv <sln>` 分离启动，按退避间隔检查发现文件和管道，最多等 3 分钟，连通后卡片随状态刷新自动连上。网页按钮和 Agent 的 start / attach / build 共用。
+  - 写了 PID 而进程已经不在的发现文件（VS 关了或崩了没删）当作没有；外层目录里别的项目的 VS（项目和解决方案都对不上）不拿来调试这个项目。
+  - UEToVS 0.9.5 起每个 VS 另写一份 `%LOCALAPPDATA%\UEToVS\Debug\instances\<PID>.json`（`server/vs-debug/instances.ts` 读）：有 VS 开着别的项目时，卡片弹窗让用户选在那个 VS 里打开（管道操作 `solution.open`，VS 先关当前解决方案、照常弹保存提示）还是新开一个 VS（`open-vs` 的 `into` 是那个 VS 的 PID）。
+  - 旧版 UEToVS 或设置关了调试控制的 VS 没有这份文件，从 `tasklist /v` 的 devenv 窗口标题（「<解决方案名> - Microsoft Visual Studio」，缓存 5 秒）认出「VS 开着这个项目但没调试控制」（`reason: no-control`）：卡片只提示去开设置，不再开第二个 VS。
 - **状态**：`GET state` 的 `vsDebug`（status 带 5 帧栈 + 前 50 个断点），整体 1.5 秒拿不到就是 `available=false`，不拖慢刷新；没有 `.sln` 时不带。
-- **网页接口**：`POST vs-debug` `{op, args}` → `{result}` / `{error}`（原样转发，协议外的 op 拒绝）；`POST vs-debug/open-vs` → `{ok, opened}` / `{error}`。
+- **网页接口**：`POST vs-debug` `{op, args}` → `{result}` / `{error}`（原样转发，协议外的 op 拒绝）；`POST vs-debug/open-vs` `{into?}` → `{ok, opened}` / `{error}`。
 - **Agent 工具**：`ue_vs_debug`（会话：status、start、stop、restart、attach、build、pause、continue、step、wait；stop / restart 会结束 UE，先请用户确认）、`ue_vs_breakpoints`（list、add、remove、enable、clear）、`ue_vs_inspect`（stack、threads、locals、eval、output、dump）。用法写在 `ue-runtime-debug` 技能的「用 VS 断点调试」。
 - **停在断点**：UE 停在 VS 里时进程冻住，UELink 调不通。`ue_*` 工具超时 / 连不上、网页判断「忙」时，如果 VS 处于 break，说明换成「UE 停在 VS 断点 文件:行（函数），先 ue_vs_debug continue 继续」。
-- 单测：`node --test ue/server/vs-debug/vs-debug.test.ts`（假服务端用 unix socket 代替命名管道）。还没在真实的 VS + UEToVS 0.8.0 上联调过。
+- 单测：`node --test ue/server/vs-debug/vs-debug.test.ts ue/server/vs-debug/open-vs.test.ts`（假服务端用 unix socket 代替命名管道）。还没在真实的 VS + UEToVS 0.8.0 上联调过。
 
 ## 只认 Agent 模式里的项目
 

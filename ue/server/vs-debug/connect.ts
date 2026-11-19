@@ -1,7 +1,8 @@
 import type { UeProject } from '../types.ts'
 import { t } from '../util.ts'
 import { pipeOne, howToEnable, READ_TIMEOUT_MS, type CallOpts } from './client.ts'
-import { findEndpoint, ENDPOINT_REL } from './discover.ts'
+import { findEndpoint, findSolution, ENDPOINT_REL } from './discover.ts'
+import { sameFile } from './instances.ts'
 import { MAX_WAIT_MS, VsDebugError } from './protocol.ts'
 
 /** 按项目找到发现文件再发请求：工具、网页路由、状态都从这里进 */
@@ -26,6 +27,16 @@ export async function endpointOf(p: UeProject) {
       t('VS 的调试控制没开（解决方案旁边没有 {file}）：{how}', { file: ENDPOINT_REL, how: howToEnable() }),
       'no-vs',
     )
+  // 外层目录的发现文件可能是别的项目的 VS（项目和解决方案都对不上）：不能拿它调试这个项目
+  const ep = found.endpoint
+  if (ep.project && p.uproject && !sameFile(ep.project, p.uproject) && ep.solution) {
+    const mine = await findSolution(p)
+    if (mine && !sameFile(ep.solution, mine))
+      throw new VsDebugError(
+        t('VS 开着的是别的项目（{other}），没开这个项目：{how}', { other: ep.solution, how: howToEnable() }),
+        'no-vs',
+      )
+  }
   return found
 }
 

@@ -5,6 +5,7 @@ import { h, t } from '../host.ts'
 import { Confirm } from '../ui.tsx'
 import { openVs, vsOp } from './api.ts'
 import { loadParams, saveParams, type LaunchParams } from './model.ts'
+import { OpenVsChooser } from './OpenVsChooser.tsx'
 import { VsDebugView } from './VsDebugView.tsx'
 
 /**
@@ -20,6 +21,8 @@ export function VsDebugCard() {
   const [opening, setOpening] = useState(false)
   // 停止、重启会结束 UE 进程：先确认
   const [ask, setAsk] = useState<'stop' | 'restart' | null>(null)
+  // 已经有 VS 开着别的项目时，先问在那个 VS 里打开还是新开一个
+  const [choose, setChoose] = useState(false)
   const vs = state?.vsDebug
   if (!vs) return null
 
@@ -33,16 +36,18 @@ export function VsDebugCard() {
     if (op === 'restart') return setAsk('restart')
     exec(op, args, key)
   }
-  const onOpenVs = () => {
+  const doOpen = (into?: number) => {
+    setChoose(false)
     setOpening(true)
-    void openVs(project.id)
-      .then(() => h().toast.success(t('VS 已打开')))
+    void openVs(project.id, into)
+      .then(() => h().toast.success(t('VS 已打开这个项目，调试控制已连上')))
       .catch((e: Error) => h().toast.error(e.message))
       .finally(() => {
         setOpening(false)
         reload()
       })
   }
+  const onOpenVs = () => (vs.others?.length ? setChoose(true) : doOpen())
   return (
     <>
       <VsDebugView
@@ -56,6 +61,14 @@ export function VsDebugCard() {
         }}
         onOp={onOp}
         onOpenVs={onOpenVs}
+      />
+      <OpenVsChooser
+        open={choose}
+        others={vs.others ?? []}
+        solution={vs.solution}
+        canSpawn={!!vs.devenv}
+        onPick={doOpen}
+        onCancel={() => setChoose(false)}
       />
       <Confirm
         open={!!ask}
