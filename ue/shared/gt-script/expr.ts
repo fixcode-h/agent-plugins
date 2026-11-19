@@ -26,7 +26,13 @@ export type ExprNode =
   | { k: 'cond'; test: ExprNode; a: ExprNode; b: ExprNode; at: number }
 
 export type ExprErrorCode =
-  'empty' | 'too_long' | 'bad_char' | 'unterminated_string' | 'unexpected' | 'expected' | 'unexpected_end'
+  | 'empty'
+  | 'too_long'
+  | 'bad_char'
+  | 'unterminated_string'
+  | 'unexpected'
+  | 'expected'
+  | 'unexpected_end'
 
 export interface ExprError {
   code: ExprErrorCode

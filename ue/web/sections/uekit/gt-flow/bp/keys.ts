@@ -42,7 +42,7 @@ export const CANVAS_KEYS = {
   enter: registerShortcut({
     id: 'canvas-enter',
     keys: 'Ctrl+↓ / 双击',
-    label: () => t('进到选中的块里面（调用脚本：打开那个脚本）'),
+    label: () => t('进到选中的子图里面（挂的用例：打开那个脚本）'),
     scope: CANVAS,
     match: (e) => mod(e) && !e.altKey && e.key === 'ArrowDown',
   }),

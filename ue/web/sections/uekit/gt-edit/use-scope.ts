@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { getAt, pathStr, slotsOf, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
+import {
+  getAt,
+  isSubgraph,
+  pathStr,
+  slotsOf,
+  type GtPath,
+  type GtScript,
+  type GtStep,
+} from '../../../../shared/gt-script/index.ts'
 import { blockUi } from '../gt-blocks/index.ts'
 import { findScope, scopeKey, scopeOfSlot } from '../gt-flow/bp/graph.ts'
 import type { Crumb } from './EditorHeader.tsx'
@@ -8,7 +16,8 @@ const isStep = (v: unknown): v is GtStep => !!v && typeof v === 'object' && type
 const labelOf = (s: GtStep) => (typeof s.name === 'string' && s.name.trim() ? s.name : blockUi(s.action).title())
 
 /**
- * 流程图「进到块里面」（子图，用户 2026-11-19：段、循环不在原地展开，双击进去只看里面，顶上路径显示在第几层、点了回去）。
+ * 流程图「进到子图里面」（用户 2026-11-19：段是子图，双击进去只看里面，顶上路径显示在第几层、点了回去；
+ * 如果、循环不算子图，在画布上摊开连线）。
  * 记的是块的 key（步骤 id），改动让路径变了也找得回来；块没了就回到最外层。
  * 在别处（列表、运行面板）选中了某个块里面的步骤时跟过去，画布上看得到选中的那步
  */
@@ -20,7 +29,7 @@ export function useScope(doc: GtScript | undefined, selected: GtPath[], select: 
     for (let i = 1; i <= path.length; i++) {
       const p = path.slice(0, i)
       const v = getAt(doc, p)
-      if (typeof p[p.length - 1] !== 'number' || !isStep(v) || !slotsOf(v).length) continue
+      if (typeof p[p.length - 1] !== 'number' || !isStep(v) || !isSubgraph(v) || !slotsOf(v).length) continue
       const k = scopeKey(v, p)
       crumbs.push({ label: labelOf(v), onClick: () => setKey(k) })
     }

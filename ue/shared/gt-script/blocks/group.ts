@@ -6,5 +6,6 @@ export const group: BlockDef = {
   idPrefix: 'grp',
   slots: () => [{ key: ['do'], kind: 'do' }],
   wrapSlot: ['do'],
+  subgraph: true,
   make: () => ({ action: 'group', name: '', do: [] }),
 }

@@ -3844,7 +3844,6 @@
   "流程图画布": "Flow canvas",
   "全选这一层的节点": "Select all nodes on this level",
   "聚焦选中的节点（没选就看全部）": "Focus selected nodes (all if none selected)",
-  "进到选中的块里面（调用脚本：打开那个脚本）": "Enter the selected block (call: open that script)",
   "{n} 步 · 双击进入": "{n} steps · double-click to enter",
   "编辑快捷键": "Editing shortcuts",
   "找场景或节点": "Find scenarios or nodes",
@@ -3853,5 +3852,10 @@
   "拖动调整高度": "Drag to resize height",
   "拖动调整高度，双击恢复默认": "Drag to resize height, double-click to reset",
   "且": "and",
-  "或": "or"
+  "或": "or",
+  "子图（空）": "Subgraph (empty)",
+  "双击进去自己连": "Double-click to wire it inside",
+  "子图（挂现有用例）": "Subgraph (existing test)",
+  "引用一个测试用例": "References a test case",
+  "进到选中的子图里面（挂的用例：打开那个脚本）": "Enter the selected subgraph (for a linked test: open that script)"
 }

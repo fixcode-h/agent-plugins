@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useReactFlow, type Connection, type Edge, type FinalConnectionState, type Node } from '@xyflow/react'
-import { CornerLeftUp, Hand, LayoutGrid, Maximize, MousePointer2, ShieldCheck, StickyNote } from 'lucide-react'
+import {
+  CornerLeftUp,
+  FileCode2,
+  Hand,
+  Layers,
+  LayoutGrid,
+  Maximize,
+  MousePointer2,
+  ShieldCheck,
+  StickyNote,
+} from 'lucide-react'
 import { CanvasToolbar, CanvasToolbarSep, GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
 import {
+  blockOf,
   getAt,
+  isSubgraph,
   pathStr,
   type GtGuard,
   type GtPath,
@@ -18,16 +30,7 @@ import { canDrop, readDrop, wantsCopy } from '../dnd.ts'
 import { ReadableFit } from '../readable-fit.tsx'
 import { emptyRun, type FlowRunState } from '../run-state.ts'
 import { BpContext, linkedPins, type BpCtx } from './ctx.ts'
-import {
-  addLoose,
-  addNote,
-  clearPositions,
-  connect,
-  disconnect,
-  insertAtPin,
-  setPositions,
-  updateNote,
-} from './edit.ts'
+import { addLoose, addNote, clearPositions, connect, disconnect, insertAtPin, moveNodes, updateNote } from './edit.ts'
 import { BP_EDGE_TYPES, type BpEdgeData } from './edge.tsx'
 import { bpGraph, pinOf, scopeKey, type BpAt, type BpNode } from './graph.ts'
 import { CANVAS_KEYS } from './keys.ts'
@@ -328,20 +331,35 @@ function BpInner({
   const pickNode = (clientX: number, clientY: number, from?: BpAt, extra: MenuItem[] = [], onClose?: () => void) => {
     const p = toFlow(clientX, clientY)
     const e = new globalThis.MouseEvent('contextmenu', { clientX, clientY })
+    const place = (step: GtStep) => {
+      if (from) {
+        const r = insertAtPin(doc, from, [step], p.x, p.y)
+        apply(r?.doc, r?.path)
+      } else {
+        const r = addLoose(doc, [step], p.x, p.y, here)
+        apply(r.doc, r.path)
+      }
+    }
     openMenu(
       e,
       [
         ...extra,
-        ...insertMenuItems((it) => {
-          const step = it.make()
-          if (from) {
-            const r = insertAtPin(doc, from, [step], p.x, p.y)
-            apply(r?.doc, r?.path)
-          } else {
-            const r = addLoose(doc, [step], p.x, p.y, here)
-            apply(r.doc, r.path)
-          }
-        }),
+        // 子图（用户 2026-11-19）：空的，双击进去自己放节点、连线；或者挂一个现有的测试用例（调用脚本，引用，
+        // 在右边检查器里填脚本，也可以直接从左栏把脚本拖进来）
+        {
+          label: t('子图（空）'),
+          icon: Layers,
+          hint: t('双击进去自己连'),
+          onClick: () => place({ ...blockOf('group')!.make(), name: t('子图') }),
+        },
+        {
+          label: t('子图（挂现有用例）'),
+          icon: FileCode2,
+          hint: t('引用一个测试用例'),
+          onClick: () => place(blockOf('call')!.make()),
+        },
+        'sep',
+        ...insertMenuItems((it) => place(it.make())),
       ],
       { search: t('找节点：输入名字…'), onClose },
     )
@@ -447,13 +465,7 @@ function BpInner({
       })
     } else if (hit(CANVAS_KEYS.fit)) void rf.current?.fitView({ padding: 0.1, duration: 200 })
     else if (hit(CANVAS_KEYS.deselect)) onSelect?.(undefined)
-    else if (
-      hit(CANVAS_KEYS.enter) &&
-      sel?.step &&
-      sel.path &&
-      (sel.folded !== undefined || sel.step.action === 'call')
-    )
-      onEnter?.(sel.path, sel.step)
+    else if (hit(CANVAS_KEYS.enter) && sel?.step && sel.path && isSubgraph(sel.step)) onEnter?.(sel.path, sel.step)
     else if (hit(CANVAS_KEYS.leave) && here && onLeave) onLeave()
     else done = false
     if (!done) return
@@ -473,6 +485,11 @@ function BpInner({
           // 画布按下会阻止默认动作、拿不到焦点：自己拿，Delete、Ctrl+C 这些快捷键才收得到
           if (!(e.target as HTMLElement).closest('input, textarea, [contenteditable]'))
             wrap.current?.focus({ preventScroll: true })
+        }}
+        // 画布空白处右键弹节点菜单：React Flow 开了右键拖动画布时会把空白处的右键菜单吞掉（不调 onPaneContextMenu），
+        // 只能在外面接冒上来的事件（用户 2026-11-19：不拖线、直接右键也要弹）
+        onContextMenu={(e) => {
+          if ((e.target as Element).closest('.react-flow__pane')) paneMenu(e)
         }}
         onDragOver={(e) => {
           if (!editable || !canDrop(e)) return
@@ -524,8 +541,9 @@ function BpInner({
           }}
           onNodeDragStop={(_, __, moved) =>
             apply(
-              setPositions(
+              moveNodes(
                 doc,
+                graph,
                 moved.map((n) => ({ key: n.id, x: n.position.x, y: n.position.y })),
               ),
             )
@@ -534,8 +552,7 @@ function BpInner({
           onNodeDoubleClick={(_, n) => {
             const node = n.data.node
             // 块、调用别的脚本：进到里面看（子图），顶上路径显示在第几层
-            if (node.step && node.path && (node.folded !== undefined || node.step.action === 'call'))
-              onEnter?.(node.path, node.step)
+            if (node.step && node.path && isSubgraph(node.step)) onEnter?.(node.path, node.step)
           }}
           onNodeContextMenu={(e, n) => {
             const node = n.data.node
@@ -552,7 +569,6 @@ function BpInner({
             onNodeMenu(s, e)
           }}
           onPaneClick={() => onSelect?.(undefined)}
-          onPaneContextMenu={paneMenu}
         >
           <Bridge into={rf} />
           <ReadableFit />

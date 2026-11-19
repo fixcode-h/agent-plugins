@@ -1,7 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { GtScript } from '../../../../../shared/gt-script/index.ts'
-import { addLoose, clearPositions, connect, disconnect, insertAtPin, setPositions, tidyLoose } from './edit.ts'
+import {
+  addLoose,
+  clearPositions,
+  connect,
+  disconnect,
+  insertAtPin,
+  moveNodes,
+  setPositions,
+  tidyLoose,
+} from './edit.ts'
 import { bpGraph, findScope, layoutOf, looseSlot, pinOf, START_KEY } from './graph.ts'
 
 const doc = (): GtScript => ({
@@ -23,18 +32,19 @@ const doc = (): GtScript => ({
 const edge = (g: ReturnType<typeof bpGraph>, from: string, pin: string) =>
   g.edges.find((e) => e.from === from && e.pin === pin)?.to
 
-test('图：开始 → 一步一步接下去，块只有「之后」接块后面那步，子槽是进到块里的入口', () => {
+test('图：开始 → 一步一步接下去，「如果」在画布上摊开：是 / 否出口直接连，「之后」接块后面那步', () => {
   const g = bpGraph(doc())
   assert.equal(edge(g, START_KEY, 'next'), 's1')
   assert.equal(edge(g, 's1', 'next'), 'if1')
   assert.equal(edge(g, 'if1', 'next'), 's3')
   assert.deepEqual(
     g.nodes.find((n) => n.id === 'if1')!.outs.map((p) => p.id),
-    ['next'],
+    ['s:then', 's:else', 'next'],
   )
-  const inside = bpGraph(doc(), { scope: ['steps', 1] })
-  assert.equal(edge(inside, '#in:then', 'next'), 's2')
-  assert.equal(edge(inside, '#in:else', 'next'), undefined)
+  assert.equal(edge(g, 'if1', 's:then'), 's2')
+  assert.equal(g.nodes.find((n) => n.id === 'if1')!.folded, undefined)
+  // 「如果」不是子图，进不去
+  assert.equal(findScope(doc(), 'if1'), undefined)
   // 守护是事件节点，后面接处理步骤
   assert.equal(edge(g, 'g:g1', 'next'), 's9')
 })
@@ -50,6 +60,20 @@ test('图：记过的位置照记的，没记的跟着前一个节点挪', () =>
   const ai = auto.nodes.find((n) => n.id === 'if1')!
   assert.deepEqual([if1.x - s1.x, if1.y - s1.y], [ai.x - a1.x, ai.y - a1.y])
   assert.deepEqual(layoutOf(clearPositions(d)).pos, undefined)
+})
+
+test('拖节点：后面连着的不跟着动，钉在原来的位置', () => {
+  const g0 = bpGraph(doc())
+  const if0 = g0.nodes.find((n) => n.id === 'if1')!
+  const d = moveNodes(doc(), g0, [{ key: 's1', x: 1000, y: 500 }])!
+  const g = bpGraph(d)
+  const if1 = g.nodes.find((n) => n.id === 'if1')!
+  assert.deepEqual([if1.x, if1.y], [if0.x, if0.y])
+  assert.deepEqual(g.nodes.find((n) => n.id === 's1')!.x, 1000)
+  // 拖第二个节点也只动它自己，记过的不被覆盖
+  const d2 = moveNodes(d, g, [{ key: 'if1', x: 7, y: 7 }])!
+  assert.deepEqual(layoutOf(d2).pos!.s1, [1000, 500])
+  assert.deepEqual(layoutOf(d2).pos!.if1, [7, 7])
 })
 
 test('断开：后面那串变成没连上的，位置跟着换成 ~id', () => {
@@ -144,7 +168,7 @@ const nested = (): GtScript =>
     ],
   }) as unknown as GtScript
 
-test('子图：块在外层只画一个节点，进到里面只画它里面的，子图里还能再进', () => {
+test('子图：段在外层只画一个节点，进到里面只画它里面的，循环在里面摊开画', () => {
   const ids = (g: ReturnType<typeof bpGraph>) => g.nodes.map((n) => n.id).sort()
   const top = bpGraph(nested())
   assert.deepEqual(ids(top), [START_KEY, 'g1', 'g2'].sort())
@@ -155,14 +179,31 @@ test('子图：块在外层只画一个节点，进到里面只画它里面的�
   )
 
   const inG1 = bpGraph(nested(), { scope: ['steps', 0] })
-  assert.deepEqual(ids(inG1), ['#in:do', 'a1', 'r1'].sort())
+  assert.deepEqual(ids(inG1), ['#in:do', 'a1', 'b1', 'r1'].sort())
   assert.equal(edge(inG1, '#in:do', 'next'), 'a1')
   assert.equal(edge(inG1, 'a1', 'next'), 'r1')
+  assert.equal(edge(inG1, 'r1', 's:do'), 'b1')
+  assert.equal(findScope(nested(), 'r1'), undefined)
+})
 
-  const r1 = findScope(nested(), 'r1')!
-  assert.deepEqual(r1, ['steps', 0, 'do', 1])
-  const inR1 = bpGraph(nested(), { scope: r1 })
-  assert.deepEqual(ids(inR1), ['#in:do', 'b1'].sort())
+test('子图：段里还能再放段，一层一层进', () => {
+  const d = nested()
+  ;(d.steps![0] as unknown as { do: unknown[] }).do.push({
+    id: 'g3',
+    action: 'group',
+    do: [{ id: 'd1', action: 'wait', seconds: 1 }],
+  })
+  const g3 = findScope(d, 'g3')!
+  assert.deepEqual(g3, ['steps', 0, 'do', 2])
+  assert.deepEqual(
+    bpGraph(d, { scope: g3 })
+      .nodes.map((n) => n.id)
+      .sort(),
+    ['#in:do', 'd1'],
+  )
+  // 循环里断开的那串记在外面那个段（循环不算一层）
+  const cut = disconnect(nested(), { slot: ['steps', 0, 'do', 1, 'do'], index: 0 })!
+  assert.equal(layoutOf(cut).loose![0].scope, 'g1')
 })
 
 test('子图：里面加的、断开的节点记在这一层，块删了跟着没', () => {
