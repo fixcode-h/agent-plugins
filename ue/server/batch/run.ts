@@ -37,8 +37,8 @@ export const BATCH_PROPS = {
 }
 
 export const BATCH_HINT =
-  '\n批量（多个资源做同样的读或改时一次调，别逐个调）：select（按条件在资源注册表里选，优先用它：path 目录或目录数组、class 资源类型、parent 蓝图父类含间接继承、name / exclude 名字通配符、prefix、tags、recursive；例 select={path:"/Game/Enemies", class:"Blueprint", parent:"BP_EnemyBase", exclude:"*_Old"}，不限个数）/ paths（路径数组）/ items（[{path, vars?, ...这一项的参数}]），paths 和 items 逐个列出超过设置的上限（默认 20 个）这次调用直接拦下不执行，再多必须用 select；字符串里 {name} {path} {vars.键} 按资源替换。' +
-  '写操作先整批演练、全过才真改，失败默认撤回整批（onError=keep 保留成功的）；retry=上一批的作业号 只重做没成的。select.kind="actor" 按 class / tag / prefix 选关卡里的 Actor。回包按资源汇总，全部结果在 report 文件。'
+  '\n批量（多个资源做同样的读或改时一次调，别逐个调）：优先 select 按条件选、不限个数（条件见参数说明；例 select={path:"/Game/Enemies", class:"Blueprint", parent:"BP_EnemyBase", exclude:"*_Old"}）；paths（路径数组）/ items（[{path, vars?, ...这一项的参数}]）逐个列出超过设置的上限（默认 20 个）时这次调用直接拦下不执行。字符串里 {name} {path} {vars.键} 按资源替换。' +
+  '写操作先整批演练、全过才真改，失败默认撤回整批（onError=keep 保留成功的）；retry=上一批的作业号 只重做没成的。回包按资源汇总，全部结果在 report 文件。'
 
 /** 一个值的一行摘要：数组给个数、短的标量原样、对象给键数 */
 function brief(res: Record<string, unknown> | undefined) {
