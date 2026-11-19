@@ -104,6 +104,8 @@ namespace AgentPanelEd
 	void RegisterStreamOps();
 	/** 编辑器小工具（UELinkEditorToolsOps.cpp）：asset.redirectors、editor.spawn、editor.destroy */
 	void RegisterEditorToolsOps();
+	/** 2.16：导入外部文件、调编辑器函数库（UELinkImportCallOps.cpp）：asset.import、asset.reimport、editor.functions、editor.call */
+	void RegisterImportCallOps();
 	/** 世界里的 Actor 增删、挂接、换文件夹时推 uelink.outliner 事件（UELinkOutlinerPush.cpp），网页的大纲据此重读，不轮询 */
 	void StartOutlinerPush();
 	void StopOutlinerPush();
