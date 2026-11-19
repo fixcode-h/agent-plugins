@@ -97,7 +97,7 @@ namespace AgentPanel
 		UClass* ComponentClass = nullptr;
 		if (!ClassName.IsEmpty())
 		{
-			ComponentClass = FindClassByName(ClassName);
+			ComponentClass = AgentPanelEd::FindClassByName(ClassName);
 			if (!ComponentClass)
 			{
 				Error = FString::Printf(TEXT("找不到组件类 %s"), *ClassName);

@@ -70,7 +70,7 @@ export function condLines(cond: unknown): FaceLine[] {
 }
 
 registerFace('group', {
-  title: (s) => str(s.name) || t('步骤段'),
+  title: (s) => str(s.name) || t('子图'),
 })
 registerFace('loop', {
   title: (s) => {
@@ -93,7 +93,7 @@ registerFace('if', {
   lines: (s) => condLines(s.cond),
 })
 registerFace('call', {
-  title: (s) => t('调用 {s}', { s: lastSeg(str(s.script)) }),
+  title: (s) => str(s.name) || lastSeg(str(s.script)) || t('子图'),
   sub: (s) => str(s.script),
 })
 registerFace('set', {

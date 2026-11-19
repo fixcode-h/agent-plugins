@@ -72,7 +72,7 @@ async function readJson(file: string): Promise<Record<string, unknown> | undefin
   }
 }
 
-/** 和 GameTestScenario::Validate 同一套检查：列表里「看起来能跑」的场景开了编辑器也真能跑 */
+/** 和 GameTestScenario::Validate 同一套检查（只有空 steps 放过，见下）：列表里「看起来能跑」的场景开了编辑器也真能跑 */
 function validate(doc: Record<string, unknown>) {
   const errors: string[] = []
   const kind = typeof doc.kind === 'string' ? doc.kind : ''
@@ -86,7 +86,8 @@ function validate(doc: Record<string, unknown>) {
     errors.push(`schemaVersion ${v} 高于本插件支持的 ${SUPPORTED_SCHEMA}（升级插件或把场景降到支持的版本）`)
   if (typeof doc.name !== 'string' || !doc.name) errors.push('缺少必填字段 name（场景名，进报告与产物目录）')
   const steps = doc.steps
-  if (!Array.isArray(steps) || !steps.length) errors.push('缺少非空的 steps 数组')
+  // 空的 steps 不算坏：刚新建、还没加步骤的脚本要能在列表里打开编辑（跑的时候 GameTest 自己会报）
+  if (!Array.isArray(steps)) errors.push('缺少 steps 数组')
   else
     steps.forEach((s, i) => {
       if (!s || typeof s !== 'object' || Array.isArray(s)) errors.push(`第 ${i + 1} 步不是 JSON 对象`)

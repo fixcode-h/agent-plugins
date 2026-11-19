@@ -20,6 +20,7 @@ import { useForgePick } from './forge-pick.ts'
 import { useForgeSource } from './forge-source.ts'
 import { useForgeFileWatch } from './forge-watch.ts'
 import { FILTERS, kindMeta, stateMeta, type FilterId } from './kinds.ts'
+import { FilterButton } from '../../FilterButton.tsx'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
 import { FileTree, type ExpandSignal, type FolderLabel, type TreeLeaf } from './tree.tsx'
@@ -253,6 +254,21 @@ export function Forge() {
         onQuery={setQuery}
         placeholder={t('按配置文件或资产路径找')}
         onBodyMenu={menus.bodyMenu}
+        // 同步状态筛选收成搜索框里的图标（用户 2026-11-19：四个页签在窄栏里字被截断，还单独占一行）；
+        // 各状态个数在下拉里看，文件夹行尾也有彩色个数
+        searchAddon={
+          <FilterButton
+            label={t('按同步状态筛选')}
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { id: 'all', label: t('全部') },
+              { id: 'pending', label: t('待导入'), count: num(counts.pending) },
+              { id: 'changed', label: t('被改过'), count: num(counts.changed) },
+              { id: 'error', label: t('出错'), count: num(counts.error) },
+            ]}
+          />
+        }
         searchExtra={
           <ui.IconButton
             icon={FilePlus2}
@@ -272,30 +288,18 @@ export function Forge() {
               onClick={() => reload(false)}
             />
             <ui.IconButton icon={Ellipsis} size="sm" label={t('更多')} onClick={menus.moreMenu} />
-            <ui.Button
-              size="sm"
-              disabled={locked || (multi ? !pickedConfigs.length : !counts.pending)}
-              onClick={() => void importConfigs(multi ? { configs: pickedConfigs } : { pending: true })}
-            >
-              <Download className="ue:h-3.5 ue:w-3.5" />
-              {multi ? t('导入 {n} 份', { n: pickedConfigs.length }) : t('导入 {n}', { n: counts.pending })}
-            </ui.Button>
+            {/* 没有要导入的就不画（以前是一颗灰掉的「导入 0」占着标题行） */}
+            {(multi ? pickedConfigs.length > 0 : counts.pending > 0) && (
+              <ui.Button
+                size="sm"
+                disabled={locked}
+                onClick={() => void importConfigs(multi ? { configs: pickedConfigs } : { pending: true })}
+              >
+                <Download className="ue:h-3.5 ue:w-3.5" />
+                {multi ? t('导入 {n} 份', { n: pickedConfigs.length }) : t('导入 {n}', { n: counts.pending })}
+              </ui.Button>
+            )}
           </>
-        }
-        tabs={
-          <ui.Segmented
-            size="sm"
-            fill
-            label={t('按同步状态筛选')}
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { id: 'all', label: t('全部') },
-              { id: 'pending', label: `${t('待导入')} ${num(counts.pending)}` },
-              { id: 'changed', label: `${t('被改过')} ${num(counts.changed)}` },
-              { id: 'error', label: `${t('出错')} ${num(counts.error)}` },
-            ]}
-          />
         }
         footer={
           <>

@@ -89,7 +89,7 @@ export function useDebug(o: { project: string; root: string; scenario: string; d
       }
     : undefined
 
-  const session = { project, root: o.root, run, running: flow.active, paused: flow.paused }
+  const session = { project, root: o.root, scenario: o.scenario, run, running: flow.active, paused: flow.paused }
   setDebugSession(session)
   useEffect(() => () => setDebugSession(undefined), [])
 
