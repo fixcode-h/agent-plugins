@@ -31,7 +31,7 @@ export interface Level {
 
 const EMPTY: Level = { folders: [], items: [] }
 
-/** 一层最多列多少：和服务端、UELink 的默认上限一致，再多用搜索页签找 */
+/** 一层最多列多少：和服务端、UELink 的默认上限一致，再多在上面的搜索框里搜 */
 export const LIMIT = 500
 
 /** 对象路径 → 包路径：/Game/A/B.B → /Game/A/B（选中、定位时两种写法都可能来） */
@@ -108,10 +108,20 @@ export function useFolderData(projectId: string, target: Target) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [kk])
 
+  // 展开时缓存里有就先显示，同时重读一次换成最新的：缓存一直留到整页刷新，编辑器刚启动注册表没扫完、
+  // 或之后新加了资源时读到的那份会一直是空的 / 旧的（用户 2026-11-19「有些文件夹展开显示为空」）
   const toggle = (key: string) => {
     const next = !open[key]
     setOpen((m) => ({ ...m, [key]: next }))
-    if (next && key.startsWith('/') && !cache.current[key]) void load(key)
+    if (next && key.startsWith('/')) void load(key)
+  }
+
+  /** 页头「刷新」：挂载根和展开着的层全部重读；旧数据先留着，读回来再换，不闪成空 */
+  const reload = () => {
+    gen.current++
+    inflight.current.clear()
+    void load('/')
+    for (const [p, on] of Object.entries(open)) if (on && p.startsWith('/')) void load(p)
   }
 
   const setCls = (c: string) => {
@@ -149,5 +159,5 @@ export function useFolderData(projectId: string, target: Target) {
     return kind === 'asset' ? `i:${pkg}` : `f:${folder}`
   }
 
-  return { levels, open, toggle, load, cls, setCls, revealPath }
+  return { levels, open, toggle, load, reload, cls, setCls, revealPath }
 }

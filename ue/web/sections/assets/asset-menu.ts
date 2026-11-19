@@ -23,7 +23,7 @@ export function useOpenInEditor() {
 }
 
 /**
- * 资源行的右键菜单（文件夹树、搜索结果共用）：在 UE 编辑器打开、在文件夹里定位（搜索页签才有）、复制路径。
+ * 资源行的右键菜单（文件夹树、搜索结果共用）：在 UE 编辑器打开、在文件夹里定位（给了 onReveal 才有）、复制路径。
  * 编辑器没开时「在 UE 编辑器打开」灰掉并写明原因，不替用户起编辑器
  */
 export function useAssetMenu() {

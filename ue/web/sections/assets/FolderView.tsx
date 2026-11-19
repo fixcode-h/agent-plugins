@@ -97,7 +97,7 @@ export function FolderView({
     data?.stat && !data.stat.editor && t('编辑器没开：未保存、未被引用要编辑器开着才看得到'),
     data?.stat?.vcsError && t('P4 状态读不到：{msg}', { msg: data.stat.vcsError }),
     data?.stat?.refsSkipped && t('还有 {n} 个资源没查引用', { n: data.stat.refsSkipped }),
-    data?.more && t('只列了前 {n} 项，用搜索页签找其余的', { n: (data.folders.length ?? 0) + items.length }),
+    data?.more && t('只列了前 {n} 项，其余的在左边的搜索框里搜', { n: (data.folders.length ?? 0) + items.length }),
     data?.loading && t('资源注册表还在扫盘，这一层可能不全'),
     data?.note,
   ].filter(Boolean) as string[]

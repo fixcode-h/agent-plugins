@@ -6,6 +6,7 @@ import {
   CHILD_MAX,
   contentDir,
   diskChildren,
+  mergeWithDisk,
   normPath,
   pickAssetCard,
   projectPlugins,
@@ -131,6 +132,11 @@ async function listChildren(ctx: OpCtx, args: Record<string, unknown>, timeoutMs
         source: 'bridge',
       }
       if (p === '/') out.folders = await tagRoots(ctx.project.root, out.folders)
+      // 游戏进程的注册表不全（见 mergeWithDisk）：并上磁盘列到的；磁盘上没有这个目录（只在内存里的包）就只用注册表的
+      else if (card.kind === 'game') {
+        const disk = await diskChildren(ctx.project.root, engineDir, p, cls, limit).catch(() => undefined)
+        if (disk) return mergeWithDisk(out, disk)
+      }
       return out
     } catch (e) {
       // 名片说支持、实际调用又说不支持（/info 的 ops 列表和操作表对不上）：也走磁盘
