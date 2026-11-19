@@ -202,7 +202,11 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
         ? {
             project,
             state: state.data,
-            reload: () => void state.reload(),
+            // 项目登记（权限、设置）在项目列表里，状态在 state 里：都重取，不然保存了设置下拉框还显示旧值
+            reload: () => {
+              void state.reload()
+              void projects.reload()
+            },
             target: { instance: pidTarget ?? (project.target.kind || undefined), world: project.target.world },
             setTarget: (p, kind, world) => {
               setPidTarget(p)
