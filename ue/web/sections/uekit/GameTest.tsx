@@ -124,8 +124,10 @@ export function GameTest() {
   // 推送里批量已经跑完了几个（跑完一个就重拉历史）
   const batchSeen = useRef(0)
 
-  // 编辑器没连上时只读操作带 disk，由面板读磁盘（编辑器正忙时也不去等它回应）
-  const disk = live ? {} : { disk: true }
+  // 脚本列表、最近运行、历史都是磁盘上的文件（场景根的 JSON、Saved/GameTest 的产物和 history.json），一律由面板直接读：
+  // 用户 2026-11-19 报编辑器开着但游戏线程忙（或 UELink / GameTest 没编新版）时，列表等 UE 回应 30 秒后整页报错，
+  // 看和编辑脚本本来就不需要编辑器，只有运行、录制这些才连 UE
+  const disk = { disk: true }
   const reload = () => {
     op<ScenarioList>(project.id, 'gt.scenarios', { limit: 1000, ...disk })
       .then((r) => {
@@ -136,7 +138,7 @@ export function GameTest() {
     void op<{ runs: GtRunSummary[] }>(project.id, 'gt.runs', disk)
       .then((r) => setRuns(r.runs ?? []))
       .catch(() => undefined)
-    void loadHistory(project.id, !live).then(setHistory)
+    void loadHistory(project.id, true).then(setHistory)
   }
   useEffect(() => {
     if (!installed) return
