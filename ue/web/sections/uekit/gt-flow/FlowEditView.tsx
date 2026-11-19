@@ -1,4 +1,4 @@
-import { Plus, Redo2, Undo2 } from 'lucide-react'
+import { Plus, Redo2, Trash2, Undo2 } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   getAt,
@@ -10,11 +10,11 @@ import {
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
-import { commandMenuItems, runKey, type CmdCtx } from '../gt-edit/commands.ts'
+import { COMMANDS, commandMenuItems, runKey, type CmdCtx } from '../gt-edit/commands.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { insertMenuItems, insertPlace, insertStep, openInsertAt } from '../gt-edit/insert-menu.ts'
 import type { InsertItem } from '../gt-blocks/index.ts'
-import { blankGuard } from '../gt-guards/model.ts'
+import { blankGuard, removeGuard } from '../gt-guards/model.ts'
 import type { ViewProps } from '../gt-edit/views.ts'
 import { CanvasToolbarSep } from '@panel/web/src/components/flow/GraphCanvas'
 import { BpView, type BpSelection } from './bp/BpView.tsx'
@@ -22,6 +22,9 @@ import { tidyLoose } from './bp/edit.ts'
 import { bpKey } from './bp/graph.ts'
 import type { FlowRunState, StepRunStatus } from './run-state.ts'
 import { useFlowRun } from './use-flow-run.ts'
+
+/** 删步骤的命令：守护的删除借它的快捷键和提示，改快捷键时两边一起变 */
+const removeCmd = COMMANDS.find((c) => c.id === 'remove')!
 
 /** 外壳给的简版运行状态（按步骤 id 标 ok / fail / run / skip）→ 流程图的运行态 */
 const RUN_STATUS: Record<string, StepRunStatus> = { ok: 'passed', fail: 'failed', run: 'running', skip: 'skipped' }
@@ -107,6 +110,14 @@ export function FlowEditView({
     setGuardKey(undefined)
     onSelect(paths)
   }
+  /** 选中的守护是第几条（key 是「guard:guards.<i>」）；画布上只有脚本自己的守护能选中，全局守护只读 */
+  const guardIndex = (k = guardKey) => {
+    const m = k && /^guard:guards\.(\d+)$/.exec(k)
+    return m ? Number(m[1]) : undefined
+  }
+  const dropGuard = (i: number) => {
+    if (onChange(removeGuard(doc, i))) setGuardKey(undefined)
+  }
   const select = (s: BpSelection | undefined) => {
     setGuardKey(s?.guard ? s.key : undefined)
     onSelect(s?.path && !s.guard ? [s.path] : [])
@@ -120,6 +131,12 @@ export function FlowEditView({
       onKeyDown={(e) => {
         // 输入框里的按键交给输入框（画布上没有，防的是将来节点上加了内联编辑）
         if ((e.target as HTMLElement).closest('input, textarea, [contenteditable]')) return
+        // 守护不在外壳的选中里，编辑命令表删不到它：选中守护时 Delete 在这里删（快捷键和删步骤同一个）
+        const gi = guardIndex()
+        if (gi !== undefined && !selected.length && removeCmd.match?.(e)) {
+          e.preventDefault()
+          return dropGuard(gi)
+        }
         runKey(e, ctx)
       }}
     >
@@ -176,6 +193,17 @@ export function FlowEditView({
           </>
         }
         onNodeMenu={(s, e) => {
+          const gi = s.guard ? guardIndex(s.key) : undefined
+          if (gi !== undefined)
+            return openMenu(e, [
+              {
+                label: t('删掉这条守护'),
+                icon: Trash2,
+                hint: removeCmd.keys,
+                danger: true,
+                onClick: () => dropGuard(gi),
+              },
+            ])
           if (s.guard || !s.path) return
           box.current?.focus()
           openMenu(e, commandMenuItems({ ...ctx, selected: [s.path] }))

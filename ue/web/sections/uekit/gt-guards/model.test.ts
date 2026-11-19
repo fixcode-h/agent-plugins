@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { blankGuard, blockersToGuards, tidyGuards } from './model.ts'
+import { blankGuard, blockersToGuards, removeGuard, tidyGuards } from './model.ts'
 
 test('阻挡界面按协议 5.1 改写成守护', () => {
   const g = blockersToGuards([
@@ -32,4 +32,12 @@ test('存盘前去掉默认值和空条', () => {
 
 test('新守护的 id 不和已有的撞', () => {
   assert.equal(blankGuard(new Set(['g1', 'g2'])).id, 'g3')
+})
+
+test('removeGuard 删掉第 i 条守护，删空了不留 guards 字段', () => {
+  const a = { id: 'g1', when: { target: 'A', onScreen: true }, do: [] }
+  const b = { id: 'g2', when: { target: 'B', onScreen: true }, do: [] }
+  const doc = { name: 't', guards: [a, b] }
+  assert.deepEqual(removeGuard(doc, 0).guards, [b])
+  assert.equal('guards' in removeGuard({ name: 't', guards: [a] }, 0), false)
 })
