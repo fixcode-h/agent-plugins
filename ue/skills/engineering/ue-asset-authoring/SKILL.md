@@ -21,6 +21,7 @@ user-invocable: true
 对一批资源做同样的读或改（读几个蓝图的大纲、给一批蓝图的同一个组件改属性、编译一批蓝图），**只调一次工具**，不要一个资源调一次，也不要并行发十几次：
 
 - `paths=[...]` 给全部路径；或 `select={path, class, parent, tags}` 按条件选，关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
+- `select` 的条件可以组合，在资源注册表里筛、不加载资源：`path` 目录（`recursive=false` 不含子目录）、`class` 资源类型（Blueprint、WidgetBlueprint、DataTable…）、`parent` 蓝图父类（含间接继承）、`prefix` 名字前缀、`tags` 注册表标签。例：某目录下所有继承 BP_EnemyBase 的蓝图改 MaxHP：`ue_set select={path:"/Game/Characters", class:"Blueprint", parent:"BP_EnemyBase"} prop=MaxHP value=200`。`parent` 给 C++ 类时只认蓝图最近的那个 C++ 父类（BP 继承 Character 时写 Character 能选中，写 Pawn 选不中）；名字要通配、排除或多个目录时，先 `ue_find kind=asset` 列出来，筛好后用 `paths` 传。
 - 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
 - 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。
 - 写操作先整批演练，全部通过才真改，失败自动撤回整批；`where` 只改当前值对得上的；`retry=<上一批作业号>` 只重做没成的；改完直接 `ue_save`：它先编译要保存的蓝图，全部通过才保存。
