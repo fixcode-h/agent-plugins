@@ -4,6 +4,7 @@
 #include "AgentPanelLog.h"
 #include "UELinkVersion.h"
 #include "AgentPanelLuaOps.h"
+#include "UELinkJobOps.h"
 #include "Async/Async.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -609,6 +610,7 @@ public:
 		UELINK_POST_ENGINE_INIT.Remove(PostInit);
 		AgentPanelUnregisterEmmyValues();
 		AgentPanelUnregisterLuaTrace();
+		AgentPanel::ShutdownJobOps();
 		FAgentPanelBridge::Get().Stop();
 	}
 
