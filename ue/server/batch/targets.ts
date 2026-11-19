@@ -1,6 +1,8 @@
 import { BridgeError } from '../instances.ts'
 import { runOp, type OpCtx } from '../ops.ts'
-import { keep, list, tooMany } from './select-filter.ts'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { itemsFromJson, keep, list, tooMany } from './select-filter.ts'
 import { c } from '../util.ts'
 
 /** 关卡 Actor 的 select 一次最多（UELink 的 actors 操作上限） */
@@ -12,7 +14,11 @@ const OLD_LIMIT = 2000
 
 /** 工具参数里有没有批量写法：paths、items 或 select */
 export const isBatch = (a: Record<string, unknown>) =>
-  Array.isArray(a.paths) || Array.isArray(a.items) || !!a.retry || (!!a.select && typeof a.select === 'object')
+  Array.isArray(a.paths) ||
+  Array.isArray(a.items) ||
+  typeof a.itemsFile === 'string' ||
+  !!a.retry ||
+  (!!a.select && typeof a.select === 'object')
 
 export type Targets = { paths: string[] } | { items: Record<string, unknown>[] }
 
@@ -21,6 +27,8 @@ export type Targets = { paths: string[] } | { items: Record<string, unknown>[] }
  * paths / items 逐个列出的超过设置的上限时直接拦下（不执行），让 Agent 改用 select
  */
 export async function resolveTargets(a: Record<string, unknown>, ctx: OpCtx): Promise<Targets> {
+  // 每项参数各不相同、又超过逐个列出上限时：Agent 把 items 写成 JSON 文件只传路径，工具输入仍然很短（不限个数）
+  if (typeof a.itemsFile === 'string') return { items: await readItemsFile(a.itemsFile, ctx.project.root) }
   if (Array.isArray(a.items)) return check({ items: a.items as Record<string, unknown>[] }, a.items.length, 'items')
   if (Array.isArray(a.paths)) return check({ paths: a.paths.map(String) }, a.paths.length, 'paths')
   const s = a.select as Record<string, unknown>
@@ -80,4 +88,18 @@ function check(t: Targets, n: number, key: string) {
   const why = tooMany(n, key, Number(c().config().batchListMax))
   if (why) throw new BridgeError(why)
   return t
+}
+
+/** itemsFile：绝对路径或相对 UE 项目目录；内容是 [{path, ...}] 或 {items: [...]}，也认一行一个 JSON 对象 */
+async function readItemsFile(file: string, root: string) {
+  const full = path.isAbsolute(file) ? file : path.join(root, file)
+  let text: string
+  try {
+    text = await readFile(full, 'utf8')
+  } catch (e) {
+    throw new BridgeError(`读不到 itemsFile ${full}：${(e as Error).message}`)
+  }
+  const r = itemsFromJson(text)
+  if (typeof r === 'string') throw new BridgeError(`itemsFile ${full}：${r}`)
+  return r
 }

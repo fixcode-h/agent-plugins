@@ -20,7 +20,7 @@ user-invocable: true
 
 对一批资源做同样的读或改（读几个蓝图的大纲、给一批蓝图的同一个组件改属性、编译一批蓝图），**只调一次工具**，不要一个资源调一次，也不要并行发十几次：
 
-- **优先用 `select` 按条件选，不要把资源名逐个列进 `paths`**：`paths` / `items` 逐个列出超过上限（默认 20 个，用户可在 UE 插件设置里改）时这次调用直接被拦下、不执行；`select` 不限个数。关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
+- **优先用 `select` 按条件选，不要把资源名逐个列进 `paths`**：`paths` / `items` 逐个列出超过上限（默认 20 个，用户可在 UE 插件设置里改）时这次调用直接被拦下、不执行；`select` 不限个数。每项参数各不相同（比如按表给 300 个蓝图各设不同的值）又超过上限时，把 items 写成 JSON 文件（`[{"path": "/Game/...", "value": ...}]`，放进 `Saved/AgentPanel/` 或项目里的临时目录），用 `itemsFile=<路径>` 传。关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
 - `select` 的条件可以组合，在资源注册表里筛、不加载资源：`path` 目录（可给目录数组；`recursive=false` 不含子目录）、`class` 资源类型（Blueprint、WidgetBlueprint、DataTable…）、`parent` 蓝图父类（含间接继承，C++ 类认整条继承链）、`name` / `exclude` 名字通配符（`"*_Boss"`、`["BP_Old*", "*_Test"]`；带 `/` 时比对路径，如 `"/Game/Enemies/Legacy/*"`）、`prefix` 名字前缀、`tags` 注册表标签。例：某目录下所有继承 BP_EnemyBase、名字不以 _Old 结尾的蓝图改 MaxHP：`ue_set select={path:"/Game/Characters", class:"Blueprint", parent:"BP_EnemyBase", exclude:"*_Old"} prop=MaxHP value=200`。拿不准选中了哪些时先 `dryRun=true` 看清单。
 - 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
 - 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。

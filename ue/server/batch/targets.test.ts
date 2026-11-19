@@ -2,7 +2,7 @@
 // 用法（在仓库根）：node --test ue/server/batch/targets.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_LIST_MAX, keep, tooMany, wildcard } from './select-filter.ts'
+import { DEFAULT_LIST_MAX, itemsFromJson, keep, tooMany, wildcard } from './select-filter.ts'
 
 test('通配符和 UE 的 MatchesWildcard 一样：* ? 不分大小写，点号按字面', () => {
   assert.ok(wildcard('BP_Goblin_Boss', '*_boss'))
@@ -29,4 +29,12 @@ test('paths / items 逐个列出超过上限时拦下，让改用 select；上�
   assert.match(tooMany(DEFAULT_LIST_MAX + 1, 'items', NaN) ?? '', /没有执行.*改用 select/)
   assert.equal(tooMany(80, 'paths', 100), undefined)
   assert.match(tooMany(101, 'paths', 100) ?? '', /最多 100 个/)
+})
+
+test('itemsFile 的内容：数组、{items}、一行一个对象都认，缺 path 报第几项', () => {
+  assert.deepEqual(itemsFromJson('[{"path":"/Game/A","value":1}]'), [{ path: '/Game/A', value: 1 }])
+  assert.equal((itemsFromJson('\uFEFF{"items":[{"path":"/Game/A"},{"path":"/Game/B"}]}') as unknown[]).length, 2)
+  assert.equal((itemsFromJson('{"path":"/Game/A"}\n{"path":"/Game/B"}\n') as unknown[]).length, 2)
+  assert.match(String(itemsFromJson('[{"path":"/Game/A"},{"value":1}]')), /第 2 项没有 path/)
+  assert.match(String(itemsFromJson('')), /空/)
 })
