@@ -16,6 +16,33 @@ import { openMenuAt, type MenuItem } from '../../../menu.tsx'
 import { kindLabel, useTargetInfo, worldLabel } from '../../../ui.tsx'
 import type { ViewDef } from './views.ts'
 
+/** 面包屑里的一级：名字和点了去哪 */
+export interface Crumb {
+  label: string
+  onClick: () => void
+}
+
+function CrumbLink({ crumb, last, title }: { crumb: Crumb; last?: boolean; title: string }) {
+  const { cn } = h()
+  return (
+    <span className="ue:flex ue:min-w-0 ue:shrink ue:items-center ue:gap-1.5 ue:font-mono">
+      <span className="ue:text-subtle">/</span>
+      {last ? (
+        <span className="ue:truncate ue:text-heading ue:font-semibold ue:text-fg">{crumb.label}</span>
+      ) : (
+        <button
+          type="button"
+          title={title}
+          onClick={crumb.onClick}
+          className={cn('ue:min-w-0 ue:cursor-pointer ue:truncate ue:text-muted ue:hover:text-fg')}
+        >
+          {crumb.label}
+        </button>
+      )}
+    </span>
+  )
+}
+
 /**
  * 编辑页顶栏（效果图 1）：左边面包屑（GameTest / 文件夹 / 脚本名 + 编写或录制的标签），
  * 右边依次是「编写 / 录制」、视图切换、目标（PIE · 客户端 0）、保存状态、「⋯」、「试这个节点」、「运行」。
@@ -42,7 +69,16 @@ export function EditorHeader({
   onRunFrom,
   onRunTo,
   running,
+  callers,
+  scopes,
+  onRoot,
 }: {
+  /** 从别的脚本「调用脚本」节点双击进来的：调用方一层一层（点了回到那个脚本），这个脚本标「引用」 */
+  callers?: Crumb[]
+  /** 在画布上进到了哪几层块里面（子图），点了回到那一层 */
+  scopes?: Crumb[]
+  /** 进到块里面时点脚本名回到最外层 */
+  onRoot?: () => void
   name: string
   /** 场景所在文件夹（相对场景根），根下的为空 */
   folder: string
@@ -83,25 +119,49 @@ export function EditorHeader({
           <FlaskConical className="ue:h-3.5 ue:w-3.5" />
           GameTest
         </span>
-        {folder
-          .split('/')
-          .filter(Boolean)
-          .map((f, i, all) => (
-            <span key={i} className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-muted">
-              <span className="ue:text-subtle">/</span>
-              <button
-                type="button"
-                title={t('在场景库里定位到这个文件夹')}
-                disabled={!onFolder}
-                onClick={() => onFolder?.(all.slice(0, i + 1).join('/'))}
-                className="ue:cursor-pointer ue:hover:text-fg ue:disabled:cursor-default"
-              >
-                {f}
-              </button>
-            </span>
-          ))}
+        {callers?.length
+          ? callers.map((c, i) => <CrumbLink key={`c${i}`} crumb={c} title={t('回到调用它的脚本')} />)
+          : folder
+              .split('/')
+              .filter(Boolean)
+              .map((f, i, all) => (
+                <span key={i} className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-muted">
+                  <span className="ue:text-subtle">/</span>
+                  <button
+                    type="button"
+                    title={t('在场景库里定位到这个文件夹')}
+                    disabled={!onFolder}
+                    onClick={() => onFolder?.(all.slice(0, i + 1).join('/'))}
+                    className="ue:cursor-pointer ue:hover:text-fg ue:disabled:cursor-default"
+                  >
+                    {f}
+                  </button>
+                </span>
+              ))}
         <span className="ue:text-subtle">/</span>
-        <span className="ue:truncate ue:text-heading ue:font-semibold ue:text-fg">{name}</span>
+        {onRoot ? (
+          <button
+            type="button"
+            title={t('回到最外层')}
+            onClick={onRoot}
+            className="ue:min-w-0 ue:cursor-pointer ue:truncate ue:text-heading ue:font-semibold ue:text-muted ue:hover:text-fg"
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="ue:truncate ue:text-heading ue:font-semibold ue:text-fg">{name}</span>
+        )}
+        {!!callers?.length && (
+          <span
+            title={t('这是被调用的脚本本身：在这里改就是改它，调用它的地方都跟着变')}
+            className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-warning/12 ue:px-1.5 ue:text-caption ue:text-warning"
+          >
+            {t('引用')}
+          </span>
+        )}
+        {scopes?.map((c, i) => (
+          <CrumbLink key={`s${i}`} crumb={c} last={i === scopes.length - 1} title={t('回到这一层')} />
+        ))}
         <span
           className={cn(
             'ue:shrink-0 ue:rounded-(--c-badge-radius) ue:px-1.5 ue:text-caption',

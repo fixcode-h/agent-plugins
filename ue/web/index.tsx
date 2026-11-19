@@ -17,7 +17,7 @@ import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
-import { BpSpecimen, FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
+import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { EditSpecimen } from './sections/uekit/gt-edit/EditSpecimen.tsx'
 import { DebugSpecimen } from './sections/uekit/gt-debug/DebugSpecimen.tsx'
 import { PickSpecimen } from './sections/uekit/gt-live/PickSpecimen.tsx'
@@ -82,13 +82,12 @@ const activate: ActivateWeb = (host) => {
     // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
     specimens: [
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
-      // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标，跟面板「流程图画布」「数字角标」的调节项
-      { id: 'gt-flow', label: t('GameTest · 流程图'), tune: ['canvas', 'countBadge'], Specimen: FlowSpecimen },
+      // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标 + 节点卡片和圆点引脚，跟面板「流程图画布」「数字角标」「流程图节点」「流程图引脚」的调节项
       {
-        id: 'gt-bp',
-        label: t('GameTest · 蓝图画布节点'),
-        tune: ['flowNode', 'flowPin', 'countBadge'],
-        Specimen: BpSpecimen,
+        id: 'gt-flow',
+        label: t('GameTest · 流程图'),
+        tune: ['canvas', 'countBadge', 'flowNode', 'flowPin'],
+        Specimen: FlowSpecimen,
       },
       // GameTest 脚本编辑页（定稿 9.2–9.5）：列表视图、检查器、条件组编辑器，跟面板「行」「输入框」「菜单」的调节项
       { id: 'gt-edit', label: t('GameTest · 脚本编辑'), tune: ['row', 'input', 'menu'], Specimen: EditSpecimen },

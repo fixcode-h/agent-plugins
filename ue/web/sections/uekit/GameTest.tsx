@@ -45,6 +45,7 @@ import { GtEditor } from './gt-edit/index.ts'
 import { ApiLibrary } from './gt-api/ApiLibrary.tsx'
 import type { GtJob, GtRunSummary, GtScenarioFile } from './gt-run/types.ts'
 import { ListCol, useExtEvents } from './ListCol.tsx'
+import { NodeShelf } from './NodeShelf.tsx'
 import { NotInstalled } from './NotInstalled.tsx'
 import { FileTree, type TreeLeaf } from './tree.tsx'
 import { GT_COPY_MIME, GT_STEPS_MIME } from './gt-flow/dnd.ts'
@@ -86,7 +87,7 @@ export function GameTest() {
   const [runs, setRuns] = useState<GtRunSummary[]>([])
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState<'scenarios' | 'nodes' | 'runs'>('scenarios')
+  const [tab, setTab] = useState<'scenarios' | 'runs'>('scenarios')
   // 「节点」页签里给编辑器画节点面板的位置（编辑器用 portal 画进来）
   const [paletteHost, setPaletteHost] = useState<HTMLDivElement | null>(null)
   // 左栏「最近运行」里点的那次：打开那个脚本，右栏看这次的报告
@@ -219,6 +220,26 @@ export function GameTest() {
   )
 
   const selected = list?.scenarios.find((s) => s.relativePath === sub)
+  // 从「调用脚本」双击进来的一层层调用方（子图，用户 2026-11-19）：打开的就是被调用的脚本本身，面包屑点了回去；
+  // 从脚本库换到别的脚本时清掉
+  const [callers, setCallers] = useState<{ path: string; name: string; to: string }[]>([])
+  useEffect(() => {
+    if (callers.length && callers[callers.length - 1].to !== sub) setCallers([])
+  }, [sub, callers])
+  const openCall = (script: string) => {
+    const want = script.replace(/\.json$/i, '').toLowerCase()
+    const hit = list?.scenarios.find((x) => x.relativePath.replace(/\.json$/i, '').toLowerCase() === want)
+    if (!hit || !selected) return h().toast.error(t('场景库里找不到 {s}', { s: script }))
+    setCallers((c) => [...c, { path: selected.relativePath, name: selected.name, to: hit.relativePath }])
+    open(hit.relativePath)
+  }
+  const callerCrumbs = callers.map((c, i) => ({
+    label: c.name,
+    onClick: () => {
+      setCallers(callers.slice(0, i).map((x, j) => (j === i - 1 ? { ...x, to: c.path } : x)))
+      open(c.path)
+    },
+  }))
   /** 打开另一个脚本：编辑器里有没存的改动时先问一句 */
   const open = (p: string) => {
     if (p === selected?.relativePath) return
@@ -331,13 +352,11 @@ export function GameTest() {
       return startRun(s.name, { name: s.name, steps: [step], stepDelayMs: file.stepDelayMs })
     }
     const i = start.index
-    return startRun(
-      s.name,
-      {
-        name: s.name,
-        steps: legacySteps(file.steps, file.schemaVersion ?? 1).slice(i, only ? i + 1 : undefined),
-        stepDelayMs: file.stepDelayMs,
-      })
+    return startRun(s.name, {
+      name: s.name,
+      steps: legacySteps(file.steps, file.schemaVersion ?? 1).slice(i, only ? i + 1 : undefined),
+      stepDelayMs: file.stepDelayMs,
+    })
   }
   /**
    * 停止：gt.stop 只是请求取消，结果以 UE 的作业状态为准——已经不在跑（例如早就失败结束、推送没到）时
@@ -473,7 +492,7 @@ export function GameTest() {
         count={list?.scenarios.length ?? '…'}
         query={query}
         onQuery={setQuery}
-        placeholder={tab === 'nodes' ? t('找节点') : t('按名字找场景')}
+        placeholder={t('找场景或节点')}
         // 空白处右键：在场景根新建脚本、文件夹（其他页签没有可新建的，交给整页兜底）
         onBodyMenu={tab === 'scenarios' ? lib.blankMenu : undefined}
         searchExtra={
@@ -494,16 +513,27 @@ export function GameTest() {
             />
           </>
         }
+        // 节点常驻在搜索框下面（用户 2026-11-19：不用单独一个页签），搜索框同时筛节点和场景
+        shelf={
+          selected && !recording ? (
+            <NodeShelf
+              hint={t(
+                '拖到画布上放下，或在连线上点 +；点一下插在选中那步后面。从下面的脚本列表拖一个脚本进画布就是「调用脚本」',
+              )}
+            >
+              <div ref={setPaletteHost} />
+            </NodeShelf>
+          ) : undefined
+        }
         tabs={
           <ui.Segmented
             size="sm"
             fill
-            label={t('脚本 / 节点 / 最近运行')}
+            label={t('脚本 / 最近运行')}
             value={tab}
             onChange={setTab}
             options={[
               { id: 'scenarios', label: t('脚本') },
-              { id: 'nodes', label: t('节点') },
               { id: 'runs', label: `${t('最近运行')} ${runs.length}` },
             ]}
           />
@@ -522,17 +552,6 @@ export function GameTest() {
         ) : !list ? (
           <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
             <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
-          </div>
-        ) : tab === 'nodes' ? (
-          <div className="ue:flex ue:flex-col ue:gap-2 ue:px-1 ue:py-1">
-            <p className="ue:text-caption ue:text-subtle">
-              {t('拖到画布上放下，或在连线上点 +；点一下插在选中那步后面。从左边「脚本」页拖一个脚本进画布就是「调用脚本」')}
-            </p>
-            {selected && !recording ? (
-              <div ref={setPaletteHost} />
-            ) : (
-              <p className="ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">{t('先打开一个脚本')}</p>
-            )}
           </div>
         ) : tab === 'runs' ? (
           <RunList
@@ -695,8 +714,10 @@ export function GameTest() {
             gtVersion={gtVersion}
             onSaved={reload}
             onDirty={onDirty}
-            paletteHost={tab === 'nodes' ? paletteHost : null}
-            paletteQuery={tab === 'nodes' ? q : ''}
+            callers={callerCrumbs}
+            onOpenCall={openCall}
+            paletteHost={paletteHost}
+            paletteQuery={q}
             onFolder={(f) => {
               setTab('scenarios')
               setQuery('')

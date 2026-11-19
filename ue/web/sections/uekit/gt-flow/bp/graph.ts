@@ -8,7 +8,6 @@ import {
   type GtStep,
   type SlotKind,
 } from '../../../../../shared/gt-script/index.ts'
-import { defaultCollapsed } from '../layout.ts'
 
 /**
  * GameTest 蓝图式流程图的图模型（设计稿 designs/GameTest整页编辑器与蓝图画布-设计稿.md 第 3 节）。
@@ -25,6 +24,8 @@ import { defaultCollapsed } from '../layout.ts'
 
 export interface BpNote {
   id: string
+  /** 在哪个块里面（同 loose 的 scope） */
+  scope?: string
   x: number
   y: number
   w?: number
@@ -34,7 +35,8 @@ export interface BpNote {
 
 export interface BpLayout {
   pos?: Record<string, [number, number]>
-  loose?: { steps: GtStep[] }[]
+  /** scope：在哪个块里面（块的 key，见 scopeKey）；不写是最外层 */
+  loose?: { steps: GtStep[]; scope?: string }[]
   notes?: BpNote[]
 }
 
@@ -66,7 +68,8 @@ export interface BpPin {
   at: BpAt
 }
 
-export type BpKind = 'start' | 'setup' | 'step' | 'guard' | 'note'
+/** entry：进到块里面时，块的每个子槽一个入口事件节点（照 UE 蓝图折叠图的输入节点） */
+export type BpKind = 'start' | 'setup' | 'step' | 'guard' | 'note' | 'entry'
 
 export interface BpNode {
   id: string
@@ -78,8 +81,10 @@ export interface BpNode {
   step?: GtStep
   /** 没连上，不执行 */
   loose?: boolean
-  /** 折叠起来的块：里面藏着几步 */
+  /** 块：里面有几步（块在画布上只画一个节点，双击进到里面看） */
   folded?: number
+  /** 入口节点：是哪个子槽（then / else / do…）和第几个「否则如果」，块是什么（循环的 do 叫「每轮」） */
+  entry?: { kind: SlotKind; index?: number; action: string }
   /** 守护：路径（guards.N）和守护本身；global 是运行设置里的全局守护（只读，没有处理步骤） */
   guard?: GtGuard
   guardPath?: GtPath
@@ -111,7 +116,8 @@ const nodeH = (n: BpNode) => {
   const rows = n.outs.filter((p) => p.kind !== 'next').length
   return BP.head + BP.body + rows * BP.row
 }
-const nodeW = (n: BpNode) => (n.kind === 'start' || n.kind === 'setup' ? BP.start : n.kind === 'guard' ? BP.eventW : BP.w)
+const nodeW = (n: BpNode) =>
+  n.kind === 'start' || n.kind === 'setup' || n.kind === 'entry' ? BP.start : n.kind === 'guard' ? BP.eventW : BP.w
 
 const arr = (doc: unknown, p: GtPath) => {
   const a = getAt(doc, p)
@@ -134,7 +140,12 @@ function pinsOf(step: GtStep, path: GtPath, folded: boolean): BpPin[] {
   const slots = folded ? [] : slotsOf(step)
   return [
     ...slots.map(
-      (r): BpPin => ({ id: `s:${pathStr(r.key)}`, kind: r.kind, index: r.index, at: { slot: [...path, ...r.key], index: 0 } }),
+      (r): BpPin => ({
+        id: `s:${pathStr(r.key)}`,
+        kind: r.kind,
+        index: r.index,
+        at: { slot: [...path, ...r.key], index: 0 },
+      }),
     ),
     next,
   ]
@@ -143,21 +154,59 @@ function pinsOf(step: GtStep, path: GtPath, folded: boolean): BpPin[] {
 /** 块里一共多少步（折叠时显示） */
 function countInside(step: GtStep): number {
   let n = 0
-  for (const r of slotsOf(step))
-    for (const s of arr(step, r.key)) if (isStep(s)) n += 1 + countInside(s)
+  for (const r of slotsOf(step)) for (const s of arr(step, r.key)) if (isStep(s)) n += 1 + countInside(s)
   return n
 }
 
 export interface GraphOptions {
-  /** 块折没折：不给按默认（录制段折叠） */
-  folded?: (step: GtStep, key: string) => boolean
+  /** 进到哪个块里面看（块的路径）；不给是最外层 */
+  scope?: GtPath
   globalGuards?: GtGuard[]
+}
+
+/** 块当作「里面」时的 key：步骤 id，没有 id 用路径（没连上的串、注释框按它记属于哪一层） */
+export const scopeKey = (step: GtStep, path: GtPath) =>
+  typeof step.id === 'string' && step.id ? step.id : pathStr(path)
+
+/**
+ * 一个步骤槽在哪一层：最近的外层块的 key；最外层（steps、setup、顶层守护）是 ''。
+ * 没连上的串的最外一层按它记的 scope
+ */
+export function scopeOfSlot(doc: GtScript, slot: GtPath): string {
+  for (let i = slot.length - 1; i > 0; i--) {
+    const p = slot.slice(0, i)
+    if (isLoosePath(slot) && p.length < 4) break
+    const v = getAt(doc, p)
+    if (isStep(v)) return scopeKey(v, p)
+  }
+  if (isLoosePath(slot)) return layoutOf(doc).loose?.[slot[2] as number]?.scope ?? ''
+  return ''
+}
+
+/** 按块的 key 找回它现在的路径（找不到返回 undefined：块被删了或换了 id） */
+export function findScope(doc: GtScript, key: string): GtPath | undefined {
+  let hit: GtPath | undefined
+  const visit = (slot: GtPath) => {
+    arr(doc, slot).forEach((raw, i) => {
+      if (hit || !isStep(raw)) return
+      const p = [...slot, i]
+      if (scopeKey(raw, p) === key && slotsOf(raw).length) return void (hit = p)
+      for (const r of slotsOf(raw)) visit([...p, ...r.key])
+    })
+  }
+  visit(['steps'])
+  visit(['setup'])
+  arr(doc, ['guards']).forEach((_, i) => visit(['guards', i, 'do']))
+  ;(layoutOf(doc).loose ?? []).forEach((_, i) => visit(looseSlot(i)))
+  return hit
 }
 
 /** 从脚本算出画布上的节点和连线（位置：记过的照记的，没记的自动摆） */
 export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
-  const isFolded = o.folded ?? ((s: GtStep) => defaultCollapsed(s))
   const layout = layoutOf(doc)
+  const scopeStep = o.scope ? (getAt(doc, o.scope) as GtStep | undefined) : undefined
+  const scope = o.scope && isStep(scopeStep) ? o.scope : undefined
+  const here = scope ? scopeKey(scopeStep!, scope) : ''
   const nodes: BpNode[] = []
   const edges: BpEdge[] = []
   const byId = new Map<string, BpNode>()
@@ -167,7 +216,8 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
     return n
   }
   // 自动布局：每串从 (x, y) 往右排成一行，「之后」接着往右走直线；块的子槽（是 / 否 / 每轮…）排在块右下方，
-  // 一个槽一行往下排开。同一行后面的块的子槽要避开前面块已经占了的地方（往下挪）
+  // 一个槽一行往下排开。块连同它展开的子槽算一整块：后面那步排在整块的右边，不和别的块的子槽挤在同几列里
+  // （用户 2026-11-19：以前后面那步紧挨着块，几个块的子槽交错排在同几列、连线交叉，看不出谁属于哪个块）
   const auto = new Map<string, [number, number]>()
   /** 前一个节点（新插进来、没记位置的节点跟着它摆） */
   const prev = new Map<string, string>()
@@ -177,14 +227,12 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
     let right = x
     let bottom = y
     let link = from
-    // 这一行下面已经放了子槽的区域：[右边界, 下边界]
-    const taken: [number, number][] = []
     arr(doc, slot).forEach((raw, i) => {
       if (!isStep(raw)) return
       const path = [...slot, i]
       const key = bpKey(raw, path)
-      const block = slotsOf(raw).length > 0
-      const folded = block && isFolded(raw, key)
+      // 块只画一个节点（用户 2026-11-19：不在原地展开，双击进到里面看，顶上路径显示在第几层）
+      const folded = slotsOf(raw).length > 0
       const n = add({
         id: key,
         kind: 'step',
@@ -199,73 +247,103 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
       })
       auto.set(key, [cx, y])
       if (link) {
-        edges.push({ id: `${link.node}:${link.pin.id}>${key}`, from: link.node, pin: link.pin.id, to: key, at: link.pin.at })
+        edges.push({
+          id: `${link.node}:${link.pin.id}>${key}`,
+          from: link.node,
+          pin: link.pin.id,
+          to: key,
+          at: link.pin.at,
+        })
         prev.set(key, link.node)
       }
       const bw = nodeW(n)
       const bh = nodeH(n)
       right = Math.max(right, cx + bw)
       bottom = Math.max(bottom, y + bh)
+      // 这一块占到的右边界：块自己，展开了再加上子槽
+      let blockRight = cx + bw
       const subs = n.outs.filter((p) => p.kind !== 'next')
       if (subs.length) {
         const sx = cx + bw + BP.gx
-        let sy = Math.max(y + bh, ...taken.filter(([r]) => r > sx).map(([, b]) => b)) + BP.gy
-        let sr = sx
+        let sy = y + bh + BP.gy
         for (const p of subs) {
           const r = chain(p.at.slot, sx, sy, { node: key, pin: p })
-          sr = Math.max(sr, sx + r.w)
+          blockRight = Math.max(blockRight, sx + r.w)
           sy += Math.max(r.h, BP.row) + BP.gy
         }
-        taken.push([sr, sy - BP.gy])
-        right = Math.max(right, sr)
+        right = Math.max(right, blockRight)
         bottom = Math.max(bottom, sy - BP.gy)
       }
-      cx += bw + BP.gx
+      cx = blockRight + BP.gx
       link = { node: key, pin: n.outs[n.outs.length - 1] }
     })
     return { w: Math.max(0, right - x), h: bottom - y }
   }
 
-  // 主流程：开始 → steps；有 setup 时多一个「准备」事件
   let y = 0
-  const startPin: BpPin = { id: 'next', kind: 'next', at: { slot: ['steps'], index: 0 } }
-  add({ id: START_KEY, kind: 'start', x: 0, y: 0, outs: [startPin], input: false })
-  auto.set(START_KEY, [0, y])
-  const main = chain(['steps'], BP.start + BP.gx, y, { node: START_KEY, pin: startPin })
-  y += Math.max(main.h, BP.head) + BP.gy * 2
-  if (arr(doc, ['setup']).length) {
-    const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['setup'], index: 0 } }
-    add({ id: SETUP_KEY, kind: 'setup', x: 0, y: 0, outs: [pin], input: false })
-    auto.set(SETUP_KEY, [0, y])
-    const r = chain(['setup'], BP.start + BP.gx, y, { node: SETUP_KEY, pin })
-    y += Math.max(r.h, BP.head) + BP.gy * 2
-  }
-  // 守护：一条一个事件节点，后面接它的处理步骤
-  arr(doc, ['guards']).forEach((raw, i) => {
-    if (!raw || typeof raw !== 'object') return
-    const g = raw as GtGuard
-    const key = guardKey(g, i)
-    const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['guards', i, 'do'], index: 0 } }
-    add({ id: key, kind: 'guard', x: 0, y: 0, guard: g, guardPath: ['guards', i], outs: [pin], input: false })
-    auto.set(key, [0, y])
-    const r = chain(['guards', i, 'do'], BP.eventW + BP.gx, y, { node: key, pin })
-    y += Math.max(r.h, BP.head + BP.body) + BP.gy
-  })
-  ;(o.globalGuards ?? []).forEach((g, i) => {
-    const key = `gg:${i}`
-    add({ id: key, kind: 'guard', x: 0, y: 0, guard: g, global: true, outs: [], input: false })
-    auto.set(key, [0, y])
-    y += BP.head + BP.body + BP.gy
-  })
-  // 没连上的：一串一行，排在最下面
+  if (scope) {
+    // 进到块里面：块的每个子槽一个入口节点，后面接这个槽里的步骤
+    for (const r of slotsOf(scopeStep!)) {
+      const key = `#in:${pathStr(r.key)}`
+      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: [...scope, ...r.key], index: 0 } }
+      add({
+        id: key,
+        kind: 'entry',
+        x: 0,
+        y: 0,
+        entry: { kind: r.kind, index: r.index, action: scopeStep!.action },
+        outs: [pin],
+        input: false,
+      })
+      auto.set(key, [0, y])
+      const c = chain(pin.at.slot, BP.start + BP.gx, y, { node: key, pin })
+      y += Math.max(c.h, BP.head) + BP.gy * 2
+    }
+  } else y = root(y)
+  // 没连上的：一串一行，排在最下面（只画这一层的）
   y += BP.gy
-  ;(layout.loose ?? []).forEach((_, i) => {
+  ;(layout.loose ?? []).forEach((c, i) => {
+    if ((c?.scope ?? '') !== here) return
     const r = chain(looseSlot(i), 0, y)
     y += Math.max(r.h, BP.head) + BP.gy
   })
   for (const note of Array.isArray(layout.notes) ? layout.notes : []) {
-    if (!note || typeof note.id !== 'string') continue
+    if (!note || typeof note.id !== 'string' || (note.scope ?? '') !== here) continue
     add({ id: `n:${note.id}`, kind: 'note', x: note.x, y: note.y, note, outs: [], input: false })
+  }
+
+  function root(y: number) {
+    // 主流程：开始 → steps；有 setup 时多一个「准备」事件
+    const startPin: BpPin = { id: 'next', kind: 'next', at: { slot: ['steps'], index: 0 } }
+    add({ id: START_KEY, kind: 'start', x: 0, y: 0, outs: [startPin], input: false })
+    auto.set(START_KEY, [0, y])
+    const main = chain(['steps'], BP.start + BP.gx, y, { node: START_KEY, pin: startPin })
+    y += Math.max(main.h, BP.head) + BP.gy * 2
+    if (arr(doc, ['setup']).length) {
+      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['setup'], index: 0 } }
+      add({ id: SETUP_KEY, kind: 'setup', x: 0, y: 0, outs: [pin], input: false })
+      auto.set(SETUP_KEY, [0, y])
+      const r = chain(['setup'], BP.start + BP.gx, y, { node: SETUP_KEY, pin })
+      y += Math.max(r.h, BP.head) + BP.gy * 2
+    }
+    // 守护：一条一个事件节点，后面接它的处理步骤
+    arr(doc, ['guards']).forEach((raw, i) => {
+      if (!raw || typeof raw !== 'object') return
+      const g = raw as GtGuard
+      const key = guardKey(g, i)
+      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['guards', i, 'do'], index: 0 } }
+      add({ id: key, kind: 'guard', x: 0, y: 0, guard: g, guardPath: ['guards', i], outs: [pin], input: false })
+      auto.set(key, [0, y])
+      const r = chain(['guards', i, 'do'], BP.eventW + BP.gx, y, { node: key, pin })
+      y += Math.max(r.h, BP.head + BP.body) + BP.gy
+    })
+    ;(o.globalGuards ?? []).forEach((g, i) => {
+      const key = `gg:${i}`
+      add({ id: key, kind: 'guard', x: 0, y: 0, guard: g, global: true, outs: [], input: false })
+      auto.set(key, [0, y])
+      y += BP.head + BP.body + BP.gy
+    })
+    return y
   }
 
   // 定位置：记过的照记的；没记的跟着前一个节点挪（保持自动布局里的相对位置），前面也没有就用自动布局

@@ -1,23 +1,7 @@
-import {
-  CircleCheck,
-  CircleX,
-  Copy,
-  Download,
-  Loader2,
-  ScanSearch,
-  Sparkles,
-  TriangleAlert,
-  Undo2,
-} from 'lucide-react'
+import { CircleCheck, CircleX, Copy, Download, Loader2, ScanSearch, Sparkles, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  getAt,
-  isBlock,
-  type GtPath,
-  type GtScript,
-  type GtStep,
-} from '../../../../shared/gt-script/index.ts'
+import { getAt, isBlock, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { ErrorText, fmtTime } from '../../../ui.tsx'
@@ -32,7 +16,8 @@ import { stepKey } from '../gt-flow/layout.ts'
 import { guardsSupported, GUARD_MIN_VERSION } from '../gt-guards/model.ts'
 import type { CmdCtx } from './commands.ts'
 import { EditContext } from './ctx.ts'
-import { EditorHeader } from './EditorHeader.tsx'
+import { EditorHeader, type Crumb } from './EditorHeader.tsx'
+import { useScope } from './use-scope.ts'
 import { Inspector } from './Inspector.tsx'
 import { useRecordHere } from './record-here.ts'
 import { useTidyHere } from './tidy-here.ts'
@@ -93,7 +78,13 @@ export function GtEditor({
   openRun,
   lastRun,
   onDirty,
+  callers,
+  onOpenCall,
 }: {
+  /** 从别的脚本的「调用脚本」双击进来的：调用方一层一层，点了回去 */
+  callers?: Crumb[]
+  /** 双击「调用脚本」节点：打开被调用的脚本（script 是相对场景根、不带 .json 的路径） */
+  onOpenCall?: (script: string) => void
   project: string
   /** 场景根的绝对路径 */
   root: string
@@ -131,6 +122,7 @@ export function GtEditor({
 }) {
   const { ui } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
+  const scope = useScope(s.doc, s.selected, s.select)
   const apis = useApis(project, root, live)
   const [aliases, setAliases] = useState<string[]>([])
   const [view, setView] = useState(readView)
@@ -362,6 +354,9 @@ export function GtEditor({
           onRunFrom={runFrom}
           onRunTo={!old && !run && selKey && debug.run ? () => debug.run?.({ to: selKey }) : undefined}
           running={!!run}
+          callers={callers}
+          scopes={scope.crumbs}
+          onRoot={scope.path ? scope.root : undefined}
         />
         {run && (
           <RunBanner run={run} paused={debug.flow.paused}>
@@ -395,6 +390,14 @@ export function GtEditor({
                 selected={s.selected}
                 onSelect={s.select}
                 onTry={onTry}
+                scope={scope.path}
+                onEnter={(p, st) => {
+                  if (st.action !== 'call') return scope.enter(p, st)
+                  const script = typeof st.script === 'string' ? st.script : ''
+                  if (!script) return h().toast.error(t('先在检查器里填要调用的脚本'))
+                  onOpenCall?.(script)
+                }}
+                onLeave={scope.leave}
                 history={{ undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo }}
                 run={!run && !debug.flow.active && lastFailed ? { status: lastFailed } : undefined}
               />

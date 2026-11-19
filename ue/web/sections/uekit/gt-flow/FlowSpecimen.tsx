@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { insert, type GtScript } from '../../../../shared/gt-script/index.ts'
-import { GtFlowView } from './GtFlowView.tsx'
-import { BpView } from './bp/BpView.tsx'
-import { emptyRun, type FlowRunState } from './run-state.ts'
+import { type EditResult, type GtPath, type GtScript } from '../../../../shared/gt-script/index.ts'
+import { EditContext } from '../gt-edit/ctx.ts'
+import { useScope } from '../gt-edit/use-scope.ts'
+import { FlowEditView } from './FlowEditView.tsx'
 
 /**
  * 设置 →「组件」里 GameTest 流程图的示例（效果图 1、6 的「每日福利」）：假数据，不连 UE。
- * 能点 + 插、能折叠展开；运行状态是摆好的一刻（循环第 3 轮、正在等奖励弹窗、守护触发过几次，其中一条超过 999）
+ * 双击块进到里面（子图），顶上一行路径点了回去；能框选、拖线；运行状态是摆好的一刻（循环第 3 轮、正在等奖励弹窗、守护触发过几次，其中一条超过 999）
  */
 const DOC: GtScript = {
   kind: 'gametest-scenario',
@@ -74,53 +74,52 @@ const DOC: GtScript = {
   ],
 }
 
-const RUN: FlowRunState = {
-  ...emptyRun(),
-  runId: 'demo',
-  active: true,
+/** 摆好的一刻：循环第 3 轮、正在等奖励弹窗（编辑页外壳给视图的简版运行状态） */
+const RUN_VIEW = {
   at: 's6',
-  steps: {
-    s1: { status: 'passed', ms: 18200, runs: 1 },
-    g_open: { status: 'passed', ms: 2600, runs: 1 },
-    s2: { status: 'passed' },
-    s3: { status: 'passed' },
-    s4: { status: 'passed' },
-    loop1: { status: 'running', iter: 3, runs: 1 },
-    if1: { status: 'passed', runs: 3 },
-    s5: { status: 'passed', ms: 320, runs: 2 },
-    s6: { status: 'running', runs: 2 },
-  },
-  guards: { g1: 1, g2: 12, g3: 1200 },
-}
+  status: { s1: 'ok', g_open: 'ok', s2: 'ok', s3: 'ok', s4: 'ok', loop1: 'run', if1: 'ok', s5: 'ok', s6: 'run' },
+} as const
 
 export function FlowSpecimen() {
   const [doc, setDoc] = useState(DOC)
-  const [sel, setSel] = useState<string | undefined>('loop1')
+  const [sel, setSel] = useState<GtPath[]>([['steps', 2]])
+  const scope = useScope(doc, sel, setSel)
+  const apply = (r: EditResult | GtScript | undefined) => {
+    if (!r) return false
+    if ('path' in r && Array.isArray(r.path) && 'doc' in r) {
+      setDoc((r as EditResult).doc)
+      setSel([(r as EditResult).path])
+    } else setDoc(r as GtScript)
+    return true
+  }
   return (
-    <div className="ue:h-[460px] ue:w-full ue:overflow-hidden ue:rounded-xl ue:bg-bg">
-      <GtFlowView
-        doc={doc}
-        onChange={(d) => setDoc(d)}
-        selected={sel}
-        onSelect={(s) => setSel(s?.key)}
-        run={RUN}
-        // 示例里点 + 直接插一步「等一下」，真实的编辑页弹插入菜单
-        onPickInsert={(at) => setDoc((d) => insert(d, at.slot, at.index, [{ action: 'wait', ms: 500 }])?.doc ?? d)}
-      />
-    </div>
-  )
-}
-
-/**
- * 设置 →「组件」里 GameTest 蓝图画布的示例：同一份「每日福利」画成蓝图节点，
- * 看节点卡片、内容区（多项条件一行一项）、出口行、圆点引脚；调「流程图节点」「流程图引脚」马上能看到变化
- */
-export function BpSpecimen() {
-  const [doc, setDoc] = useState(DOC)
-  const [sel, setSel] = useState<string | undefined>('loop1')
-  return (
-    <div className="ue:h-[520px] ue:w-full ue:overflow-hidden ue:rounded-xl ue:bg-bg">
-      <BpView doc={doc} onChange={(d) => setDoc(d)} selected={sel} onSelect={(s) => setSel(s?.key)} run={RUN} />
-    </div>
+    <EditContext.Provider value={{ project: '', root: '', live: false, doc, apis: [], aliases: [] }}>
+      <div className="ue:flex ue:h-[460px] ue:w-full ue:flex-col ue:overflow-hidden ue:rounded-xl ue:bg-bg">
+        {/* 和编辑页顶栏同一种面包屑：进到块里面一层多一级，点了回去 */}
+        <nav className="ue:flex ue:items-center ue:gap-1.5 ue:border-b ue:border-line ue:px-3 ue:py-1.5 ue:font-mono ue:text-footnote ue:text-muted">
+          <button type="button" className="ue:cursor-pointer ue:hover:text-fg" onClick={scope.root}>
+            {doc.name}
+          </button>
+          {scope.crumbs.map((c, i) => (
+            <span key={i} className="ue:flex ue:items-center ue:gap-1.5">
+              <span className="ue:text-subtle">/</span>
+              <button type="button" className="ue:cursor-pointer ue:hover:text-fg" onClick={c.onClick}>
+                {c.label}
+              </button>
+            </span>
+          ))}
+        </nav>
+        <FlowEditView
+          doc={doc}
+          onChange={apply}
+          selected={sel}
+          onSelect={setSel}
+          run={RUN_VIEW}
+          scope={scope.path}
+          onEnter={(p, st) => st.action !== 'call' && scope.enter(p, st)}
+          onLeave={scope.leave}
+        />
+      </div>
+    </EditContext.Provider>
   )
 }

@@ -9,6 +9,8 @@ import { h } from '../host.ts'
  */
 interface Slot {
   el: HTMLElement | null
+  /** 二级面板标题右边的小位置（整栏列表的个数放这里，和标题同一行） */
+  aside: HTMLElement | null
   /** 页面占用插槽（有页面放东西才显示二级面板）；wide：放进来的是整栏列表（对象页的大纲），面板加宽、可拖。返回释放函数 */
   claim: (wide?: boolean) => () => void
 }
@@ -18,10 +20,12 @@ export const SlotCtx = createContext<Slot | null>(null)
 /** 二级面板用：建插槽，返回给 Provider 的值和「有没有页面占用」 */
 export function useSlot() {
   const [el, setEl] = useState<HTMLElement | null>(null)
+  const [aside, setAside] = useState<HTMLElement | null>(null)
   const [used, setUsed] = useState(0)
   const [wide, setWide] = useState(0)
   const [value] = useState(() => ({
     el: null as HTMLElement | null,
+    aside: null as HTMLElement | null,
     claim: (w?: boolean) => {
       setUsed((n) => n + 1)
       if (w) setWide((n) => n + 1)
@@ -31,7 +35,7 @@ export function useSlot() {
       }
     },
   }))
-  return { value: { ...value, el }, setEl, used: used > 0, wide: wide > 0 }
+  return { value: { ...value, el, aside }, setEl, setAside, used: used > 0, wide: wide > 0 }
 }
 
 /** 分区页面用：插槽在就把 children 放进二级面板，不在就画 fallback；wide 见 Slot.claim */
@@ -41,6 +45,12 @@ export function SubNav({ children, fallback, wide }: { children: ReactNode; fall
   useEffect(() => (el && slot ? slot.claim(wide) : undefined), [el, slot?.claim, wide])
   if (!el) return <>{fallback}</>
   return createPortal(children, el)
+}
+
+/** 放到二级面板标题同一行右边（整栏列表的个数）：插槽不在时什么也不画，由页面自己的标题行画 */
+export function SubNavAside({ children }: { children: ReactNode }) {
+  const el = useContext(SlotCtx)?.aside ?? null
+  return el ? createPortal(children, el) : null
 }
 
 /** 二级面板里的一组行（页签换成竖排的行）：标题 + 一行一项，右边是数字 */
