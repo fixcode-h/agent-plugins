@@ -336,7 +336,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_python',
-    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些用 select 一次选一批、不限个数，有演练、撤回、编译回读和 P4 签出，Python 没有）。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；修改包在 unreal.ScopedEditorTransaction 里；不保存、不签出、不改名删除，改完用 ue_save 存（默认先编译通过才写盘）；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
+    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些用 select 一次选一批、不限个数，有演练、逐项结果和编译回读）。面板自动把整段包进一个编辑器事务：改了资源时返回 changed（改了哪些包）和 tx，ue_undo 能整次撤回。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；不保存、不签出、不改名删除，改完用 ue_save 存（默认先编译通过才写盘）；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
     { code: { type: 'string' }, timeoutMs: { type: 'number' }, target: TARGET },
     ['code'],
     async (a, ctx) => {

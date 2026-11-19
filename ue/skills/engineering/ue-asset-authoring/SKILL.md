@@ -109,13 +109,13 @@ user-invocable: true
 写 Python 必须做到：
 
 1. 顶部 `DRY_RUN = True` 先演练，只打印每项「资源、改前、改后」，没问题再改成 `False` 跑同一份。
-2. 修改都放在 `with unreal.ScopedEditorTransaction("Agent: <做什么>"):` 里，改前 `obj.modify()`。
+2. 面板会自动把整段脚本包进一个编辑器事务（不用自己写）；改资源前照样 `obj.modify()`，否则事务记不下这次改动。返回里的 `changed` 是这次改了的包，`ue_undo` 能整次撤回。
 3. 不保存、不碰源码控制、不 `rename_asset` / `delete_asset`：改完 `ue_asset action=dirty` 看脏包，再 `ue_save`（默认先编译蓝图，通过才写盘）。
 4. 开始前 `ue_asset action=dirty`，已经脏、不是本对话改的包传进脚本跳过。
 5. 每项 `try/except` 记下原因继续，结尾只打印一行 JSON `{changed, failed:[{path,error}], skipped}`；明细超过 4000 字写到 `Saved/AgentPanel/py-out/<名字>.json`，只打印路径。
 6. 超过 1 分钟用 `unreal.ScopedSlowTask`，按 500 个一批分几次调（单次上限 600 秒，期间编辑器卡住，先告诉用户）。
 7. 不确定的 API 先用小脚本 `print(dir(unreal.X))` 查，不要猜。
-8. 告诉用户改了哪些资源，以及这次不能 `ue_undo`（没保存前用编辑器撤销或 `ue_asset action=revert`）。
+8. 告诉用户改了哪些资源（返回的 `changed`）；要撤回用 `ue_undo`，之后编辑器里又改过别的就只能 `ue_asset action=revert` 放弃。
 
 ## 边界
 
