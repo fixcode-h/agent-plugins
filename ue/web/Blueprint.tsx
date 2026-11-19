@@ -398,7 +398,7 @@ function ComponentRow({ c, depth, onOpen }: { c: Component; depth: number; onOpe
 }
 
 /** 伪代码的一行：行尾的 #节点id 单独淡显、可点；注释行整行淡显 */
-function PseudoLine({ line, active, onNode }: { line: string; active: string; onNode: (id: string) => void }) {
+export function PseudoLine({ line, active, onNode }: { line: string; active: string; onNode: (id: string) => void }) {
   const m = /^(.*?)(\s{2}#([0-9a-f]{6,32}))?$/.exec(line)
   const text = m?.[1] ?? line
   const id = m?.[3]

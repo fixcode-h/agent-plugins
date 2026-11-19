@@ -1,88 +1,158 @@
-import { useEffect } from 'react'
-import { useLoad } from '../../../api.ts'
-import { BlueprintView } from '../../../Blueprint.tsx'
-import { loadBlueprintComps } from '../../../bp-comps.ts'
-import { CompTree } from '../../../CompTree.tsx'
+import { useEffect, useState } from 'react'
 import { useUe } from '../../../ctx.tsx'
-import { PropMarksCtx } from '../../../details/marks.ts'
 import { t } from '../../../host.ts'
-import { Props } from '../../../Props.tsx'
+import { useKept } from '../../../keep.ts'
 import { Card } from '../../../ui.tsx'
-import { assetName, CommonActions, InfoView, useAssetTab } from '../common.tsx'
+import { assetName, InfoView } from '../common.tsx'
 import { LayoutShell } from '../shell/LayoutShell.tsx'
 import type { LayoutProps } from '../types.ts'
+import { BpDetails } from './BpDetails.tsx'
+import { BpHead } from './BpHead.tsx'
+import { CompPanel } from './CompPanel.tsx'
+import { GraphPane } from './GraphPane.tsx'
+import { closeTab, defaultGraph, openTab, resolveView, type BpView } from './model.ts'
+import { MyBlueprint } from './MyBlueprint.tsx'
+import { useBpData } from './use-bp.ts'
+import { Viewport } from './Viewport.tsx'
+
+/** 图表页签：按资源记（切资源就换一套） */
+interface Tabs {
+  path: string
+  list: string[]
+  active: string
+}
 
 /**
- * 蓝图（原 AssetView 的蓝图分支，行为不变）：看类默认值时左边多一栏组件树（C++ 组件 + 蓝图组件，可拖宽），
- * 右边「类默认值 / 蓝图 / 摘要与引用」。不是 Actor 蓝图（函数库、动画蓝图）时组件读出 null，不显示那一栏
+ * 蓝图的查看页（设计稿第 3 节 Actor 行、效果图 A1–A4）：
+ * 左上组件树、左下「我的蓝图」、中间切视口 / 图表 / 类默认值 / 摘要与引用、右边细节。
+ * - 组件树选组件 → 右栏组件细节；点「自身」或页头「类默认值」→ 右栏类默认值（两处联动），中间留着视口；
+ * - 「我的蓝图」点图 / 函数 / 宏 → 中间图表页签里打开；图表里点节点 → 右栏看节点引脚；
+ * - 动画蓝图、函数库没有组件：不显示组件树和视口，直接看图表；UE 没连上时各块说明原因（A4）。
+ * 视口要 UELink 的 asset.preview（还没有）：先放说明，不画假画面
  */
-export function BlueprintLayout({ path, comp, onComp, onOpen, onChanged, hint, marks, layout }: LayoutProps) {
+export function BlueprintLayout(p: LayoutProps) {
+  const { path, comp, onComp, onOpen, onChanged, hint, marks, layout } = p
   const { project } = useUe()
-  const [view, setView] = useAssetTab()
-  const tab = view
-  const comps = useLoad(
-    () => loadBlueprintComps(project.id, path).then((items) => ({ path, items })),
-    [project.id, path],
-    0,
-    `${project.id}/assetview/comps`,
-  )
-  const compItems = tab === '' && comps.data?.path === path ? comps.data.items : null
+  const data = useBpData(path)
+  const [want, setView] = useKept<BpView>(`${project.id}/bp/view`, 'viewport')
+  const [tabs, setTabs] = useState<Tabs>({ path, list: [], active: '' })
+  const [node, setNode] = useState('')
+  const cur: Tabs = tabs.path === path ? tabs : { path, list: [], active: '' }
+  // 没打开过图：大纲读回来后默认开事件图
+  const first = defaultGraph(data.outline)
+  const list = cur.list.length ? cur.list : first ? [first] : []
+  const active = cur.active || list[0] || ''
+
+  const actor = data.comps === null ? (data.online ? false : undefined) : data.comps === undefined ? undefined : true
+  const view = resolveView(want, actor)
+  const picked = data.comps?.find((c) => c.path === comp)
+
   // 刷新、切回来后选中的组件没了：回到资源本身
   useEffect(() => {
-    const items = comps.data?.path === path ? comps.data.items : undefined
-    if (comp && items !== undefined && !items?.some((c) => c.path === comp)) onComp('')
+    if (comp && data.comps !== undefined && !data.comps?.some((c) => c.path === comp)) onComp('')
     // 只在组件读回来时判断
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [comps.data])
-  const name = assetName(path)
-  const graph = (
-    <BlueprintView
-      key={path}
-      path={path}
-      onOpen={(p) => {
-        setView('')
-        onOpen(p, t('蓝图'))
-      }}
-      onChanged={() => onChanged?.()}
-    />
-  )
+  }, [data.comps])
+
+  const pickView = (v: BpView) => {
+    setView(v)
+    if (v === 'defaults') onComp('')
+    if (v !== 'graph') setNode('')
+  }
+  const pickComp = (c: string) => {
+    onComp(c)
+    setNode('')
+    // 「自身」= 类默认值，选了组件回到视口（页头分段按钮跟着变）
+    if (view === 'viewport' && !c) setView('defaults')
+    else if (view === 'defaults' && c) setView('viewport')
+  }
+  const openGraph = (name: string) => {
+    setTabs({ path, list: openTab(list, name), active: name })
+    setNode('')
+    setView('graph')
+  }
+  const close = (name: string) => {
+    const r = closeTab(list, name, active)
+    setTabs({ path, list: r.tabs, active: r.active })
+    setNode('')
+  }
+
+  const center =
+    view === 'graph' ? (
+      <GraphPane
+        path={path}
+        outline={data.outline}
+        tabs={list}
+        active={active}
+        onActive={(name) => {
+          setTabs({ path, list, active: name })
+          setNode('')
+        }}
+        onClose={close}
+        picked={node}
+        onPick={setNode}
+        onCompiled={() => {
+          data.reload()
+          onChanged?.()
+        }}
+      />
+    ) : view === 'info' ? (
+      <Card
+        className="ue:min-h-0 ue:flex-1"
+        title={t('摘要与引用')}
+        bodyClass="ue:flex ue:min-h-0 ue:flex-col ue:overflow-auto"
+      >
+        <InfoView path={path} onOpen={onOpen} />
+      </Card>
+    ) : (
+      <Viewport path={path} online={data.online} picked={picked} />
+    )
+
   return (
     <LayoutShell
       layout={layout}
+      head={
+        <BpHead
+          path={path}
+          outline={data.outline}
+          online={data.online}
+          actor={actor !== false}
+          view={view}
+          onView={pickView}
+        />
+      }
       regions={{
-        comps: compItems && (
-          <Card
-            className="ue:min-h-0 ue:flex-1"
-            title={t('组件')}
-            aside={<span className="ue:max-w-32 ue:truncate">{name}</span>}
-            bodyClass="ue:overflow-auto"
-          >
-            <CompTree actor={name} items={compItems} selected={comp} onSelect={onComp} />
-          </Card>
+        comps: actor !== false && (
+          <CompPanel
+            name={assetName(path)}
+            items={data.comps}
+            online={data.online}
+            selected={comp}
+            onSelect={pickComp}
+          />
+        ),
+        mybp: (
+          <MyBlueprint
+            outline={data.outline}
+            error={data.outlineError}
+            online={data.online}
+            active={view === 'graph' ? active : undefined}
+            onGraph={openGraph}
+          />
+        ),
+        details: (
+          <BpDetails
+            path={path}
+            comp={view === 'defaults' ? undefined : picked}
+            node={view === 'graph' ? node : ''}
+            onNode={setNode}
+            onOpen={onOpen}
+            hint={hint}
+            marks={marks}
+          />
         ),
       }}
-      center={
-        <Card className="ue:min-h-0 ue:flex-1" bodyClass="ue:flex ue:min-h-0 ue:flex-col">
-          <PropMarksCtx.Provider value={comp ? null : (marks ?? null)}>
-            <Props
-              key={comp || path}
-              path={comp || path}
-              bar
-              onOpen={onOpen}
-              readOnlyHint={hint}
-              aside={<CommonActions path={path} />}
-              mainLabel={t('类默认值')}
-              noFns
-              more={[
-                { id: 'graph', label: t('蓝图'), view: graph },
-                { id: 'info', label: t('摘要与引用'), view: <InfoView path={path} onOpen={onOpen} /> },
-              ]}
-              moreTab={tab}
-              onMoreTab={(id) => setView(id as typeof view)}
-            />
-          </PropMarksCtx.Provider>
-        </Card>
-      }
+      center={center}
     />
   )
 }
