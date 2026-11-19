@@ -1,0 +1,455 @@
+{
+  "kind": "gametest-scenario",
+  "schemaVersion": 3,
+  "name": "AssetForge 示例界面：各类控件操作",
+  "_note": "配套「控件」页（AssetForge 1.5.0 起）。每种能操作的 UMG 控件各练一遍：按钮（普通、禁用到可用）、单行 / 多行输入框、滑条、微调框、下拉框、复选框、单选按钮组、按键选择器、滚动框、切换器、菜单锚点；最后一段是观察类动作（ping、find、snapshot、probe、标注截图）和临时加界面。都用代码方式（不动鼠标），真实鼠标键盘见「真实输入」。",
+  "revision": 1,
+  "tags": ["sample","assetforge","controls"],
+  "stepDelayMs": 200,
+  "params": {"nickname":{"default":"火焰骑士","type":"string","note":"昵称框填什么"},"server":{"default":"海外","type":"string","note":"下拉框选哪一项"}},
+  "vars": {
+    "crumb": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb",
+    "status": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/StatusChip/Status",
+    "back": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Back"
+  },
+  "steps": [
+    {
+      "id": "open",
+      "action": "call",
+      "script": "AssetForgeSample/common/打开示例界面",
+      "with": {"nav":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Controls__Nav","title":"控件"},
+      "saveAs": "opened",
+      "note": "进图、重置示例界面、切到「控件」页"
+    },
+    {
+      "id": "buttons",
+      "action": "group",
+      "name": "按钮：普通、禁用到可用、短按",
+      "do": [
+        {
+          "id": "clickNormal",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal"
+        },
+        {"id":"normalDone","action":"assert","expr":"contains(text($status), '普通按钮')"},
+        {
+          "id": "lockGate",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/Enable_Btn_Gated",
+          "checked": false,
+          "note": "复选框 set 会广播：父类跟着把按钮禁用"
+        },
+        {
+          "id": "gateLocked",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated",
+          "enabled": false
+        },
+        {
+          "id": "openGate",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/Enable_Btn_Gated",
+          "checked": true
+        },
+        {
+          "id": "gateOpen",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated",
+          "enabled": true
+        },
+        {
+          "id": "clickGated",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated"
+        },
+        {"id":"gatedDone","action":"assert","expr":"contains(text($status), '勾上才能点')"},
+        {
+          "id": "tapHold",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge",
+          "note": "代码点击在同一帧按下松开：算短按（长按见「真实输入」）"
+        },
+        {
+          "id": "tapShort",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge_Value",
+          "text": "短按"
+        }
+      ]
+    },
+    {
+      "id": "texts",
+      "action": "group",
+      "name": "文字输入：单行、回车提交、多行",
+      "do": [
+        {
+          "id": "typeNick",
+          "action": "type",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/NicknameBg/Nickname",
+          "text": "$nickname"
+        },
+        {
+          "id": "saveNick",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/Submit_Nickname"
+        },
+        {
+          "id": "nickEcho",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/Nickname_Echo",
+          "text": "$nickname"
+        },
+        {
+          "id": "typeSearch",
+          "action": "type",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/SearchBox",
+          "text": "火焰剑",
+          "commit": true,
+          "note": "commit：打完按回车"
+        },
+        {"id":"searchCommitted","action":"assert","expr":"contains(text($status), '输入：火焰剑')"},
+        {
+          "id": "typeFeedback",
+          "action": "type",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackSize/Feedback",
+          "text": "第一行\n第二行",
+          "via": "code",
+          "note": "多行框用代码写入（换行符直接写进去）"
+        },
+        {
+          "id": "appendFeedback",
+          "action": "type",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackSize/Feedback",
+          "text": "（补充）",
+          "via": "code",
+          "append": true
+        },
+        {
+          "id": "sendFeedback",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Submit_Feedback"
+        },
+        {
+          "id": "feedbackEcho",
+          "action": "assert",
+          "cond": {
+            "all": [
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Feedback_Echo",
+                "textContains": "第二行"
+              },
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Feedback_Echo",
+                "textContains": "（补充）"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "numbers",
+      "action": "group",
+      "name": "数值：滑条、微调框",
+      "do": [
+        {
+          "id": "setBright",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
+          "value": 80,
+          "note": "滑条 set 不广播 OnValueChanged：右边的数字不变，用 stateKey 看滑条自己的值"
+        },
+        {
+          "id": "brightValue",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
+          "stateKey": "value",
+          "equals": 80
+        },
+        {
+          "id": "setAmount",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/AmountRow/AmountSize/Amount",
+          "value": 5,
+          "note": "微调框 set 会广播"
+        },
+        {
+          "id": "amountEcho",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/AmountRow/Amount_Value",
+          "number": {"eq":5}
+        }
+      ]
+    },
+    {
+      "id": "choices",
+      "action": "group",
+      "name": "选择：下拉框、复选框、单选按钮组、按键选择器",
+      "do": [
+        {
+          "id": "pickServer",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+          "option": "$server"
+        },
+        {
+          "id": "serverEcho",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/Server_Value",
+          "text": "$server"
+        },
+        {
+          "id": "pickServerByIndex",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+          "index": 1,
+          "note": "按序号选第二项"
+        },
+        {
+          "id": "serverIndex",
+          "action": "assert",
+          "cond": {
+            "all": [
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/Server_Value",
+                "text": "华南二区"
+              },
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+                "stateKey": "index",
+                "equals": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "lootOff",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
+          "checked": false
+        },
+        {
+          "id": "lootToggle",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
+          "note": "代码点击复选框：切换勾选"
+        },
+        {
+          "id": "lootOn",
+          "action": "assert",
+          "cond": {
+            "all": [
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
+                "checked": true
+              },
+              {
+                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot_Value",
+                "text": "开"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pickHard",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/DifficultyRow/Pick_Difficulty__Hard",
+          "note": "一组按钮当单选"
+        },
+        {
+          "id": "hardPicked",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/DifficultyRow/Difficulty",
+          "text": "困难"
+        },
+        {
+          "id": "bindJump",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKeySize/JumpKey",
+          "key": "SpaceBar",
+          "note": "按键选择器 set 不广播：看控件自己的 key"
+        },
+        {
+          "id": "jumpBound",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKeySize/JumpKey",
+          "stateKey": "key",
+          "equals": "SpaceBar"
+        }
+      ]
+    },
+    {
+      "id": "containers",
+      "action": "group",
+      "name": "容器：滚动框、切换器",
+      "do": [
+        {
+          "id": "scrollEnd",
+          "action": "scroll",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "mode": "end"
+        },
+        {
+          "id": "pickLast",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__20",
+          "note": "滚到底再点最后一条"
+        },
+        {
+          "id": "lastPicked",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogHead/LogPicked",
+          "textContains": "日志 20"
+        },
+        {
+          "id": "scrollStart",
+          "action": "scroll",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "mode": "start"
+        },
+        {
+          "id": "atTop",
+          "action": "wait",
+          "until": "cond",
+          "cond": {
+            "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+            "stateKey": "offset",
+            "equals": 0
+          },
+          "timeoutMs": 3000,
+          "note": "滚动在下一帧布局时才生效：等它读回 0"
+        },
+        {
+          "id": "scrollTo12",
+          "action": "scroll",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "mode": "widget",
+          "widget": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__12",
+          "note": "滚到某个子控件露出来"
+        },
+        {
+          "id": "pick12",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__12"
+        },
+        {
+          "id": "picked12",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogHead/LogPicked",
+          "textContains": "日志 12"
+        },
+        {
+          "id": "stepB",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/StepTabs/Go_StepB",
+          "note": "按钮切切换器的页"
+        },
+        {
+          "id": "onStepB",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps",
+          "stateKey": "activeIndex",
+          "equals": 1
+        },
+        {
+          "id": "setStepC",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps",
+          "index": 2,
+          "note": "直接设切换器页号"
+        },
+        {
+          "id": "onStepC",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps/StepC",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "id": "observe",
+      "action": "group",
+      "name": "观察：连通、标记、句柄、快照、命中测试、标注截图、临时界面",
+      "do": [
+        {"id":"ping","action":"ping"},
+        {"id":"mark","action":"mark","text":"下面这段只观察，不改界面"},
+        {
+          "id": "findBtn",
+          "action": "find",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal",
+          "into": "normalBtn",
+          "note": "捕获控件句柄，后面用 @normalBtn 引用"
+        },
+        {"id":"clickHandle","action":"click","target":"@normalBtn"},
+        {"id":"handleClicked","action":"assert","expr":"contains(text($status), '普通按钮')"},
+        {
+          "id": "snap",
+          "action": "snapshot",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard",
+          "props": true,
+          "note": "只取「选择」卡片这棵子树"
+        },
+        {
+          "id": "probe",
+          "action": "probe",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal",
+          "note": "只读命中测试：按钮中心有没有被挡住"
+        },
+        {"id":"shotAnnotated","action":"screenshot","name":"forge-sample-controls","annotate":true},
+        {
+          "id": "addMenu",
+          "action": "widget.add",
+          "class": "/Script/AssetForgeTests.ForgeSampleMenu",
+          "zOrder": 50,
+          "note": "不靠游戏流程，直接把一个界面加进视口（放在菜单那段之前：屏上只有这一个 ForgeSampleMenu）"
+        },
+        {"id":"menuAdded","action":"wait","until":"widget","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuDelete"},
+        {"id":"removeMenu","action":"widget.remove","target":"ForgeSampleMenu:."},
+        {"id":"menuRemoved","action":"wait","until":"widgetGone","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuDelete"}
+      ]
+    },
+    {
+      "id": "menu",
+      "action": "group",
+      "name": "菜单锚点：按钮开菜单、点菜单项、直接设开合",
+      "do": [
+        {
+          "id": "openMenu",
+          "action": "click",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/Menu_ActionAnchor"
+        },
+        {
+          "id": "menuOpen",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "stateKey": "open",
+          "equals": true
+        },
+        {"id":"pickRename","action":"click","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuRename","note":"菜单内容是另一个界面 ForgeSampleMenu（在弹出窗口里）"},
+        {"id":"renamed","action":"assert","expr":"contains(text($status), '菜单：重命名')"},
+        {
+          "id": "menuClosed",
+          "action": "assert",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "stateKey": "open",
+          "equals": false
+        },
+        {
+          "id": "setOpen",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "open": true
+        },
+        {"id":"menuShown","action":"wait","until":"widget","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuCopy"},
+        {
+          "id": "setClosed",
+          "action": "set",
+          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "open": false
+        },
+        {"id":"menuGone","action":"wait","until":"widgetGone","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuCopy"}
+      ]
+    },
+    {"id":"close","action":"group","name":"截图收尾","do":[{"id":"stop","action":"pie.stop"},{"id":"stopped","action":"wait","until":"pieStopped"}]}
+  ]
+}
