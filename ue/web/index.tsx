@@ -82,8 +82,13 @@ const activate: ActivateWeb = (host) => {
     // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
     specimens: [
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
-      // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标，跟面板「流程图画布」「数字角标」的调节项
-      { id: 'gt-flow', label: t('GameTest · 流程图'), tune: ['canvas', 'countBadge'], Specimen: FlowSpecimen },
+      // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标 + 节点卡片和圆点引脚，跟面板「流程图画布」「数字角标」「流程图节点」「流程图引脚」的调节项
+      {
+        id: 'gt-flow',
+        label: t('GameTest · 流程图'),
+        tune: ['canvas', 'countBadge', 'flowNode', 'flowPin'],
+        Specimen: FlowSpecimen,
+      },
       // GameTest 脚本编辑页（定稿 9.2–9.5）：列表视图、检查器、条件组编辑器，跟面板「行」「输入框」「菜单」的调节项
       { id: 'gt-edit', label: t('GameTest · 脚本编辑'), tune: ['row', 'input', 'menu'], Specimen: EditSpecimen },
       // GameTest 调试和运行面板（定稿 9.2、效果图 6）：停在断点上的运行横条、运行记录和此刻的变量

@@ -17,7 +17,7 @@ import { insertMenuItems } from '../../gt-edit/insert-menu.ts'
 import { canDrop, readDrop, wantsCopy } from '../dnd.ts'
 import { ReadableFit } from '../readable-fit.tsx'
 import { emptyRun, type FlowRunState } from '../run-state.ts'
-import { BpContext, type BpCtx } from './ctx.ts'
+import { BpContext, linkedPins, type BpCtx } from './ctx.ts'
 import {
   addLoose,
   addNote,
@@ -351,6 +351,7 @@ function BpInner({
     () => ({
       run,
       editable,
+      linked: linkedPins(graph),
       selected,
       picked: pickedSet,
       disconnect: (at) => apply(disconnect(doc, at)),

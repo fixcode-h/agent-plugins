@@ -3851,5 +3851,7 @@
   "拖到画布上放下，或在连线上点 +；点一下插在选中那步后面。从下面的脚本列表拖一个脚本进画布就是「调用脚本」": "Drop onto the canvas, or click + on a link; click to insert after the selected step. Drag a script from the list below onto the canvas to call it",
   "脚本 / 最近运行": "Scripts / Recent runs",
   "拖动调整高度": "Drag to resize height",
-  "拖动调整高度，双击恢复默认": "Drag to resize height, double-click to reset"
+  "拖动调整高度，双击恢复默认": "Drag to resize height, double-click to reset",
+  "且": "and",
+  "或": "or"
 }

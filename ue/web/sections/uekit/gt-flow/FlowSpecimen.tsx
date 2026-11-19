@@ -54,7 +54,13 @@ const DOC: GtScript = {
         {
           id: 'if1',
           action: 'if',
-          cond: { target: '$item>BtnClaim', textLike: '领取' },
+          // 两项条件：蓝图画布的节点里一行一项列出来（「且」写在行首）
+          cond: {
+            all: [
+              { target: '$item>BtnClaim', textLike: '领取' },
+              { target: '$item>BtnClaim', enabled: true },
+            ],
+          },
           then: [
             { id: 's5', action: 'click', target: '$item>BtnClaim' },
             { id: 's6', action: 'wait', target: 'WBP_RewardPopup:.', visible: true },
