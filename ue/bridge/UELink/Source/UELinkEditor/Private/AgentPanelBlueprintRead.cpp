@@ -138,8 +138,11 @@ namespace
 		return O;
 	}
 
-	/** bFull：单个节点的详情，带完整 guid、位置、隐藏引脚；列表里只给看得见的引脚 */
-	TSharedPtr<FJsonObject> NodeJson(const UEdGraphNode* N, bool bFull)
+	/**
+	 * bFull：单个节点的详情，带完整 guid、位置、隐藏引脚；列表里只给看得见的引脚。
+	 * bLayout（2.18，bp.graph 的 layout 参数）：列表里也带位置，网页按 UE 的布局画图；注释节点另带框的尺寸和颜色
+	 */
+	TSharedPtr<FJsonObject> NodeJson(const UEdGraphNode* N, bool bFull, bool bLayout = false)
 	{
 		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 		O->SetStringField(TEXT("id"), NodeId(N));
@@ -165,6 +168,22 @@ namespace
 			O->SetNumberField(TEXT("x"), N->NodePosX);
 			O->SetNumberField(TEXT("y"), N->NodePosY);
 			O->SetStringField(TEXT("tooltip"), N->GetTooltipText().ToString().Left(400));
+		}
+		else if (bLayout)
+		{
+			O->SetNumberField(TEXT("x"), N->NodePosX);
+			O->SetNumberField(TEXT("y"), N->NodePosY);
+		}
+		if (bFull || bLayout)
+		{
+			// 只有注释框的尺寸是存下来的；普通节点的 NodeWidth / NodeHeight 一般是 0（大小由 Slate 按引脚算），不写
+			if (const UEdGraphNode_Comment* Comment = Cast<UEdGraphNode_Comment>(N))
+			{
+				O->SetNumberField(TEXT("w"), N->NodeWidth);
+				O->SetNumberField(TEXT("h"), N->NodeHeight);
+				const FColor C = Comment->CommentColor.ToFColor(true);
+				O->SetStringField(TEXT("color"), FString::Printf(TEXT("#%02x%02x%02x"), C.R, C.G, C.B));
+			}
 		}
 		TArray<TSharedPtr<FJsonValue>> Pins;
 		for (const UEdGraphPin* P : N->Pins)
@@ -195,11 +214,35 @@ namespace
 		return Out;
 	}
 
+	/** 函数图入口上的声明信息（2.18）：分类、访问级别、const；都是默认值（Default 分类、public、非 const）时不写 */
+	void FunctionDecl(const UK2Node_FunctionEntry* Entry, TSharedPtr<FJsonObject>& O)
+	{
+		const FString Category = Entry->MetaData.Category.ToString();
+		if (!Category.IsEmpty() && Category != UEdGraphSchema_K2::VR_DefaultCategory.ToString())
+		{
+			O->SetStringField(TEXT("category"), Category);
+		}
+		const int32 Flags = Entry->GetExtraFlags();
+		if (Flags & FUNC_Private)
+		{
+			O->SetStringField(TEXT("access"), TEXT("private"));
+		}
+		else if (Flags & FUNC_Protected)
+		{
+			O->SetStringField(TEXT("access"), TEXT("protected"));
+		}
+		if (Flags & FUNC_Const)
+		{
+			O->SetBoolField(TEXT("const"), true);
+		}
+	}
+
 	TSharedPtr<FJsonObject> GraphBrief(UBlueprint* BP, UEdGraph* G)
 	{
 		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
 		O->SetStringField(TEXT("name"), G->GetName());
-		O->SetStringField(TEXT("kind"), GraphKind(BP, G));
+		const FString Kind = GraphKind(BP, G);
+		O->SetStringField(TEXT("kind"), Kind);
 		O->SetNumberField(TEXT("nodes"), G->Nodes.Num());
 		TArray<TSharedPtr<FJsonValue>> Events;
 		for (const UEdGraphNode* N : G->Nodes)
@@ -216,6 +259,10 @@ namespace
 					if (Entry->GetExtraFlags() & FUNC_BlueprintPure)
 					{
 						O->SetBoolField(TEXT("pure"), true);
+					}
+					if (Kind == TEXT("function"))
+					{
+						FunctionDecl(Entry, O);
 					}
 				}
 			}
@@ -237,6 +284,74 @@ namespace
 			O->SetArrayField(TEXT("events"), Events);
 		}
 		return O;
+	}
+
+	/** 事件分发器的参数：签名图（DelegateSignatureGraphs 里和分发器同名的那张）入口节点的输出引脚 */
+	TArray<TSharedPtr<FJsonValue>> DispatcherParams(const UBlueprint* Owner, FName Name)
+	{
+		for (const UEdGraph* SG : Owner->DelegateSignatureGraphs)
+		{
+			if (!SG || SG->GetFName() != Name)
+			{
+				continue;
+			}
+			for (const UEdGraphNode* N : SG->Nodes)
+			{
+				if (N && N->IsA<UK2Node_FunctionEntry>())
+				{
+					return PinParams(N, EGPD_Output);
+				}
+			}
+		}
+		return {};
+	}
+
+	/**
+	 * 一个变量（或分发器）的大纲条目。Owner 是定义它的蓝图（父蓝图的变量也从这里取分发器签名），
+	 * CDO 是当前蓝图的类默认对象：父蓝图的变量也按子类上的值给默认值（子类可能改过）
+	 */
+	void AddVariable(const UBlueprint* Owner, const FBPVariableDescription& V, UObject* CDO, bool bInherited, TArray<TSharedPtr<FJsonValue>>& Vars, TArray<TSharedPtr<FJsonValue>>& Dispatchers)
+	{
+		TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+		O->SetStringField(TEXT("name"), V.VarName.ToString());
+		O->SetStringField(TEXT("type"), PinTypeText(V.VarType));
+		if (bInherited)
+		{
+			O->SetBoolField(TEXT("inherited"), true);
+		}
+		if (V.VarType.PinCategory == UEdGraphSchema_K2::PC_MCDelegate)
+		{
+			TArray<TSharedPtr<FJsonValue>> Params = DispatcherParams(Owner, V.VarName);
+			if (Params.Num())
+			{
+				O->SetArrayField(TEXT("params"), Params);
+			}
+			Dispatchers.Add(JObj(O));
+			return;
+		}
+		if (!V.Category.IsEmpty())
+		{
+			O->SetStringField(TEXT("category"), V.Category.ToString());
+		}
+		if (V.PropertyFlags & CPF_Net)
+		{
+			O->SetStringField(TEXT("replication"), (V.PropertyFlags & CPF_RepNotify) ? TEXT("repNotify") : TEXT("replicated"));
+		}
+		O->SetBoolField(TEXT("instanceEditable"), !(V.PropertyFlags & CPF_DisableEditOnInstance));
+		if (V.PropertyFlags & CPF_ExposeOnSpawn)
+		{
+			O->SetBoolField(TEXT("exposeOnSpawn"), true);
+		}
+		FProperty* Prop = CDO ? FindFProperty<FProperty>(CDO->GetClass(), V.VarName) : nullptr;
+		if (Prop)
+		{
+			O->SetField(TEXT("default"), ToJson(Prop, Prop->ContainerPtrToValuePtr<void>(CDO), 300));
+		}
+		else if (!V.DefaultValue.IsEmpty())
+		{
+			O->SetStringField(TEXT("default"), V.DefaultValue);
+		}
+		Vars.Add(JObj(O));
 	}
 
 	TSharedPtr<FJsonObject> ComponentJson(const USCS_Node* Node)
@@ -301,37 +416,25 @@ void AgentPanelEd::RegisterBlueprintReadOps()
 		TArray<TSharedPtr<FJsonValue>> Dispatchers;
 		for (const FBPVariableDescription& V : BP->NewVariables)
 		{
-			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
-			O->SetStringField(TEXT("name"), V.VarName.ToString());
-			O->SetStringField(TEXT("type"), PinTypeText(V.VarType));
-			if (V.VarType.PinCategory == UEdGraphSchema_K2::PC_MCDelegate)
+			AddVariable(BP, V, CDO, false, Vars, Dispatchers);
+		}
+		// 2.18：父蓝图链上的变量和分发器，标 inherited（到 C++ 父类为止；防环、最多 32 层）
+		TSet<const UBlueprint*> Seen;
+		Seen.Add(BP);
+		UClass* ParentClass = BP->ParentClass;
+		for (int32 Depth = 0; ParentClass && Depth < 32; ++Depth)
+		{
+			const UBlueprint* ParentBP = UBlueprint::GetBlueprintFromClass(ParentClass);
+			if (!ParentBP || Seen.Contains(ParentBP))
 			{
-				Dispatchers.Add(JObj(O));
-				continue;
+				break;
 			}
-			if (!V.Category.IsEmpty())
+			Seen.Add(ParentBP);
+			for (const FBPVariableDescription& V : ParentBP->NewVariables)
 			{
-				O->SetStringField(TEXT("category"), V.Category.ToString());
+				AddVariable(ParentBP, V, CDO, true, Vars, Dispatchers);
 			}
-			if (V.PropertyFlags & CPF_Net)
-			{
-				O->SetStringField(TEXT("replication"), (V.PropertyFlags & CPF_RepNotify) ? TEXT("repNotify") : TEXT("replicated"));
-			}
-			O->SetBoolField(TEXT("instanceEditable"), !(V.PropertyFlags & CPF_DisableEditOnInstance));
-			if (V.PropertyFlags & CPF_ExposeOnSpawn)
-			{
-				O->SetBoolField(TEXT("exposeOnSpawn"), true);
-			}
-			FProperty* Prop = CDO ? FindFProperty<FProperty>(CDO->GetClass(), V.VarName) : nullptr;
-			if (Prop)
-			{
-				O->SetField(TEXT("default"), ToJson(Prop, Prop->ContainerPtrToValuePtr<void>(CDO), 300));
-			}
-			else if (!V.DefaultValue.IsEmpty())
-			{
-				O->SetStringField(TEXT("default"), V.DefaultValue);
-			}
-			Vars.Add(JObj(O));
+			ParentClass = ParentBP->ParentClass;
 		}
 		Out->SetArrayField(TEXT("variables"), Vars);
 		Out->SetArrayField(TEXT("dispatchers"), Dispatchers);
@@ -475,10 +578,11 @@ void AgentPanelEd::RegisterBlueprintReadOps()
 		}
 		const int32 Offset = FMath::Max(Int(A, TEXT("offset"), 0), 0);
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 40), 1, 300);
+		const bool bLayout = Bool(A, TEXT("layout"), false);
 		TArray<TSharedPtr<FJsonValue>> Nodes;
 		for (int32 i = Offset; i < Pick.Num() && Nodes.Num() < Limit; ++i)
 		{
-			Nodes.Add(JObj(NodeJson(Pick[i], false)));
+			Nodes.Add(JObj(NodeJson(Pick[i], false, bLayout)));
 		}
 		Out->SetArrayField(TEXT("nodes"), Nodes);
 		Out->SetNumberField(TEXT("matched"), Pick.Num());

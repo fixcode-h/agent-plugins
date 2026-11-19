@@ -250,16 +250,10 @@ namespace UELinkUmgRenderImpl
 			return false;
 		}
 
-		TArray64<uint8> Png;
-		FImageUtils::PNGCompressImageArray(Width, Height, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
-		const TArray<uint8> Bytes(Png.GetData(), static_cast<int32>(Png.Num()));
-		// 文件名带资产名，同名资产（不同目录）按路径的 CRC 区分；同一个资产覆盖旧图
-		const FString Dir = FPaths::Combine(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir()), TEXT("UELink"), TEXT("preview"));
-		IFileManager::Get().MakeDirectory(*Dir, true);
-		const FString File = FPaths::Combine(Dir, FString::Printf(TEXT("%s-%08x.png"), *BP->GetName(), FCrc::StrCrc32(*BP->GetPathName())));
-		if (Bytes.Num() == 0 || !FFileHelper::SaveArrayToFile(Bytes, *File))
+		// 文件名、目录和 asset.preview 共用（AgentPanelEditorShared.h 的 SavePreviewPng）
+		FString File;
+		if (!AgentPanelEd::SavePreviewPng(BP, Width, Height, Pixels, File, Error))
 		{
-			Error = FString::Printf(TEXT("预览图写不进 %s（磁盘满或文件被占用？）"), *File);
 			return false;
 		}
 		Out->SetStringField(TEXT("file"), File);
