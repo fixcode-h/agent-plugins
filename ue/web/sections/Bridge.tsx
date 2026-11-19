@@ -6,9 +6,10 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, Confirm, PageHead } from '../ui.tsx'
 import { LuaBuildSettings } from './lua/BuildSettings.tsx'
+import { LayoutSettings } from '../inspect/layouts/settings/LayoutSettings.tsx'
 
 /**
- * 权限与设置：Agent 权限；GM 预设、资源页收藏存哪；引擎目录和编译命令；从 UE 页移除项目。
+ * 权限与设置：Agent 权限；GM 预设、资源页收藏存哪；引擎目录和编译命令；从 UE 页移除项目；资源查看布局。
  * UELink 的安装、升级、编译挪到了「UE 插件」页（uekit/Plugins.tsx），和 UEKit 的扩展放在一起
  */
 export function Bridge() {
@@ -177,6 +178,8 @@ export function Bridge() {
           </form>
         </Card>
         <LuaBuildSettings />
+        {/* 资源页按资源类型用的布局、各区域的尺寸（本机记的，所有项目共用） */}
+        <LayoutSettings />
       </div>
       <Confirm
         open={removing}

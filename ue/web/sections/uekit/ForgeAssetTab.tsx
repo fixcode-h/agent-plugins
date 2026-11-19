@@ -2,7 +2,7 @@ import { GitCompare } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { AssetView } from '../../inspect/AssetView.tsx'
+import { AssetView, canOffline } from '../../inspect/AssetView.tsx'
 import type { ForgeEntry } from './Forge.tsx'
 import { ForgeConfigPreview } from './ForgeConfigPreview.tsx'
 import type { ForgeDiffData } from './ForgeDiff.tsx'
@@ -48,6 +48,22 @@ export function ForgeAssetTab({
 
   if (['parse-error', 'foreign'].includes(entry.state))
     return <Hint>{t('配置读不出来，先看「配置原文」把它修好')}</Hint>
+  const config = { text: configText, truncated: configTruncated, loading: configLoading, error: configError }
+  // 有离线布局的类型（UMG）：资源还没生成也用和真实资源同一套布局，按配置画（资源查看页按 UE 编辑器布局，U4）
+  if (path && absent && canOffline(configText))
+    return (
+      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:p-2">
+        <AssetView
+          key={path}
+          path={path}
+          comp={comp}
+          onComp={setComp}
+          onOpen={(p) => go('assets', p)}
+          config={config}
+          offline
+        />
+      </div>
+    )
   if (!path || absent)
     return (
       <ForgeConfigPreview
@@ -99,6 +115,7 @@ export function ForgeAssetTab({
           onOpen={(p) => go('assets', p)}
           hint={t('这里改的是资源本身：配置是真源，改完记得「导出到配置」，否则下次导入会被配置盖回去')}
           marks={showMarks ? marks : undefined}
+          config={config}
         />
       </div>
     </div>

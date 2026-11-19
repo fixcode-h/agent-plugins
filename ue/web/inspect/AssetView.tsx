@@ -1,20 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useMemo } from 'react'
 import { op, useLoad } from '../api.ts'
-import { AssetInfo } from '../AssetInfo.tsx'
-import { BlueprintView } from '../Blueprint.tsx'
-import { loadBlueprintComps } from '../bp-comps.ts'
-import { CompTree } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
 import type { OpenHow } from '../details/RefChip.tsx'
-import { DataTableView } from '../DataTable.tsx'
-import { PropMarksCtx } from '../details/marks.ts'
-import { h, t } from '../host.ts'
-import { useKept } from '../keep.ts'
-import { Props } from '../Props.tsx'
-import { DiffButton } from '../asset-diff/DiffButton.tsx'
-import { ForgeExport } from '../sections/uekit/ForgeExport.tsx'
-import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Badge, Card } from '../ui.tsx'
+import { classOfKind, guessClass } from './layouts/pick.ts'
+import { layoutFor } from './layouts/registry.ts'
+import type { AssetConfig, LayoutInfo } from './layouts/types.ts'
+import { configKind } from './layouts/umg/config.ts'
 
 export interface AssetViewProps {
   /** 资源的对象路径 /Game/A/B.B */
@@ -30,143 +21,47 @@ export interface AssetViewProps {
   hint?: string
   /** 属性标注（AssetForge：导入会改的顶层属性 → 导入后的值）；只在看资源本身时标，看组件模板时不标 */
   marks?: Map<string, unknown>
+  /** AssetForge 的配置原文（AssetForge 页传进来）：UMG 布局的「配置原文」、近似预览和动画从它读 */
+  config?: AssetConfig
+  /** 资源还没生成：不问 UE，只按配置挑布局、画（canOffline 为真的配置才这样用） */
+  offline?: boolean
 }
 
-/** 按路径猜类型（类型还没读回来时先用，点引用跳过来的没有类名）：组件模板这类子对象路径带冒号，不算蓝图 */
-const guessTable = (p: string) => /\/DT_[^/]*$/.test(p)
-const guessBlueprint = (p: string) => !p.includes(':') && /\/(BP|WBP|ABP|BPI|BPFL)_[^/]*$/.test(p)
+/** 资源还没生成时，这份配置有没有能按配置画的布局（AssetForge「资源」页签用它决定用布局还是旧的按配置预览） */
+export function canOffline(configText?: string) {
+  const cls = classOfKind(configKind(configText))
+  return !!cls && layoutFor({ cls, path: '' }).offline === true
+}
 
 /**
- * 资源的检视（从资源页抽出来，对象页、资源页、AssetForge 页共用；设计稿第 3 节的表）：
- * - Actor 蓝图：中间一栏组件树（C++ 组件 + 蓝图组件），右边「类默认值 / 蓝图 / 摘要与引用」；
- * - DataTable：表格 / 摘要与引用；
- * - 其他资源（StaticMesh、材质、DataAsset…）：属性 / 函数 / 摘要与引用。
+ * 资源的检视（对象页、资源页、AssetForge 页共用；设计稿「资源查看页-按UE编辑器布局」第 2 节）：
+ * 读出资源的类和类链，在布局注册表（layouts/registry.ts）里挑布局交给它画；类型读回来之前按路径猜。
+ * 这里不按类型写分支：DataTable、蓝图、控件蓝图、其他资源各是 layouts/ 下的一个文件夹。
  * 只管看和改，不管保存（保存在资源页页头，asset-save.tsx），也不管导航历史（onOpen 交给外面）
  */
-export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint, marks }: AssetViewProps) {
+export function AssetView(props: AssetViewProps) {
+  const { path, comp = '', offline, config } = props
   const { project } = useUe()
-  const { ui } = h()
-  // 真实类型：摘要里的类名；读回来之前按路径猜
-  const info = useLoad(
+  const desc = useLoad(
     () =>
-      op<{ class: string }>(project.id, 'asset.describe', { path }, undefined, 120000).then((r) => ({
-        path,
-        cls: r.class,
-      })),
-    [project.id, path],
+      offline
+        ? Promise.resolve(undefined)
+        : op<{ class: string; classChain?: string[] }>(project.id, 'asset.describe', { path }, undefined, 120000).then(
+            (r) => ({ path, cls: r.class, chain: r.classChain }),
+          ),
+    [project.id, path, offline],
     0,
     `${project.id}/assetview/cls/${path}`,
   )
-  const cls = info.data?.path === path ? info.data.cls : undefined
-  const isTable = cls ? cls === 'DataTable' : guessTable(path)
-  const isBlueprint = !path.includes(':') && (cls ? /Blueprint$/.test(cls) : guessBlueprint(path))
-  // 右栏看什么：内容（表格 / 属性）、蓝图（大纲和图表）、摘要（文件、标签、引用关系）
-  const [view, setView] = useKept<'' | 'graph' | 'info'>(`${project.id}/assetview/tab`, '')
-  const tab = view === 'graph' && !isBlueprint ? '' : view
-  // Actor 蓝图看类默认值时多一栏组件树；不是 Actor 蓝图（控件蓝图、函数库）时读出 null，不显示这一栏
-  const comps = useLoad(
-    () =>
-      isBlueprint
-        ? loadBlueprintComps(project.id, path).then((items) => ({ path, items }))
-        : Promise.resolve(undefined),
-    [project.id, path, isBlueprint],
-    0,
-    `${project.id}/assetview/comps`,
+  const got = desc.data?.path === path ? desc.data : undefined
+  const kindCls = offline ? classOfKind(configKind(config?.text)) : undefined
+  const info: LayoutInfo = useMemo(
+    () => ({ path, cls: got?.cls ?? kindCls ?? guessClass(path), classChain: got?.chain }),
+    [path, got, kindCls],
   )
-  const compItems = tab === '' && comps.data?.path === path ? comps.data.items : null
-  // 刷新、切回来后选中的组件没了：回到资源本身
-  useEffect(() => {
-    const items = comps.data?.path === path ? comps.data.items : undefined
-    if (comp && items !== undefined && !items?.some((c) => c.path === comp)) onComp('')
-    // 只在组件读回来时判断
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [comps.data])
-
-  const compPane = usePane('assets.comps', '22%', 180)
-  const compRef = useRef<HTMLElement>(null)
-  const name = path.split(/[./]/).pop() ?? path
-  const infoView = <AssetInfo key={path} path={path} onOpen={(p) => onOpen(p, t('引用'))} />
-  const graph = (
-    <BlueprintView
-      key={path}
-      path={path}
-      onOpen={(p) => {
-        setView('')
-        onOpen(p, t('蓝图'))
-      }}
-      onChanged={() => onChanged?.()}
-    />
-  )
-
+  const layout = layoutFor(info)
+  const Layout = layout.Component
   return (
-    <div className={SPLIT_ROW}>
-      {compItems && (
-        <>
-          <Card
-            ref={compRef}
-            className={PANE_FIXED}
-            style={compPane.style('calc(100% - 352px)')}
-            title={t('组件')}
-            aside={<span className="ue:max-w-32 ue:truncate">{name}</span>}
-            bodyClass="ue:overflow-auto"
-          >
-            <CompTree actor={name} items={compItems} selected={comp} onSelect={onComp} />
-          </Card>
-          <SplitHandle pane={compPane} paneRef={compRef} reserve={() => 352} />
-        </>
-      )}
-      <Card className={PANE_FILL} bodyClass="ue:flex ue:min-h-0 ue:flex-col">
-        {isTable ? (
-          <>
-            <header className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-2.5">
-              <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">{name}</span>
-              <Badge>DataTable</Badge>
-              <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={path}>
-                {path.split('.')[0]}
-              </span>
-              <div className="ue:ml-auto ue:flex ue:items-center ue:gap-1">
-                <DiffButton asset={path} />
-                <ForgeExport asset={path} />
-                <ui.Segmented
-                  size="sm"
-                  label={t('表格 / 摘要')}
-                  value={tab === 'info' ? 'info' : ''}
-                  onChange={setView}
-                  options={[
-                    { id: '', label: t('表格') },
-                    { id: 'info', label: t('摘要与引用') },
-                  ]}
-                />
-              </div>
-            </header>
-            {tab === 'info' ? infoView : <DataTableView key={path} path={path} onChanged={() => onChanged?.()} />}
-          </>
-        ) : (
-          <PropMarksCtx.Provider value={comp ? null : (marks ?? null)}>
-            <Props
-              key={comp || path}
-              path={comp || path}
-              bar
-              onOpen={onOpen}
-              readOnlyHint={hint}
-              aside={
-                <>
-                  <DiffButton asset={path} />
-                  <ForgeExport asset={path} />
-                </>
-              }
-              mainLabel={isBlueprint ? t('类默认值') : undefined}
-              noFns={isBlueprint}
-              more={[
-                ...(isBlueprint ? [{ id: 'graph', label: t('蓝图'), view: graph }] : []),
-                { id: 'info', label: t('摘要与引用'), view: infoView },
-              ]}
-              moreTab={tab}
-              onMoreTab={(id) => setView(id as typeof view)}
-            />
-          </PropMarksCtx.Provider>
-        )}
-      </Card>
-    </div>
+    <Layout key={layout.id} {...props} comp={comp} offline={offline && layout.offline} info={info} layout={layout} />
   )
 }

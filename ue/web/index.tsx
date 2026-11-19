@@ -13,6 +13,7 @@ import { PathTextSpecimen } from './path-text.tsx'
 import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
+import { LayoutSettingsSpecimen, TimelineSpecimen, UmgLayoutSpecimen } from './inspect/layouts/settings/Specimen.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
@@ -105,6 +106,21 @@ const activate: ActivateWeb = (host) => {
       { id: 'inspect-bar', label: t('检视 · 导航条'), tune: ['menu'], Specimen: InspectorBarSpecimen },
       { id: 'inspect-ref', label: t('检视 · 引用'), Specimen: RefChipSpecimen },
       { id: 'inspect-cats', label: t('检视 · 分类栏'), tune: ['menu'], Specimen: CategoryBarSpecimen },
+      // 资源查看页按 UE 编辑器布局（设计稿 designs/资源查看页-按UE编辑器布局-设计稿.md）：UMG 布局（控件树、近似预览、细节、动画时间轴）、
+      // 共用的动画时间轴、布局注册表的设置；跟面板「行」「输入框」「菜单」的调节项
+      {
+        id: 'asset-layout-umg',
+        label: t('资源查看布局 · UMG'),
+        tune: ['row', 'input', 'menu'],
+        Specimen: () => <UmgLayoutSpecimen />,
+      },
+      { id: 'asset-timeline', label: t('资源查看布局 · 动画时间轴'), tune: ['row'], Specimen: TimelineSpecimen },
+      {
+        id: 'asset-layouts',
+        label: t('资源查看布局 · 设置'),
+        tune: ['badge', 'button'],
+        Specimen: LayoutSettingsSpecimen,
+      },
       // 资源页文件夹树上面的收藏区和行尾星标：跟面板「行」「菜单」的调节项
       { id: 'fav-folders', label: t('资源 · 收藏的文件夹'), tune: ['row', 'menu'], Specimen: FavFoldersSpecimen },
       // 资源页选中文件夹时右栏的内容表：跟面板「徽标」「行」的调节项
