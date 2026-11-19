@@ -20,6 +20,22 @@ const budget = <T>(work: Promise<T>, ms: number, msg: () => string) =>
     work.then(resolve, reject).finally(() => clearTimeout(timer))
   })
 
+/**
+ * VS 忙时别再追着问：UE 刚启动、加载模块和符号时，VS 回答状态要在界面线程上等调试引擎，
+ * 一直问会让请求在 VS 里越积越多、把 VS 卡死（UEToVS 0.9.6 那边也拦了）。所以
+ * - 一次没在时限内回应，之后 BUSY_BACKOFF_MS 内不再连管道，直接显示「VS 正忙」
+ * - 运行中、编译中、正在启动时只问 status，断点列表用上一次的（运行中数断点要等调试引擎）
+ */
+export const BUSY_BACKOFF_MS = 10000
+
+interface LastState {
+  breakpoints?: VsBreakpoint[]
+  /** 上次的状态是不是在跑 / 编译 / 启动 */
+  busy?: boolean
+  busyUntil?: number
+}
+const lastState = new Map<string, LastState>()
+
 /** 没有 .sln（没生成 VS 工程、纯蓝图项目）时返回空：卡片不显示 */
 export async function vsDebugState(p: UeProject): Promise<VsDebugState | undefined> {
   const solution = await findSolution(p)
@@ -27,16 +43,20 @@ export async function vsDebugState(p: UeProject): Promise<VsDebugState | undefin
   // vswhere 第一次要一两秒：等不到就这次先不带 devenv，查到后有缓存
   const devenv = await Promise.race([findDevenv(), new Promise<undefined>((r) => setTimeout(r, 300))])
   const base: VsDebugState = { available: false, solution, ...(devenv ? { devenv } : {}) }
+  const last = lastState.get(p.id) ?? {}
+  if (last.busyUntil && Date.now() < last.busyUntil)
+    return {
+      ...base,
+      reason: 'connect-failed',
+      message: t('VS 正忙（可能在编译、启动调试或弹着对话框），过几秒再查调试状态'),
+    }
   try {
     const [st, bp] = await budget(
       (async () => {
         const { endpoint } = await endpointOf(p)
         return pipeCall(
           endpoint,
-          [
-            { op: 'status', args: { frames: 5 } },
-            { op: 'bp.list', args: { limit: 50 } },
-          ],
+          [{ op: 'status', args: { frames: 5 } }, ...(last.busy ? [] : [{ op: 'bp.list', args: { limit: 50 } }])],
           { connectTimeoutMs: STATE_BUDGET_MS, readTimeoutMs: STATE_BUDGET_MS, ...overridePath(endpoint.pipe) },
         )
       })(),
@@ -44,14 +64,18 @@ export async function vsDebugState(p: UeProject): Promise<VsDebugState | undefin
       () => t('VS 在 {s} 秒内没有回应调试状态（可能正忙或弹着对话框）', { s: STATE_BUDGET_MS / 1000 }),
     )
     if (!st.ok) return { ...base, reason: 'error', message: st.error }
-    return {
-      ...base,
-      available: true,
-      status: st.result as unknown as VsDebugStatus,
-      ...(bp.ok && Array.isArray(bp.result.items) && { breakpoints: bp.result.items as VsBreakpoint[] }),
-    }
+    const status = st.result as unknown as VsDebugStatus
+    const breakpoints =
+      bp?.ok && Array.isArray(bp.result.items) ? (bp.result.items as VsBreakpoint[]) : last.breakpoints
+    lastState.set(p.id, {
+      breakpoints,
+      busy: status.mode === 'run' || status.building || !!status.launchPending,
+    })
+    return { ...base, available: true, status, ...(breakpoints && { breakpoints }) }
   } catch (e) {
     const err = e as VsDebugError
+    // 没在时限内回应：VS 正忙，先别追着问
+    if (err.reason === 'connect-failed') lastState.set(p.id, { ...last, busyUntil: Date.now() + BUSY_BACKOFF_MS })
     if (err.reason !== 'no-vs' || !pipeSupported())
       return { ...base, reason: err.reason ?? 'error', message: err.message }
     return { ...base, ...(await explainNoVs(solution)) }

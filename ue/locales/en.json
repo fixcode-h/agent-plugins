@@ -4009,5 +4009,6 @@
   "移动角色": "Move character",
   "技能输入": "Ability input",
   "开始输入": "Start input",
-  "停止输入": "Stop input"
+  "停止输入": "Stop input",
+  "VS 正忙（可能在编译、启动调试或弹着对话框），过几秒再查调试状态": "VS is busy (building, starting the debugger or showing a dialog); checking the debug state again in a few seconds"
 }
