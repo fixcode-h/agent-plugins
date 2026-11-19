@@ -417,7 +417,8 @@ export function GtEditor({
               style={aside.style('60%')}
               className={`ue:relative ue:flex ue:min-h-0 ue:flex-col ue:border-t ue:border-line ue:lg:border-t-0 ue:lg:border-l ${PANE_FIXED}`}
             >
-              <div className="ue:absolute ue:inset-y-0 ue:left-0 ue:z-10 ue:hidden ue:lg:block">
+              {/* 拖动条要撑满整栏高：外层是 flex，拖动条的 self-stretch 才生效（以前是 block，拖动条高度是 0，拖不动） */}
+              <div className="ue:absolute ue:inset-y-0 ue:left-0 ue:z-10 ue:hidden ue:lg:flex">
                 <SplitHandle pane={aside} paneRef={asideRef} side="right" reserve={() => 480} />
               </div>
               <div className="ue:flex ue:shrink-0 ue:items-center ue:border-b ue:border-line ue:px-3 ue:py-2">

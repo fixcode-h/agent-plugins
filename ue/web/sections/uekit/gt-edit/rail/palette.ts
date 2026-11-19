@@ -81,8 +81,8 @@ export const TONE_SOFT: Record<BlockTone, string> = {
 // ---------- 内置的格子（效果图 1 的顺序：两列，从左到右、从上到下） ----------
 
 registerPaletteCell({ id: 'step', label: () => t('一步操作'), groups: () => [t('一步操作'), t('界面')], order: 10 })
-registerPaletteCell({ id: 'group', label: () => t('步骤段'), ids: ['group'], order: 20 })
-registerPaletteCell({ id: 'call', label: () => t('调用脚本'), ids: ['call'], order: 30 })
+// 子图：不挂脚本的段和挂了脚本的调用合成一格（用户 2026-11-19），挂哪个脚本在检查器里选，也可以从脚本库直接拖进来
+registerPaletteCell({ id: 'group', label: () => t('子图'), ids: ['group'], order: 20 })
 registerPaletteCell({ id: 'if', label: () => t('如果'), groups: () => [t('分支')], order: 40 })
 registerPaletteCell({ id: 'loop', label: () => t('循环'), groups: () => [t('循环')], order: 50 })
 registerPaletteCell({ id: 'wait', label: () => t('等到'), ids: ['wait-cond', 'wait-ms'], order: 60 })

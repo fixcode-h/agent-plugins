@@ -3,9 +3,11 @@ import { openMenu, type MenuItem } from '../../../menu.tsx'
 import { blockUi, insertItems, type InsertItem } from '../gt-blocks/index.ts'
 
 /** 插入菜单：插入项按组排（组名在表里第一次出现的顺序），组名当小标题，右边是 / 短名 */
-export function insertMenuItems(onPick: (it: InsertItem) => void): MenuItem[] {
+/** skip：调用方自己另外放了的插入项 id（画布右键菜单把「子图」放在最上面） */
+export function insertMenuItems(onPick: (it: InsertItem) => void, skip: string[] = []): MenuItem[] {
   const groups = new Map<string, InsertItem[]>()
   for (const it of insertItems()) {
+    if (skip.includes(it.id)) continue
     const g = it.group()
     groups.set(g, [...(groups.get(g) ?? []), it])
   }

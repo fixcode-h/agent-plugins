@@ -35,8 +35,9 @@ export async function makeFolder(projectRoot: string, a: LibArgs) {
 }
 
 /**
- * create：新建一个空白脚本（「新建脚本（编写）」）。GameTest 要求 steps 非空，先放一步「等 1 秒」占位，
- * 打开后在画布上换掉；直接写成 v3（每步带 id）：编辑器存盘本来就整理成 v3，用户 2026-11-19 说 v2 的用例基本都删了，
+ * create：新建一个空白脚本（「新建脚本（编写）」）。画布上只有「开始」，不放占位步骤（用户 2026-11-19：
+ * 以前放一步「等 1 秒」占位要自己删，碍事）；还没有步骤的脚本 GameTest 跑的时候会报「缺少非空的 steps 数组」，
+ * 列表里不当坏脚本（gt-disk.ts 的 validate）。直接写成 v3（每步带 id）：编辑器存盘本来就整理成 v3，用户 2026-11-19 说 v2 的用例基本都删了，
  * 新脚本不再先写 v2 再升
  */
 export async function createScript(projectRoot: string, a: LibArgs) {
@@ -48,7 +49,7 @@ export async function createScript(projectRoot: string, a: LibArgs) {
     schemaVersion: SCHEMA_VERSION,
     name,
     tags: [],
-    steps: [{ id: 's1', action: 'wait', until: 'seconds', seconds: 1, note: '占位：换成真正的步骤' }],
+    steps: [],
   }
   await writeFile(to.abs, JSON.stringify(doc, null, '\t') + '\n', 'utf8')
   return { path: to.rel }

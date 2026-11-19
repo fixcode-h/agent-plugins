@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useReactFlow, type Connection, type Edge, type FinalConnectionState, type Node } from '@xyflow/react'
-import {
-  CornerLeftUp,
-  FileCode2,
-  Hand,
-  Layers,
-  LayoutGrid,
-  Maximize,
-  MousePointer2,
-  ShieldCheck,
-  StickyNote,
-} from 'lucide-react'
+import { CornerLeftUp, Hand, Layers, LayoutGrid, Maximize, MousePointer2, ShieldCheck, StickyNote } from 'lucide-react'
 import { CanvasToolbar, CanvasToolbarSep, GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
 import {
   blockOf,
@@ -344,22 +334,15 @@ function BpInner({
       e,
       [
         ...extra,
-        // 子图（用户 2026-11-19）：空的，双击进去自己放节点、连线；或者挂一个现有的测试用例（调用脚本，引用，
-        // 在右边检查器里填脚本，也可以直接从左栏把脚本拖进来）
+        // 子图放最上面（用户 2026-11-19）：空的双击进去自己连，在检查器里选了脚本就跑那个脚本；下面的分类里不再重复
         {
-          label: t('子图（空）'),
+          label: t('子图'),
           icon: Layers,
-          hint: t('双击进去自己连'),
-          onClick: () => place({ ...blockOf('group')!.make(), name: t('子图') }),
-        },
-        {
-          label: t('子图（挂现有用例）'),
-          icon: FileCode2,
-          hint: t('引用一个测试用例'),
-          onClick: () => place(blockOf('call')!.make()),
+          hint: t('空的，双击进去自己连'),
+          onClick: () => place(blockOf('group')!.make()),
         },
         'sep',
-        ...insertMenuItems((it) => place(it.make())),
+        ...insertMenuItems((it) => place(it.make()), ['group']),
       ],
       { search: t('找节点：输入名字…'), onClose },
     )
