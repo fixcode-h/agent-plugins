@@ -206,7 +206,8 @@ export function GtEditor({
     let off = false
     op<{ runs?: GtHistoryRun[] }>(project, 'gt.history', {
       scenario: scenario.relativePath,
-      ...(live ? {} : { disk: true }),
+      // history.json 是磁盘文件，直接读，不等编辑器回应（编辑器忙时不卡住历史页）
+      disk: true,
     }).then(
       (r) => !off && setHistory(r.runs ?? []),
       () => !off && setHistory(undefined),
@@ -214,7 +215,7 @@ export function GtEditor({
     return () => {
       off = true
     }
-  }, [project, scenario.relativePath, live, lastRun?.runId])
+  }, [project, scenario.relativePath, lastRun?.runId])
   // 上次运行失败的步骤在画布上标红（读那次的报告，按步骤 id 对）；开跑后换成实时的运行态，跑完再按新报告标
   const [lastFailed, setLastFailed] = useState<Record<string, 'fail'>>()
   const failedRun = lastRun && !lastRun.succeeded ? lastRun.runId : undefined
