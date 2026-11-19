@@ -5,6 +5,7 @@
 #include "UELinkVersion.h"
 #include "AgentPanelLuaOps.h"
 #include "UELinkJobOps.h"
+#include "UELinkBatch.h"
 #include "Async/Async.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -309,6 +310,12 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Info() const
 		}
 	}
 	O->SetArrayField(TEXT("ops"), Names);
+	TArray<TSharedPtr<FJsonValue>> Batch;
+	for (const FString& Name : BatchOpNames())
+	{
+		Batch.Add(MakeShared<FJsonValueString>(Name));
+	}
+	O->SetArrayField(TEXT("batchOps"), Batch);
 	AgentPanelLuaInfo(O);
 	return O;
 }
@@ -338,7 +345,10 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	TSharedPtr<FJsonObject> Args = Body->TryGetObjectField(TEXT("args"), ArgsPtr) && ArgsPtr ? *ArgsPtr : MakeShared<FJsonObject>();
 	TSharedPtr<FJsonObject> Out = MakeShared<FJsonObject>();
 	FString Error;
-	if (!(*Fn)(Args, Out, Error))
+	// 2.14：能批量的操作给了 paths / items 时展开成作业，回作业号（UELinkBatch.cpp）
+	const FAgentPanelBatchInfo* BatchInfo = BatchOps.Find(Op);
+	const bool bBatch = BatchInfo && (Args->HasField(TEXT("paths")) || Args->HasField(TEXT("items")));
+	if (!(bBatch ? AgentPanel::StartBatch(Op, *BatchInfo, Args, Out, Error) : (*Fn)(Args, Out, Error)))
 	{
 		return ErrorObject(Error.IsEmpty() ? TEXT("执行失败") : Error);
 	}
@@ -350,6 +360,14 @@ TSharedPtr<FJsonObject> FAgentPanelBridge::Dispatch(const TSharedPtr<FJsonObject
 	}
 	Out->SetBoolField(TEXT("ok"), true);
 	return Out;
+}
+
+TArray<FString> FAgentPanelBridge::BatchOpNames() const
+{
+	TArray<FString> Names;
+	BatchOps.GetKeys(Names);
+	Names.Sort();
+	return Names;
 }
 
 bool FAgentPanelBridge::CallOp(const FString& Name, const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error)

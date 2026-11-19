@@ -6,6 +6,7 @@
 #include "AgentPanelBridgeUtil.h"
 #include "AgentPanelEditorShared.h"
 #include "UELinkLuaDecl.h"
+#include "UELinkTableMulti.h"
 #include "UELinkStream.h"
 
 #include "DataTableEditorUtils.h"
@@ -85,6 +86,11 @@ static void RegisterEditorOps()
 		if (!DT)
 		{
 			return false;
+		}
+		// 2.14：row 给数组 / 通配符、或带 where 时一次改多行（UELinkTableMulti.cpp）
+		if (IsMultiRowSet(A))
+		{
+			return SetTableRows(DT, A, Out, Error);
 		}
 		const FName RowName(*Str(A, TEXT("row")));
 		uint8* Row = DT->FindRowUnchecked(RowName);
@@ -353,6 +359,44 @@ static void RegisterEditorOps()
 	});
 }
 
+/**
+ * 2.14：编辑器里能批量（paths / items）的操作，展开和回滚在 UELinkCore 的 UELinkBatch.cpp。
+ * 让新操作支持批量只在这里加一行：读的照抄 Read；改的写清楚认不认 dryRun、怎么回滚
+ */
+static void RegisterEditorBatchOps()
+{
+	FAgentPanelBridge& B = FAgentPanelBridge::Get();
+	const FAgentPanelBatchInfo Read;
+	for (const TCHAR* Op : {TEXT("bp.outline"), TEXT("bp.graph"), TEXT("bp.compile"), TEXT("asset.describe"), TEXT("asset.refs"), TEXT("asset.export")})
+	{
+		B.AddBatchOp(Op, Read);
+	}
+	FAgentPanelBatchInfo Edit;
+	Edit.bWrite = true;
+	Edit.bDryRun = true;
+	Edit.bCompile = true;
+	Edit.Undo = TEXT("tx");
+	B.AddBatchOp(TEXT("bp.edit"), Edit);
+	// 复制、改名、删除：能演练，但没有事务，回滚不了（失败时结果里写明哪些已经做了）
+	FAgentPanelBatchInfo Structural;
+	Structural.bWrite = true;
+	Structural.bDryRun = true;
+	for (const TCHAR* Op : {TEXT("asset.duplicate"), TEXT("asset.rename"), TEXT("asset.delete")})
+	{
+		B.AddBatchOp(Op, Structural);
+	}
+	// DataTable 改单元格：同一张表可以在一批里出现多次（每项改不同的行和列）；多行写法认 dryRun
+	FAgentPanelBatchInfo Cell;
+	Cell.bWrite = true;
+	Cell.Undo = TEXT("tx");
+	Cell.bRepeatPaths = true;
+	B.AddBatchOp(TEXT("datatable.set"), Cell);
+	// 撤回本身也能批量：客户端撤回一整批时把每个资源的 tx 一次交过来
+	FAgentPanelBatchInfo Undo;
+	Undo.bWrite = true;
+	B.AddBatchOp(TEXT("asset.undo"), Undo);
+}
+
 class FAgentPanelBridgeEditorModule : public IModuleInterface
 {
 public:
@@ -365,9 +409,11 @@ public:
 		RegisterBlueprintEditOps();
 		RegisterTraceOps();
 		RegisterTextifyOps();
+		RegisterSnapshotOps();
 		RegisterStreamOps();
 		RegisterSelectionOps();
 		RegisterEditorToolsOps();
+		RegisterEditorBatchOps();
 		// 2.7：编辑器就绪。ready: false 要在第一次写名片前记下，所以在模块启动时就放进名片字段
 		RegisterEditorReadyOps();
 		PresetEditorReady();

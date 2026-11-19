@@ -89,6 +89,13 @@ namespace AgentPanelEd
 	void RegisterBlueprintEditOps();
 	/** 一版 .uasset 文件转成文本（AgentPanelTextify.cpp）：asset.textify，评审看二进制资产的差异用 */
 	void RegisterTextifyOps();
+	/**
+	 * 一版资源文件（不在 Content 下的临时文件）挂到独立的临时挂载点加载，交给 Fn 处理，然后连脏的一起卸载、撤掉挂载点。
+	 * Fn 拿到资源对象和临时包名、临时挂载根（结果里要换回 Original 包名）。加载不了或找不到资源对象时返回 false 写 Error（2.14 起 textify 和 snapshot 共用）
+	 */
+	bool WithTempAsset(const FString& File, const FString& Original, TFunctionRef<void(UObject* Asset, const FString& TempPkg, const FString& TempRoot)> Fn, FString& Error);
+	/** 资源版本差异用的结构化快照（AgentPanelSnapshot.cpp）：asset.snapshot（2.14） */
+	void RegisterSnapshotOps();
 	/** trace 分析（AgentPanelTrace.cpp）：trace.query */
 	void RegisterTraceOps();
 	/** 放掉缓存的 trace 分析会话（引擎退出前、模块卸载时调） */

@@ -3,6 +3,7 @@
 // 任何一步失败整批取消；dryRun 照常执行和编译，拿到结果后取消，不留改动。
 #include "UELinkCompat.h"
 #include "AgentPanelEditorShared.h"
+#include "UELinkBpNames.h"
 
 #include "BlueprintActionDatabase.h"
 #include "BlueprintFunctionNodeSpawner.h"
@@ -460,6 +461,9 @@ namespace
 			}
 		}
 
+		/** ifMissing 用：要加的变量、函数、组件、接口是不是已经有了；不认识的操作返回 false（照常执行） */
+		bool AlreadyHas(const FString& What, const TSharedPtr<FJsonObject>& Op);
+
 		FBPVariableDescription* Var(const FName Name)
 		{
 			for (FBPVariableDescription& V : BP->NewVariables)
@@ -573,7 +577,11 @@ namespace
 			}
 		}
 
-		bool SetProp(UObject* Target, const TSharedPtr<FJsonObject>& Op, FString& Error)
+		/**
+		 * 改一个属性。结果里写原值 prev 和新值 value（2.14，演练时也能看到改前改后）；
+		 * where 给了且当前值和它对不上时跳过（skipped），用于「是 A 的才改成 B」
+		 */
+		bool SetProp(UObject* Target, const TSharedPtr<FJsonObject>& Op, TSharedPtr<FJsonObject>& Res, FString& Error)
 		{
 			FResolved R;
 			if (!ResolvePath(Target->GetClass(), Target, Target, Str(Op, TEXT("prop")), R, Error))
@@ -585,8 +593,23 @@ namespace
 				Error = FString::Printf(TEXT("%s 不能改：%s"), *Str(Op, TEXT("prop")), *R.ReadOnlyWhy);
 				return false;
 			}
+			const TSharedPtr<FJsonValue> Prev = ToJson(R.Prop, R.Value, 2000);
+			const TSharedPtr<FJsonValue> Where = Op->TryGetField(TEXT("where"));
+			if (Where.IsValid() && !SameJsonValue(Prev, Where))
+			{
+				Res->SetBoolField(TEXT("skipped"), true);
+				Res->SetStringField(TEXT("why"), TEXT("当前值和 where 对不上，没改"));
+				Res->SetField(TEXT("prev"), Prev);
+				return true;
+			}
 			Target->Modify();
-			return FromJson(R.Prop, R.Value, Op->TryGetField(TEXT("value")), Error);
+			if (!FromJson(R.Prop, R.Value, Op->TryGetField(TEXT("value")), Error))
+			{
+				return false;
+			}
+			Res->SetField(TEXT("prev"), Prev);
+			Res->SetField(TEXT("value"), ToJson(R.Prop, R.Value, 2000));
+			return true;
 		}
 
 		UEdGraphNode* AddNode(const TSharedPtr<FJsonObject>& Op, FString& Error);
@@ -789,10 +812,54 @@ namespace
 		return N;
 	}
 
+	bool FEdit::AlreadyHas(const FString& What, const TSharedPtr<FJsonObject>& Op)
+	{
+		const FString Name = Str(Op, TEXT("name"));
+		if (What == TEXT("add_variable"))
+		{
+			return Var(FName(*Name)) != nullptr;
+		}
+		if (What == TEXT("add_function"))
+		{
+			for (const UEdGraph* G : AllGraphs(BP))
+			{
+				if (G && G->GetName().Equals(Name, ESearchCase::IgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		if (What == TEXT("add_component"))
+		{
+			return !Name.IsEmpty() && BP->SimpleConstructionScript && BP->SimpleConstructionScript->FindSCSNode(FName(*Name));
+		}
+		if (What == TEXT("add_interface"))
+		{
+			const UClass* I = FindClassByName(Str(Op, TEXT("interface")));
+			for (const FBPInterfaceDescription& D : BP->ImplementedInterfaces)
+			{
+				if (I && D.Interface.Get() == I)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		return false;
+	}
+
 	bool FEdit::Run(const TSharedPtr<FJsonObject>& Op, TSharedPtr<FJsonObject>& Res, FString& Error)
 	{
 		const FString What = Str(Op, TEXT("op"));
 		const FString Name = Str(Op, TEXT("name"));
+
+		// 2.14：ifMissing 的增加类操作，已经有了就跳过（批量重跑同一组操作时不因为「已经存在」失败）
+		if (Bool(Op, TEXT("ifMissing"), false) && AlreadyHas(What, Op))
+		{
+			Res->SetBoolField(TEXT("skipped"), true);
+			return true;
+		}
 
 		// ----- 成员 -----
 		if (What == TEXT("add_variable"))
@@ -976,7 +1043,7 @@ namespace
 				Error = TEXT("这个蓝图还没有生成的类");
 				return false;
 			}
-			return SetProp(CDO, Op, Error);
+			return SetProp(CDO, Op, Res, Error);
 		}
 
 		// ----- 组件 -----
@@ -1054,7 +1121,7 @@ namespace
 				Error = FString::Printf(TEXT("组件 %s 没有模板对象"), *Name);
 				return false;
 			}
-			return SetProp(N->ComponentTemplate, Op, Error);
+			return SetProp(N->ComponentTemplate, Op, Res, Error);
 		}
 
 		// ----- 节点 -----
@@ -1330,9 +1397,37 @@ void AgentPanelEd::RegisterBlueprintEditOps()
 			else
 			{
 				Res->SetStringField(TEXT("op"), Str(*Op, TEXT("op")));
-				if (!Edit.Run(*Op, Res, OpError) && OpError.IsEmpty())
+				// 2.14：name / node 给数组、通配符或 componentClass 时展开成多条同样的操作（UELinkBpNames.cpp）
+				TArray<TSharedPtr<FJsonObject>> Each;
+				if (ExpandBlueprintOp(BP, *Op, Each, OpError))
 				{
-					OpError = TEXT("没有成功（引擎没给原因）");
+					TArray<TSharedPtr<FJsonValue>> Subs;
+					for (const TSharedPtr<FJsonObject>& One : Each)
+					{
+						TSharedPtr<FJsonObject> Sub = Each.Num() == 1 ? Res : MakeShared<FJsonObject>();
+						if (!Edit.Run(One, Sub, OpError))
+						{
+							if (OpError.IsEmpty())
+							{
+								OpError = TEXT("没有成功（引擎没给原因）");
+							}
+							if (Each.Num() > 1)
+							{
+								OpError = FString::Printf(TEXT("%s：%s"), *SubOpLabel(One), *OpError);
+							}
+							break;
+						}
+						if (Each.Num() > 1)
+						{
+							Sub->SetStringField(TEXT("name"), SubOpLabel(One));
+							Subs.Add(JObj(Sub));
+						}
+					}
+					if (Each.Num() > 1)
+					{
+						Res->SetNumberField(TEXT("count"), Each.Num());
+						Res->SetArrayField(TEXT("each"), Subs);
+					}
 				}
 			}
 			if (!OpError.IsEmpty())

@@ -26,6 +26,24 @@ using FAgentPanelReply = TFunction<void(bool bOk, TSharedPtr<FJsonObject> Out, c
  */
 using FAgentPanelAsyncOp = TFunction<void(const TSharedPtr<FJsonObject>& Args, FAgentPanelReply Reply)>;
 
+/**
+ * 批量（2.14）：登记了的操作在参数里给 paths（路径数组）或 items（[{path, ...这一项自己的参数}]）时，
+ * 不直接执行，而是展开成一个作业逐个执行（UELinkBatch.cpp，协议文档「批量」一节）
+ */
+struct FAgentPanelBatchInfo
+{
+	/** 会改资源：先整批演练（操作支持 dryRun 时）、失败默认回滚 */
+	bool bWrite = false;
+	/** 操作认 dryRun 参数：真实执行后撤销，不留改动 */
+	bool bDryRun = false;
+	/** 操作认 compile 参数（bp.edit）：compile = "end" 时逐个改完不编译，整批改完再逐个 bp.compile */
+	bool bCompile = false;
+	/** 同一个资源可以在一批里出现多次（datatable.set：同一张表改不同的行和列）；默认不行，免得第二次改的是第一次的结果 */
+	bool bRepeatPaths = false;
+	/** 回滚怎么做：tx（结果里的 tx 交给 asset.undo）、prev（同一个操作把 value 设回结果里的 prev）、空表示不能回滚 */
+	FString Undo;
+};
+
 /** 扩展发出的推送事件：主题（forge.job、gt.record……）和事件内容。推送通道收到后转给订阅了这个主题的客户端 */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnAgentPanelEvent, const FString& /*Topic*/, const TSharedRef<FJsonObject>& /*Event*/);
 
@@ -63,6 +81,12 @@ public:
 	bool CallOp(const FString& Name, const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error);
 	/** 2.12：这个进程有没有登记这个操作（例如 lua.* 只在编进了 Lua 支持时有） */
 	bool HasOp(const FString& Name) const { return Ops.Contains(Name); }
+
+	/** 2.14：让一个已登记的同步操作支持批量（paths / items），见 FAgentPanelBatchInfo */
+	void AddBatchOp(const FString& Name, const FAgentPanelBatchInfo& Info) { BatchOps.Add(Name, Info); }
+	const FAgentPanelBatchInfo* FindBatchOp(const FString& Name) const { return BatchOps.Find(Name); }
+	/** 能批量的操作名（/info 的 batchOps，客户端据此决定一次传多个还是逐个调） */
+	TArray<FString> BatchOpNames() const;
 
 	/**
 	 * 扩展推一条事件（作业进度、录制到的一步……）：主题必须带「前缀.」，和操作名同一个前缀。
@@ -102,6 +126,7 @@ public:
 private:
 	TMap<FString, FAgentPanelOp> Ops;
 	TMap<FString, FAgentPanelAsyncOp> AsyncOps;
+	TMap<FString, FAgentPanelBatchInfo> BatchOps;
 	/** HTTP 服务还在：异步操作的回复晚到时（服务已停、引擎在退出）不再往已经拆掉的连接上写 */
 	TSharedRef<std::atomic<bool>, ESPMode::ThreadSafe> Alive = MakeShared<std::atomic<bool>, ESPMode::ThreadSafe>(false);
 	int32 Port = 0;

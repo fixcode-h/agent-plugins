@@ -7,6 +7,7 @@
 // 一帧里做到 30 毫秒为止（一步本身可能就超过，所以至少做一步），作业按先后排队，同一时间只跑一个。
 // 状态变化推 uelink.job 事件（phase: started / progress / finished），做完把全部结果写进 Saved/UELink/jobs/<作业号>.json。
 #include "UELinkJobOps.h"
+#include "UELinkBatch.h"
 #include "AgentPanelBridge.h"
 #include "AgentPanelBridgeUtil.h"
 
@@ -27,7 +28,6 @@ namespace AgentPanel
 	// 不用匿名命名空间：单体编译时和别的文件的同名小函数会撞
 	namespace JobOps
 	{
-		constexpr int32 MaxSteps = 500;
 		/** 内存里留几个已经结束的作业：客户端只关心最近的 */
 		constexpr int32 MaxKept = 20;
 		/** Saved/UELink/jobs 下最多留几份结果文件 */
@@ -35,42 +35,6 @@ namespace AgentPanel
 		constexpr double FrameBudgetMs = 30.0;
 		constexpr int32 DefaultWaitMs = 20000;
 		constexpr int32 MaxWaitMs = 60000;
-		/** job.get / job.wait 回包里各步结果合计最多多少字（读结构的上限），超出的只在结果文件里 */
-		constexpr int32 ResultBudget = 12000;
-
-		struct FStep
-		{
-			FString Op;
-			TSharedPtr<FJsonObject> Args;
-			bool bDone = false;
-			bool bOk = false;
-			FString Error;
-			TSharedPtr<FJsonObject> Result;
-			double Ms = 0;
-		};
-
-		struct FWaiter
-		{
-			FAgentPanelReply Reply;
-			double Deadline = 0;
-		};
-
-		struct FJob
-		{
-			FString Id;
-			FString Title;
-			TArray<FStep> Steps;
-			int32 Next = 0;
-			bool bStopOnError = true;
-			/** queued / running / done / failed / cancelled */
-			FString Status = TEXT("queued");
-			FDateTime StartedAt;
-			FDateTime EndedAt;
-			FString Report;
-			TArray<FWaiter> Waiters;
-
-			bool IsFinished() const { return Status == TEXT("done") || Status == TEXT("failed") || Status == TEXT("cancelled"); }
-		};
 
 		struct FState
 		{
@@ -134,6 +98,11 @@ namespace AgentPanel
 			const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
 			O->SetStringField(TEXT("op"), St.Op);
 			O->SetStringField(TEXT("state"), !St.bDone ? TEXT("skipped") : St.bOk ? TEXT("ok") : TEXT("failed"));
+			if (St.Item != INDEX_NONE)
+			{
+				O->SetNumberField(TEXT("item"), St.Item);
+				O->SetStringField(TEXT("phase"), St.Phase);
+			}
 			if (!St.Error.IsEmpty())
 			{
 				O->SetStringField(TEXT("error"), St.Error);
@@ -156,6 +125,16 @@ namespace AgentPanel
 		TSharedRef<FJsonObject> Describe(const FJob& Job)
 		{
 			const TSharedRef<FJsonObject> O = Summary(Job);
+			// 批量作业按资源汇总（几百上千步逐步列出来没法看），每步的完整结果在 report 文件里
+			if (Job.Batch.IsValid())
+			{
+				DescribeBatch(Job, O, false);
+				if (!Job.Report.IsEmpty())
+				{
+					O->SetStringField(TEXT("report"), Job.Report);
+				}
+				return O;
+			}
 			TArray<TSharedPtr<FJsonValue>> Steps;
 			int32 Used = 0;
 			bool bTruncated = false;
@@ -224,6 +203,10 @@ namespace AgentPanel
 				Steps.Add(MakeShared<FJsonValueObject>(One));
 			}
 			O->SetArrayField(TEXT("steps"), Steps);
+			if (Job.Batch.IsValid())
+			{
+				DescribeBatch(Job, O, true);
+			}
 			const FString File = FPaths::Combine(Dir, Job.Id + TEXT(".json"));
 			if (!FFileHelper::SaveStringToFile(ToText(O), *File, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 			{
@@ -273,7 +256,14 @@ namespace AgentPanel
 			St.Error = St.bOk ? FString() : Err;
 			St.Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
 			St.bDone = true;
+			const int32 Index = Job.Next;
 			++Job.Next;
+			// 批量作业：演练有失败就不真改、真改失败就回滚（会改 Next、往后追加撤回步骤）
+			if (Job.Batch.IsValid())
+			{
+				AfterBatchStep(Job, Index);
+				return;
+			}
 			// 出错停下：后面的步骤不做了，算 skipped
 			if (!St.bOk && Job.bStopOnError)
 			{
@@ -344,7 +334,7 @@ namespace AgentPanel
 				{
 					if (Job->Next >= Job->Steps.Num())
 					{
-						Finish(*Job, CountDone(*Job, true) > 0 ? TEXT("failed") : TEXT("done"));
+						Finish(*Job, CountDone(*Job, true) > 0 || BatchHasFailure(*Job) ? TEXT("failed") : TEXT("done"));
 					}
 					else
 					{
@@ -442,10 +432,16 @@ namespace AgentPanel
 			{
 				return false;
 			}
-			FState& S = State();
-			Job->Id = FString::Printf(TEXT("uelink-%d"), ++S.Serial);
 			Job->Title = Str(A, TEXT("title"), Job->Steps.Num() == 1 ? Job->Steps[0].Op : FString::Printf(TEXT("%d 步"), Job->Steps.Num()));
 			Job->bStopOnError = Bool(A, TEXT("stopOnError"), true);
+			Out = Enqueue(Job.ToSharedRef());
+			return true;
+		}
+
+		TSharedRef<FJsonObject> Enqueue(const TSharedRef<FJob>& Job)
+		{
+			FState& S = State();
+			Job->Id = FString::Printf(TEXT("uelink-%d"), ++S.Serial);
 			Job->StartedAt = FDateTime::UtcNow();
 			S.Jobs.Add(Job);
 			// 只删已经结束的旧作业，排队和正在跑的不能丢
@@ -462,9 +458,9 @@ namespace AgentPanel
 			}
 			EnsureTicking();
 			Publish(*Job, TEXT("queued"));
-			Out = Summary(*Job);
+			const TSharedRef<FJsonObject> Out = Summary(*Job);
 			Out->SetStringField(TEXT("job"), Job->Id);
-			return true;
+			return Out;
 		}
 	}
 
@@ -475,6 +471,8 @@ namespace AgentPanel
 		{
 			return StartJob(A, Out, Error);
 		});
+
+		RegisterBatchOps(Bridge);
 
 		Bridge.AddOp(TEXT("job.get"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 		{

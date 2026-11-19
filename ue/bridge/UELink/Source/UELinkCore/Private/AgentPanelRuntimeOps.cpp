@@ -5,6 +5,7 @@
 #include "AgentPanelBlueprintComps.h"
 #include "AgentPanelOutliner.h"
 #include "AgentPanelAssetTree.h"
+#include "UELinkAssetFilter.h"
 #include "UELinkConfigOps.h"
 #include "UELinkJobOps.h"
 #include "UELinkPropEdit.h"
@@ -430,15 +431,28 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			return false;
 		}
 		const FString Prefix = Str(A, TEXT("prefix")).TrimStartAndEnd();
-		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 1000);
+		// 2.14：按类（含子类）、Actor 标签筛（批量改关卡里的一类 Actor 用）；给了其中一个时前缀可以空
+		const FString ClassName = Str(A, TEXT("class"));
+		const FName Tag(*Str(A, TEXT("tag")));
+		UClass* Class = nullptr;
+		if (!ClassName.IsEmpty())
+		{
+			Class = FindClassByName(ClassName);
+			if (!Class)
+			{
+				Error = FString::Printf(TEXT("找不到类 %s"), *ClassName);
+				return false;
+			}
+		}
+		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 2000);
 		TArray<TSharedPtr<FJsonValue>> Items;
 		bool bMore = false;
-		if (!Prefix.IsEmpty())
+		if (!Prefix.IsEmpty() || Class || !Tag.IsNone())
 		{
 			for (TActorIterator<AActor> It(World); It; ++It)
 			{
 				AActor* Act = *It;
-				if (!IsValid(Act))
+				if (!IsValid(Act) || (Class && !Act->IsA(Class)) || (!Tag.IsNone() && !Act->ActorHasTag(Tag)))
 				{
 					continue;
 				}
@@ -446,7 +460,7 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 #if WITH_EDITOR
 				Label = Act->GetActorLabel(false);
 #endif
-				if (!StartsWithNoCase(Act->GetName(), Prefix) && !StartsWithNoCase(Label, Prefix))
+				if (!Prefix.IsEmpty() && !StartsWithNoCase(Act->GetName(), Prefix) && !StartsWithNoCase(Label, Prefix))
 				{
 					continue;
 				}
@@ -579,6 +593,14 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			return false;
 		}
 		Out->SetField(TEXT("prev"), ToJson(R.Prop, R.Value, 0));
+		// 2.14：where 给了且当前值对不上时不改（「是 A 的才改成 B」，批量时按资源挑）
+		const TSharedPtr<FJsonValue> Where = A->TryGetField(TEXT("where"));
+		if (Where.IsValid() && !SameJsonValue(Out->TryGetField(TEXT("prev")), Where))
+		{
+			Out->SetBoolField(TEXT("skipped"), true);
+			Out->SetStringField(TEXT("why"), TEXT("当前值和 where 对不上，没改"));
+			return true;
+		}
 		UObject* Owner = R.Owner ? R.Owner : Target;
 		// 三种写法：array 给了是容器按钮（数组 add / insert / duplicate / remove / clear，集合和映射按 key add / remove / clear）；
 		// 只给 class 是给对象属性新建内嵌子对象（2.13.0）；都没有就按 value 整体写
@@ -1183,7 +1205,8 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 	{
 		IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 		FARFilter Filter;
-		Filter.bRecursivePaths = true;
+		// 2.14：recursive=false 只看这一层目录
+		Filter.bRecursivePaths = Bool(A, TEXT("recursive"), true);
 		Filter.PackagePaths.Add(FName(*Str(A, TEXT("path"), TEXT("/Game"))));
 		const FString ClassName = Str(A, TEXT("class"));
 		if (!ClassName.IsEmpty())
@@ -1199,6 +1222,17 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		}
 		TArray<FAssetData> Found;
 		AR.GetAssets(Filter, Found);
+		// 2.14：按蓝图父类（含间接的）、资源注册表标签筛，都只读注册表、不加载资源（批量操作选目标用）
+		const FString Parent = Str(A, TEXT("parent"));
+		if (!Parent.IsEmpty())
+		{
+			FilterAssetsByParent(AR, Parent, Found);
+		}
+		const TSharedPtr<FJsonObject>* Tags = nullptr;
+		if (A->TryGetObjectField(TEXT("tags"), Tags) && Tags && Tags->IsValid())
+		{
+			FilterAssetsByTags(*Tags, Found);
+		}
 		const FString Prefix = Str(A, TEXT("prefix"));
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 300), 1, 2000);
 		TArray<TSharedPtr<FJsonValue>> Items;
