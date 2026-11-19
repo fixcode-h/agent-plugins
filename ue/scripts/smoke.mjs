@@ -303,9 +303,19 @@ try {
   assert.ok(refBlocked.isError && /还被 1 个资源引用/.test(text(refBlocked)), text(refBlocked))
   assert.ok(!(await call('ue_asset', { action: 'delete', path: '/Game/BP_New' }, yes)).isError)
   assert.deepEqual(bridge.state.bp.deleted, ['/Game/BP_New'])
-  // Python：不允许时拒绝；「允许，每次问我」时确认；「允许，不用问我」时直接执行
-  const pyOff = await call('ue_python', { code: 'print(1)' }, yes)
+  // Python：不允许时没有确认卡片就拒绝、有卡片就问这一次放不放行（用户的指令优先，面板 ADR 0070）；
+  // 「允许，每次问我」时确认；「允许，不用问我」时直接执行
+  const pyOff = await call('ue_python', { code: 'print(1)' })
   assert.ok(pyOff.isError && /执行 Python/.test(text(pyOff)), text(pyOff))
+  let pyAsked = ''
+  const pyOnce = await call(
+    'ue_python',
+    { code: 'print(0)' },
+    {
+      confirm: async (r) => ((pyAsked = r.title), { allow: true, message: '' }),
+    },
+  )
+  assert.ok(!pyOnce.isError && /这次放行吗/.test(pyAsked), text(pyOnce))
   await api('POST', '/p/p1/settings', { perms: { runtime: 'write', asset: 'ask', struct: 'ask', python: 'ask' } })
   assert.ok((await call('ue_python', { code: 'print(1)' })).isError)
   const py = await call('ue_python', { code: 'print(1)' }, yes)
