@@ -33,7 +33,7 @@ export function AddProject({
   const [detecting, setDetecting] = useState(false)
   const [mode, setMode] = useState<InstallMode | 'none'>('local')
   const [runtime, setRuntime] = useState('write')
-  const [asset, setAsset] = useState('ask')
+  const [asset, setAsset] = useState('save')
   const { busy, run } = useAction()
   const proj = candidates.find((p) => p.id === id)
 
