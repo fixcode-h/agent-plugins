@@ -10,10 +10,13 @@ import { c, t } from '../util.ts'
  * - 一个页面连接只盯一份（右栏只显示一份）；换了选中项整份替换，取消选中就不盯了。连接断了面板回调 onClose，一起清掉。
  * - 盯所在目录而不是文件本身：VS Code、Excel 一类编辑器保存是先写临时文件再改名替换，盯文件的话改名后就盯丢了。
  * - 保存时会连着来好几下事件：等它停 SETTLE_MS 再看修改时间，和上次推过的不一样才推，同一次保存只推一次。
+ * - 配置 include 了片段文件（设计稿 4.3.4）时页面把片段一起报上来（extra）：片段存盘也算这份配置变了，推的还是主文件的路径。
  */
 const SETTLE_MS = 300
 /** 同时最多盯这么多个页面连接：每个占一个系统句柄 */
 const MAX_CONNS = 64
+/** 一份配置最多连带盯这么多个片段文件 */
+const MAX_EXTRA = 50
 
 /** 推给一个页面连接（api-ext.ts 给：走扩展事件同一个事件名，页面的 useExtEvents 收） */
 export type PushTo = (data: Record<string, unknown>, conn: string) => void
@@ -23,9 +26,10 @@ interface Sub {
   push: PushTo
   /** 页面登记时用的路径（相对配置根），推回去时页面按它对上选中项 */
   rel: string
-  full: string
+  /** 主文件和 include 的片段文件（绝对路径），第一个是主文件 */
+  files: string[]
   mtime: string
-  watcher: FSWatcher
+  watchers: FSWatcher[]
   timer?: ReturnType<typeof setTimeout>
 }
 
@@ -37,11 +41,12 @@ function stop(conn: string) {
   if (!s) return
   subs.delete(conn)
   if (s.timer) clearTimeout(s.timer)
-  try {
-    s.watcher.close()
-  } catch {
-    // 已经关了
-  }
+  for (const w of s.watchers)
+    try {
+      w.close()
+    } catch {
+      // 已经关了
+    }
 }
 
 async function mtimeOf(full: string) {
@@ -49,11 +54,17 @@ async function mtimeOf(full: string) {
   return st?.isFile() ? st.mtime.toISOString() : ''
 }
 
+/** 主文件的修改时间（推给页面的）+ 片段的：任何一个变了都算变了 */
+async function stampOf(files: string[]) {
+  return (await Promise.all(files.map(mtimeOf))).join('|')
+}
+
 async function check(conn: string, s: Sub) {
   s.timer = undefined
-  const mtime = await mtimeOf(s.full)
-  if (subs.get(conn) !== s || mtime === s.mtime) return
-  s.mtime = mtime
+  const stamp = await stampOf(s.files)
+  if (subs.get(conn) !== s || stamp === s.mtime) return
+  s.mtime = stamp
+  const mtime = stamp.split('|')[0]
   s.push({ project: s.project, event: 'forge.file', path: s.rel, ...(mtime ? { mtime } : { missing: true }) }, conn)
 }
 
@@ -74,36 +85,59 @@ export async function forgeWatch(project: string, rootAbs: string, b: Record<str
     if (subs.get(conn)?.project === project) stop(conn)
     return { watching: false }
   }
-  const full = path.resolve(rootAbs, rel)
-  const back = path.relative(rootAbs, full)
-  if (back.startsWith('..') || path.isAbsolute(back) || !/\.json$/i.test(full))
-    throw new Error(t('只能盯配置根里的 .json：{p}', { p: rel }))
+  const inRoot = (r: string) => {
+    const full = path.resolve(rootAbs, r)
+    const back = path.relative(rootAbs, full)
+    return back.startsWith('..') || path.isAbsolute(back) || !/\.json$/i.test(full) ? undefined : full
+  }
+  const full = inRoot(rel)
+  if (!full) throw new Error(t('只能盯配置根里的 .json：{p}', { p: rel }))
+  // 片段文件出了配置根的不盯（include 本来就不许出配置根），不报错
+  const extra = (Array.isArray(b.extra) ? b.extra : [])
+    .slice(0, MAX_EXTRA)
+    .map((x) => inRoot(String(x).replace(/\\/g, '/')))
+    .filter((x): x is string => !!x && x !== full)
+  const files = [full, ...new Set(extra)]
 
   const cur = subs.get(conn)
-  if (cur && cur.full === full && cur.project === project) return { watching: true }
+  if (cur && cur.project === project && cur.files.join('\n') === files.join('\n')) return { watching: true }
   stop(conn)
   if (subs.size >= MAX_CONNS) return { watching: false }
 
-  const dir = path.dirname(full)
-  const name = path.basename(full).toLowerCase()
-  let watcher: FSWatcher
-  try {
-    watcher = watch(dir, { persistent: false }, (_e, f) => {
-      const s = subs.get(conn)
-      if (!s || s.watcher !== watcher) return
-      // 有的系统不给文件名：当成可能是它，修改时间没变的不会推
-      if (f && path.basename(String(f)).toLowerCase() !== name) return
-      if (s.timer) clearTimeout(s.timer)
-      s.timer = setTimeout(() => void check(conn, s), SETTLE_MS)
-    })
-  } catch {
-    // 盯不了（目录不存在、网络盘、权限）：不报错，页面照旧能手动刷新
-    return { watching: false }
+  // 按目录盯，一个目录一个 watcher，事件里的文件名对上这个目录里要盯的才算
+  const byDir = new Map<string, Set<string>>()
+  for (const f of files) {
+    const d = path.dirname(f)
+    if (!byDir.has(d)) byDir.set(d, new Set())
+    byDir.get(d)!.add(path.basename(f).toLowerCase())
   }
-  watcher.on('error', () => {
-    if (subs.get(conn)?.watcher === watcher) stop(conn)
-  })
-  subs.set(conn, { project, push, rel, full, mtime: await mtimeOf(full), watcher })
+  const watchers: FSWatcher[] = []
+  const sub: Sub = { project, push, rel, files, mtime: '', watchers }
+  for (const [dir, names] of byDir) {
+    let watcher: FSWatcher
+    try {
+      watcher = watch(dir, { persistent: false }, (_e, f) => {
+        if (subs.get(conn) !== sub) return
+        // 有的系统不给文件名：当成可能是它，修改时间没变的不会推
+        if (f && !names.has(path.basename(String(f)).toLowerCase())) return
+        if (sub.timer) clearTimeout(sub.timer)
+        sub.timer = setTimeout(() => void check(conn, sub), SETTLE_MS)
+      })
+    } catch {
+      // 盯不了（目录不存在、网络盘、权限）：主文件的目录盯不了就不盯，页面照旧能手动刷新；片段的目录盯不了跳过
+      if (dir === path.dirname(full)) {
+        for (const w of watchers) w.close()
+        return { watching: false }
+      }
+      continue
+    }
+    watcher.on('error', () => {
+      if (subs.get(conn) === sub) stop(conn)
+    })
+    watchers.push(watcher)
+  }
+  sub.mtime = await stampOf(files)
+  subs.set(conn, sub)
   return { watching: true }
 }
 

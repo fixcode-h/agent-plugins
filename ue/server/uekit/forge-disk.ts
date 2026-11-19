@@ -80,10 +80,13 @@ export function normalizeAsset(p: string) {
   return s.split(/[.:]/)[0]
 }
 
-/** 配置根下的 .json，跳过 `_` 开头的目录和文件（模板 `_templates/`、`_schema` 这类生成物，和 UE 的 IsGeneratedPath 一致） */
+/**
+ * 配置根下的 .json，跳过 `_` 开头的目录和文件（模板 `_templates/`、`_schema` 这类生成物，和 UE 的 IsGeneratedPath 一致），
+ * 也跳过 `.` 开头的（`.schema/` 是 AssetForge 写给编辑器做格式检查的 JSON Schema，设计稿 4.3.5，不是配置）
+ */
 async function walk(dir: string, out: string[]) {
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-    if (e.name.startsWith('_')) continue
+    if (e.name.startsWith('_') || e.name.startsWith('.')) continue
     const abs = path.join(dir, e.name)
     if (e.isDirectory()) await walk(abs, out)
     else if (e.isFile() && /\.json$/i.test(e.name)) out.push(abs)
@@ -118,7 +121,7 @@ export interface DiskEntry {
   message?: string
 }
 
-async function describe(rootAbs: string, abs: string): Promise<DiskEntry> {
+async function describe(rootAbs: string, abs: string): Promise<DiskEntry | undefined> {
   const config = slash(path.relative(rootAbs, abs))
   const base = { key: config, name: path.basename(abs, path.extname(abs)), config, configPath: slash(abs) }
   const text = await readFile(abs, 'utf8').catch(() => undefined)
@@ -131,6 +134,8 @@ async function describe(rootAbs: string, abs: string): Promise<DiskEntry> {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc))
     return { ...base, state: 'parse-error', message: text === undefined ? '读不了文件' : '不是 JSON 对象' }
   const d = doc as Record<string, unknown>
+  // include 的片段文件（顶层 fragment、没有 kind，设计稿 4.3.4）不是资源：不列，也不报「读不出来」
+  if (typeof d.fragment === 'string' && d.kind === undefined) return undefined
   return {
     ...base,
     state: '',
@@ -151,7 +156,7 @@ async function entries(root: string, args: Record<string, unknown>) {
   const rootAbs = await forgeConfigRoot(root)
   const files: string[] = []
   await walk(rootAbs, files)
-  const all = await mapLimit(files, 32, (f) => describe(rootAbs, f))
+  const all = (await mapLimit(files, 32, (f) => describe(rootAbs, f))).filter((e): e is DiskEntry => !!e)
   all.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
   const offset = Math.max(0, Number(args.offset) || 0)
   const limit = Math.min(20000, Math.max(1, Number(args.limit) || 200))

@@ -8,6 +8,7 @@ import { ForgeConfigPreview } from './ForgeConfigPreview.tsx'
 import type { ForgeDiffData } from './ForgeDiff.tsx'
 import { assetObjectPath } from './ForgeLink.tsx'
 import { Hint } from './forge-parts.tsx'
+import { useFragmentAt, type ForgeExpanded } from './forge-config/use-expanded.ts'
 
 /**
  * 「资源」页签（默认页签，设计稿 §2.2 第 3、4 条，用户原话「这个 json 也可以认为是一个蓝图资源」）：
@@ -20,6 +21,7 @@ export function ForgeAssetTab({
   entry,
   diff,
   configText,
+  expanded,
   configTruncated,
   configLoading,
   configError,
@@ -29,6 +31,8 @@ export function ForgeAssetTab({
   /** 「和资产比」的属性差异；和上次提交的配置比的那份不用来标注（那是配置之间的差别，不是导入会改资源的） */
   diff?: ForgeDiffData
   configText?: string
+  /** 展开 include 之后的配置（设计稿 4.3.4）：预览按它画 */
+  expanded?: ForgeExpanded
   configTruncated?: boolean
   configLoading?: boolean
   configError?: string
@@ -45,6 +49,7 @@ export function ForgeAssetTab({
     return new Map(diff.changes.map((c) => [c.property.replace(/^props\./, ''), c.after] as const))
   }, [diff])
   const absent = entry.state === 'never-imported' || entry.state === 'asset-missing'
+  const fragmentAt = useFragmentAt(expanded)
 
   if (['parse-error', 'foreign'].includes(entry.state))
     return <Hint>{t('配置读不出来，先看「配置原文」把它修好')}</Hint>
@@ -52,6 +57,8 @@ export function ForgeAssetTab({
     return (
       <ForgeConfigPreview
         text={configText}
+        doc={expanded?.doc}
+        fragmentAt={expanded?.origins.length ? fragmentAt : undefined}
         truncated={configTruncated}
         loading={configLoading}
         error={configError}
