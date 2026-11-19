@@ -27,13 +27,17 @@ const LINES_MAX = 3500
 export const BATCH_PROPS = {
   paths: { type: 'array', items: { type: 'string' } },
   items: { type: 'array', items: { type: 'object' } },
-  select: { type: 'object' },
+  select: {
+    type: 'object',
+    description:
+      '按条件选资源，条件可组合：path 目录（默认 /Game）、class 资源类型（Blueprint、WidgetBlueprint、DataTable…）、parent 蓝图父类（含间接继承；C++ 类只认最近的那层）、prefix 名字前缀、tags 注册表标签、recursive=false 不含子目录；kind="actor" 改成按 class / tag / prefix 选关卡里的 Actor',
+  },
   onError: { type: 'string', enum: ['rollback', 'keep'] },
   retry: { type: 'string' },
 }
 
 export const BATCH_HINT =
-  '\n批量（多个资源做同样的读或改时一次调，别逐个调）：paths（路径数组）/ items（[{path, vars?, ...这一项的参数}]）/ select（{path, class, prefix, parent, tags}），最多 2000 个；字符串里 {name} {path} {vars.键} 按资源替换。' +
+  '\n批量（多个资源做同样的读或改时一次调，别逐个调）：paths（路径数组）/ items（[{path, vars?, ...这一项的参数}]）/ select（按条件在资源注册表里选、可组合：path 目录、class 资源类型、parent 蓝图父类含间接继承、prefix 名字前缀、tags、recursive；例 select={path:"/Game/Enemies", class:"Blueprint", parent:"BP_EnemyBase"}），最多 2000 个；字符串里 {name} {path} {vars.键} 按资源替换。' +
   '写操作先整批演练、全过才真改，失败默认撤回整批（onError=keep 保留成功的）；retry=上一批的作业号 只重做没成的。select.kind="actor" 按 class / tag / prefix 选关卡里的 Actor。回包按资源汇总，全部结果在 report 文件。'
 
 /** 一个值的一行摘要：数组给个数、短的标量原样、对象给键数 */
