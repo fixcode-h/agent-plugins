@@ -1,9 +1,25 @@
 import type { McpResult } from '../../sdk/server.ts'
-import { packageToDisk } from './asset-query.ts'
+import { diskToPackage, packageToDisk } from './asset-query.ts'
+import { noteCompile, noteSaved, packageName } from './bp-check/state.ts'
 import { resumeJob } from './long-ops.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+
+const taskOf = (ctx: OpCtx) => (ctx.actor.kind === 'agent' ? ctx.actor.taskId : '')
+/** 桥接的编译结果：ok、warnings 算通过 */
+const compileOk = (res: Record<string, unknown>) => {
+  const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
+  return status === 'ok' || status === 'warnings'
+}
+/** 保存的磁盘文件换回包名；不在 Content 里的（不该有）跳过 */
+function toPackage(file: string, root: string) {
+  try {
+    return [diskToPackage(file.replace(/\\/g, '/').replace(/\.(uasset|umap)$/i, ''), root)]
+  } catch {
+    return []
+  }
+}
 
 /**
  * 资源和蓝图读写的工具（设计稿「UE 插件扩充设计：资源与蓝图读写」，在仓库 ue/docs/asset-blueprint-design.md）：
@@ -240,15 +256,12 @@ export const ASSET_TOOLS = [
           )
         case 'edit':
           if (!Array.isArray(a.ops) || !a.ops.length) return mcpText('action=edit 要给 ops（操作数组）', true)
-          return out(
-            await runOp(
-              ctx,
-              'bp.edit',
-              { path, ops: a.ops, dryRun: !!a.dryRun, compile: a.compile !== false },
-              300000,
-              JOB,
-            ),
-          )
+          const compile = a.compile !== false
+          const r = await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile }, 300000, JOB)
+          // 写后编译钩子据此跳过已经编过的蓝图（bp-check/state.ts）；演练不留改动，不记。
+          // 转成作业（长操作）时这里拿不到编译结果，按「没确认过」记，保存后钩子会再编一次
+          if (!a.dryRun) noteCompile(taskOf(ctx), packageName(path), compile ? compileOk(r) : undefined)
+          return out(r)
         // 编译拆成了 ue_compile（面板据此把编译结果算进完成依据）；老会话里还按旧说明调的，指过去
         case 'compile':
           return mcpText('只编译改用 ue_compile 工具（path 参数不变）', true)
@@ -266,6 +279,12 @@ export const ASSET_TOOLS = [
       const res = await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000)
       // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
       const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
+      // 交给写后编译钩子（bp-check/hook.ts）：保存之后编译其中的蓝图，没通过的把错误补给模型
+      noteSaved(
+        taskOf(ctx),
+        ctx.project.id,
+        saved.flatMap((f) => toPackage(f, ctx.project.root)),
+      )
       return { ...out(res), changed: saved }
     },
     {
@@ -288,6 +307,7 @@ export const ASSET_TOOLS = [
       // 还在编：不给完成依据，等带 job 再调拿到结果
       if (res.job && !res.compile) return out(res)
       const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
+      noteCompile(taskOf(ctx), packageName(a.path), compileOk(res))
       const file = packageToDisk(ctx.project.root, str(a.path))
       // 编译结论交给面板的完成依据：通过的蓝图不再要求跑项目的测试步骤，没通过时不让对话结束
       return {

@@ -7,7 +7,7 @@
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
   "activation": "project",
-  "api": 9,
+  "api": 13,
   "settings": [
     {
       "key": "attach",
@@ -446,6 +446,28 @@
         ],
         "instructions": "你是 UE 性能分析的深挖子任务，只看一个方向：{{focus}}。按 ue-perf-analysis 技能里 trace 的下钻方法做，派单里有抓取 id、范围和这个方向的发现。\n\n- 只分析，不录制（不用 ue_perf start / record），不改代码和资源；要读源码时用读文件工具看 src 给的位置。\n{{#if focus=game}}- 游戏线程：timers lane=GameThread perFrame=true 找每帧最重的，butterfly 看调用关系，instances 区分每次都慢还是偶尔一次，tree 看主干。{{/if}}\n{{#if focus=render}}- 渲染和 GPU：threads / bound 看是渲染线程、RHI 还是 GPU，timers lane=<那条线程> perFrame=true，counters 看 Draw Call 和图元数。{{/if}}\n{{#if focus=hitch}}- 卡顿：hitches 看分组和周期，最慢的几帧逐个 frame，grew 里的计时器用 butterfly / stack 找到入口。{{/if}}\n{{#if focus=lua}}- Lua：timers lua=true mergeC=true、tree luaOnly=true，按 src 读源码，butterfly 看是从哪个 UE 回调进来的。{{/if}}\n{{#if focus=memory}}- 内存：counters sort=growth、memtags、allocs（有才查）；GC 卡顿看 hitches 里「垃圾回收」组的帧。{{/if}}\n{{#if focus=loading}}- 加载：loads sort=time、files，hitches 里「同步加载」「关卡流送」组的帧，看是哪些包在游戏线程上同步加载。{{/if}}\n\n交回时按这个格式（不超过 40 行）：\n## 结论\n一两句：这个方向最大的问题是什么、每帧大约多少毫秒（impactMs）。\n## 证据\n每条：哪一帧或哪一段、哪个计时器、多少毫秒、怎么查到的（工具和参数）。\n## 源码位置\n文件:行（Lua 的 src、C++ 能对上的函数）。\n## 建议\n具体改法，按收益排序。\n## 还没确认的\n推测和需要再录什么才能确认。"
       }
+    }
+  ],
+  "testSteps": [
+    {
+      "id": "compile-bp",
+      "name": "蓝图编译",
+      "command": "node \"{dir}/bin/bp-compile.mjs\" --data \"{data}\"",
+      "appliesTo": ["**/*.uasset"],
+      "detect": ["*.uproject"],
+      "scope": "changed",
+      "timeoutSec": 1800,
+      "when": "改了 .uasset 时",
+      "note": "用 UnrealEditor-Cmd 的 CompileAllBlueprints 编译项目里全部蓝图，要几分钟；编辑器开着时先用 ue_compile 逐个编译改过的蓝图，都通过了就不用再跑这条"
+    }
+  ],
+  "hooks": [
+    {
+      "id": "compile-after-save",
+      "name": "保存蓝图后自动编译",
+      "description": "Agent 用 ue_save 把资源写到磁盘后，编译刚保存的蓝图，没通过的把错误和节点 id 补给模型接着修；编辑器没开时不做",
+      "event": "tool.after",
+      "timeoutSec": 300
     }
   ],
   "mcpServers": ["ue"],
