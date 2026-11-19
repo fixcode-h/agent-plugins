@@ -1404,7 +1404,12 @@ void AgentPanelEd::RegisterBlueprintEditOps()
 					TArray<TSharedPtr<FJsonValue>> Subs;
 					for (const TSharedPtr<FJsonObject>& One : Each)
 					{
-						TSharedPtr<FJsonObject> Sub = Each.Num() == 1 ? Res : MakeShared<FJsonObject>();
+						// 不写成 Each.Num() == 1 ? Res : MakeShared<FJsonObject>()：TSharedPtr 和 TSharedRef 混在条件表达式里要靠隐式转换，各版本引擎和编译器不一定认
+						TSharedPtr<FJsonObject> Sub = Res;
+						if (Each.Num() > 1)
+						{
+							Sub = MakeShared<FJsonObject>();
+						}
 						if (!Edit.Run(One, Sub, OpError))
 						{
 							if (OpError.IsEmpty())

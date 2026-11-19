@@ -134,7 +134,14 @@ namespace AgentPanel
 						{
 							double Num = 0;
 							bool B = false;
-							Text = Pair.Value->TryGetNumber(Num) ? FString::SanitizeFloat(Num) : Pair.Value->TryGetBool(B) ? (B ? TEXT("true") : TEXT("false")) : FString();
+							if (Pair.Value->TryGetNumber(Num))
+							{
+								Text = FString::SanitizeFloat(Num);
+							}
+							else if (Pair.Value->TryGetBool(B))
+							{
+								Text = B ? TEXT("true") : TEXT("false");
+							}
 						}
 						Out = Out.Replace(*Token, *Text);
 					}

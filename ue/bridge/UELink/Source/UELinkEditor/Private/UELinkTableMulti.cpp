@@ -118,7 +118,7 @@ namespace AgentPanel
 			return false;
 		}
 
-		FTx Tx(FString::Printf(TEXT("%s %d 行.%s"), *DT->GetName(), Rows.Num(), *Column));
+		AgentPanelEd::FTx Tx(FString::Printf(TEXT("%s %d 行.%s"), *DT->GetName(), Rows.Num(), *Column));
 		DT->Modify();
 		FDataTableEditorUtils::BroadcastPreChange(DT, FDataTableEditorUtils::EDataTableChangeInfo::RowData);
 		TArray<TSharedPtr<FJsonValue>> Listed;
@@ -160,7 +160,7 @@ namespace AgentPanel
 		}
 		if (bKeep)
 		{
-			NoteDirty(DT);
+			AgentPanelEd::NoteDirty(DT);
 			if (bFinished)
 			{
 				Out->SetStringField(TEXT("tx"), Tx.Id);
