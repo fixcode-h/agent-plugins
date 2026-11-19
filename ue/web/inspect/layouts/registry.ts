@@ -1,9 +1,13 @@
 import type { ComponentType } from 'react'
 import { BlueprintLayout } from './blueprint/BlueprintLayout.tsx'
+import { CurveLayout } from './curve/CurveLayout.tsx'
+import { DataAssetLayout } from './dataasset/DataAssetLayout.tsx'
 import { DataTableLayout } from './datatable/DataTableLayout.tsx'
 import { LAYOUT_DEFS } from './defs.ts'
+import { EnumLayout } from './enum/EnumLayout.tsx'
 import { GenericLayout } from './generic/GenericLayout.tsx'
 import { pickLayout } from './pick.ts'
+import { StructLayout } from './struct/StructLayout.tsx'
 import type { Layout, LayoutInfo, LayoutProps } from './types.ts'
 import { UmgLayout } from './umg/UmgLayout.tsx'
 
@@ -15,6 +19,10 @@ const COMPONENTS: Record<string, ComponentType<LayoutProps>> = {
   umg: UmgLayout,
   datatable: DataTableLayout,
   blueprint: BlueprintLayout,
+  dataasset: DataAssetLayout,
+  enum: EnumLayout,
+  struct: StructLayout,
+  curve: CurveLayout,
   generic: GenericLayout,
 }
 
