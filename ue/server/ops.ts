@@ -305,8 +305,11 @@ function release(p: UeProject, packages: string[]) {
  * 设成只读的那一档：用户的指令优先（面板 ADR 0070，用户 2026-11-19 定），不再直接报错，
  * 弹确认卡问这一次放不放行；同意只放这一次，不改设置。不在对话里（没法弹卡）时 ask 照旧报错
  */
-const readOnlyAsk = (ctx: OpCtx, title: string, what: string) =>
-  ask(ctx, { title, detail: `${what}\n${t('同意只放行这一次，不改「权限与设置」。')}` })
+async function readOnlyAsk(ctx: OpCtx, title: string, what: string) {
+  // 不在对话里（定时任务、网页外的调用）没法问：按设置拦下，原因写清是哪一档
+  if (!ctx.confirm) throw new BridgeError(t('{title}（这次调用没法弹确认卡片，按设置拦下）：{what}', { title, what }))
+  await ask(ctx, { title, detail: `${what}\n${t('同意只放行这一次，不改「权限与设置」。')}` })
+}
 
 /** Agent 的权限（设计文档 6）：你在网页上的操作不受这个限制 */
 async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<string, unknown>) {
