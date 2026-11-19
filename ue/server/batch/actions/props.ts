@@ -17,6 +17,7 @@ registerBatch('ue_set', {
     ...(a.key !== undefined ? { key: a.key } : {}),
     ...(a.value !== undefined ? { value: a.value } : {}),
     ...(a.class ? { class: String(a.class) } : {}),
+    ...(a.where !== undefined ? { where: a.where } : {}),
   }),
   timeoutMs: 600000,
   write: true,

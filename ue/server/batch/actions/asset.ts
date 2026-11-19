@@ -17,6 +17,19 @@ registerBatch('ue_asset.export', {
   timeoutMs: 600000,
 })
 
+// DataTable 改单元格：items 每项 {path, row, column, value}，同一张表可以出现多次；一张表里同一列改多行不用批量，直接 row 给数组 / where
+registerBatch('ue_asset.set', {
+  op: 'datatable.set',
+  args: (a) => ({
+    ...(a.row !== undefined ? { row: a.row } : {}),
+    ...(a.column !== undefined ? { column: a.column } : {}),
+    ...(a.value !== undefined ? { value: a.value } : {}),
+    ...(a.where ? { where: a.where } : {}),
+  }),
+  timeoutMs: 600000,
+  write: true,
+})
+
 for (const action of ['duplicate', 'rename', 'delete'])
   registerBatch(`ue_asset.${action}`, {
     op: `asset.${action}`,

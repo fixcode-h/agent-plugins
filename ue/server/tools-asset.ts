@@ -1,5 +1,6 @@
 import type { McpResult } from '../../sdk/server.ts'
 import { diskToPackage, packageToDisk } from './asset-query.ts'
+import { compileBeforeSave } from './bp-check/compile-before-save.ts'
 import { noteCompile, noteSaved, packageName } from './bp-check/state.ts'
 import { BATCH_HINT, BATCH_PROPS, jobResult, runBatch } from './batch/run.ts'
 import { isBatch } from './batch/targets.ts'
@@ -192,7 +193,10 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
 const EDIT_HELP = `ops 是操作数组，整批在一个编辑器事务里执行，任一步失败整批取消。每个操作 {op, ...}：
 成员：add_variable {name, type, default?, category?, instanceEditable?, replicated?, exposeOnSpawn?}；set_variable {name, type?, rename?, default?, …同上}；remove_variable {name}；add_function {name, inputs?:[{name,type}], outputs?:[{name,type}], pure?}；remove_function {name}。
 类设置：add_interface / remove_interface {interface}；reparent {parent}；set_default {prop, value}（类默认值，prop 同 ue_get）。
-组件：add_component {name, class, parent?}；remove_component {name}；set_component {name, prop, value}。改删组件 / 变量、删函数的 name 可给数组或通配符（组件可按 componentClass 选），一条改多个。
+组件：add_component {name, class, parent?}；remove_component {name}；set_component {name, prop, value}。
+一条改多个：set_variable / remove_variable / remove_function / set_component / remove_component 的 name 可给数组，每项可写通配符（* ?，不分大小写）；组件另可 componentClass（组件类，含子类），不写 name 就是这个类的全部组件；remove_node 的 node 可给 id 数组。展开后在同一个事务里逐个做，任一个失败整批取消；结果带 count 和 each。
+改属性（set_component / set_default）：props {属性路径: 值} 一次改多个属性；where 是期望的当前值（用 props 时写 {属性路径: 期望值}），对不上的跳过（skipped）；结果带 prev 和 value，演练也有，可以先看改前改后。
+没有才加：add_variable / add_function / add_component / add_interface 加 ifMissing: true，已经有了就跳过，同一组操作可以重跑。
 节点（graph 不写是事件图）：add_node {graph?, as?, spawner 或 kind, x?, y?, comment?, pins?:{引脚名:默认值}}，kind 有 call {function:"类名.函数名"}、get / set {variable}、branch、sequence、cast {class}、self、event {name:"BeginPlay"}、custom_event {name, inputs?}、macro {macro:"ForEachLoop"}，其余先 node_search 拿 spawner；remove_node {node}；set_pin {pin:"节点.引脚", value}；connect / disconnect {from:"节点.引脚", to:"节点.引脚"}（disconnect 不写 to 断开全部连线）；move {node, x, y}；comment {graph?, text, nodes?:[节点]}。
 类型：bool、int、int64、float、byte、name、string、text、结构体名（Vector、Transform、自定义结构）、枚举名、类名（对象引用）、class<类>、soft<类>，可套 array<> / set<> / map<键,值>。
 节点用 id（graph 结果里 # 后那段）或本批 add_node 的 as 名引用；引脚别名 exec / then / self / return；不给位置自动排。`
@@ -223,11 +227,11 @@ export const ASSET_TOOLS = [
       '修改只在内存里（标脏），ue_save 保存，保存前可 ue_undo 撤回；类默认值用 ue_get / ue_set。' +
       '20 秒没做完回 job，带 job 再调接着等。' +
       BATCH_HINT +
-      ' compile="end" 整批改完再编译；add_* 加 ifMissing=true 已有就跳过。' +
-      '\n' +
-      EDIT_HELP,
+      ' compile="end" 整批改完再编译。' +
+      '\nedit 的 ops 是 [{op, ...}]，op 有：add_variable / set_variable / remove_variable、add_function / remove_function、add_interface / remove_interface、reparent、set_default、add_component / set_component / remove_component、add_node / remove_node / set_pin / connect / disconnect / move / comment。' +
+      '一条可以改多个：name 给数组或通配符（组件可按 componentClass 选），set_component / set_default 用 props 一次改多个属性，where 只改当前值对得上的，add_* 加 ifMissing 已有就跳过。每个 op 的参数和类型写法先 action=help 看一次。',
     {
-      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit'] },
+      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit', 'help'] },
       path: { type: 'string' },
       graph: { type: 'string' },
       node: { type: 'string' },
@@ -249,6 +253,7 @@ export const ASSET_TOOLS = [
     async (a, ctx) => {
       const path = a.path
       if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_blueprint', a.action, ctx)
+      if (a.action === 'help') return out(EDIT_HELP)
       if (isBatch(a)) return runBatch('ue_blueprint', a, ctx)
       if (!path) return mcpText('要给 path（蓝图资源路径），多个用 paths / select', true)
       switch (a.action) {
@@ -299,11 +304,16 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_save',
-    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过。',
-    { packages: { type: 'array', items: { type: 'string' } }, target: TARGET },
+    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过；或者 compile=true 让它先把要保存的蓝图一起编一遍，有没编过的就整批不保存（改完蓝图直接 ue_save compile=true 一步到位）。',
+    { packages: { type: 'array', items: { type: 'string' } }, compile: { type: 'boolean' }, target: TARGET },
     [],
     async (a, ctx) => {
-      const res = await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000)
+      const packages = Array.isArray(a.packages) ? a.packages.map(String) : []
+      if (a.compile) {
+        const gate = await compileBeforeSave(ctx, packages)
+        if (!gate.ok) return mcpText(gate.message ?? '编译没通过，没有保存', true)
+      }
+      const res = await runOp(ctx, 'asset.save', { packages }, 120000)
       // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
       const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
       // 交给写后编译钩子（bp-check/hook.ts）：保存之后编译其中的蓝图，没通过的把错误补给模型

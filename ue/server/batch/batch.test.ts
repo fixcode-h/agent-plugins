@@ -1,7 +1,7 @@
 // 批量（batch/）：UELink 2.14 的批量作业怎么调、汇总怎么整理、整批撤回怎么拼。
 // 用法（在仓库根）：node scripts/test.mjs ue server/batch/batch.test.ts
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
@@ -9,7 +9,8 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import type { Card } from '../instances.ts'
 import { runAsJob } from '../long-ops.ts'
-import { formatBatch } from './run.ts'
+import { retryItems } from './retry.ts'
+import { changes, formatBatch } from './run.ts'
 import { batchUndo, itemPaths, type ReportStep } from './undo.ts'
 
 /** 假桥接：batchOps 里登记的操作收到 paths 时回作业号，job.wait 回批量汇总 */
@@ -139,4 +140,36 @@ test('汇总：每个资源一行，读的结果不大时直接附上', async ()
 test('参数里的资源路径：paths 或 items', () => {
   assert.deepEqual(itemPaths({ paths: ['/Game/A'] }), ['/Game/A'])
   assert.deepEqual(itemPaths({ items: [{ path: '/Game/B', to: '/Game/C' }] }), ['/Game/B'])
+})
+
+test('改前改后：从结果里取 prev → value，跳过的写当前值', () => {
+  assert.deepEqual(changes({ results: [{ prop: 'Speed', prev: 1, value: 2 }] }), ['Speed: 1 → 2'])
+  assert.deepEqual(changes({ rows: [{ row: 'R1', prev: 'a', skipped: true }] }), ['R1: 跳过（当前 a）'])
+  assert.deepEqual(changes({ ok: true }), [])
+})
+
+test('重做失败的：只取没成功的资源，用真改那步的参数', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ue-retry-'))
+  const dir = path.join(root, 'Saved', 'UELink', 'jobs')
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    path.join(dir, 'uelink-9.json'),
+    JSON.stringify({
+      steps: [
+        { op: 'bp.edit', item: 0, phase: 'apply', state: 'ok', args: { path: '/Game/A', ops: [1] } },
+        { op: 'bp.edit', item: 1, phase: 'apply', state: 'failed', args: { path: '/Game/B', ops: [1] } },
+      ],
+      batch: {
+        list: [
+          { path: '/Game/B', item: 1, state: 'failed' },
+          { path: '/Game/A', item: 0, state: 'ok' },
+        ],
+      },
+    }),
+  )
+  const r = await retryItems(root, 'uelink-9')
+  assert.deepEqual(
+    r.items.map((i: Record<string, unknown>) => i.path),
+    ['/Game/B'],
+  )
 })

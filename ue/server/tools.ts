@@ -214,7 +214,7 @@ const DEFS = [
       '容器加删元素用 array，不整体替换（实例化子对象里的数据不会丢）：数组 add 末尾加、insert 在 index 前插、duplicate 复制第 index 个、remove 删第 index 个、clear 清空；add / insert 可带 value（新元素的值）或 class（元素是对象时新建这个类的内嵌子对象）。集合和映射按 key 增删：add / remove 给 key（元素或键），映射 add 可带 value 或 class；改映射已有键的值用 prop=名字[键] + value。\n' +
       '新建内嵌子对象（细节面板实例化属性的「选类」下拉，如输入触发器、修饰器、DataAsset 里的内嵌对象）：只给 class（原生类名或蓝图类路径），prop 可以是 Triggers[2] 这样的元素；结果里 created 是新子对象路径，接着用 ue_set path=created 改它的属性。集合 / 映射按键和 class 要 UELink 2.13。\n' +
       'UnLua 项目改 Lua 字段：写 lua（字段路径，同 ue_get）代替 prop；不写 path 时从全局表 _G 开始。只能改原值是数字、字符串、布尔或 nil 的字段，value 也只能是这几种（null 表示 nil），同样可以 ue_undo 撤回；表和函数用 ue_lua。' +
-      '\n同一处修改作用到多个资源用 paths / select（Lua 字段和运行时对象不支持批量）。' +
+      '\nwhere 是这个属性期望的当前值，对不上就不改（skipped）。同一处修改作用到多个资源或关卡里的一类 Actor 用 paths / select（Lua 字段不支持批量）。' +
       BATCH_HINT,
     {
       path: { type: 'string' },
@@ -225,6 +225,7 @@ const DEFS = [
       index: { type: 'number' },
       key: {},
       class: { type: 'string' },
+      where: {},
       ...BATCH_PROPS,
       target: TARGET,
     },
@@ -250,7 +251,15 @@ const DEFS = [
             ...(a.class ? { class: String(a.class) } : {}),
           }),
         )
-      return out(await runOp(ctx, 'set', { path: a.path, prop: a.prop, value: a.value }))
+      return out(
+        await runOp(ctx, 'set', {
+          path: a.path,
+          prop: a.prop,
+          value: a.value,
+          // UELink 2.14：当前值对得上才改
+          ...(a.where !== undefined ? { where: a.where } : {}),
+        }),
+      )
     },
   ),
   tool(
@@ -314,7 +323,7 @@ const DEFS = [
     '资源：通用读写和 DataTable。' +
       '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验，paths 一次查多个）。' +
       '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
-      'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
+      'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value；row 给数组或通配符、或 where {列: 值} 按别的列挑行时一次改多行，结果带改前改后，dryRun 演练；多张表或不同列用 items）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
       'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。' +
       JOB_HINT +
@@ -333,8 +342,10 @@ const DEFS = [
       file: { type: 'boolean' },
       force: { type: 'boolean' },
       dryRun: { type: 'boolean' },
-      row: { type: 'string' },
+      // 改单元格时可以给行名数组或通配符（一次改多行）
+      row: {},
       column: { type: 'string' },
+      where: { type: 'object' },
       value: {},
       filter: { type: 'string' },
       offset: { type: 'number' },
@@ -352,7 +363,17 @@ const DEFS = [
         case 'row':
           return out(await runOp(ctx, 'datatable.row', { path: a.path, row: a.row }))
         case 'set':
-          return out(await runOp(ctx, 'datatable.set', { path: a.path, row: a.row, column: a.column, value: a.value }))
+          return out(
+            await runOp(ctx, 'datatable.set', {
+              path: a.path,
+              row: a.row,
+              column: a.column,
+              value: a.value,
+              // UELink 2.14：row 给数组 / 通配符、或 where {列: 值} 时一次改多行
+              ...(a.where ? { where: a.where } : {}),
+              ...(a.dryRun ? { dryRun: true } : {}),
+            }),
+          )
         // duplicate / rename 带 row 时是 DataTable 的行操作，不带时是资源的复制 / 改名（assetAction 已经处理）
         case 'add':
         case 'remove':

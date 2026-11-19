@@ -6,7 +6,7 @@ export const MAX_ITEMS = 2000
 
 /** 工具参数里有没有批量写法：paths、items 或 select */
 export const isBatch = (a: Record<string, unknown>) =>
-  Array.isArray(a.paths) || Array.isArray(a.items) || (!!a.select && typeof a.select === 'object')
+  Array.isArray(a.paths) || Array.isArray(a.items) || !!a.retry || (!!a.select && typeof a.select === 'object')
 
 export type Targets = { paths: string[] } | { items: Record<string, unknown>[] }
 
@@ -18,6 +18,20 @@ export async function resolveTargets(a: Record<string, unknown>, ctx: OpCtx): Pr
   if (Array.isArray(a.items)) return check({ items: a.items as Record<string, unknown>[] }, a.items.length)
   if (Array.isArray(a.paths)) return check({ paths: a.paths.map(String) }, a.paths.length)
   const s = a.select as Record<string, unknown>
+  // 关卡里的 Actor：按类、标签、名字前缀在世界里找（UELink 2.14 的 actors 筛选）
+  if (s.kind === 'actor') {
+    const res = await runOp(ctx, 'actors', {
+      class: s.class,
+      tag: s.tag,
+      prefix: s.prefix ?? '',
+      world: s.world,
+      limit: MAX_ITEMS,
+    })
+    if (res.more) throw new BridgeError(`select 选中的 Actor 超过 ${MAX_ITEMS} 个：加 class / tag / prefix 缩小范围`)
+    const actors = ((res.items as { path?: string }[]) ?? []).map((x) => String(x.path ?? '')).filter(Boolean)
+    if (!actors.length) throw new BridgeError('select 没有选中任何 Actor：检查 class、tag、prefix 和 world')
+    return { paths: actors }
+  }
   const res = await runOp(ctx, 'assets', {
     path: s.path || '/Game',
     class: s.class,

@@ -1,6 +1,8 @@
 import type { McpResult } from '../../../sdk/server.ts'
 import { runOp, type OpCtx } from '../ops.ts'
+import { str } from '../toolkit.ts'
 import { mcpText } from '../util.ts'
+import { retryItems } from './retry.ts'
 import './actions/asset.ts'
 import './actions/blueprint.ts'
 import './actions/props.ts'
@@ -27,11 +29,12 @@ export const BATCH_PROPS = {
   items: { type: 'array', items: { type: 'object' } },
   select: { type: 'object' },
   onError: { type: 'string', enum: ['rollback', 'keep'] },
+  retry: { type: 'string' },
 }
 
 export const BATCH_HINT =
   '\n批量（多个资源做同样的读或改时一次调，别逐个调）：paths（路径数组）/ items（[{path, vars?, ...这一项的参数}]）/ select（{path, class, prefix, parent, tags}），最多 2000 个；字符串里 {name} {path} {vars.键} 按资源替换。' +
-  '写操作先整批演练、全过才真改，失败默认撤回整批（onError=keep 保留成功的）。回包按资源汇总，全部结果在 report 文件。'
+  '写操作先整批演练、全过才真改，失败默认撤回整批（onError=keep 保留成功的）；retry=上一批的作业号 只重做没成的。select.kind="actor" 按 class / tag / prefix 选关卡里的 Actor。回包按资源汇总，全部结果在 report 文件。'
 
 /** 一个值的一行摘要：数组给个数、短的标量原样、对象给键数 */
 function brief(res: Record<string, unknown> | undefined) {
@@ -48,6 +51,27 @@ function brief(res: Record<string, unknown> | undefined) {
   return parts.join(' ')
 }
 
+/** 一个资源改了什么：结果里（含 bp.edit 每步、展开后的 each、DataTable 的 rows）带 prev / value 的，写成「名字: 原值 → 新值」，最多 3 条 */
+export function changes(res: Record<string, unknown> | undefined, max = 3) {
+  const found: string[] = []
+  const v = (x: unknown) => (typeof x === 'string' ? x : JSON.stringify(x))
+  const walk = (o: unknown, label: string) => {
+    if (found.length > max || !o || typeof o !== 'object') return
+    if (Array.isArray(o)) return o.forEach((x) => walk(x, label))
+    const r = o as Record<string, unknown>
+    const name = String(r.row ?? r.name ?? r.prop ?? label)
+    if ('prev' in r && ('value' in r || r.skipped)) {
+      found.push(
+        (r.skipped ? `${name}: 跳过（当前 ${v(r.prev)}）` : `${name}: ${v(r.prev)} → ${v(r.value)}`).slice(0, 120),
+      )
+      return
+    }
+    for (const k of ['results', 'each', 'rows']) if (k in r) walk(r[k], name)
+  }
+  walk(res, '')
+  return found.length > max ? [...found.slice(0, max), '…'] : found
+}
+
 /** 把 UELink 的批量回包整理给 Agent */
 export async function formatBatch(res: Record<string, unknown>, write: boolean) {
   const b = (res.batch ?? {}) as Record<string, unknown>
@@ -55,19 +79,22 @@ export async function formatBatch(res: Record<string, unknown>, write: boolean) 
   const steps = report?.steps ?? []
   // 每个资源最后一步有结果的（编译 > 改 / 读），拿来写一行摘要
   const byItem = new Map<number, ReportStep>()
+  // 演练的结果先放，有真改的再盖上：只演练时也能看到改前改后
   for (const s of steps)
-    if (s.item !== undefined && s.state === 'ok' && s.phase !== 'undo' && s.phase !== 'dryRun') byItem.set(s.item, s)
-  const paths = new Map<string, number>()
-  for (const s of steps) if (s.item !== undefined && s.args?.path) paths.set(String(s.args.path), s.item)
-  const list = (b.list as { path: string; state: string; error?: string }[]) ?? []
+    if (s.item !== undefined && s.state === 'ok' && s.phase !== 'undo' && (s.phase !== 'dryRun' || !byItem.has(s.item)))
+      byItem.set(s.item, s)
+  const list = (b.list as { path: string; item?: number; state: string; error?: string }[]) ?? []
   const lines: string[] = []
   let used = 0
-  for (const it of list) {
-    const step = byItem.get(paths.get(it.path) ?? -1)
-    const line = `${it.path}  ${it.state}${it.error ? `  ${it.error}` : step ? `  ${brief(step.result)}` : ''}`.slice(
-      0,
-      LINE_MAX,
-    )
+  for (const [i, it] of list.entries()) {
+    // item 是资源序号（UELink 2.14 把失败的排在前面，列表下标不等于序号）；没有 item 时按下标
+    const step = byItem.get(it.item ?? i)
+    const diff = step ? changes(step.result).join('；') : ''
+    const line =
+      `${it.path}  ${it.state}${it.error ? `  ${it.error}` : diff ? `  ${diff}` : step ? `  ${brief(step.result)}` : ''}`.slice(
+        0,
+        LINE_MAX,
+      )
     if (used + line.length > LINES_MAX) {
       lines.push(`…还有 ${list.length - lines.length} 个没列出（看 report 文件）`)
       break
@@ -110,6 +137,7 @@ export async function runBatch(tool: string, a: Record<string, unknown>, ctx: Op
   const e = batchEntry(tool, a.action)
   if (!e)
     return mcpText(`${tool}${a.action ? ` action=${a.action}` : ''} 不支持批量（paths / items / select），逐个调`, true)
+  if (a.retry) return retryBatch(str(a.retry), e, a, ctx)
   const targets = await resolveTargets(a, ctx)
   const args = {
     ...e.args(a),
@@ -135,4 +163,12 @@ export async function finishBatch(res: Record<string, unknown>, e: BatchEntry | 
 export async function jobResult(res: Record<string, unknown>, tool: string, action: unknown, ctx: OpCtx) {
   if (!res.batch) return mcpText(JSON.stringify(res, null, 1))
   return finishBatch(res, batchEntry(tool, action), ctx)
+}
+
+/** 只重做上一批没成的（失败、跳过、被回滚的）：参数照上一批每个资源实际用的，onError 可以重新给 */
+async function retryBatch(job: string, e: BatchEntry, a: Record<string, unknown>, ctx: OpCtx) {
+  const { op, items } = await retryItems(ctx.project.root, job)
+  if (!items.length) return mcpText(`作业 ${job} 里没有要重做的资源：都成功了`)
+  const res = await runOp(ctx, op, { items, ...(a.onError ? { onError: a.onError } : {}) }, e.timeoutMs, { job: true })
+  return finishBatch(res, e, ctx)
 }
