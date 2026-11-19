@@ -201,25 +201,34 @@ function Toolbar({
   )
 }
 
-/** 不可用：原样显示原因；没开 VS 且本机找得到 devenv 时给「打开 VS」 */
+/**
+ * 不可用：原样显示原因。VS 没开着这个项目时给「用 VS 打开这个项目」（本机有 devenv 能新开，或者有开着别的项目的 VS 能换过来，
+ * 有别的 VS 时外层先弹窗让用户选）；VS 开着这个项目只是没调试控制（no-control）时不给，再开一个 VS 也连不上
+ */
 function Unavailable({ vs, opening, onOpenVs }: { vs: VsDebugState; opening?: boolean; onOpenVs: () => void }) {
   const { ui } = h()
-  const canOpen = vs.reason === 'no-vs' && !!vs.devenv
+  const others = vs.others ?? []
+  const canOpen = vs.reason === 'no-vs' && (!!vs.devenv || others.length > 0)
+  const name = (p: string) => p.replace(/\\/g, '/').split('/').pop() || p
   return (
     <div className="ue:flex ue:flex-col ue:items-start ue:gap-2">
       <p className="ue:text-body ue:leading-relaxed ue:text-muted">{vs.message || t('VS 调试不可用')}</p>
       {canOpen && (
-        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+        <div className="ue:flex ue:min-w-0 ue:max-w-full ue:flex-wrap ue:items-center ue:gap-2">
           <ui.Button size="sm" variant="secondary" disabled={opening} onClick={onOpenVs}>
             {opening ? (
               <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
             ) : (
               <ArrowRightToLine className="ue:h-3.5 ue:w-3.5" />
             )}
-            {opening ? t('正在打开 VS…') : t('打开 VS')}
+            {opening ? t('正在打开…') : t('用 VS 打开这个项目')}
           </ui.Button>
-          <span className="ue:text-caption ue:text-subtle">
-            {opening ? t('等 VS 加载完解决方案，可能要一两分钟') : vs.solution}
+          <span className="ue:min-w-0 ue:truncate ue:text-caption ue:text-subtle" title={vs.solution}>
+            {opening
+              ? t('等 VS 加载完解决方案，可能要一两分钟，好了自动连上')
+              : others.length
+                ? t('开着的 VS：{list}', { list: others.map((o) => name(o.solution)).join('、') })
+                : vs.solution}
           </span>
         </div>
       )}

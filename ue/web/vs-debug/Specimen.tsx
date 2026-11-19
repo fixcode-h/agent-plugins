@@ -9,8 +9,9 @@ export const VS_SAMPLES: Record<'noVs' | 'run' | 'break', VsDebugState> = {
   noVs: {
     available: false,
     reason: 'no-vs',
-    message: '没有找到打开着这个项目的 Visual Studio（需要装 UEToVS 0.8.0 以上）',
+    message: 'VS 没打开这个项目（MyGame.sln），开着的 VS 里是别的项目',
     solution: 'D:/Projects/MyGame/MyGame.sln',
+    others: [{ pid: 18244, solution: 'D:/Projects/Tools/Tools.sln' }],
     devenv: 'C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/devenv.exe',
   },
   run: {

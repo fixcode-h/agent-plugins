@@ -27,6 +27,9 @@ export const INSPECT_OPS = ['stack', 'threads', 'locals', 'eval', 'output', 'dum
 
 /** 请求 / 应答的全部 op；subscribe 是推送连接、不是一问一答，不在这里（网页靠现有的状态刷新） */
 export const OPS: readonly string[] = [...SESSION_OPS, ...BP_OPS, ...INSPECT_OPS]
+
+/** UEToVS 0.9.5：让 VS 换成另一个解决方案。只给「用 VS 打开这个项目」用，不进 OPS（网页的通用转发和 Agent 工具都不开放） */
+export const SOLUTION_OPEN = 'solution.open'
 export const isKnownOp = (op: string) => OPS.includes(op)
 
 /** 发现文件 <解决方案目录>/.vs/UEToVS/Debug/endpoint.json */
@@ -43,7 +46,11 @@ export interface Endpoint {
   startedUtc?: string
 }
 
-export type VsDebugReason = 'no-vs' | 'connect-failed' | 'protocol' | 'error'
+/**
+ * no-vs：VS 没开着这个项目（可能开着别的项目）；no-control：VS 开着这个项目但调试控制没开（UEToVS 太旧或设置关了）；
+ * connect-failed：发现文件在、VS 也在，但管道连不上或不回应
+ */
+export type VsDebugReason = 'no-vs' | 'no-control' | 'connect-failed' | 'protocol' | 'error'
 
 /**
  * VS 调试出的错：reason 给网页卡片分情况显示（和 VsDebugState.reason 同一套），message 是中文、写清楚怎么办，原样给用户和 Agent。

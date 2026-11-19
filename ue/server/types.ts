@@ -295,8 +295,10 @@ export interface ProjectState {
  */
 export interface VsDebugState {
   available: boolean
-  reason?: 'no-vs' | 'connect-failed' | 'protocol' | 'error'
+  reason?: 'no-vs' | 'no-control' | 'connect-failed' | 'protocol' | 'error'
   message?: string
+  /** VS 没开着这个项目时，开着别的项目、能在里面打开这个项目的 VS（UEToVS 0.9.5 起） */
+  others?: VsOtherInstance[]
   /** 找到的 .sln（VS 没开时「打开 VS」按钮用） */
   solution?: string
   /** 本机装的 VS（vswhere 找到 devenv 时有） */
@@ -304,6 +306,13 @@ export interface VsDebugState {
   status?: VsDebugStatus
   /** 断点（bp.list 前 50 个） */
   breakpoints?: VsBreakpoint[]
+}
+
+export interface VsOtherInstance {
+  pid: number
+  /** 它现在开着的解决方案 */
+  solution: string
+  project?: string
 }
 
 export interface VsDebugFrame {

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { solutionDirs } from '../search-index/uetovs.ts'
 import type { UeProject } from '../types.ts'
 import { readJson } from '../util.ts'
+import { pidAlive } from './instances.ts'
 import type { Endpoint } from './protocol.ts'
 
 /**
@@ -39,7 +40,8 @@ export interface FoundEndpoint {
 
 /**
  * 发现文件：几个候选目录都看，写着这个 .uproject 的优先（外层解决方案可能是别的项目的 VS 开着），
- * 再按新旧取。文件在不代表 VS 在（VS 崩了没删），连不连得上由调用方去连
+ * 再按新旧取。写了 PID 而进程已经不在的（VS 关了或崩了没删）直接不算，免得卡片报「连不上管道」；
+ * 进程在也不代表管道在，连不连得上由调用方去连
  */
 export async function findEndpoint(p: ProjectLike): Promise<FoundEndpoint | undefined> {
   const found: FoundEndpoint[] = []
@@ -49,6 +51,7 @@ export async function findEndpoint(p: ProjectLike): Promise<FoundEndpoint | unde
     if (!st?.isFile()) continue
     const endpoint = await readJson<Endpoint | null>(file, null)
     if (!endpoint || typeof endpoint.pipe !== 'string' || typeof endpoint.token !== 'string') continue
+    if (typeof endpoint.pid === 'number' && !pidAlive(endpoint.pid)) continue
     found.push({ endpoint, file, mtimeMs: st.mtimeMs })
   }
   const mine = (f: FoundEndpoint) =>
