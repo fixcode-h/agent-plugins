@@ -10,7 +10,7 @@ export interface EditCtx {
   project: string
   /** 场景根（相对项目根）：调用脚本挑文件、读 _api.json、_vars.json 用 */
   root: string
-  /** 正在编辑的场景（相对场景根）：「转成平铺」另存一份时用 */
+  /** 正在编辑的场景（相对场景根） */
   path?: string
   live: boolean
   doc?: GtScript

@@ -3,6 +3,7 @@ import { isBlock, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { BlockGuards } from '../gt-guards/BlockGuards.tsx'
+import { FieldGroup, SwitchRow } from './fields/FieldGroup.tsx'
 
 /** 改一个字段：值是 undefined / 空字符串时删掉这个字段，存进文件的步骤保持短 */
 export function patch(step: GtStep, k: string, v: unknown): GtStep {
@@ -83,21 +84,28 @@ export function NumberField({
   )
 }
 
+/** 说明：这一步在做什么（报告里显示），检查器最上面 */
+export function NoteField({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
+  return (
+    <Row label={t('说明')}>
+      <TextField step={step} k="note" onChange={onChange} placeholder={t('这一步在做什么（报告里显示）')} />
+    </Row>
+  )
+}
+
 /**
- * 所有步骤共用的字段（协议第 2 节开头）：说明、失败了怎么办（停下 / 接着往下 / 重试 N 次）、总时限、
- * 执行期间出了报错就算失败、停用；已达成就跳过的条件折叠在最下面
+ * 所有步骤共用的字段（协议第 2 节开头），按用途分三组（用户 2026-11-19）：
+ * 执行（失败了怎么办、选了重试才出次数、总时限）、跳过（停用、已达成就跳过 + 条件）、判定（报错算失败）。
+ * 说明单独放在检查器最上面（NoteField）
  */
 export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui } = h()
   const [skip, setSkip] = useState(!!step.skipIf)
   const onFail = typeof step.onFail === 'string' ? step.onFail : 'stop'
   return (
-    <div className="ue:flex ue:flex-col ue:gap-2.5">
-      <Row label={t('说明')}>
-        <TextField step={step} k="note" onChange={onChange} placeholder={t('这一步在做什么（报告里显示）')} />
-      </Row>
-      <Row label={t('失败了')}>
-        <div className="ue:flex ue:items-center ue:gap-2">
+    <div className="ue:flex ue:flex-col ue:gap-4">
+      <FieldGroup title={t('执行')}>
+        <Row label={t('失败了')}>
           <ui.Segmented
             size="sm"
             label={t('失败了')}
@@ -117,52 +125,48 @@ export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: G
               { id: 'retry', label: t('重试') },
             ]}
           />
-          {onFail === 'retry' && <NumberField step={step} k="retries" onChange={onChange} placeholder="2" />}
-        </div>
-      </Row>
-      <Row label={t('总时限')} hint={t('写在块上是整块的总时限；块里每步各自的等待不变')}>
-        <div className="ue:flex ue:items-center ue:gap-2">
-          <NumberField step={step} k="timeoutMs" onChange={onChange} placeholder={t('默认')} />
-          <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
-        </div>
-      </Row>
-      <div className="ue:flex ue:flex-wrap ue:gap-x-4 ue:gap-y-1.5 ue:pl-[80px]">
-        <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
-          <input
-            type="checkbox"
-            checked={step.expectNoErrors === true}
-            onChange={(e) => onChange(patch(step, 'expectNoErrors', e.target.checked || undefined))}
-          />
-          {t('执行期间出了 Error、Ensure 或 Lua 报错就算失败')}
-        </label>
-        <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
-          <input
-            type="checkbox"
-            checked={step.disabled === true}
-            onChange={(e) => onChange(patch(step, 'disabled', e.target.checked || undefined))}
-          />
-          {t('停用（跑的时候跳过）')}
-        </label>
-        <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-fg">
-          <input
-            type="checkbox"
-            checked={skip}
-            onChange={(e) => {
-              setSkip(e.target.checked)
-              if (!e.target.checked) onChange(patch(step, 'skipIf', undefined))
-            }}
-          />
-          {t('已达成就跳过')}
-        </label>
-      </div>
-      {skip && (
-        <div className="ue:flex ue:flex-col ue:gap-1.5">
-          <span className="ue:text-footnote ue:text-subtle">
-            {t('这些条件成立时跳过这一步（目标已经是想要的状态）')}
-          </span>
-          <CondEditor compact value={step.skipIf} onChange={(c) => onChange({ ...step, skipIf: c })} />
-        </div>
-      )}
+        </Row>
+        {onFail === 'retry' && (
+          <Row label={t('重试次数')}>
+            <div className="ue:flex ue:items-center ue:gap-2">
+              <NumberField step={step} k="retries" onChange={onChange} placeholder="2" />
+              <span className="ue:text-footnote ue:text-subtle">{t('次')}</span>
+            </div>
+          </Row>
+        )}
+        <Row label={t('总时限')} hint={t('写在块上是整块的总时限；块里每步各自的等待不变')}>
+          <div className="ue:flex ue:items-center ue:gap-2">
+            <NumberField step={step} k="timeoutMs" onChange={onChange} placeholder={t('默认')} />
+            <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
+          </div>
+        </Row>
+      </FieldGroup>
+      <FieldGroup title={t('跳过')}>
+        <SwitchRow
+          label={t('停用')}
+          desc={t('跑的时候跳过这一步')}
+          checked={step.disabled === true}
+          onChange={(c) => onChange(patch(step, 'disabled', c || undefined))}
+        />
+        <SwitchRow
+          label={t('已达成')}
+          desc={t('下面的条件成立就跳过')}
+          checked={skip}
+          onChange={(c) => {
+            setSkip(c)
+            if (!c) onChange(patch(step, 'skipIf', undefined))
+          }}
+        />
+        {skip && <CondEditor compact value={step.skipIf} onChange={(c) => onChange({ ...step, skipIf: c })} />}
+      </FieldGroup>
+      <FieldGroup title={t('判定')}>
+        <SwitchRow
+          label={t('报错算失败')}
+          desc={t('执行期间出了 Error、Ensure 或 Lua 报错')}
+          checked={step.expectNoErrors === true}
+          onChange={(c) => onChange(patch(step, 'expectNoErrors', c || undefined))}
+        />
+      </FieldGroup>
       {isBlock(step) && (
         <div className="ue:border-t ue:border-line ue:pt-3">
           <BlockGuards step={step} onChange={onChange} />

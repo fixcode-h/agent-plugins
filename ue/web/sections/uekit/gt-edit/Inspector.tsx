@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import { getAt, replace, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
-import { blockUi, CommonFields, TONE_TEXT, type BlockTone } from '../gt-blocks/index.ts'
+import { blockUi, CommonFields, NoteField, TONE_TEXT, type BlockTone } from '../gt-blocks/index.ts'
 import { canRun, commandMenuItems, COMMANDS, type CmdCtx } from './commands.ts'
 
 /** 图标底下的浅色调小方块（效果图 1、11 右上）：和 TONE_TEXT 同一套色调，只是做成底色 */
@@ -124,11 +124,10 @@ export function Inspector({
     <div className="ue:flex ue:flex-col">
       <Head icon={bu.icon} tone={bu.tone} title={bu.title()} id={id} ctx={ctx} />
       <div className="ue:divide-y ue:divide-line">
-        {Own && (
-          <Section>
-            <Own key={id ?? path.join('.')} step={step} onChange={set} />
-          </Section>
-        )}
+        <Section>
+          <NoteField step={step} onChange={set} />
+          {Own && <Own key={id ?? path.join('.')} step={step} onChange={set} />}
+        </Section>
         {onTry && (
           <Section title={t('在游戏里试')}>
             <div>
@@ -139,7 +138,7 @@ export function Inspector({
             </div>
           </Section>
         )}
-        <Section title={t('出错和说明')}>
+        <Section title={t('出错和跳过')}>
           <CommonFields step={step} onChange={set} />
         </Section>
         {history && history(path) && (

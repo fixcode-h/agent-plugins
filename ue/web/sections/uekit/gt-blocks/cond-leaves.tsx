@@ -1,9 +1,10 @@
 import { CheckCheck, Hourglass } from 'lucide-react'
 import { blockOf, type GtStep } from '../../../../shared/gt-script/index.ts'
-import { t } from '../../../host.ts'
+import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { condSummary } from '../gt-cond/summary.ts'
 import { stepTitle } from '../gt-step-title.ts'
+import { WAIT_MODES } from './fields/actions.ts'
 import { LeafInspector } from './leaf.tsx'
 import { NumberField, Row } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
@@ -14,10 +15,51 @@ import { registerBlockUi } from './registry.ts'
  */
 const usesCond = (s: GtStep) => (s.action === 'wait' ? s.until === 'cond' : s.cond !== undefined)
 
-function Inspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
-  if (!usesCond(step)) return <LeafInspector step={step} onChange={onChange} />
+/** 老写法 {ms} 换成协议认的 until:"seconds"（GameTest 的 wait 必须写 until） */
+function normWait(s: GtStep): GtStep {
+  if (s.until !== undefined || s.ms === undefined) return s
+  const { ms, ...rest } = s
+  return { ...rest, until: 'seconds', seconds: typeof ms === 'number' ? ms / 1000 : ms }
+}
+
+/** 换等待方式：去掉旧方式的字段，cond 给一个空条件组 */
+function switchWait(step: GtStep, mode: string): GtStep {
+  const keep: GtStep = { action: 'wait' }
+  for (const k of ['id', 'note', 'onFail', 'retries', 'timeoutMs', 'skipIf', 'expectNoErrors', 'disabled', 'hint'])
+    if (k in step) keep[k] = step[k]
+  if (mode === 'cond') return { ...keep, until: 'cond', cond: { all: [] } }
+  if (mode === 'seconds') return { ...keep, until: 'seconds', seconds: 1 }
+  return { ...keep, until: mode }
+}
+
+function WaitMode({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
+  const { ui } = h()
+  const cur = typeof step.until === 'string' ? step.until : 'seconds'
+  return (
+    <Row label={t('等待方式')}>
+      <ui.Select
+        size="sm"
+        className="ue:w-full"
+        value={cur}
+        options={WAIT_MODES()}
+        onChange={(e: { target: { value: string } }) => onChange(switchWait(step, e.target.value))}
+      />
+    </Row>
+  )
+}
+
+function Inspector({ step: raw, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
+  const step = raw.action === 'wait' ? normWait(raw) : raw
+  if (!usesCond(step))
+    return (
+      <div className="ue:flex ue:flex-col ue:gap-2.5">
+        {step.action === 'wait' && <WaitMode step={step} onChange={onChange} />}
+        <LeafInspector step={step} onChange={onChange} />
+      </div>
+    )
   return (
     <div className="ue:flex ue:flex-col ue:gap-2.5">
+      {step.action === 'wait' && <WaitMode step={step} onChange={onChange} />}
       {step.action === 'wait' && (
         <Row label={t('最多等')}>
           <div className="ue:flex ue:items-center ue:gap-2">
@@ -54,10 +96,10 @@ registerBlockUi(
       id: 'wait-ms',
       group: () => t('等待 / 检查'),
       label: () => t('等一会儿'),
-      hint: () => t('固定等几毫秒，能等条件就别用它'),
+      hint: () => t('固定等几秒，能等条件就别用它'),
       slash: 'sleep',
       action: 'wait',
-      make: () => ({ action: 'wait', ms: 1000 }),
+      make: () => ({ action: 'wait', until: 'seconds', seconds: 1 }),
     },
   ],
 )
