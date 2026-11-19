@@ -98,10 +98,17 @@ try {
     await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'nope', mode: 'agent' }),
     { skip: '这个项目还没在 UE 页接入' },
   )
+  // Chat 页的对话没有项目：不挂
   assert.match(
-    (await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'p1', mode: 'chat' }))
-      .skip,
+    (await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, mode: 'chat' })).skip,
     /Chat 页/,
+  )
+  // 旧面板把项目里的对话、子对话也交成 mode=chat：带着项目的照样挂
+  assert.deepEqual(
+    (
+      await plugin.tools({ taskId: 'a', agentName: 'x', skills: [], resume: false, projectId: 'p1', mode: 'chat' })
+    ).servers?.map((s) => s.name),
+    ['ue'],
   )
   // 能力目录：不开对话也能列出工具，每个都写了作用和什么时候用
   const cat = await plugin.catalog()
