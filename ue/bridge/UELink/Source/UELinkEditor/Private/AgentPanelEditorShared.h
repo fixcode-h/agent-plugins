@@ -113,6 +113,8 @@ namespace AgentPanelEd
 	void RegisterSelectionOps();
 	void StartSelectionPush();
 	void StopSelectionPush();
+	/** 2.17：控件蓝图的设计树、动画和离屏预览（UELinkUmgView.cpp / UELinkUmgRender.cpp）：umg.design、umg.anims、umg.render */
+	void RegisterUmgViewOps();
 	/** 2.7：编辑器就绪（UELinkEditorReady.cpp）：名片 ready 字段、uelink.ready 事件、editor.ready 操作 */
 	void PresetEditorReady();
 	void RegisterEditorReadyOps();

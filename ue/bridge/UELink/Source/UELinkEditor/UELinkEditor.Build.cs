@@ -22,7 +22,10 @@ public class UELinkEditor : ModuleRules
 			// 后台生成 Lua 声明（2.5）：找 UnLua 插件目录拷它自带的静态声明
 			"Projects",
 			// 编辑器就绪（2.7）：主窗口建好没有（IMainFrameModule）
-			"MainFrame"
+			"MainFrame",
+			// 2.17：在网页上看控件蓝图（UELinkUmgView.cpp / UELinkUmgRender.cpp）：UWidgetBlueprint 在 UMGEditor，
+			// 动画轨道在 MovieScene / MovieSceneTracks，离屏渲染读回像素要 RenderCore（FlushRenderingCommands）
+			"UMG", "UMGEditor", "MovieScene", "MovieSceneTracks", "RenderCore", "RHI"
 		});
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
