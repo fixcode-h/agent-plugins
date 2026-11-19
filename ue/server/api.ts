@@ -25,6 +25,7 @@ import { enableFor } from './capability.ts'
 import { searchIndexRoute } from './search-index/index.ts'
 import { vsDebugRoute } from './vs-debug/api.ts'
 import { ocrRoute } from './ocr/install.ts'
+import { assetDiffFor, assetHistory, parseSource } from './asset-diff/snapshot.ts'
 
 /**
  * 网页用的接口（挂在 /api/plugins/ue/ 下）。你在网页上的操作记成 actor=user，不受 Agent 权限限制，
@@ -147,6 +148,11 @@ export async function handle(req: Request): Promise<Response> {
       }
       case 'POST build':
         return json({ job: (await build(project, { force: b.force === true, kill: b.kill === true })).id })
+      // 资源页「版本差异」：版本记录；点开一条记录时才取两边的快照比（asset-diff/snapshot.ts）
+      case 'GET asset-history':
+        return json(await assetHistory(project, url.searchParams.get('path') ?? ''))
+      case 'POST asset-diff':
+        return json(await assetDiffFor(project, String(b.path ?? ''), parseSource(b.from), parseSource(b.to)))
       case 'POST op':
         return json(await runOp(ctx, String(b.op), (b.args as Body) ?? {}, Number(b.timeout) || 30000))
       case 'POST console': {

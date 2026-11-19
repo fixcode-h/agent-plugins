@@ -18,6 +18,7 @@ import {
   Wand2,
   type LucideIcon,
 } from 'lucide-react'
+import { AssetDiffHost } from './asset-diff/AssetDiffDialog.tsx'
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import type { ProjectState, UeProject } from '../server/types.ts'
 import { AddProject } from './AddProject.tsx'
@@ -283,6 +284,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
   return (
     <Ctx.Provider value={ctx}>
       <PendingPie />
+      <AssetDiffHost />
       {ui.SectionRail ? (
         // 方案 B（用户 2026-11-18 定）：图标轨 + 二级面板；面板太旧没有这几个组件时照旧画下面的左栏
         <RailLayout

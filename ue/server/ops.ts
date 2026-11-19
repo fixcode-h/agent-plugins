@@ -54,6 +54,7 @@ const ASSET_OPS = new Set([
   'asset.describe',
   'asset.export',
   'asset.textify',
+  'asset.snapshot',
   'asset.refs',
   'asset.validate',
   'asset.create',

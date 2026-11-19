@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArchiveRestore, History, Loader2, Undo2 } from 'lucide-react'
+import { ArchiveRestore, Loader2, Undo2 } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { SheetData } from '@shared/files'
 import type { TableSchema } from '@shared/tables'
@@ -13,7 +13,7 @@ import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { Modal, ModalHeader } from '@/components/ui/modal'
+import { VersionDiffShell } from '@/components/ui/version-diff'
 import { Segmented } from '@/components/ui/segmented'
 import { Select } from '@/components/ui/input'
 import { IconButton } from '@/components/ui/icon-button'
@@ -143,135 +143,95 @@ export function TableHistoryDialog({
       ? t('{base} → 本地', { base: labelOf(left) })
       : t('{from} → {to}', { from: left ? labelOf(left) : t('（新建）'), to: revs[pick]?.label ?? '' })
   return (
-    <Modal
+    <VersionDiffShell
       open={open}
-      onOpenChange={(o) => !o && onClose()}
-      title={null}
-      bare
-      closeOnOutside
-      className="tb:h-[min(820px,calc(100dvh-3.75rem))] tb:max-w-[1280px]"
-    >
-      <ModalHeader icon={History} title={t('版本差异')} meta={`${path} · ${sheet}`} />
-      <div className="tb:flex tb:min-h-0 tb:flex-1">
-        <nav
-          aria-label={t('版本记录')}
-          className="thin-scroll tb:flex tb:w-72 tb:shrink-0 tb:flex-col tb:gap-0.5 tb:overflow-y-auto tb:border-r tb:p-2"
-        >
-          {!hist && !error && (
-            <div className="tb:flex tb:justify-center tb:p-6 tb:text-subtle">
-              <Loader2 className="tb:h-4 tb:w-4 tb:animate-spin" />
-            </div>
-          )}
-          {hist?.vcs === 'none' && (
-            <p className="tb:px-2 tb:py-4 tb:text-footnote tb:leading-relaxed tb:text-subtle">
-              {t('这个项目没有用 Git / P4 / SVN 管理，看不了版本差异。')}
-            </p>
-          )}
+      onClose={onClose}
+      meta={`${path} · ${sheet}`}
+      paneKey="tables"
+      list={hist}
+      failed={hist ? undefined : error}
+      pick={pick}
+      onPick={setPick}
+      local={{ meta: t('含还没保存的'), message: t('最近一次提交 ↔ 现在页面上的内容') }}
+      header={
+        <>
+          <span className="tb:font-mono tb:text-body">{title}</span>
+          {diff && <DiffSummary diff={diff} only={diffOnly} onOnly={setDiffOnly} />}
+          <span className="tb:flex-1" />
           {hist && hist.vcs !== 'none' && (
-            <>
-              <p className="tb:px-2 tb:pt-1 tb:pb-1.5 tb:text-caption tb:text-subtle">
-                {t('{vcs} · 选一个版本看它改了什么', { vcs: hist.vcs.toUpperCase() })}
-              </p>
-              <RevItem
-                active={pick === 'local'}
-                onClick={() => setPick('local')}
-                label={t('本地改动')}
-                meta={t('含还没保存的')}
-                message={t('最近一次提交 ↔ 现在页面上的内容')}
-              />
-              {revs.map((r, i) => (
-                <RevItem
-                  key={r.id}
-                  active={pick === i}
-                  onClick={() => setPick(i)}
-                  label={r.label}
-                  meta={r.time ? new Date(r.time).toLocaleString() : ''}
-                  message={[r.author, r.message].filter(Boolean).join(' · ')}
-                />
-              ))}
-              {hist.error && <p className="tb:px-2 tb:py-2 tb:text-caption tb:text-danger">{hist.error}</p>}
-            </>
-          )}
-        </nav>
-        <section aria-label={t('差异')} className="tb:flex tb:min-w-0 tb:flex-1 tb:flex-col">
-          <header className="tb:flex tb:shrink-0 tb:flex-wrap tb:items-center tb:gap-3 tb:border-b tb:px-3 tb:py-2">
-            <span className="tb:font-mono tb:text-body">{title}</span>
-            {diff && <DiffSummary diff={diff} only={diffOnly} onOnly={setDiffOnly} />}
-            <span className="tb:flex-1" />
-            {hist && hist.vcs !== 'none' && (
-              <Select
-                size="sm"
-                aria-label={t('和哪一版比')}
-                value={against}
-                onChange={(e) => setAgainst(e.target.value)}
-                options={[
-                  { value: '', label: pick === 'local' ? t('和最近一次提交比') : t('和上一版比') },
-                  ...revs
-                    .filter((_, i) => pick === 'local' || i !== pick)
-                    .map((r) => ({ value: r.id, label: t('和 {rev} 比', { rev: r.label }) })),
-                ]}
-              />
-            )}
-            {onCheckout && hist && hist.vcs !== 'none' && (pick === 'local' ? hist.base : revs[pick]) && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="tb:h-7"
-                onClick={() =>
-                  setSwitching(
-                    pick === 'local'
-                      ? { id: hist.base, label: revs[0]?.label ?? t('最近一次提交') }
-                      : { id: revs[pick].id, label: revs[pick].label },
-                  )
-                }
-              >
-                <ArchiveRestore className="tb:h-3.5 tb:w-3.5" />
-                {pick === 'local' ? t('本地文件换回最近一次提交') : t('本地文件切换到这一版')}
-              </Button>
-            )}
-            <DiffBothToggle on={both} onChange={setBoth} />
-            <Segmented
-              label={t('显示')}
+            <Select
               size="sm"
-              value={only ? 'only' : 'all'}
-              onChange={(v) => setOnly(v === 'only')}
+              aria-label={t('和哪一版比')}
+              value={against}
+              onChange={(e) => setAgainst(e.target.value)}
               options={[
-                { id: 'only', label: t('只看变化') },
-                { id: 'all', label: t('全部行') },
+                { value: '', label: pick === 'local' ? t('和最近一次提交比') : t('和上一版比') },
+                ...revs
+                  .filter((_, i) => pick === 'local' || i !== pick)
+                  .map((r) => ({ value: r.id, label: t('和 {rev} 比', { rev: r.label }) })),
               ]}
             />
-          </header>
-          {note && diff && !error && !diffError && <RevNoteLine note={note} diff={diff} />}
-          <div className="tb:flex tb:min-h-0 tb:flex-1 tb:flex-col">
-            {error || diffError ? (
-              <p className="tb:p-4 tb:text-body tb:text-danger">{error || diffError}</p>
-            ) : loading || !sides || !diff ? (
-              hist?.vcs === 'none' ? null : (
-                <div className="tb:flex tb:justify-center tb:p-8 tb:text-subtle">
-                  <Loader2 className="tb:h-5 tb:w-5 tb:animate-spin" />
-                </div>
-              )
-            ) : (
-              <SheetDiffView
-                a={sides.a.rows}
-                b={sides.b.rows}
-                diff={diff}
-                names={sides.b.names}
-                onlyChanges={only}
-                both={both}
-                only={diffOnly}
-                rowAction={
-                  pick === 'local' && onRestore
-                    ? (row) =>
-                        row.kind === 'mod' ? (
-                          <IconButton icon={Undo2} size="sm" label={t('这一行改回旧值')} onClick={() => restore(row)} />
-                        ) : null
-                    : undefined
-                }
-              />
-            )}
-          </div>
-        </section>
+          )}
+          {onCheckout && hist && hist.vcs !== 'none' && (pick === 'local' ? hist.base : revs[pick]) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="tb:h-7"
+              onClick={() =>
+                setSwitching(
+                  pick === 'local'
+                    ? { id: hist.base, label: revs[0]?.label ?? t('最近一次提交') }
+                    : { id: revs[pick].id, label: revs[pick].label },
+                )
+              }
+            >
+              <ArchiveRestore className="tb:h-3.5 tb:w-3.5" />
+              {pick === 'local' ? t('本地文件换回最近一次提交') : t('本地文件切换到这一版')}
+            </Button>
+          )}
+          <DiffBothToggle on={both} onChange={setBoth} />
+          <Segmented
+            label={t('显示')}
+            size="sm"
+            value={only ? 'only' : 'all'}
+            onChange={(v) => setOnly(v === 'only')}
+            options={[
+              { id: 'only', label: t('只看变化') },
+              { id: 'all', label: t('全部行') },
+            ]}
+          />
+        </>
+      }
+    >
+      {note && diff && !error && !diffError && <RevNoteLine note={note} diff={diff} />}
+      <div className="tb:flex tb:min-h-0 tb:flex-1 tb:flex-col">
+        {error || diffError ? (
+          <p className="tb:p-4 tb:text-body tb:text-danger">{error || diffError}</p>
+        ) : loading || !sides || !diff ? (
+          hist?.vcs === 'none' ? null : (
+            <div className="tb:flex tb:justify-center tb:p-8 tb:text-subtle">
+              <Loader2 className="tb:h-5 tb:w-5 tb:animate-spin" />
+            </div>
+          )
+        ) : (
+          <SheetDiffView
+            a={sides.a.rows}
+            b={sides.b.rows}
+            diff={diff}
+            names={sides.b.names}
+            onlyChanges={only}
+            both={both}
+            only={diffOnly}
+            rowAction={
+              pick === 'local' && onRestore
+                ? (row) =>
+                    row.kind === 'mod' ? (
+                      <IconButton icon={Undo2} size="sm" label={t('这一行改回旧值')} onClick={() => restore(row)} />
+                    ) : null
+                : undefined
+            }
+          />
+        )}
       </div>
       <ConfirmDialog
         open={!!switching}
@@ -300,7 +260,7 @@ export function TableHistoryDialog({
         }}
         onOpenChange={(o) => !o && setSwitching(null)}
       />
-    </Modal>
+    </VersionDiffShell>
   )
 }
 
@@ -320,36 +280,4 @@ function RevNoteLine({ note, diff }: { note: RevNote; diff: SheetDiff }) {
         : t('这一版还改了其他工作表：{s}', { s: note.others.join('、') })
   if (!text) return null
   return <p className="tb:shrink-0 tb:border-b tb:bg-sel tb:px-3 tb:py-1.5 tb:text-footnote tb:text-muted">{text}</p>
-}
-
-function RevItem({
-  active,
-  onClick,
-  label,
-  meta,
-  message,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-  meta: string
-  message: string
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={active || undefined}
-      onClick={onClick}
-      className={cn(
-        'tb:flex tb:w-full tb:cursor-pointer tb:flex-col tb:gap-0.5 tb:rounded-(--c-row-radius) tb:px-2.5 tb:py-2 tb:text-left tb:hover:bg-hover',
-        active && 'tb:bg-sel tb:hover:bg-sel',
-      )}
-    >
-      <span className="tb:flex tb:items-center tb:gap-2">
-        <span className="tb:font-mono tb:text-body tb:font-medium">{label}</span>
-        <span className="tb:ml-auto tb:truncate tb:text-caption tb:text-subtle">{meta}</span>
-      </span>
-      {message && <span className="tb:truncate tb:text-footnote tb:text-muted">{message}</span>}
-    </button>
-  )
 }
