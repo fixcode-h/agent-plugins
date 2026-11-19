@@ -416,6 +416,7 @@ public:
 		RegisterImportCallOps();
 		RegisterEditorBatchOps();
 		RegisterUmgViewOps();
+		RegisterAssetPreviewOps();
 		// 2.7：编辑器就绪。ready: false 要在第一次写名片前记下，所以在模块启动时就放进名片字段
 		RegisterEditorReadyOps();
 		PresetEditorReady();

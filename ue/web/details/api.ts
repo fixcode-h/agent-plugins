@@ -9,7 +9,7 @@ import type { DetailsApi, Node } from './rows.tsx'
 const changed = new Map<string, unknown>()
 
 /** 网页上填的文字换成交给桥接的值：布尔、数字按类型转，像 JSON 的按 JSON，其余原样交给桥接按 UE 文本格式（ImportText）写 */
-function toValue(n: Node, raw: string): unknown {
+export function toValue(n: Node, raw: string): unknown {
   if (n.type === 'bool' || typeof n.value === 'boolean') return raw === 'true'
   if ((isNumberType(n.type ?? '') || typeof n.value === 'number') && raw.trim() !== '' && !isNaN(Number(raw)))
     return Number(raw)

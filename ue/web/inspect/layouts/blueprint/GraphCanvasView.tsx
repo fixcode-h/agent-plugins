@@ -4,13 +4,17 @@ import { MessageSquare } from 'lucide-react'
 import { GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
 import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
 import { layoutGraph, type GNode } from './graph.ts'
+import type { CommentBoxData } from './CommentBox.tsx'
 import { GRAPH_NODE_TYPES, type GraphNodeData } from './GraphNode.tsx'
 import { typeTone } from './model.ts'
 
+type AnyNode = Node<GraphNodeData> | Node<CommentBoxData>
+
 /**
- * 图表的节点图（效果图 A2 中间）：bp.graph 的节点按连线自动排（graph.ts），用面板共用的流程图画布画，只读。
+ * 图表的节点图（效果图 A2 中间）：bp.graph 的节点有 UE 坐标（2.18 bp.layout）时照原位置画、注释画成框，
+ * 没坐标时按连线自动排（graph.ts）；用面板共用的流程图画布画，只读。
  * 打开时按可读的缩放显示（TopLeftFit），放不下就从左上角开始，靠拖动和小地图看其余。
- * 执行线粗一点、用前景色，数据线按类型上色（和引脚同色）；注释节点没有框的位置和大小，列在左上角
+ * 执行线粗一点、用前景色，数据线按类型上色（和引脚同色）；没有框位置的注释节点列在左上角
  */
 export function GraphCanvasView({
   nodes: raw,
@@ -22,17 +26,33 @@ export function GraphCanvasView({
   onPick: (id: string) => void
 }) {
   const laid = useMemo(() => layoutGraph(raw), [raw])
-  const nodes = useMemo<Node<GraphNodeData>[]>(
-    () =>
-      laid.nodes.map((p) => ({
-        id: p.node.id,
-        type: 'bp',
-        position: { x: p.x, y: p.y },
-        width: p.w,
-        height: p.h,
-        data: { placed: p, picked: p.node.id === picked },
-        selectable: true,
-      })),
+  const nodes = useMemo<AnyNode[]>(
+    () => [
+      // 注释框先放（画在节点下面），zIndex 再压一层保险
+      ...laid.boxes.map(
+        (b): Node<CommentBoxData> => ({
+          id: b.node.id,
+          type: 'comment',
+          position: { x: b.x, y: b.y },
+          width: b.w,
+          height: b.h,
+          zIndex: -1,
+          data: { box: b, picked: b.node.id === picked },
+          selectable: true,
+        }),
+      ),
+      ...laid.nodes.map(
+        (p): Node<GraphNodeData> => ({
+          id: p.node.id,
+          type: 'bp',
+          position: { x: p.x, y: p.y },
+          width: p.w,
+          height: p.h,
+          data: { placed: p, picked: p.node.id === picked },
+          selectable: true,
+        }),
+      ),
+    ],
     [laid, picked],
   )
   const edges = useMemo<Edge[]>(
@@ -52,7 +72,7 @@ export function GraphCanvasView({
     [laid, picked],
   )
   return (
-    <GraphCanvas<Node<GraphNodeData>, Edge>
+    <GraphCanvas<AnyNode, Edge>
       frameClassName="ue:min-h-0 ue:flex-1"
       nodes={nodes}
       edges={edges}

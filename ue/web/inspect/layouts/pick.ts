@@ -13,7 +13,8 @@ export function pickLayout<T extends LayoutDef>(list: readonly T[], info: Layout
 export const isA = (info: LayoutInfo, cls: string) => info.cls === cls || !!info.classChain?.includes(cls)
 
 /**
- * 类型还没读回来时按路径猜（点引用跳过来的没有类名）：DT_ 是表、WBP_ 是控件蓝图、BP_ 这些是蓝图。
+ * 类型还没读回来时按路径猜（点引用跳过来的没有类名）：DT_ 是表、WBP_ 是控件蓝图、BP_ 这些是蓝图、DA_ 是数据资产、E_ 是枚举
+ * （S_ 声音和结构体都在用、C_ 不一定是曲线，不猜）。
  * 组件模板这类子对象路径带冒号，什么都不猜
  */
 export function guessClass(path: string): string | undefined {
@@ -22,8 +23,20 @@ export function guessClass(path: string): string | undefined {
   if (/^DT_/.test(name)) return 'DataTable'
   if (/^WBP_/.test(name)) return 'WidgetBlueprint'
   if (/^(BP|ABP|BPI|BPFL)_/.test(name)) return 'Blueprint'
-  return undefined
+  if (/^DA_/.test(name)) return 'DataAsset'
+  if (/^E_/.test(name)) return 'UserDefinedEnum'
+  return PREVIEW_PREFIX.find(([re]) => re.test(name))?.[1]
 }
+
+/** 预览类资源的常见前缀（UE 命名规范）：MI_ 要先于 M_ 比 */
+const PREVIEW_PREFIX: [RegExp, string][] = [
+  [/^MI_/, 'MaterialInstanceConstant'],
+  [/^M_/, 'Material'],
+  [/^T_/, 'Texture2D'],
+  [/^SM_/, 'StaticMesh'],
+  [/^SK_/, 'SkeletalMesh'],
+  [/^NS_/, 'NiagaraSystem'],
+]
 
 /** AssetForge 配置的 kind → 资源的类（资源还没生成时用配置挑布局） */
 const KIND_CLASS: Record<string, string> = {

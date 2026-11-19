@@ -17,6 +17,11 @@ export interface BpGraphBrief {
   outputs?: BpParam[]
   pure?: boolean
   events?: { name: string; node: string; custom: boolean }[]
+  /** 函数的分类（UELink 2.18 bp.layout，Default 时省略） */
+  category?: string
+  /** protected / private（public 时省略） */
+  access?: string
+  const?: boolean
 }
 
 export interface BpVar {
@@ -27,6 +32,14 @@ export interface BpVar {
   instanceEditable: boolean
   exposeOnSpawn?: boolean
   default?: unknown
+  /** 父蓝图链上定义的（UELink 2.18 bp.layout），排在自己的后面 */
+  inherited?: boolean
+}
+
+/** 事件分发器：2.18 起带签名参数和是否继承 */
+export interface BpDispatcher extends BpParam {
+  params?: BpParam[]
+  inherited?: boolean
 }
 
 /** bp.outline 的回包里这个布局用到的部分（组件走 components 操作，编译结果给图表页） */
@@ -38,8 +51,8 @@ export interface BpOutline {
   dirty: boolean
   interfaces: string[]
   variables: BpVar[]
-  /** 事件分发器：UELink 只给名字和类型，参数表还拿不到（报告里列为缺的接口） */
-  dispatchers: BpParam[]
+  /** 事件分发器：UELink 2.18 起带 params（签名）和 inherited，旧桥接只有名字和类型 */
+  dispatchers: BpDispatcher[]
   graphs: BpGraphBrief[]
   timelines: string[]
   compile?: { status: string; errors?: number; warnings?: number }
@@ -67,6 +80,13 @@ export interface MyBpItem {
   editable?: boolean
   replication?: string
   category?: string
+  /** 函数的访问级别（protected / private）和 const */
+  access?: string
+  isConst?: boolean
+  /** 继承自父蓝图的变量 / 分发器 */
+  inherited?: boolean
+  /** 分发器的签名参数 */
+  params?: BpParam[]
 }
 
 export interface MyBpSection {
@@ -97,6 +117,9 @@ export function myBlueprint(o: BpOutline, q = ''): MyBpSection[] {
       inputs: g.inputs,
       outputs: g.outputs,
       pure: g.pure,
+      category: g.category,
+      access: g.access,
+      isConst: g.const,
     }
     if (g.kind === 'event' || g.name === CONSTRUCTION) graphs.push(item)
     else if (g.kind === 'function' || g.kind === 'interface') functions.push({ ...item, section: 'functions' })
@@ -112,12 +135,15 @@ export function myBlueprint(o: BpOutline, q = ''): MyBpSection[] {
     editable: v.instanceEditable,
     replication: v.replication,
     category: v.category,
+    inherited: v.inherited,
   }))
   const dispatchers: MyBpItem[] = o.dispatchers.map((d) => ({
     key: `d:${d.name}`,
     name: d.name,
     section: 'dispatchers',
     type: d.type,
+    params: d.params,
+    inherited: d.inherited,
   }))
   const keep = (list: MyBpItem[]) => list.filter((i) => hit(q, i.name, i.type))
   return [
@@ -128,6 +154,22 @@ export function myBlueprint(o: BpOutline, q = ''): MyBpSection[] {
     { id: 'dispatchers', items: keep(dispatchers) },
   ]
 }
+
+/**
+ * 一组里按分类排（UE「我的蓝图」里函数、变量按 Category 分小组）：没分类（Default）的在前，其余按名字；
+ * 同分类里自己的在前、继承的在后（UELink 已经这么排，这里保持稳定）。只有一个分类时返回一组，界面不画小标题
+ */
+export function byCategory(items: MyBpItem[]): [string, MyBpItem[]][] {
+  const m = new Map<string, MyBpItem[]>()
+  for (const i of items) {
+    const c = i.category && i.category !== 'Default' ? i.category : ''
+    m.set(c, [...(m.get(c) ?? []), i])
+  }
+  return [...m.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+}
+
+/** 分发器签名写成一行：(Damage: Float, Instigator: Actor Object Reference)；没参数的写 () */
+export const signature = (params?: BpParam[]) => `(${(params ?? []).map((p) => `${p.name}: ${p.type}`).join(', ')})`
 
 /**
  * 引脚 / 变量类型的颜色（照 UE 的引脚配色，换成面板主题色名，toneColor 转成 var(--名)）：

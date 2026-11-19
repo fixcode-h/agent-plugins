@@ -175,6 +175,13 @@
 #define UELINK_UMG_DOUBLE_TRACK 0
 #endif
 
+// ---------- 资源离屏预览（2.18，UELinkEditor 的 UELinkAssetPreview.cpp） ----------
+// 按 5.4 的 ObjectTools.h 写（ThumbnailTools::RenderThumbnail，渲染目标传空时用编辑器的临时渲染目标，像素读进 FObjectThumbnail），
+// 5.4 / 5.8 都还没在本地编过；签名对不上时只改这里
+#define UELINK_RENDER_THUMBNAIL(Object, Width, Height, OutThumb) ThumbnailTools::RenderThumbnail((Object), static_cast<uint32>(Width), static_cast<uint32>(Height), ThumbnailTools::EThumbnailTextureFlushMode::AlwaysFlush, nullptr, (OutThumb))
+// 缩略图没压缩的像素（BGRA 字节，宽 × 高 × 4）
+#define UELINK_THUMB_PIXELS(Thumb) (Thumb).GetUncompressedImageData()
+
 // ---------- 按成员探测的兼容层 ----------
 // TraceServices 的接口每版都在改名，而云端没有引擎源码、没法逐版核对：这些地方不按版本号猜名字，
 // 用 SFINAE 在编译期看类型上有哪个成员，选能编过的那条路；全都没有时退化成「取不到」，不让整个模块编不过。

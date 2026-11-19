@@ -5,8 +5,9 @@ import { PseudoLine } from '../../../Blueprint.tsx'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { useKept } from '../../../keep.ts'
-import { Badge, ErrorText, Term, type Tone } from '../../../ui.tsx'
-import type { GNode } from './graph.ts'
+import { Badge, ErrorText, Term, useTargetInfo, type Tone } from '../../../ui.tsx'
+import { hasCap } from '../preview/model.ts'
+import { hasPositions, type GNode } from './graph.ts'
 import { GraphCanvasView } from './GraphCanvasView.tsx'
 import type { BpOutline } from './model.ts'
 import { graphLabel } from './MyBlueprint.tsx'
@@ -24,7 +25,7 @@ const STATUS: Record<string, { tone: Tone; label: () => string }> = {
 /**
  * 图表视图（效果图 A2 中间）：上面一排打开的图做成页签（左栏「我的蓝图」点开的，和它同步高亮），
  * 工具条切「节点图 / 伪代码」、编译、在 UE 里打开；节点图是网页按 UE 导出的节点和连线画的（不是截图），只读，点节点在右栏看引脚。
- * UELink 的节点列表不带坐标，节点按连线自动排，位置和 UE 里不一样（工具条上写明）
+ * UELink 2.18（名片 features 有 bp.layout）起节点带 UE 里的坐标，照原位置画、注释画成框；旧桥接按连线自动排（工具条上写明）
  */
 export function GraphPane({
   path,
@@ -52,18 +53,22 @@ export function GraphPane({
   const { busy, run } = useAction()
   const [format, setFormat] = useKept<'nodes' | 'pseudo'>(`${project.id}/bp/graph-format`, 'nodes')
   const [compiled, setCompiled] = useState<string>()
+  const { inst } = useTargetInfo()
+  const layout = hasCap(inst, 'bp.layout')
   const body = useLoad(
     () =>
       active
         ? op<{ pseudo?: string; more?: boolean; nodes?: GNode[]; total: number; next?: number }>(
             project.id,
             'bp.graph',
-            format === 'pseudo' ? { path, graph: active } : { path, graph: active, format: 'json', limit: LIMIT },
+            format === 'pseudo'
+              ? { path, graph: active }
+              : { path, graph: active, format: 'json', limit: LIMIT, ...(layout ? { layout: true } : {}) },
             undefined,
             120000,
           ).then((r) => ({ key: `${active}/${format}`, r }))
         : Promise.resolve(undefined),
-    [project.id, path, active, format],
+    [project.id, path, active, format, layout],
   )
   const data = body.data?.key === `${active}/${format}` ? body.data.r : undefined
   const status = STATUS[compiled ?? outline?.compile?.status ?? outline?.status ?? '']
@@ -130,8 +135,10 @@ export function GraphPane({
           {format === 'nodes' && data?.next !== undefined && (
             <span className="ue:text-warning">{t('太大，只画了前 {n} 个；全部看伪代码', { n: LIMIT })}</span>
           )}
-          {format === 'nodes' && (
-            <span className="ue:ml-auto ue:shrink-0">{t('按连线自动排布（UELink 不给节点坐标）')}</span>
+          {format === 'nodes' && data?.nodes && (
+            <span className="ue:ml-auto ue:shrink-0">
+              {hasPositions(data.nodes) ? t('按 UE 里的位置') : t('按连线自动排布（UELink 2.18 前不给节点坐标）')}
+            </span>
           )}
         </div>
       )}

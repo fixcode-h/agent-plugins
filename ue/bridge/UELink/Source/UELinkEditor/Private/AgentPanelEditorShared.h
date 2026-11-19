@@ -115,6 +115,13 @@ namespace AgentPanelEd
 	void StopSelectionPush();
 	/** 2.17：控件蓝图的设计树、动画和离屏预览（UELinkUmgView.cpp / UELinkUmgRender.cpp）：umg.design、umg.anims、umg.render */
 	void RegisterUmgViewOps();
+	/** 2.18：资源离屏预览（UELinkAssetPreview.cpp）：asset.preview */
+	void RegisterAssetPreviewOps();
+	/**
+	 * 预览图写成 PNG：<项目>/Saved/UELink/preview/<资产名>-<路径 CRC>.png，同一个资产覆盖旧图（umg.render、asset.preview 共用）。
+	 * Pixels 必须正好 Width*Height 个，否则返回 false 写 Error
+	 */
+	bool SavePreviewPng(const UObject* Asset, int32 Width, int32 Height, const TArray<FColor>& Pixels, FString& OutFile, FString& Error);
 	/** 2.7：编辑器就绪（UELinkEditorReady.cpp）：名片 ready 字段、uelink.ready 事件、editor.ready 操作 */
 	void PresetEditorReady();
 	void RegisterEditorReadyOps();

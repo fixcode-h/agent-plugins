@@ -108,8 +108,9 @@ TArray<FString> FUELinkStream::Features()
 	// selection：uelink.selection 事件（2.4）；luaDecl：uelink.luadecl 事件（2.5）；luaErrors：uelink.luaErrors 事件（2.4，编进 Lua 支持时才有）
 	// editorReady：名片 ready 字段和 uelink.ready 事件（2.7）；jobs：job.* 操作和 uelink.job 事件（2.13）
 	// umg.design / umg.render / umg.anims：控件蓝图的设计树、离屏预览、动画（2.17），网页按它判断桥接新旧
+	// asset.preview：资源离屏预览（2.18）；bp.layout：bp.graph 的 layout 参数和 bp.outline 补的字段（2.18）
 	TArray<FString> Out = {TEXT("log"), TEXT("tests"), TEXT("extEvents"), TEXT("selection"), TEXT("luaDecl"), TEXT("editorReady"), TEXT("jobs"),
-		TEXT("umg.design"), TEXT("umg.render"), TEXT("umg.anims")};
+		TEXT("umg.design"), TEXT("umg.render"), TEXT("umg.anims"), TEXT("asset.preview"), TEXT("bp.layout")};
 	if (FAgentPanelLua::IsCompiledIn())
 	{
 		Out.Add(TEXT("luaErrors"));

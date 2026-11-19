@@ -28,7 +28,7 @@ interface Tabs {
  * - 组件树选组件 → 右栏组件细节；点「自身」或页头「类默认值」→ 右栏类默认值（两处联动），中间留着视口；
  * - 「我的蓝图」点图 / 函数 / 宏 → 中间图表页签里打开；图表里点节点 → 右栏看节点引脚；
  * - 动画蓝图、函数库没有组件：不显示组件树和视口，直接看图表；UE 没连上时各块说明原因（A4）。
- * 视口要 UELink 的 asset.preview（还没有）：先放说明，不画假画面
+ * 视口用 UELink 2.18 的 asset.preview（UE 缩略图渲染）；旧桥接说明要更新，不画假画面
  */
 export function BlueprintLayout(p: LayoutProps) {
   const { path, comp, onComp, onOpen, onChanged, hint, marks, layout } = p
