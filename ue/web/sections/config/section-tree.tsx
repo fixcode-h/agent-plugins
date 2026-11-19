@@ -1,4 +1,4 @@
-import { FileCog, Folder as FolderIcon, FolderOpen } from 'lucide-react'
+import { FileCog, FileText, Folder as FolderIcon, FolderOpen } from 'lucide-react'
 import { t } from '../../host.ts'
 import type { TreeLine } from '../../TreeList.tsx'
 import { Hit, keepSet } from '../../tree-search.tsx'
@@ -10,10 +10,12 @@ export interface Sec {
 }
 
 /** 树上的一个节点：路径上的一段；sec 有值说明这一段本身也是一个 section（如 Core 和 Core.Log 都有） */
-interface Node {
+export interface Node {
   key: string
   name: string
   sec?: Sec
+  /** 按文件分树时顶层的 ini 文件行：完整路径，悬停显示 */
+  file?: string
   kids: Node[]
   /** 下面（含自己）有几个 section，文件夹行尾显示 */
   count: number
@@ -36,14 +38,17 @@ export function secPath(name: string): string[] {
   return dot > 0 ? [name.slice(0, dot), name.slice(dot + 1)] : [name]
 }
 
-/** 每一层的 key 用路径拼起来（不用 section 原名，免得 Core 的 section 和 Core 文件夹撞 key） */
-const keyOf = (path: string[]) => path.join('\u0001')
+/**
+ * 每一层的 key 用路径拼起来（不用 section 原名，免得 Core 的 section 和 Core 文件夹撞 key）；
+ * prefix 是按文件分树时所在的 ini 文件，同一个 section 挂在几个文件下面时 key 不撞
+ */
+const keyOf = (path: string[], prefix = '') => prefix + path.join('\u0001')
 
 /**
  * 拼成树；只有一个 section 的模块收成一行「AIModule.AISystem」（像 VS Code 的紧凑文件夹），
  * 不然 /Script 下面一大半模块都得多点一层才看得到唯一的那个类
  */
-export function buildSecTree(secs: Sec[]): Node[] {
+export function buildSecTree(secs: Sec[], prefix = ''): Node[] {
   const root: Node = { key: '', name: '', kids: [], count: 0 }
   for (const s of secs) {
     const path = secPath(s.name)
@@ -51,7 +56,7 @@ export function buildSecTree(secs: Sec[]): Node[] {
     path.forEach((p, i) => {
       let next = cur.kids.find((k) => k.name === p)
       if (!next) {
-        next = { key: keyOf(path.slice(0, i + 1)), name: p, kids: [], count: 0 }
+        next = { key: keyOf(path.slice(0, i + 1), prefix), name: p, kids: [], count: 0 }
         cur.kids.push(next)
       }
       cur = next
@@ -74,14 +79,14 @@ export function buildSecTree(secs: Sec[]): Node[] {
 }
 
 /** 选中的 section 一路上的文件夹 key（从搜索结果跳过来时展开到它） */
-export function ancestorsOf(name: string): string[] {
+export function ancestorsOf(name: string, prefix = ''): string[] {
   const path = secPath(name)
-  return path.slice(1).map((_, i) => keyOf(path.slice(0, i + 1)))
+  return path.slice(1).map((_, i) => keyOf(path.slice(0, i + 1), prefix))
 }
 
 /** 根据 section 名找它在树上那一行的 key（紧凑行的 key 是最深那一段的） */
-export function lineKeyOf(name: string) {
-  return keyOf(secPath(name))
+export function lineKeyOf(name: string, prefix = '') {
+  return keyOf(secPath(name), prefix)
 }
 
 export interface SecLinesCtx {
@@ -120,16 +125,18 @@ export function secLines(c: SecLinesCtx) {
         key: n.key,
         depth,
         label: q ? <Hit text={n.name} q={c.q} /> : n.name,
-        icon: expandable ? (isOpen ? FolderOpen : FolderIcon) : FileCog,
+        icon: n.file !== undefined ? FileText : expandable ? (isOpen ? FolderOpen : FolderIcon) : FileCog,
         iconTone: expandable ? 'ue:text-subtle' : undefined,
         expandable,
         open: isOpen,
         selected: !!s && s.name === c.section,
-        title: s
-          ? s.liveOnly
-            ? `${s.name}\n${t('只在进程里有（插件的 Config 或运行中加的）')}`
-            : `${s.name}\n${s.layers.join('\n')}`
-          : undefined,
+        title: n.file
+          ? n.file
+          : s
+            ? s.liveOnly
+              ? `${s.name}\n${t('只在进程里有（插件的 Config 或运行中加的）')}`
+              : `${s.name}\n${s.layers.join('\n')}`
+            : undefined,
         // 文件夹显示下面有几个 section；section 显示写在几层 ini 里
         aside: expandable ? n.count : s?.liveOnly ? t('进程') : s?.layers.length,
         onToggle: forced ? () => c.fold(n.key, isOpen) : () => c.toggle(n.key),

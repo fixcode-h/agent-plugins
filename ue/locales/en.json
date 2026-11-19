@@ -3857,5 +3857,9 @@
   "双击进去自己连": "Double-click to wire it inside",
   "子图（挂现有用例）": "Subgraph (existing test)",
   "引用一个测试用例": "References a test case",
-  "进到选中的子图里面（挂的用例：打开那个脚本）": "Enter the selected subgraph (for a linked test: open that script)"
+  "进到选中的子图里面（挂的用例：打开那个脚本）": "Enter the selected subgraph (for a linked test: open that script)",
+  "section 分组方式": "Group sections by",
+  "按 section": "By section",
+  "按 ini 文件": "By ini file",
+  "只在进程里（插件的 Config 或运行中加的）": "Only in the process (plugin Config or added at runtime)"
 }
