@@ -759,10 +759,21 @@ export async function startFakeBridge(root, { kind = 'editor', extraOps = {}, ex
       state.bp.dirty.add(BP)
       return { path: a.path, dryRun: false, results, compile, tx }
     },
-    'bp.compile': (a) => ({
-      path: a.path,
-      compile: { status: 'ok', errors: 0, warnings: 0, messages: [], nodes: [], affected: [] },
-    }),
+    // 名字里带 BP_Broken 的编不过：冒烟测试用它验证 ue_save 先编译、编不过不保存
+    'bp.compile': (a) => {
+      const broken = String(a.path).includes('BP_Broken')
+      return {
+        path: a.path,
+        compile: {
+          status: broken ? 'error' : 'ok',
+          errors: broken ? 1 : 0,
+          warnings: 0,
+          messages: [],
+          nodes: [],
+          affected: [],
+        },
+      }
+    },
   }
   Object.assign(
     ops,

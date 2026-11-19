@@ -23,7 +23,7 @@ user-invocable: true
 - `paths=[...]` 给全部路径；或 `select={path, class, parent, tags}` 按条件选，关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
 - 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
 - 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。
-- 写操作先整批演练，全部通过才真改，失败自动撤回整批；`where` 只改当前值对得上的；`retry=<上一批作业号>` 只重做没成的；改完 `ue_save compile=true` 先编译再保存。
+- 写操作先整批演练，全部通过才真改，失败自动撤回整批；`where` 只改当前值对得上的；`retry=<上一批作业号>` 只重做没成的；改完直接 `ue_save`：它先编译要保存的蓝图，全部通过才保存。
 - 报「UELink 不支持批量」时才逐个调，并提醒用户在 UE 页升级 UELink 到 2.14 后本地编译。
 
 ## 读：由粗到细
@@ -47,8 +47,8 @@ user-invocable: true
 2. 要放的节点不是 `call / get / set / branch / sequence / cast / self / event / custom_event / macro` 这几种时，先 `action=node_search query=<关键字>` 拿 `spawner`。
 3. `edit` 带 `dryRun=true` 演练：真实执行并编译，返回每步结果和编译错误，然后取消。
 4. 演练没问题再正式 `edit`。返回里 `compile.nodes` 是挂在节点上的错误（带图名和节点 id），`compile.messages` 是编译器原话，`compile.affected` 是受影响的子类和调用方。有错按节点 id 接着修，不要重来一遍。
-5. 保存前 `ue_compile path=<蓝图>` 确认编译通过（结果算进对话的完成依据，没通过时对话不能结束）。`ue_save` 之后面板还会自动编译刚保存、没确认过的蓝图，有错会补一条【UE】说明，照它按节点 id 修。
-6. 给用户说明改了什么，再 `ue_save packages=[...]`。
+5. 改完要确认时 `ue_compile path=<蓝图>`（结果算进对话的完成依据，没通过时对话不能结束）。
+6. 给用户说明改了什么，再 `ue_save packages=[...]`：它先把这些蓝图编一遍，全部通过才签出、写盘；有编不过的整批不保存并返回错误和节点，按节点 id 修好再存。不要先存再编：保存就会签出进 P4 变更列表。
 
 一批操作的例子（BeginPlay 时把 HP 设成 MaxHP，再打印一句）：
 
@@ -110,7 +110,7 @@ user-invocable: true
 
 1. 顶部 `DRY_RUN = True` 先演练，只打印每项「资源、改前、改后」，没问题再改成 `False` 跑同一份。
 2. 修改都放在 `with unreal.ScopedEditorTransaction("Agent: <做什么>"):` 里，改前 `obj.modify()`。
-3. 不保存、不碰源码控制、不 `rename_asset` / `delete_asset`：改完 `ue_asset action=dirty` 看脏包，再 `ue_save compile=true`。
+3. 不保存、不碰源码控制、不 `rename_asset` / `delete_asset`：改完 `ue_asset action=dirty` 看脏包，再 `ue_save`（默认先编译蓝图，通过才写盘）。
 4. 开始前 `ue_asset action=dirty`，已经脏、不是本对话改的包传进脚本跳过。
 5. 每项 `try/except` 记下原因继续，结尾只打印一行 JSON `{changed, failed:[{path,error}], skipped}`；明细超过 4000 字写到 `Saved/AgentPanel/py-out/<名字>.json`，只打印路径。
 6. 超过 1 分钟用 `unreal.ScopedSlowTask`，按 500 个一批分几次调（单次上限 600 秒，期间编辑器卡住，先告诉用户）。

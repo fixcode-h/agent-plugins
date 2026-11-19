@@ -13,7 +13,6 @@ import { installedIn } from './uekit/catalog.ts'
 import { EXT_TOOL_PLUGIN } from './uekit/tools-ext.ts'
 import { listProjects, projectForRun } from './registry.ts'
 import { ueTextifier } from './textify.ts'
-import { compileAfterSave, HOOK_ID } from './bp-check/hook.ts'
 import { ueToolDefs, ueTools } from './tools.ts'
 import { UE_SUMMARY } from './tool-guides.ts'
 import { setCtx, t } from './util.ts'
@@ -110,9 +109,6 @@ const activate: ActivateServer = async (ctx) => {
         },
       ],
     }),
-
-    // 清单 hooks 里没写 script 的钩子（面板插件接口 3）：写后编译，ue_save 之后编译刚保存的蓝图
-    hook: (id, input) => (id === HOOK_ID ? compileAfterSave(input) : undefined),
 
     // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
     textify: ueTextifier,

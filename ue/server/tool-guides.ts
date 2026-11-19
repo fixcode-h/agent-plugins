@@ -95,8 +95,8 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_save: {
     title: '保存资源',
-    summary: '把编辑器里改了没保存的资源写回磁盘（P4 项目自动签出）',
-    useWhen: '资源和蓝图改完、蓝图 ue_compile 通过、要让修改留下来时',
+    summary: '先编译要保存的蓝图，全部通过才写回磁盘（P4 项目自动签出）',
+    useWhen: '资源和蓝图改完、要让修改留下来时；蓝图不用先 ue_compile，ue_save 会先编译，编不过整批不存并返回错误',
     avoidWhen: '只是试验数值时别存，用 ue_undo 撤回即可',
     confirms: true,
     group: ASSET,
@@ -104,7 +104,7 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_compile: {
     title: '编译蓝图',
     summary: '编译蓝图，给出错误和警告所在的图和节点；通过的结果进完成依据',
-    useWhen: '改完蓝图、保存之前，确认编译通过时；多个蓝图用 paths / select 一次编',
+    useWhen: '改完蓝图、还不想保存时确认编译通过；多个蓝图用 paths / select 一次编',
     avoidWhen: 'C++ 代码用面板的 request_build 编译，或 ue_editor 的 livecoding 热重载',
     group: ASSET,
   },
@@ -112,7 +112,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '执行 Python',
     summary: '在编辑器里执行 Python 脚本（兜底）',
     useWhen:
-      '只在这几种情况用，并先一句话说明为什么工具不行：工具没有的编辑器能力（导入外部文件、LOD / 碰撞 / 贴图压缩这类编辑器函数、材质图、控件树、动画状态机、Sequencer）；超过 2000 个资源；每项的值要复杂计算且没法批量读再 items 批量写；只读的全项目统计。写资源的脚本先 DRY_RUN 演练、包事务、不自己保存，改完 ue_save compile=true',
+      '只在这几种情况用，并先一句话说明为什么工具不行：工具没有的编辑器能力（导入外部文件、LOD / 碰撞 / 贴图压缩这类编辑器函数、材质图、控件树、动画状态机、Sequencer）；超过 2000 个资源；每项的值要复杂计算且没法批量读再 items 批量写；只读的全项目统计。写资源的脚本先 DRY_RUN 演练、包事务、不自己保存，改完 ue_save（默认先编译）',
     avoidWhen:
       '改属性、DataTable、蓝图、新建复制改名删除、编译保存、运行中游戏的读改都用对应的 ue_* 工具，多少个都一样：批量一次调用，有演练、撤回、P4 签出和改动记录，Python 没有',
     confirms: true,

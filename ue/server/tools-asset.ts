@@ -1,28 +1,12 @@
 import type { McpResult } from '../../sdk/server.ts'
-import { diskToPackage, packageToDisk } from './asset-query.ts'
+import { packageToDisk } from './asset-query.ts'
 import { compileBeforeSave } from './bp-check/compile-before-save.ts'
-import { noteCompile, noteSaved, packageName } from './bp-check/state.ts'
 import { BATCH_HINT, BATCH_PROPS, jobResult, runBatch } from './batch/run.ts'
 import { isBatch } from './batch/targets.ts'
 import { resumeJob } from './long-ops.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
-
-const taskOf = (ctx: OpCtx) => (ctx.actor.kind === 'agent' ? ctx.actor.taskId : '')
-/** 桥接的编译结果：ok、warnings 算通过 */
-const compileOk = (res: Record<string, unknown>) => {
-  const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
-  return status === 'ok' || status === 'warnings'
-}
-/** 保存的磁盘文件换回包名；不在 Content 里的（不该有）跳过 */
-function toPackage(file: string, root: string) {
-  try {
-    return [diskToPackage(file.replace(/\\/g, '/').replace(/\.(uasset|umap)$/i, ''), root)]
-  } catch {
-    return []
-  }
-}
 
 /**
  * 资源和蓝图读写的工具（设计稿「UE 插件扩充设计：资源与蓝图读写」，在仓库 ue/docs/asset-blueprint-design.md）：
@@ -117,7 +101,7 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
     return miss.length ? mcpText(`action=${a.action} 要给 ${miss.join('、')}`, true) : undefined
   }
   // 带 job：接着等之前没做完的作业（改名、删除、批量校验……），不管 action
-  if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_asset', a.action, ctx)
+  if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_asset', a.action)
   // 批量（paths / items / select）；validate 的 paths 是它自己的老用法，照旧
   if (isBatch(a) && a.action !== 'validate') return runBatch('ue_asset', a, ctx)
   switch (a.action) {
@@ -204,7 +188,7 @@ const EDIT_HELP = `ops 是操作数组，整批在一个编辑器事务里执行
 /** ue_compile 的批量：汇总里全部 ok / warnings 才算通过，交给面板的完成依据 */
 async function compileBatch(a: Record<string, unknown>, ctx: OpCtx) {
   const r = a.job
-    ? await jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_compile', undefined, ctx)
+    ? await jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_compile', undefined)
     : await runBatch('ue_compile', a, ctx)
   if (r.isError) return r
   let sum: { status?: string; items?: number; ok?: number; lines?: string[] } = {}
@@ -252,7 +236,7 @@ export const ASSET_TOOLS = [
     ['action'],
     async (a, ctx) => {
       const path = a.path
-      if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_blueprint', a.action, ctx)
+      if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_blueprint', a.action)
       if (a.action === 'help') return out(EDIT_HELP)
       if (isBatch(a)) return runBatch('ue_blueprint', a, ctx)
       if (!path) return mcpText('要给 path（蓝图资源路径），多个用 paths / select', true)
@@ -289,11 +273,7 @@ export const ASSET_TOOLS = [
         case 'edit':
           if (!Array.isArray(a.ops) || !a.ops.length) return mcpText('action=edit 要给 ops（操作数组）', true)
           const compile = a.compile !== false
-          const r = await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile }, 300000, JOB)
-          // 写后编译钩子据此跳过已经编过的蓝图（bp-check/state.ts）；演练不留改动，不记。
-          // 转成作业（长操作）时这里拿不到编译结果，按「没确认过」记，保存后钩子会再编一次
-          if (!a.dryRun) noteCompile(taskOf(ctx), packageName(path), compile ? compileOk(r) : undefined)
-          return out(r)
+          return out(await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile }, 300000, JOB))
         // 编译拆成了 ue_compile（面板据此把编译结果算进完成依据）；老会话里还按旧说明调的，指过去
         case 'compile':
           return mcpText('只编译改用 ue_compile 工具（path 参数不变）', true)
@@ -304,24 +284,19 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_save',
-    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过；或者 compile=true 让它先把要保存的蓝图一起编一遍，有没编过的就整批不保存（改完蓝图直接 ue_save compile=true 一步到位）。',
+    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。默认先把要保存的蓝图一起编译一遍，全部通过才写盘，有没编过的整批不保存、P4 也不签出（版本管理里不会出现编不过的版本），按返回的错误修好再 ue_save；改完蓝图直接 ue_save 一步到位，不用先 ue_compile。compile=false 跳过编译，只在用户明确要求时用。',
     { packages: { type: 'array', items: { type: 'string' } }, compile: { type: 'boolean' }, target: TARGET },
     [],
     async (a, ctx) => {
       const packages = Array.isArray(a.packages) ? a.packages.map(String) : []
-      if (a.compile) {
+      // 先编译后保存：保存就会签出进变更列表，编不过的版本不能先落盘再修
+      if (a.compile !== false) {
         const gate = await compileBeforeSave(ctx, packages)
         if (!gate.ok) return mcpText(gate.message ?? '编译没通过，没有保存', true)
       }
       const res = await runOp(ctx, 'asset.save', { packages }, 120000)
       // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
       const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
-      // 交给写后编译钩子（bp-check/hook.ts）：保存之后编译其中的蓝图，没通过的把错误补给模型
-      noteSaved(
-        taskOf(ctx),
-        ctx.project.id,
-        saved.flatMap((f) => toPackage(f, ctx.project.root)),
-      )
       return { ...out(res), changed: saved }
     },
     {
@@ -346,7 +321,6 @@ export const ASSET_TOOLS = [
       // 还在编：不给完成依据，等带 job 再调拿到结果
       if (res.job && !res.compile) return out(res)
       const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
-      noteCompile(taskOf(ctx), packageName(a.path), compileOk(res))
       const file = packageToDisk(ctx.project.root, str(a.path))
       // 编译结论交给面板的完成依据：通过的蓝图不再要求跑项目的测试步骤，没通过时不让对话结束
       return {
@@ -362,7 +336,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_python',
-    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些一次能传 2000 个，有演练、撤回、编译回读和 P4 签出，Python 没有）。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；修改包在 unreal.ScopedEditorTransaction 里；不保存、不签出、不改名删除，改完用 ue_save compile=true 存；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
+    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些一次能传 2000 个，有演练、撤回、编译回读和 P4 签出，Python 没有）。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；修改包在 unreal.ScopedEditorTransaction 里；不保存、不签出、不改名删除，改完用 ue_save 存（默认先编译通过才写盘）；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
     { code: { type: 'string' }, timeoutMs: { type: 'number' }, target: TARGET },
     ['code'],
     async (a, ctx) => {
