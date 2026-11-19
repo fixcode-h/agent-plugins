@@ -63,6 +63,19 @@ declare module '@panel/web/src/components/ui/count-badge' {
   ): ReactElement | null
 }
 
+/** 网页：开关（面板 web/src/components/ui/switch.tsx，Radix Switch），检查器的开关行用 */
+declare module '@panel/web/src/components/ui/switch' {
+  import type { ReactElement } from 'react'
+  export function Switch(p: {
+    checked?: boolean
+    defaultChecked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+    disabled?: boolean
+    className?: string
+    'aria-label'?: string
+  }): ReactElement
+}
+
 /** 服务端：文件的版本记录和取某一版的字节（面板 server/exec/vcs-history.ts，表格插件也用）；资源页「版本差异」用 */
 declare module '@panel/server/exec/vcs-history' {
   export interface FileRev {

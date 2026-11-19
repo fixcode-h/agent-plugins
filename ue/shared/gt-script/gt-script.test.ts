@@ -17,7 +17,6 @@ import {
   placeOf,
   remove,
   replace,
-  toFlat,
   toV3,
   unwrap,
   usedIds,
@@ -224,22 +223,6 @@ test('v1 → v3：补 via:code、包成录制段、补 id', () => {
     ['s1', 's2', 's3'],
   )
   assert.equal(toV3(v1).steps!.length, 3, '保持平铺')
-})
-
-test('转回平铺：段展开；有如果、循环时列出来不转', () => {
-  const doc: GtScript = {
-    schemaVersion: 3,
-    steps: [{ id: 'grp1', action: 'group', do: [click(1), { action: 'group', do: [click(2)] }] }, click(3)],
-  }
-  const r = toFlat(doc)
-  assert.deepEqual(r.problems, [])
-  assert.equal(r.doc!.steps!.length, 3)
-  assert.equal(r.doc!.schemaVersion, 2)
-  const bad = toFlat(sample())
-  assert.deepEqual(
-    bad.problems.map((p) => p.what),
-    ['guards', 'if', 'loop'],
-  )
 })
 
 test('列表行：否则如果 / 否则有分隔行、空槽有占位行、折叠后算出藏了几步', () => {

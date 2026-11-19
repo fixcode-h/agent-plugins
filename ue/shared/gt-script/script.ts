@@ -256,34 +256,3 @@ export function toV3(doc: GtScript, o: { wrapFlat?: boolean; groupName?: string 
   out.schemaVersion = SCHEMA_VERSION
   return fillIds(out)
 }
-
-/** 旧版 GameTest（1.9 以前）不认的东西：块、v3 新动作、参数、变量、对象、守护 */
-const V3_ONLY_TOP = ['params', 'vars', 'objects', 'guards'] as const
-
-/**
- * 转回平铺（给旧版 GameTest 跑，9.7）：步骤段展开成平铺；有如果、循环、调用、守护这些转不了的，列出来，不转。
- * 转成功时 problems 为空
- */
-export function toFlat(doc: GtScript): { doc?: GtScript; problems: { path: GtPath; what: string }[] } {
-  const problems: { path: GtPath; what: string }[] = []
-  for (const k of V3_ONLY_TOP) {
-    const v = doc[k]
-    if (v && (Array.isArray(v) ? v.length : Object.keys(v as object).length)) problems.push({ path: [k], what: k })
-  }
-  walk(doc, (e) => {
-    if (e.step.action === 'group') return
-    if (blockOf(e.step.action) && !['assert', 'wait'].includes(e.step.action)) {
-      problems.push({ path: e.path, what: e.step.action })
-      return false
-    }
-    if (e.step.guards) problems.push({ path: e.path, what: 'guards' })
-  })
-  if (problems.length) return { problems }
-  const flat = (arr: unknown): GtStep[] =>
-    (Array.isArray(arr) ? (arr as GtStep[]) : []).flatMap((s) => (s?.action === 'group' ? flat(s.do) : [clone(s)]))
-  const out = clone(doc)
-  out.steps = flat(doc.steps)
-  if (Array.isArray(doc.setup)) out.setup = flat(doc.setup)
-  out.schemaVersion = 2
-  return { doc: out, problems }
-}
