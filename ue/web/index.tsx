@@ -17,7 +17,7 @@ import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
 import { ForgeConfigPreviewSpecimen } from './sections/uekit/ForgeConfigPreview.tsx'
-import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
+import { BpSpecimen, FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { EditSpecimen } from './sections/uekit/gt-edit/EditSpecimen.tsx'
 import { DebugSpecimen } from './sections/uekit/gt-debug/DebugSpecimen.tsx'
 import { PickSpecimen } from './sections/uekit/gt-live/PickSpecimen.tsx'
@@ -84,6 +84,12 @@ const activate: ActivateWeb = (host) => {
       { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
       // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标，跟面板「流程图画布」「数字角标」的调节项
       { id: 'gt-flow', label: t('GameTest · 流程图'), tune: ['canvas', 'countBadge'], Specimen: FlowSpecimen },
+      {
+        id: 'gt-bp',
+        label: t('GameTest · 蓝图画布节点'),
+        tune: ['flowNode', 'flowPin', 'countBadge'],
+        Specimen: BpSpecimen,
+      },
       // GameTest 脚本编辑页（定稿 9.2–9.5）：列表视图、检查器、条件组编辑器，跟面板「行」「输入框」「菜单」的调节项
       { id: 'gt-edit', label: t('GameTest · 脚本编辑'), tune: ['row', 'input', 'menu'], Specimen: EditSpecimen },
       // GameTest 调试和运行面板（定稿 9.2、效果图 6）：停在断点上的运行横条、运行记录和此刻的变量

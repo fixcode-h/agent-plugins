@@ -3835,5 +3835,8 @@
   "「权限与设置」里 Agent 对资源是只读，要保存，这次放行吗": "\"Permissions & settings\" gives the Agent read-only asset access, and it wants to save. Allow it this time?",
   "Agent 要调用没有对蓝图开放的函数": "The Agent wants to call a function that isn't exposed to Blueprints",
   "Agent 默认只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的），同意只放行这一次。": "By default the Agent can only call functions exposed to Blueprints (BlueprintCallable, Exec, or marked AgentPanel). Allowing lets it through this one time only.",
-  "{title}（这次调用没法弹确认卡片，按设置拦下）：{what}": "{title} (this call can't show a confirmation card, so it was blocked per the settings): {what}"
+  "{title}（这次调用没法弹确认卡片，按设置拦下）：{what}": "{title} (this call can't show a confirmation card, so it was blocked per the settings): {what}",
+  "且": "and",
+  "或": "or",
+  "GameTest · 蓝图画布节点": "GameTest · Blueprint canvas nodes"
 }

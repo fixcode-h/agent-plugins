@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { insert, type GtScript } from '../../../../shared/gt-script/index.ts'
 import { GtFlowView } from './GtFlowView.tsx'
+import { BpView } from './bp/BpView.tsx'
 import { emptyRun, type FlowRunState } from './run-state.ts'
 
 /**
@@ -53,7 +54,13 @@ const DOC: GtScript = {
         {
           id: 'if1',
           action: 'if',
-          cond: { target: '$item>BtnClaim', textLike: '领取' },
+          // 两项条件：蓝图画布的节点里一行一项列出来（「且」写在行首）
+          cond: {
+            all: [
+              { target: '$item>BtnClaim', textLike: '领取' },
+              { target: '$item>BtnClaim', enabled: true },
+            ],
+          },
           then: [
             { id: 's5', action: 'click', target: '$item>BtnClaim' },
             { id: 's6', action: 'wait', target: 'WBP_RewardPopup:.', visible: true },
@@ -100,6 +107,20 @@ export function FlowSpecimen() {
         // 示例里点 + 直接插一步「等一下」，真实的编辑页弹插入菜单
         onPickInsert={(at) => setDoc((d) => insert(d, at.slot, at.index, [{ action: 'wait', ms: 500 }])?.doc ?? d)}
       />
+    </div>
+  )
+}
+
+/**
+ * 设置 →「组件」里 GameTest 蓝图画布的示例：同一份「每日福利」画成蓝图节点，
+ * 看节点卡片、内容区（多项条件一行一项）、出口行、圆点引脚；调「流程图节点」「流程图引脚」马上能看到变化
+ */
+export function BpSpecimen() {
+  const [doc, setDoc] = useState(DOC)
+  const [sel, setSel] = useState<string | undefined>('loop1')
+  return (
+    <div className="ue:h-[520px] ue:w-full ue:overflow-hidden ue:rounded-xl ue:bg-bg">
+      <BpView doc={doc} onChange={(d) => setDoc(d)} selected={sel} onSelect={(s) => setSel(s?.key)} run={RUN} />
     </div>
   )
 }

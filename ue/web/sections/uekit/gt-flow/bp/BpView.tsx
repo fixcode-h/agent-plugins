@@ -11,7 +11,7 @@ import { canDrop, readDrop, wantsCopy } from '../dnd.ts'
 import { defaultCollapsed } from '../layout.ts'
 import { ReadableFit } from '../readable-fit.tsx'
 import { emptyRun, type FlowRunState } from '../run-state.ts'
-import { BpContext, type BpCtx } from './ctx.ts'
+import { BpContext, linkedPins, type BpCtx } from './ctx.ts'
 import { addLoose, addNote, clearPositions, connect, disconnect, insertAtPin, setPositions, updateNote } from './edit.ts'
 import { BP_EDGE_TYPES, type BpEdgeData } from './edge.tsx'
 import { bpGraph, pinOf, type BpAt, type BpNode } from './graph.ts'
@@ -245,6 +245,7 @@ function BpInner({
     () => ({
       run,
       editable,
+      linked: linkedPins(graph),
       selected,
       disconnect: (at) => apply(disconnect(doc, at)),
       insertAt: (at, steps, anchor) => {
