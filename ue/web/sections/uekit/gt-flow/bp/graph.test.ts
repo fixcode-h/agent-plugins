@@ -1,0 +1,128 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import type { GtScript } from '../../../../../shared/gt-script/index.ts'
+import { addLoose, clearPositions, connect, disconnect, insertAtPin, setPositions } from './edit.ts'
+import { bpGraph, layoutOf, looseSlot, pinOf, START_KEY } from './graph.ts'
+
+const doc = (): GtScript => ({
+  schemaVersion: 3,
+  guards: [{ id: 'g1', name: '断线', when: {}, do: [{ id: 's9', action: 'click', target: 'A:B' }] }],
+  steps: [
+    { id: 's1', action: 'click', target: 'X:Y' },
+    {
+      id: 'if1',
+      action: 'if',
+      cond: { all: [] },
+      then: [{ id: 's2', action: 'wait', seconds: 1 }],
+      else: [],
+    },
+    { id: 's3', action: 'assert', target: 'X:Z' },
+  ],
+})
+
+const edge = (g: ReturnType<typeof bpGraph>, from: string, pin: string) =>
+  g.edges.find((e) => e.from === from && e.pin === pin)?.to
+
+test('图：开始 → 一步一步接下去，块的子槽各一个引脚，之后接块后面那步', () => {
+  const g = bpGraph(doc())
+  assert.equal(edge(g, START_KEY, 'next'), 's1')
+  assert.equal(edge(g, 's1', 'next'), 'if1')
+  assert.equal(edge(g, 'if1', 's:then'), 's2')
+  assert.equal(edge(g, 'if1', 'next'), 's3')
+  assert.equal(edge(g, 'if1', 's:else'), undefined)
+  assert.deepEqual(
+    g.nodes.find((n) => n.id === 'if1')!.outs.map((p) => p.id),
+    ['s:then', 's:else', 'next'],
+  )
+  // 守护是事件节点，后面接处理步骤
+  assert.equal(edge(g, 'g:g1', 'next'), 's9')
+})
+
+test('图：记过的位置照记的，没记的跟着前一个节点挪', () => {
+  const d = setPositions(doc(), [{ key: 's1', x: 1000, y: 500 }])!
+  const g = bpGraph(d)
+  const s1 = g.nodes.find((n) => n.id === 's1')!
+  const if1 = g.nodes.find((n) => n.id === 'if1')!
+  assert.deepEqual([s1.x, s1.y], [1000, 500])
+  const auto = bpGraph(doc())
+  const a1 = auto.nodes.find((n) => n.id === 's1')!
+  const ai = auto.nodes.find((n) => n.id === 'if1')!
+  assert.deepEqual([if1.x - s1.x, if1.y - s1.y], [ai.x - a1.x, ai.y - a1.y])
+  assert.deepEqual(layoutOf(clearPositions(d)).pos, undefined)
+})
+
+test('断开：后面那串变成没连上的，位置跟着换成 ~id', () => {
+  const d0 = setPositions(doc(), [{ key: 's3', x: 9, y: 9 }])!
+  const d = disconnect(d0, { slot: ['steps'], index: 2 })!
+  assert.equal((d.steps ?? []).length, 2)
+  const loose = layoutOf(d).loose!
+  assert.equal(loose[0].steps[0].id, 's3')
+  assert.deepEqual(layoutOf(d).pos!['~s3'], [9, 9])
+  const g = bpGraph(d)
+  const n = g.nodes.find((x) => x.id === '~s3')!
+  assert.equal(n.loose, true)
+  assert.deepEqual([n.x, n.y], [9, 9])
+})
+
+test('连线：把没连上的接回去，原来接着的那串断开', () => {
+  const d1 = disconnect(doc(), { slot: ['steps'], index: 2 })!
+  // 「是」里原来是 s2：接上 s3 后 s2 变成没连上的
+  const r = connect(d1, { slot: ['steps', 1, 'then'], index: 0 }, [...looseSlot(0), 0])!
+  const then = (r.doc.steps![1] as unknown as { then: { id: string }[] }).then
+  assert.deepEqual(
+    then.map((s) => s.id),
+    ['s3'],
+  )
+  assert.deepEqual(r.path, ['steps', 1, 'then', 0])
+  const loose = layoutOf(r.doc).loose!
+  assert.equal(loose.length, 1)
+  assert.equal(loose[0].steps[0].id, 's2')
+})
+
+test('连线：不能接成环', () => {
+  // if1 的「是」接回 s1（s1 后面那串含 if1 自己）
+  assert.equal(connect(doc(), { slot: ['steps', 1, 'then'], index: 0 }, ['steps', 0]), undefined)
+  // s3 的下一步接回 s1
+  assert.equal(connect(doc(), { slot: ['steps'], index: 3 }, ['steps', 0]), undefined)
+  // 已经接着
+  assert.equal(connect(doc(), { slot: ['steps'], index: 1 }, ['steps', 1]), undefined)
+})
+
+test('连线：流程里往前挪（开始直接接 if1，s1 断开）', () => {
+  const r = connect(doc(), { slot: ['steps'], index: 0 }, ['steps', 1])!
+  assert.deepEqual(
+    r.doc.steps!.map((s) => s.id),
+    ['if1', 's3'],
+  )
+  assert.equal(layoutOf(r.doc).loose![0].steps[0].id, 's1')
+})
+
+test('空白处加节点、在引脚处插入', () => {
+  const r = addLoose(doc(), [{ action: 'click', target: 'Q:W' }], 100, 200)
+  const loose = layoutOf(r.doc).loose!
+  const id = loose[0].steps[0].id!
+  assert.ok(!['s1', 's2', 's3', 's9'].includes(id))
+  assert.deepEqual(layoutOf(r.doc).pos![`~${id}`], [100, 200])
+  const g = bpGraph(r.doc)
+  assert.ok(pinOf(g, `~${id}`, 'next'))
+
+  const ins = insertAtPin(doc(), { slot: ['steps'], index: 1 }, [{ action: 'wait', seconds: 2 }], 5, 6)!
+  const ids = ins.doc.steps!.map((s) => s.id)
+  assert.equal(ids.length, 4)
+  assert.equal(ids[0], 's1')
+  assert.equal(ids[2], 'if1')
+  assert.deepEqual(layoutOf(ins.doc).pos![ids[1]!], [5, 6])
+})
+
+test('没连上的 id 和流程里新插的撞了：没连上的换一个，接回去不重复', () => {
+  const d1 = disconnect(doc(), { slot: ['steps'], index: 2 })!
+  // 模拟别的视图在流程里插了一个同 id 的步骤
+  d1.steps!.push({ id: 's3', action: 'wait', seconds: 1 })
+  const r = connect(d1, { slot: ['steps', 1, 'else'], index: 0 }, [...looseSlot(0), 0])!
+  const ids = new Set<string>()
+  const all = JSON.stringify(r.doc)
+  for (const m of all.matchAll(/"id":"([^"]+)"/g)) {
+    assert.ok(!ids.has(m[1]), `重复 id ${m[1]}`)
+    ids.add(m[1])
+  }
+})

@@ -26,5 +26,5 @@ export function useTidyHere(
     if (!id) return h().toast.error(t('这一步还没有 id，先存盘再整理'))
     tidy.ask(`整理录制段「${name}」里的步骤。`, id)
   }
-  return { onTidy: (path: GtPath) => void start(path), dialogs: tidy.dialogs }
+  return { onTidy: (path: GtPath) => void start(path), dialogs: tidy.dialogs, tidy }
 }

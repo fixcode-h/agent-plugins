@@ -1,5 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { SCHEMA_VERSION } from '../../../shared/gt-script/script.ts'
 import { t } from '../../util.ts'
 import { callHits, fileKey } from './call-refs.ts'
 import { exists, isDir, libPath, slash, stemOf, walkDirs, walkJson } from './files.ts'
@@ -35,7 +36,8 @@ export async function makeFolder(projectRoot: string, a: LibArgs) {
 
 /**
  * create：新建一个空白脚本（「新建脚本（编写）」）。GameTest 要求 steps 非空，先放一步「等 1 秒」占位，
- * 打开后在步骤列表里插入、改掉；schemaVersion 写 2（1.x 都认），以后由编辑器存盘时升到 3
+ * 打开后在画布上换掉；直接写成 v3（每步带 id）：编辑器存盘本来就整理成 v3，用户 2026-11-19 说 v2 的用例基本都删了，
+ * 新脚本不再先写 v2 再升
  */
 export async function createScript(projectRoot: string, a: LibArgs) {
   const name = (a.name ?? '').trim()
@@ -43,10 +45,10 @@ export async function createScript(projectRoot: string, a: LibArgs) {
   await mkdir(path.dirname(to.abs), { recursive: true })
   const doc = {
     kind: 'gametest-scenario',
-    schemaVersion: 2,
+    schemaVersion: SCHEMA_VERSION,
     name,
     tags: [],
-    steps: [{ action: 'wait', until: 'seconds', seconds: 1, note: '占位：换成真正的步骤' }],
+    steps: [{ id: 's1', action: 'wait', until: 'seconds', seconds: 1, note: '占位：换成真正的步骤' }],
   }
   await writeFile(to.abs, JSON.stringify(doc, null, '\t') + '\n', 'utf8')
   return { path: to.rel }

@@ -1,6 +1,6 @@
 import { op, ppost } from '../../api.ts'
 import type { GtBatch } from './GtBatch.tsx'
-import type { GtJob } from './GtRun.tsx'
+import type { GtJob } from './gt-run/types.ts'
 import type { Scenario } from './GtMenus.tsx'
 
 /**

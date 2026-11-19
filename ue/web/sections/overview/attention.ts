@@ -3,7 +3,7 @@ import type { ProjectState } from '../../../server/types.ts'
 import type { OverviewExtra } from '../../../server/overview.ts'
 import type { Badges } from '../../ctx.tsx'
 import { t } from '../../host.ts'
-import type { GtRunSummary } from '../uekit/GtRun.tsx'
+import type { GtRunSummary } from '../uekit/gt-run/types.ts'
 import type { Upgrade } from './ext-data.ts'
 import type { AttnItem } from './parts.tsx'
 

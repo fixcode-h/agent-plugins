@@ -19,7 +19,7 @@ import {
 import { hintOf, isPositional } from './gt-steps.ts'
 import { GtKeyFields } from './GtKeyFields.tsx'
 import { placeRows } from './gt-rows/rows.ts'
-import type { GtScenarioFile } from './GtRun.tsx'
+import type { GtScenarioFile } from './gt-run/types.ts'
 import type { StepDef } from './GtStepDetail.tsx'
 
 type Mode = 'key' | 'text' | 'index'

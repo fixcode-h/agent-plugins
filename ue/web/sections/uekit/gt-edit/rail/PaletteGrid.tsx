@@ -1,14 +1,13 @@
-import type { GtScript } from '../../../../../shared/gt-script/index.ts'
+import type { EditResult, GtPath, GtScript } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
 import { openMenuAt } from '../../../../menu.tsx'
 import { blockUi, TONE_TEXT, type InsertItem } from '../../gt-blocks/index.ts'
 import { GT_STEPS_MIME } from '../../gt-flow/dnd.ts'
 import { insertPlace, insertStep } from '../insert-menu.ts'
 import { cellItems, cellLook, cellMatches, paletteCells, TONE_SOFT, type PaletteCell } from './palette.ts'
-import type { EditRailProps } from './EditRail.tsx'
 
 /**
- * 节点格子（效果图 1 左栏上半）：两列小卡片。点一下插到选中步骤后面（一格多项时从格子下沿弹菜单选），
+ * 节点格子（UE 页二级栏「节点」页签，编辑器用 portal 画进去）：两列小卡片。点一下插到选中步骤后面（一格多项时从格子下沿弹菜单选），
  * 拖到流程图的连线「+」或空槽上插在那里（拖的是这一格第一项）
  */
 export function PaletteGrid({
@@ -17,7 +16,13 @@ export function PaletteGrid({
   onChange,
   onSelect,
   q,
-}: Pick<EditRailProps, 'doc' | 'selected' | 'onChange' | 'onSelect'> & { q: string }) {
+}: {
+  doc: GtScript
+  selected: GtPath[]
+  onChange: (r: EditResult | GtScript | undefined, what?: string) => boolean
+  onSelect: (paths: GtPath[]) => void
+  q: string
+}) {
   const { cn } = h()
   const list = paletteCells().filter((c) => cellMatches(c, q))
   if (!list.length) return <div className="ue:px-1 ue:py-1 ue:text-footnote ue:text-subtle">{t('没有对上的节点')}</div>

@@ -76,12 +76,15 @@ export function Inspector({
   onChange,
   ctx,
   onTry,
+  history,
 }: {
   doc: GtScript
   selected: GtPath[]
   onChange: (r: ReturnType<typeof replace> | GtScript | undefined) => boolean
   ctx: CmdCtx
   onTry?: (p: GtPath) => void
+  /** 这一步最近几次运行过没过（原来运行结果页步骤详情里的「最近几次」）；没有历史时返回空 */
+  history?: (p: GtPath) => ReactNode
 }) {
   const { ui } = h()
   if (selected.length > 1)
@@ -139,6 +142,11 @@ export function Inspector({
         <Section title={t('出错和说明')}>
           <CommonFields step={step} onChange={set} />
         </Section>
+        {history && history(path) && (
+          <Section title={t('最近几次')}>
+            <div className="ue:text-footnote">{history(path)}</div>
+          </Section>
+        )}
       </div>
     </div>
   )

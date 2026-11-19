@@ -1,16 +1,18 @@
 import { Plus, Redo2, Undo2 } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent } from 'react'
-import { getAt, type GtStep } from '../../../../shared/gt-script/index.ts'
+import { getAt, type EditResult, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { commandMenuItems, runKey, type CmdCtx } from '../gt-edit/commands.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { insertMenuItems, insertPlace, insertStep, openInsertAt } from '../gt-edit/insert-menu.ts'
 import type { InsertItem } from '../gt-blocks/index.ts'
+import { blankGuard } from '../gt-guards/model.ts'
 import type { ViewProps } from '../gt-edit/views.ts'
 import { CanvasToolbarSep } from '@panel/web/src/components/flow/GraphCanvas'
-import { GtFlowView, type FlowSelection } from './GtFlowView.tsx'
-import { stepKey } from './layout.ts'
+import { BpView, type BpSelection } from './bp/BpView.tsx'
+import { tidyLoose } from './bp/edit.ts'
+import { bpKey } from './bp/graph.ts'
 import type { FlowRunState, StepRunStatus } from './run-state.ts'
 import { useFlowRun } from './use-flow-run.ts'
 
@@ -23,26 +25,31 @@ function fromViewRun(r: NonNullable<ViewProps['run']>, live: FlowRunState): Flow
 }
 
 /**
- * 编辑页的「流程图」视图（定稿 9.1「一份数据，三种看法」）：把外壳的 ViewProps 接到 GtFlowView。
+ * 编辑页的「流程图」视图（定稿 9.1「一份数据，三种看法」）：把外壳的 ViewProps 接到蓝图式画布 BpView。
  * - 选中：外壳按路径记、可多选；画布按 key（步骤 id 或路径）单选，这里两头换。守护不在外壳的选中里
  *   （守护在「脚本设置」里编辑），选守护时外壳清空选中、显示脚本设置，画布自己记着高亮哪条；
  * - 插入、右键、快捷键都用外壳那一份（insert-menu、commands），和列表视图同一套命令；
  * - 运行高亮：外壳给了 run 就叠上去，否则只看 gt.flow / gt.job 推送
  * - 底部工具条（效果图 1）：画布自带选择 / 平移 / 适配 / 折叠，这里补「+ 插入」和外壳给的撤销、重做
  */
-export function FlowEditView({ doc, onChange, selected, onSelect, onTry, run, history }: ViewProps) {
+export function FlowEditView({ doc, onChange: change, selected, onSelect, onTry, run, history }: ViewProps) {
+  // 画布上可能有没连上的步骤（_layout.loose）：插入、复制这些通用命令只给流程里的步骤补 id，这里统一补上、去掉空串
+  const onChange: ViewProps['onChange'] = (r, what) => {
+    if (!r) return change(r, what)
+    if ('doc' in r && Array.isArray((r as EditResult).path))
+      return change({ ...(r as EditResult), doc: tidyLoose(structuredClone((r as EditResult).doc)) }, what)
+    return change(tidyLoose(structuredClone(r as GtScript)), what)
+  }
   const { IconButton } = h().ui
   const { project } = useEditCtx()
   const live = useFlowRun(project, doc.name)
   const box = useRef<HTMLDivElement>(null)
-  // 最近一次指针的位置：点「+」时菜单从这里弹出（画布的插入回调不带事件）
-  const pointer = useRef({ x: 200, y: 200 })
   const [guardKey, setGuardKey] = useState<string>()
 
   const key = useMemo(() => {
     const p = selected[0]
     const step = p && (getAt(doc, p) as GtStep | undefined)
-    return step && typeof step === 'object' ? stepKey(step, p) : guardKey
+    return step && typeof step === 'object' ? bpKey(step, p) : guardKey
   }, [doc, selected, guardKey])
 
   // 插在选中那步后面；没选就接在主流程末尾（insertPlace 的规则），快捷键和工具条的「+」同一份
@@ -59,7 +66,7 @@ export function FlowEditView({ doc, onChange, selected, onSelect, onTry, run, hi
     openInsert: () => openInsertAt(box.current?.querySelector(`[data-gt-node="${key}"]`) ?? box.current, pickInsert),
   }
 
-  const select = (s: FlowSelection | undefined) => {
+  const select = (s: BpSelection | undefined) => {
     setGuardKey(s?.guard ? s.key : undefined)
     onSelect(s?.path && !s.guard ? [s.path] : [])
   }
@@ -69,14 +76,13 @@ export function FlowEditView({ doc, onChange, selected, onSelect, onTry, run, hi
       ref={box}
       tabIndex={-1}
       className="ue:min-h-0 ue:flex-1 ue:outline-none"
-      onPointerDownCapture={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
       onKeyDown={(e) => {
         // 输入框里的按键交给输入框（画布上没有，防的是将来节点上加了内联编辑）
         if ((e.target as HTMLElement).closest('input, textarea, [contenteditable]')) return
         runKey(e, ctx)
       }}
     >
-      <GtFlowView
+      <BpView
         doc={doc}
         onChange={(d, focus) => {
           if (onChange(d) && focus) onSelect([focus])
@@ -84,12 +90,12 @@ export function FlowEditView({ doc, onChange, selected, onSelect, onTry, run, hi
         selected={key}
         onSelect={select}
         run={run ? fromViewRun(run, live) : live}
-        onPickInsert={(at) => {
-          const e = new MouseEvent('contextmenu', { clientX: pointer.current.x, clientY: pointer.current.y })
-          openMenu(
-            e,
-            insertMenuItems((it) => onChange(insertStep(doc, at.slot, at.index, it.make()))),
-          )
+        // 空白处右键「加守护」：加一条空守护，事件节点出现在画布上，触发条件到右栏「这个脚本的守护」里填
+        onAddGuard={() => {
+          const guards = doc.guards ?? []
+          const g = blankGuard(new Set(guards.map((x) => x.id ?? '')))
+          if (onChange({ ...doc, guards: [...guards, g] }))
+            h().toast.success(t('加了守护「{id}」：从它的引脚拖出处理步骤，触发条件在右边「这个脚本的守护」里填', { id: g.id ?? '' }))
         }}
         toolbar={
           <>
