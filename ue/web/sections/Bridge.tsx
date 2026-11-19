@@ -26,6 +26,8 @@ export function Bridge() {
 
   const saveSettings = (patch: Partial<UeProject>) =>
     run('settings', async () => {
+      // 先把选的值显示出来，不等项目列表重取回来
+      setForm((f) => ({ ...f, ...patch }))
       await ppost(project.id, 'settings', patch)
       toast.success(t('已保存'))
       reload()
