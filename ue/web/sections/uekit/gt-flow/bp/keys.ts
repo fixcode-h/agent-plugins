@@ -32,6 +32,13 @@ export const CANVAS_KEYS = {
     scope: CANVAS,
     match: (e) => plain(e) && e.key === 'Home',
   }),
+  search: registerShortcut({
+    id: 'canvas-search',
+    keys: 'Ctrl+F',
+    label: () => t('搜索节点'),
+    scope: CANVAS,
+    match: (e) => mod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f',
+  }),
   deselect: registerShortcut({
     id: 'canvas-deselect',
     keys: 'Esc',

@@ -24,6 +24,7 @@ import { addLoose, addNote, clearPositions, connect, disconnect, insertAtPin, mo
 import { BP_EDGE_TYPES, type BpEdgeData } from './edge.tsx'
 import { bpGraph, pinOf, scopeKey, type BpAt, type BpNode } from './graph.ts'
 import { CANVAS_KEYS } from './keys.ts'
+import { AlignTools, MiniMapToggle, NodeSearch, useMiniMapPref, ZoomReadout } from './toolbar.tsx'
 import { BP_NODE_TYPES, type BpData } from './nodes.tsx'
 
 /** 画布上选中的东西：一步（key = 步骤 id，没连上的前面带 ~），或者一条守护 */
@@ -265,6 +266,8 @@ function BpInner({
   onSelectMany?: (s: BpSelection[]) => void
 }) {
   const pickedSet = useMemo(() => new Set(picked ?? []), [picked])
+  const [searching, setSearching] = useState(false)
+  const [mini, setMini] = useMiniMapPref()
   // 进到块里面、回到上一层：换了一层就把这一层的节点收进视口（第一次打开由 ReadableFit 管）
   const lastHere = useRef(here)
   useEffect(() => {
@@ -450,6 +453,7 @@ function BpInner({
     else if (hit(CANVAS_KEYS.deselect)) onSelect?.(undefined)
     else if (hit(CANVAS_KEYS.enter) && sel?.step && sel.path && isSubgraph(sel.step)) onEnter?.(sel.path, sel.step)
     else if (hit(CANVAS_KEYS.leave) && here && onLeave) onLeave()
+    else if (hit(CANVAS_KEYS.search)) setSearching(true)
     else done = false
     if (!done) return
     e.preventDefault()
@@ -510,7 +514,7 @@ function BpInner({
           nodesConnectable={editable}
           deleteKeyCode={null}
           elevateNodesOnSelect={false}
-          minimap={6}
+          minimap={mini ? 6 : false}
           autoFit={false}
           miniColor={miniOf(run)}
           connectionRadius={28}
@@ -557,8 +561,24 @@ function BpInner({
           <ReadableFit />
           <CanvasToolbar>
             {toolbarLeft}
+            <NodeSearch
+              open={searching}
+              setOpen={(v) => {
+                setSearching(v)
+                if (!v) wrap.current?.focus({ preventScroll: true })
+              }}
+              nodes={graph.nodes}
+              onPick={(n) => {
+                const s = selOf(n)
+                if (s) onSelect?.(s)
+              }}
+            />
+            {editable && <AlignTools onMove={(m) => apply(moveNodes(doc, graph, m))} />}
             {toolbar && <CanvasToolbarSep />}
             {toolbar}
+            <CanvasToolbarSep />
+            <ZoomReadout />
+            <MiniMapToggle on={mini} onChange={setMini} />
           </CanvasToolbar>
         </GraphCanvas>
       </div>

@@ -1,14 +1,12 @@
-import { ASSET_KINDS } from '../../../asset-icons.ts'
-import { useEditCtx } from '../gt-edit/ctx.ts'
-import { t } from '../../../host.ts'
-import { useSearchIndex } from '../../../jump/index-data.ts'
-import { SuggestInput } from '../../../SuggestInput.tsx'
+import { useState } from 'react'
+import { MousePointerClick } from 'lucide-react'
+import { h, t } from '../../../host.ts'
 import { selectorLabel } from '../gt-selector-label.ts'
-import { matchWidgets } from '../gt-widget-match.ts'
+import { TargetPickDialog } from './TargetPickDialog.tsx'
 
 /**
- * 控件选择器输入框（WBP_X:Root/Btn、$item>BtnClaim）：还没写冒号时从资源索引里按名字挑界面（按继承 UUserWidget 认，
- * 和阻挡界面下拉同一份索引），挑中填成「界面:.」；写了冒号以后就是手填路径
+ * 控件选择器（WBP_X:Root/Btn、$item>BtnClaim）：框里只显示，点一下弹窗选（用户 2026-11-19：输入框里下拉操作空间太小）。
+ * 弹窗里按界面找、点控件树，也能直接改选择器原文
  */
 export function TargetInput({
   value,
@@ -19,34 +17,32 @@ export function TargetInput({
   onChange: (v: string) => void
   placeholder?: string
 }) {
-  const { project } = useEditCtx()
-  const index = useSearchIndex(project)
-  const suggest = (q: string) => {
-    if (q.includes(':') || q.startsWith('$')) return { rows: [], total: 0 }
-    const m = matchWidgets(index.idx, q, 30)
-    const { icon, tone } = ASSET_KINDS['umg-widget']
-    return {
-      total: m.total,
-      rows: m.rows.map((w) => ({
-        key: w.pkg,
-        value: `${w.value}:.`,
-        label: w.name,
-        detail: w.pkg,
-        icon,
-        tone,
-        dim: !w.sure,
-      })),
-    }
-  }
+  const { cn } = h()
+  const [open, setOpen] = useState(false)
   return (
-    <SuggestInput
-      value={value}
-      onChange={onChange}
-      suggest={suggest}
-      inputClassName="ue:font-mono"
-      display={selectorLabel}
-      placeholder={placeholder ?? t('界面:路径，例如 WBP_Shop:Root/BtnBuy')}
-      empty={t('写界面名找 WBP，或直接写选择器')}
-    />
+    <>
+      <button
+        type="button"
+        title={value || undefined}
+        onClick={() => setOpen(true)}
+        // 照面板输入框（components/ui/input.tsx 的 fieldClass，sm 档）的样子画，和同一列的输入框对齐
+        className="ue:flex ue:h-8 ue:w-full ue:min-w-0 ue:items-center ue:gap-2 ue:rounded-(--c-input-radius) ue:border-(length:--c-input-border) ue:border-line-strong ue:bg-(--c-input-bg) ue:px-2.5 ue:text-left ue:text-body ue:outline-none ue:focus-visible:border-focus"
+      >
+        <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', value ? 'ue:font-mono ue:text-fg' : 'ue:text-subtle')}>
+          {value ? selectorLabel(value) : (placeholder ?? t('点这里选控件'))}
+        </span>
+        <MousePointerClick className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+      </button>
+      {open && (
+        <TargetPickDialog
+          value={value}
+          onClose={() => setOpen(false)}
+          onPick={(v) => {
+            onChange(v)
+            setOpen(false)
+          }}
+        />
+      )}
+    </>
   )
 }
