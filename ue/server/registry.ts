@@ -7,7 +7,7 @@ import { c, now, readJson, writeJson } from './util.ts'
 const dir = () => path.join(c().dataDir, 'projects')
 const file = (id: string) => path.join(dir(), `${encodeURIComponent(id)}.json`)
 
-export const DEFAULT_PERMS: UeProject['perms'] = { runtime: 'write', asset: 'ask', struct: 'ask', python: true }
+export const DEFAULT_PERMS: UeProject['perms'] = { runtime: 'write', asset: 'save', struct: 'ask', python: true }
 
 /** 补齐老数据缺的字段 */
 function norm(p: UeProject): UeProject {
