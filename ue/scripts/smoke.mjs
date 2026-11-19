@@ -63,6 +63,14 @@ const bridge = await startFakeBridge(proj)
 // 面板开放给插件的模块（server/download）：冒烟测试不连外网，给一份用 fetch 写文件的替身
 globalThis.__agentPanelServer = {
   modules: {
+    // 资源版本差异用的版本记录（面板 server/exec/vcs-history）：冒烟测试不碰版本管理，给个空替身
+    'server/exec/vcs-history': {
+      fileHistory: async () => ({ vcs: 'none', items: [] }),
+      fileAt: async () => {
+        throw new Error('冒烟测试里没有版本管理')
+      },
+      VcsInputError: class extends Error {},
+    },
     'server/download': {
       downloadFile: async (url, to) => {
         const res = await fetch(url)

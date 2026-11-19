@@ -191,10 +191,10 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
 
 const EDIT_HELP = `ops 是操作数组，整批在一个编辑器事务里执行，任一步失败整批取消。每个操作 {op, ...}：
 成员：add_variable {name, type, default?, category?, instanceEditable?, replicated?, exposeOnSpawn?}；set_variable {name, type?, rename?, default?, …同上}；remove_variable {name}；add_function {name, inputs?:[{name,type}], outputs?:[{name,type}], pure?}；remove_function {name}。
-类设置：add_interface / remove_interface {interface}；reparent {parent}；set_default {prop, value}（类默认值，prop 同 ue_get 的属性路径）。
-组件：add_component {name, class, parent?}；remove_component {name}；set_component {name, prop, value}。
-节点（graph 不写是事件图）：add_node {graph?, as?, spawner 或 kind, x?, y?, comment?, pins?:{引脚名:默认值}}，kind 有 call {function:"类名.函数名"}、get / set {variable}、branch、sequence、cast {class}、self、event {name:"BeginPlay"}（重写父类事件）、custom_event {name, inputs?}、macro {macro:"ForEachLoop"}，其余节点先 node_search 拿 spawner；remove_node {node}；set_pin {pin:"节点.引脚", value}；connect / disconnect {from:"节点.引脚", to:"节点.引脚"}（disconnect 不写 to 是断开这个引脚的所有连线）；move {node, x, y}；comment {graph?, text, nodes?:[节点]}。
-类型写法：bool、int、int64、float、byte、name、string、text、结构体名（Vector、Rotator、Transform、自定义结构）、枚举名、类名（对象引用）、class<类>、soft<类>，可以套 array<>、set<>、map<键,值>。
+类设置：add_interface / remove_interface {interface}；reparent {parent}；set_default {prop, value}（类默认值，prop 同 ue_get）。
+组件：add_component {name, class, parent?}；remove_component {name}；set_component {name, prop, value}。改删组件 / 变量、删函数的 name 可给数组或通配符（组件可按 componentClass 选），一条改多个。
+节点（graph 不写是事件图）：add_node {graph?, as?, spawner 或 kind, x?, y?, comment?, pins?:{引脚名:默认值}}，kind 有 call {function:"类名.函数名"}、get / set {variable}、branch、sequence、cast {class}、self、event {name:"BeginPlay"}、custom_event {name, inputs?}、macro {macro:"ForEachLoop"}，其余先 node_search 拿 spawner；remove_node {node}；set_pin {pin:"节点.引脚", value}；connect / disconnect {from:"节点.引脚", to:"节点.引脚"}（disconnect 不写 to 断开全部连线）；move {node, x, y}；comment {graph?, text, nodes?:[节点]}。
+类型：bool、int、int64、float、byte、name、string、text、结构体名（Vector、Transform、自定义结构）、枚举名、类名（对象引用）、class<类>、soft<类>，可套 array<> / set<> / map<键,值>。
 节点用 id（graph 结果里 # 后那段）或本批 add_node 的 as 名引用；引脚别名 exec / then / self / return；不给位置自动排。`
 
 /** ue_compile 的批量：汇总里全部 ok / warnings 才算通过，交给面板的完成依据 */

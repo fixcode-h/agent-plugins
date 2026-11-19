@@ -27,7 +27,6 @@ export const BATCH_PROPS = {
   items: { type: 'array', items: { type: 'object' } },
   select: { type: 'object' },
   onError: { type: 'string', enum: ['rollback', 'keep'] },
-  dryRunFirst: { type: 'boolean' },
 }
 
 export const BATCH_HINT =
