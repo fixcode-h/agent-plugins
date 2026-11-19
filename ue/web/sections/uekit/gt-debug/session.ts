@@ -16,6 +16,8 @@ export interface DebugSession {
   project: string
   /** 场景根（相对或绝对，和编辑页的 root 一样） */
   root: string
+  /** 正在编辑的脚本（相对场景根）：子图选脚本时不列自己 */
+  scenario?: string
   /** 能开跑（连着编辑器、没在录制）时才有 */
   run?: (o: DebugRunOpts) => void
   running: boolean
