@@ -1,0 +1,18 @@
+{
+  "kind": "gametest-scenario",
+  "schemaVersion": 3,
+  "name": "打开示例界面（子脚本）",
+  "_note": "给其他示例场景 call 的子脚本：进图（PIE 已经在跑这张图就沿用）、等界面出来、把示例界面重置回首页，再点侧栏切到要测的页。返回切完之后顶栏面包屑的文字。",
+  "revision": 1,
+  "tags": ["sample","assetforge","common"],
+  "params": {"nav":{"default":"","type":"string","note":"侧栏按钮的选择器；空 = 停在首页"},"title":{"default":"首页","type":"string","note":"切过去之后面包屑应该显示的页名"}},
+  "vars": {"crumb":"WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb"},
+  "steps": [
+    {"id":"pie","action":"pie.start","map":"/Game/AgentTest/AssetForge/Map_ForgeSample"},
+    {"id":"waitUi","action":"wait","until":"widget","target":"$crumb","note":"GameMode 进图就把界面加进视口"},
+    {"id":"reset","action":"widget.call","target":"WBP_ForgeSample:.","function":"ResetScreen","note":"回首页、关弹窗、清计数和领取记录：上一份场景留下的状态不影响这一份"},
+    {"id":"goPage","action":"if","cond":{"expr":"$nav != ''"},"then":[{"id":"clickNav","action":"click","target":"$nav"}]},
+    {"id":"atPage","action":"assert","target":"$crumb","text":"$title"},
+    {"id":"done","action":"return","value":"=text($crumb)"}
+  ]
+}
