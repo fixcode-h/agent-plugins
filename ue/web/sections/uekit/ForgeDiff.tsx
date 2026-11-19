@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu } from '../../menu.tsx'
 import { ErrorBox, Hint, Loading } from './forge-parts.tsx'
+import { sectionIds } from '../../../shared/forge-doc/sections.ts'
+import { groupBySection } from './forge-config/diff-groups.ts'
+import { sectionLabel } from './forge-config/section-label.ts'
 
 /** forge.diff 的 diff（UEKit docs/asset-forge.md） */
 export interface ForgeDiffData {
@@ -39,17 +42,21 @@ export function AgainstSelect({ value, onChange }: { value: Against; onChange: (
 /**
  * 「属性差异」页签：三列表格（属性 / 旧值 / 新值），上面一个按属性路径筛的输入框（差异是一次取回来的，
  * 本地筛，不发请求）。行右键复制属性路径、旧值、新值——查问题时最常做的是把这几个贴进对话。
+ * 改动分在不止一段时按段分组（设计稿 4.3.3），每组前一行段名和条数。
  */
+
 export function ForgeDiff({
   loading,
   error,
   diff,
   against,
+  kind,
 }: {
   loading: boolean
   error: string
   diff?: ForgeDiffData
   against: Against
+  kind?: string
 }) {
   const { ui } = h()
   const [q, setQ] = useState('')
@@ -59,6 +66,7 @@ export function ForgeDiff({
   if (!diff.supported) return <Hint>{diff.reason || t('这种资产不支持属性差异，看「导入计划」页')}</Hint>
   const key = q.trim().toLowerCase()
   const rows = key ? diff.changes.filter((c) => c.property.toLowerCase().includes(key)) : diff.changes
+  const groups = groupBySection(rows, sectionIds(undefined, kind))
   const cell = 'ue:truncate ue:border-t ue:border-line/60 ue:px-3 ue:py-1.5'
   const head = 'ue:bg-sel/35 ue:px-3 ue:py-1.5 ue:font-sans ue:text-caption ue:text-subtle'
   const menu = (c: ForgeDiffData['changes'][number]) => (e: React.MouseEvent) =>
@@ -84,22 +92,32 @@ export function ForgeDiff({
         <div className={head}>{t('属性')}</div>
         <div className={head}>{against === 'commit' ? t('上次提交的配置') : t('现在（资产）')}</div>
         <div className={head}>{against === 'commit' ? t('现在的配置') : t('导入后')}</div>
-        {rows.map((c, i) => (
-          <div key={i} className="ue:contents" onContextMenu={menu(c)}>
-            <div className={`${cell} ue:text-fg`} title={c.property}>
-              {c.property}
-            </div>
+        {groups.map((g) => [
+          groups.length > 1 && (
             <div
-              className={`${cell} ${c.before === undefined || c.before === null ? 'ue:text-subtle' : 'ue:bg-danger/8 ue:text-danger'}`}
-              title={show(c.before)}
+              key={`§${g.id}`}
+              className="ue:col-span-3 ue:border-t ue:border-line ue:bg-sel/20 ue:px-3 ue:py-1 ue:font-sans ue:text-caption ue:font-medium ue:text-muted"
             >
-              {show(c.before)}
+              {sectionLabel(g.id, kind)} <span className="ue:font-normal ue:text-subtle">{g.rows.length}</span>
             </div>
-            <div className={`${cell} ue:bg-success/9 ue:text-success`} title={show(c.after)}>
-              {show(c.after)}
+          ),
+          ...g.rows.map((c, i) => (
+            <div key={`${g.id}-${i}`} className="ue:contents" onContextMenu={menu(c)}>
+              <div className={`${cell} ue:text-fg`} title={c.property}>
+                {c.property}
+              </div>
+              <div
+                className={`${cell} ${c.before === undefined || c.before === null ? 'ue:text-subtle' : 'ue:bg-danger/8 ue:text-danger'}`}
+                title={show(c.before)}
+              >
+                {show(c.before)}
+              </div>
+              <div className={`${cell} ue:bg-success/9 ue:text-success`} title={show(c.after)}>
+                {show(c.after)}
+              </div>
             </div>
-          </div>
-        ))}
+          )),
+        ])}
       </div>
       {!diff.changes.length && <Hint>{t('没有属性差异')}</Hint>}
       {diff.changes.length > 0 && !rows.length && <Hint>{t('没有符合的属性')}</Hint>}

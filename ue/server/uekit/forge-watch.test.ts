@@ -91,3 +91,18 @@ test('只认配置根里的 .json', async () => {
   await assert.rejects(watchIt('p1', { conn: 'c3', path: 'umg/A.txt' }))
   assert.deepEqual(await watchIt('p1', { conn: 'x', path: 'umg/A.json' }), { watching: false })
 })
+
+test('include 的片段文件（extra）存盘也推主配置的路径，出了配置根的片段不盯', async () => {
+  const dir = path.join(projectRoot(), root, 'umg', 'A.parts')
+  await mkdir(dir, { recursive: true })
+  await writeFile(path.join(dir, 'anim.json'), '{}')
+  const r = await watchIt('p3', { conn: 'c3', path: 'umg/A.json', extra: ['umg/A.parts/anim.json', '../../x.json'] })
+  assert.equal(r.watching, true)
+  const n = pushed.length
+  await new Promise((res) => setTimeout(res, 20))
+  await writeFile(path.join(dir, 'anim.json'), '{"fragment":"animations"}')
+  await waitPushed(n + 1)
+  assert.equal(pushed.length, n + 1)
+  assert.equal(pushed[n].data.path, 'umg/A.json')
+  assert.equal(pushed[n].to, 'c3')
+})

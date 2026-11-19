@@ -26,7 +26,7 @@ test('配置根：没设置时跟文档根，设置了按设置', async () => {
   assert.equal(await forgeConfigRoot(proj), path.join(base, 'Cfg', 'Forge'))
 })
 
-test('清单：只列配置根下的 json，跳过 _ 开头的，坏 JSON 标解析失败，状态留空等 UE', async () => {
+test('清单：只列配置根下的 json，跳过 _ 和 . 开头的、片段文件，坏 JSON 标解析失败，状态留空等 UE', async () => {
   const proj = await mkdtemp(path.join(tmpdir(), 'ue-forge-disk-'))
   const root = path.join(proj, 'docs', 'AssetForge')
   await put(
@@ -37,6 +37,9 @@ test('清单：只列配置根下的 json，跳过 _ 开头的，坏 JSON 标解
   await put(path.join(root, '_templates', 'umg', 'T.json'), '{}')
   await put(path.join(root, 'umg', '_schema.json'), '{}')
   await put(path.join(root, 'umg', 'readme.txt'), 'x')
+  // include 的片段文件、.schema/ 下的 JSON Schema 都不是资源（设计稿 4.3.4、4.3.5）
+  await put(path.join(root, 'umg', 'UI', 'WBP_HUD.parts', 'side.json'), '{ "fragment": "node", "node": {} }')
+  await put(path.join(root, '.schema', 'umg-widget.schema.json'), '{ "type": "object" }')
   const r = (await forgeFromDisk(proj, 'forge.entries', { limit: 100 })) as unknown as {
     entries: { key: string; state: string; kind?: string; asset?: string; revision?: number; name: string }[]
     total: number

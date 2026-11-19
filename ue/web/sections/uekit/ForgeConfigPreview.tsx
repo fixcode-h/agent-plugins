@@ -1,4 +1,4 @@
-import { Box, ChevronRight, Info } from 'lucide-react'
+import { Box, ChevronRight, FileSymlink, Info } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { Details } from '../../details/Details.tsx'
 import { looksLikePath } from '../../details/model.ts'
@@ -8,6 +8,8 @@ import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../sp
 import { Card } from '../../ui.tsx'
 import { Hint } from './forge-parts.tsx'
 import { previewProps } from './forge-preview-props.ts'
+import type { PathSeg } from '../../../shared/forge-doc/locate.ts'
+import { resolveStyles } from '../../../shared/forge-doc/styles.ts'
 
 /**
  * 资源还没生成时的「资源」页签：配置格式本来就是一棵节点树（root: {class, name, props, slot?, children?}，
@@ -15,6 +17,8 @@ import { previewProps } from './forge-preview-props.ts'
  * 用户 2026-11-15：「这个 json 也可以认为是一个蓝图资源」。不经 UE，直接解析 forge.describe 回的配置原文。
  * 右边属性用和真实资源同一个细节面板（details/Details.tsx），分类、展开、色块、勾选和 UE 一样（用户 2026-11-16）；
  * 左边结构树能拖宽（控件名长，默认宽度放不下），宽度记在本机。
+ * 设计稿 4.2 / 4.3.4：节点引用的样式（style）先套上再显示，和导入出来的一样；include 展开后的文档由外面给（doc），
+ * 从片段文件来的节点在树上标出片段文件名。
  */
 interface CfgNode {
   class?: string
@@ -53,13 +57,17 @@ interface Line {
   key: string
   depth: number
   node: CfgNode
+  /** 在文档里的位置（root、children 下标）：查它是不是从片段来的 */
+  path: PathSeg[]
   /** 父节点的类：插槽属性的分类写成「Slot (HorizontalBoxSlot)」 */
   parent?: string
 }
 
-function flatten(n: CfgNode, depth: number, key: string, out: Line[], parent?: string) {
-  out.push({ key, depth, node: n, parent })
-  ;(n.children ?? []).forEach((c, i) => flatten(c, depth + 1, `${key}/${c.name ?? i}`, out, n.class))
+function flatten(n: CfgNode, depth: number, key: string, out: Line[], path: PathSeg[], parent?: string) {
+  out.push({ key, depth, node: n, parent, path })
+  ;(n.children ?? []).forEach((c, i) =>
+    flatten(c, depth + 1, `${key}/${c.name ?? i}`, out, [...path, 'children', i], n.class),
+  )
   return out
 }
 
@@ -88,8 +96,14 @@ export function ForgeConfigPreview({
   note,
   onOpen,
   initial = '',
+  doc: given,
+  fragmentAt,
 }: {
   text?: string
+  /** 展开 include 之后的文档；不给就自己解析 text */
+  doc?: unknown
+  /** 某个位置来自哪个片段文件（相对配置根） */
+  fragmentAt?: (path: PathSeg[]) => string | undefined
   truncated?: boolean
   loading?: boolean
   error?: string
@@ -99,8 +113,11 @@ export function ForgeConfigPreview({
   /** 一开始选中的节点（结构里的路径，如 Root/Shell/Title）；不给就选根 */
   initial?: string
 }) {
-  const doc = useMemo(() => (text ? parseConfig(text) : undefined), [text])
-  const lines = useMemo(() => (doc?.root ? flatten(doc.root, 0, doc.root.name ?? 'root', []) : []), [doc])
+  const doc = useMemo(() => {
+    const d = (given as { root?: CfgNode; styles?: unknown } | undefined) ?? (text ? parseConfig(text) : undefined)
+    return d?.root ? { ...d, root: resolveStyles(d.root, (d as { styles?: unknown }).styles) } : d
+  }, [given, text])
+  const lines = useMemo(() => (doc?.root ? flatten(doc.root, 0, doc.root.name ?? 'root', [], ['root']) : []), [doc])
   const [sel, setSel] = useState(initial)
   const cur = lines.find((l) => l.key === sel) ?? lines[0]
   const pane = usePane('forge-preview-tree', '320px', 200)
@@ -134,7 +151,7 @@ export function ForgeConfigPreview({
           aside={t('来自配置')}
           bodyClass="ue:overflow-auto ue:py-1"
         >
-          <PreviewTree lines={lines} cur={cur?.key} onPick={setSel} />
+          <PreviewTree lines={lines} cur={cur?.key} onPick={setSel} fragmentAt={fragmentAt} />
         </Card>
         <SplitHandle pane={pane} paneRef={treeRef} reserve={() => 360} />
         <Card
@@ -197,22 +214,40 @@ const PreviewTree = memo(function PreviewTree({
   lines,
   cur,
   onPick,
+  fragmentAt,
 }: {
   lines: Line[]
   cur?: string
   onPick: (key: string) => void
+  fragmentAt?: (path: PathSeg[]) => string | undefined
 }) {
-  return lines.map((l) => <TreeRow key={l.key} l={l} selected={l.key === cur} onPick={onPick} />)
+  return lines.map((l, i) => {
+    // 只在片段开始的那个节点上标（子节点跟着同一个片段的不重复标）
+    const f = fragmentAt?.(l.path)
+    const parent = i > 0 && l.depth > 0 ? fragmentAt?.(l.path.slice(0, -2)) : undefined
+    return (
+      <TreeRow
+        key={l.key}
+        l={l}
+        selected={l.key === cur}
+        onPick={onPick}
+        fragment={f && f !== parent ? f : undefined}
+      />
+    )
+  })
 })
 
 const TreeRow = memo(function TreeRow({
   l,
   selected,
   onPick,
+  fragment,
 }: {
   l: Line
   selected: boolean
   onPick: (key: string) => void
+  /** 从这个节点开始来自片段文件 */
+  fragment?: string
 }) {
   return (
     <button
@@ -230,6 +265,11 @@ const TreeRow = memo(function TreeRow({
       )}
       <Box className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
       <span className="ue:min-w-0 ue:flex-1 ue:truncate">{l.node.name ?? t('（没有名字）')}</span>
+      {fragment && (
+        <span title={t('来自片段文件 {f}', { f: fragment })} className="ue:shrink-0 ue:text-accent-text">
+          <FileSymlink className="ue:h-3 ue:w-3" />
+        </span>
+      )}
       {/* 类名让着控件名：栏窄时先截类名（控件名才是要找的） */}
       <span className="ue:max-w-[45%] ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">
         {l.node.class}

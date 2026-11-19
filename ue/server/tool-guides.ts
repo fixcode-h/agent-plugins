@@ -170,7 +170,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: 'AssetForge 配置',
     summary: '用 JSON 配置管理 UE 资产：看同步状态、属性差异，导入写成资产、导出写回配置',
     useWhen:
-      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：写配置前先 schema kind=<kind> 看结构、schema class=<类> 看 props 能写哪些属性，改配置根（ue_forge status 看位置）下的 JSON 配置，再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
+      '项目装了 AssetForge、要改 UMG / 蓝图 / 数据表等资产时：写配置前先 schema kind=<kind> 看结构、schema class=<类> 看 props 能写哪些属性，改配置根（ue_forge status 看位置）下的 JSON 配置（大配置用 describe section=<段> 只读写一段；include 的片段文件顶层是 fragment，跟着主配置走），再 plan 或 diff 看会改什么，import 先 dryRun 再正式导入；用户在编辑器里改了资产要同步回配置时用 export',
     avoidWhen:
       '项目没用 AssetForge 管的资产直接用 ue_asset / ue_blueprint；只是看资产的属性用 ue_get / ue_asset export，不用 export 写配置；导入导出是后台作业，返回编号后用 action=job 查结果',
     confirms: true,
