@@ -33,7 +33,7 @@ export function batchNudge(task: string | undefined, tool: string, a: Record<str
   const what = a.action ? `${tool} action=${a.action}` : tool
   const hint =
     `\n\n提示：你已经对 ${rec.paths.size} 个资源逐个调 ${what} 做同一件事。剩下的请合成一次调用：` +
-    `paths=[所有路径]（或 select 按目录 / 类 / 父类 / 标签选，关卡 Actor 用 select.kind=actor），其余参数照旧。` +
+    `select 按目录 / 类 / 父类 / 名字通配符选（关卡 Actor 用 select.kind=actor），不超过 20 个时也可以 paths=[所有路径]，其余参数照旧。` +
     `一次调用在 UE 里是一个作业：先整批演练、失败可整批撤回，对话里也只显示一条。不要再逐个调或并行发多次。`
   return { ...r, content: [...r.content, { type: 'text' as const, text: hint }] }
 }
