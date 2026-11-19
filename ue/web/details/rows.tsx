@@ -1,6 +1,6 @@
 import { Copy, CopyPlus, ListPlus, Pin, Trash2, Undo2 } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
-import { usePropMark } from './marks.ts'
+import { usePropAnim, usePropMark } from './marks.ts'
 import { show } from '../api.ts'
 import { h, t } from '../host.ts'
 import {
@@ -156,6 +156,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
   const canOpen = expandable(n)
   const changed = d.isChanged(n.path)
   const mark = usePropMark(n.path, depth)
+  const anim = usePropAnim(n.path, depth)
   const ro = n.readOnly
   const why = ro ? n.readOnlyWhy || t('这个属性不能改') : undefined
 
@@ -220,6 +221,14 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
           <span className={cn('ue:truncate ue:text-footnote', ro ? 'ue:text-muted' : 'ue:text-fg')}>
             <Hl text={n.label} q={depth ? '' : d.q} />
           </span>
+          {anim && (
+            // 被动画驱动：照 UE 细节面板的菱形关键帧标记
+            <span
+              title={anim}
+              aria-label={anim}
+              className="ue:h-2 ue:w-2 ue:shrink-0 ue:rotate-45 ue:rounded-[1px] ue:bg-warning"
+            />
+          )}
           {n.replicated && (
             <span
               title={t('同步属性')}

@@ -6,7 +6,9 @@ import type { ForgeEntry } from './Forge.tsx'
 import type { ForgeFileOps } from './forge-file-ops.ts'
 import { canImport, useForgeActions } from './forge-actions.ts'
 import { ForgeAssetTab } from './ForgeAssetTab.tsx'
-import { ForgeConfig, lineFromMessage } from './ForgeConfig.tsx'
+import { ForgeConfig, lineFromMessage, type ConfigFocus } from './ForgeConfig.tsx'
+import { ForgeMarkupTab } from './forge-markup/ForgeMarkupTab.tsx'
+import { useForgeExpanded } from './forge-config/use-expanded.ts'
 import { AgainstSelect, ForgeDiff, type Against, type ForgeDiffData } from './ForgeDiff.tsx'
 import { ForgeHeader } from './ForgeHeader.tsx'
 import { ForgeLink } from './ForgeLink.tsx'
@@ -14,10 +16,12 @@ import { ForgePlan, planCount, type PlanReport } from './ForgePlan.tsx'
 
 /**
  * AssetForge 选中一份配置时的右栏（设计稿 §2.2）：一份配置 = 一个资源。
- * 头部（主按钮跟状态走）、配置 → 资源关系条，下面四个页签：资源（默认，复用资源页的显示）、属性差异、导入计划、配置原文。
+ * 头部（主按钮跟状态走）、配置 → 资源关系条，下面五个页签：资源（默认，复用资源页的显示）、属性差异、导入计划、配置原文、
+ * 标记视图（设计稿 4.2：按段画成类似 XAML 的标签，点标签跳回配置原文对应的行）。
+ * 配置 include 了片段文件（4.3.4）时这里先展开：预览、标记视图按展开后的文档画，片段文件也一起盯着存盘。
  * 页签由左栏记在地址 / 状态里（tab），没给时按状态挑默认的那个：被改过的先看差异，读不出来的先看原文。
  */
-export type ForgeTab = 'asset' | 'diff' | 'plan' | 'config'
+export type ForgeTab = 'asset' | 'diff' | 'plan' | 'config' | 'markup'
 
 interface Describe {
   managed?: boolean
@@ -42,6 +46,7 @@ export function ForgeDetail({
   onTab,
   fileRev = 0,
   fileOps,
+  onFragments,
 }: {
   entry: ForgeEntry
   busy: boolean
@@ -52,6 +57,8 @@ export function ForgeDetail({
   fileRev?: number
   /** 复制一份、让 AI 改、存为模板（弹窗由页面挂） */
   fileOps?: ForgeFileOps
+  /** 这份配置 include 的片段文件（相对配置根）：页面一起盯着存盘 */
+  onFragments?: (files: string[]) => void
 }) {
   const { project } = useUe()
   const { ui } = h()
@@ -85,6 +92,15 @@ export function ForgeDetail({
     [entry.key, configRoot, fileRev],
   )
   const configText = local.data ?? desc.data?.configText
+  // include 展开（片段文件逐个从磁盘读）；片段列表交给页面一起盯（一个页面连接只登记一份，登记在 Forge.tsx）
+  const expanded = useForgeExpanded(project.id, configRoot, cfgPath, local.data, fileRev)
+  const fragKey = expanded?.fragments.join('\n') ?? ''
+  useEffect(() => {
+    onFragments?.(fragKey ? fragKey.split('\n') : [])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [fragKey])
+  // 标记视图点了标签：切到配置原文，定位到那份文件的那一行
+  const [focus, setFocus] = useState<ConfigFocus>()
   const configTruncated = local.data === undefined && desc.data?.configTextTruncated
   // 本机读失败时才等编辑器；两边都失败报本机那条（更直接）
   const configLoading = configText === undefined && (local.loading || (!!local.error && desc.loading))
@@ -144,7 +160,7 @@ export function ForgeDetail({
       <div className="ue:flex ue:items-center ue:gap-3 ue:border-b ue:border-line ue:px-5 ue:py-2">
         <ui.Segmented
           size="sm"
-          label={t('资源 / 属性差异 / 导入计划 / 配置原文')}
+          label={t('资源 / 属性差异 / 导入计划 / 配置原文 / 标记视图')}
           value={tab}
           onChange={pick}
           options={[
@@ -152,6 +168,7 @@ export function ForgeDetail({
             { id: 'diff' as const, label: withCount(t('属性差异'), nDiff) },
             { id: 'plan' as const, label: withCount(t('导入计划'), nPlan) },
             { id: 'config' as const, label: t('配置原文') },
+            { id: 'markup' as const, label: t('标记视图') },
           ]}
         />
         {savedAt && (
@@ -173,6 +190,7 @@ export function ForgeDetail({
             entry={entry}
             diff={against === 'asset' ? diff.data : undefined}
             configText={configText}
+            expanded={expanded}
             configTruncated={configTruncated}
             configLoading={configLoading}
             configError={configError}
@@ -181,7 +199,7 @@ export function ForgeDetail({
         )}
         {tab === 'diff' &&
           (diffable ? (
-            <ForgeDiff loading={diff.loading} error={diff.error} diff={diff.data} against={against} />
+            <ForgeDiff loading={diff.loading} error={diff.error} diff={diff.data} against={against} kind={entry.kind} />
           ) : (
             <NoCompare entry={entry} />
           ))}
@@ -199,11 +217,27 @@ export function ForgeDetail({
             truncated={configTruncated}
             badLine={entry.state === 'parse-error' ? lineFromMessage(entry.message) : undefined}
             onOpen={() => void actions.openFile()}
+            expanded={expanded}
+            kind={entry.kind}
+            focus={focus}
             edit={
               entry.config && configRoot
                 ? { project: project.id, configRoot, path: entry.config.replace(/\\/g, '/') }
                 : undefined
             }
+          />
+        )}
+        {tab === 'markup' && (
+          <ForgeMarkupTab
+            loading={configLoading}
+            error={configError}
+            text={configText}
+            expanded={expanded}
+            main={cfgPath}
+            onFocus={(file, line) => {
+              setFocus((f) => ({ file, line, nonce: (f?.nonce ?? 0) + 1 }))
+              pick('config')
+            }}
           />
         )}
       </div>

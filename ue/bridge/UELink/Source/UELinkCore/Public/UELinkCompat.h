@@ -154,6 +154,27 @@
 // 任务：按「这段时间里活着的任务」枚举
 #define UELINK_TASK_ENUM_OPTION TraceServices::ETaskEnumerationOption::Alive
 
+// ---------- UMG 设计树、离屏预览、动画（2.17，UELinkEditor 的 UELinkUmgView.cpp / UELinkUmgRender.cpp） ----------
+// 下面这些按 5.4 的引擎接口写，云端没有引擎源码、5.4 / 5.8 都还没在本地编过；签名对不上时只改这里。
+// 离屏画控件：FWidgetRenderer::DrawWidget 带缩放的重载（RenderTarget、控件、缩放、渲染目标的像素尺寸、DeltaTime）。
+// 尺寸是渲染目标的像素数，布局区域是「像素 / 缩放」，和 UE 设计器的 DPI 缩放一个意思
+#define UELINK_DRAW_WIDGET(Renderer, Target, Widget, Scale, Size) (Renderer)->DrawWidget((Target), (Widget), (Scale), (Size), 0.f)
+// 控件上一次绘制时的几何（绘制空间：离屏绘制时就是渲染目标里的像素坐标）
+#define UELINK_WIDGET_PAINT_GEOMETRY(Widget) (Widget)->GetPaintSpaceGeometry()
+// 设计器标志：按设计时显示（不跑 Construct，跑 PreConstruct），和 UE 控件蓝图设计器、缩略图一样
+#define UELINK_UMG_DESIGN_FLAGS (EWidgetDesignFlags::Designing | EWidgetDesignFlags::ExecutePreConstruct)
+// 2D 变换轨道（UMG 模块）和 double 属性轨道（MovieSceneTracks，UE5 起）：头文件在才认，不在时这两类轨道列进 skipped
+#if __has_include("Animation/MovieScene2DTransformSection.h") && __has_include("Animation/MovieScene2DTransformTrack.h")
+#define UELINK_UMG_2D_TRANSFORM 1
+#else
+#define UELINK_UMG_2D_TRANSFORM 0
+#endif
+#if __has_include("Tracks/MovieSceneDoubleTrack.h") && __has_include("Sections/MovieSceneDoubleSection.h")
+#define UELINK_UMG_DOUBLE_TRACK 1
+#else
+#define UELINK_UMG_DOUBLE_TRACK 0
+#endif
+
 // ---------- 按成员探测的兼容层 ----------
 // TraceServices 的接口每版都在改名，而云端没有引擎源码、没法逐版核对：这些地方不按版本号猜名字，
 // 用 SFINAE 在编译期看类型上有哪个成员，选能编过的那条路；全都没有时退化成「取不到」，不让整个模块编不过。
@@ -172,6 +193,22 @@ namespace UELinkCompat
 	UELINK_DETECT_CALL(THasGetCallstackId, GetCallstackId)
 	UELINK_DETECT_CALL(THasDefaultTimeline, GetDefaultTimeline)
 	UELINK_DETECT_FIELD(THasRegionTimer, Timer)
+
+	// ---------- UMG 动画的轨道（2.17，UELinkEditor 的 UELinkUmgView.cpp / UELinkUmgRender.cpp） ----------
+	// UE 编辑器里给 RenderTransform 整体打关键帧时建的是 2D 变换轨道，段上的通道成员是 Translation[2] / Rotation /
+	// Scale[2] / Shear[2]（4.20 起的写法，5.x 里元素是 float 还是 double 通道没在真实引擎核对过）。不按版本猜：
+	// 按成员探测，少了哪个就把那一组列进 skipped，不让整个模块编不过
+	template <typename T, typename = void> struct THas2DTranslation : std::false_type {};
+	template <typename T> struct THas2DTranslation<T, std::void_t<decltype(std::declval<T&>().Translation[1].GetData())>> : std::true_type {};
+	template <typename T, typename = void> struct THas2DScale : std::false_type {};
+	template <typename T> struct THas2DScale<T, std::void_t<decltype(std::declval<T&>().Scale[1].GetData())>> : std::true_type {};
+	template <typename T, typename = void> struct THas2DShear : std::false_type {};
+	template <typename T> struct THas2DShear<T, std::void_t<decltype(std::declval<T&>().Shear[1].GetData())>> : std::true_type {};
+	template <typename T, typename = void> struct THas2DRotation : std::false_type {};
+	template <typename T> struct THas2DRotation<T, std::void_t<decltype(std::declval<T&>().Rotation.GetData())>> : std::true_type {};
+	// double 属性轨道（UE5 起 FVector2D 的分量是 double，Sequencer 给它建 double 轨道）的段上取通道的 GetChannel()（非 const 版）
+	template <typename T, typename = void> struct THasGetChannel : std::false_type {};
+	template <typename T> struct THasGetChannel<T, std::void_t<decltype(std::declval<T&>().GetChannel().GetData())>> : std::true_type {};
 
 #undef UELINK_DETECT_CALL
 #undef UELINK_DETECT_FIELD

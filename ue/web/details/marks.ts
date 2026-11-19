@@ -10,3 +10,13 @@ export const usePropMark = (path: string, depth: number) => {
   const marks = useContext(PropMarksCtx)
   return depth === 0 && marks?.has(path) ? { after: marks.get(path) } : undefined
 }
+
+/**
+ * 被动画驱动的属性（UMG 布局：选中的控件在当前动画里有轨道的属性，设计稿第 2 节「被动画驱动的属性加菱形标记」）：
+ * 键是顶层属性名（RenderOpacity、RenderTransform、Slot.Padding），值是悬停提示（哪段动画、哪些通道）
+ */
+export const PropAnimCtx = createContext<Map<string, string> | null>(null)
+export const usePropAnim = (path: string, depth: number) => {
+  const m = useContext(PropAnimCtx)
+  return depth === 0 ? m?.get(path) : undefined
+}

@@ -105,7 +105,14 @@ export function Forge() {
     (e) => e.key === sub || e.asset === sub || (!!e.config && !!sub && samePath(e.config, sub)),
   )
   // 等 Agent 写配置时盯那一份（还不存在，服务端盯它所在的目录）；没在等就盯右栏选中的
-  useForgeFileWatch(project.id, configRoot, awaiting ?? selected?.config)
+  // 右栏选中的配置 include 的片段文件（ForgeDetail 展开后报上来）：片段存盘也算这份配置变了
+  const [fragments, setFragments] = useState<{ key: string; files: string[] }>()
+  useForgeFileWatch(
+    project.id,
+    configRoot,
+    awaiting ?? selected?.config,
+    !awaiting && fragments?.key === selected?.key ? fragments?.files : undefined,
+  )
 
   useExtEvents(project.id, (e) => {
     if (e.event === 'forge.job') {
@@ -419,6 +426,7 @@ export function Forge() {
             fileRev={fileRev}
             onTab={(tab) => setTabOf({ key: selected.key, tab })}
             fileOps={fileOps}
+            onFragments={(files) => setFragments({ key: selected.key, files })}
           />
         ) : (
           data && empty(false)

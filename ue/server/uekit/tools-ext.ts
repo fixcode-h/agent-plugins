@@ -3,6 +3,7 @@ import { runOp, type OpCtx } from '../ops.ts'
 import { out, str, tool } from '../toolkit.ts'
 import { GT_TOOL } from './gt-tool.ts'
 import { configBaseline } from './forge-baseline.ts'
+import { forgeSection } from './forge-section.ts'
 import { forgeVerdict } from './forge-verdict.ts'
 
 /**
@@ -17,13 +18,15 @@ const withVerdict = (r: McpResult, verified: McpResult['verified']) => (verified
 export const EXT_TOOLS = [
   tool(
     'ue_forge',
-    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；schema 写配置前先取：给 kind 回这种配置的 JSON Schema（根节点 class、能不能有 children、文档级字段），给 class（类或结构体）回它在 props 里能写的属性和类型（filter 按名字筛，offset 翻页）；list 列配置和资产的同步状态（默认只列有配置的，unmanaged=true 连还没配置的资产一起列；state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；plan 演练导入看会做哪些改动；diff 看属性差异（默认比资产：导入后哪些属性会变；against=commit 和 git / P4 里上次提交的配置比，看这次改了配置的哪些属性）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果（正式导入跑完全部成功算进完成依据）；stop 取消作业。用 ue_set / ue_asset / ue_blueprint 改了纳管的资产时结果里会提醒：要保留就改配置再导入，或 export 写回配置。',
+    'AssetForge：用 JSON 配置（配置根在项目的文档根下：ProjectDoc/docs/AssetForge 或项目里的 docs/AssetForge，status 返回实际位置；配置是唯一真源）管理 UE 资产。action=status 看配置根、支持的资产类型和有没有作业在跑；schema 写配置前先取：给 kind 回这种配置的 JSON Schema（根节点 class、能不能有 children、文档级字段），给 class（类或结构体）回它在 props 里能写的属性和类型（filter 按名字筛，offset 翻页）；list 列配置和资产的同步状态（默认只列有配置的，unmanaged=true 连还没配置的资产一起列；state 筛 never-imported / config-changed / asset-changed / pending / parse-error 或 needsImport，kind、query 筛，deep=true 深度检查）；describe 看一项（config 或 asset），含配置原文；配置按顶层字段分段（header、styles、root、animations…，见 schema 的 x-forge.sections），describe 给 config + section 只读这一段（太长时 offset 按行翻页），再给 text（带字段名的这一段原文，如 "animations": [ … ]）就只换这一段写回，其他段不动；段是 include 的片段时读写都落在片段文件；plan 演练导入看会做哪些改动；diff 看属性差异（默认比资产：导入后哪些属性会变；against=commit 和 git / P4 里上次提交的配置比，看这次改了配置的哪些属性）；import 导入（configs 列表或 pending=true 导入全部待导入；先 dryRun=true）；export 把资产写回配置（assets 列表）；job 查导入导出作业的进度和结果（正式导入跑完全部成功算进完成依据）；stop 取消作业。用 ue_set / ue_asset / ue_blueprint 改了纳管的资产时结果里会提醒：要保留就改配置再导入，或 export 写回配置。',
     {
       action: {
         type: 'string',
         enum: ['status', 'schema', 'list', 'describe', 'plan', 'diff', 'import', 'export', 'job', 'stop'],
       },
       config: { type: 'string', description: '配置路径（相对配置根，如 umg/UI/WBP_HUD.json）' },
+      section: { type: 'string', description: 'describe：只读 / 只写这一段（header、styles、root、animations…）' },
+      text: { type: 'string', description: 'describe + section：这一段的新原文，写回文件' },
       asset: { type: 'string', description: '资产路径（/Game/UI/WBP_HUD）' },
       configs: { type: 'array', items: { type: 'string' } },
       assets: { type: 'array', items: { type: 'string' } },
@@ -71,6 +74,8 @@ export const EXT_TOOLS = [
             ),
           )
         case 'describe':
+          // 按段读写直接读写配置根里的文件，不经 UE（forge-section.ts）
+          if (a.section) return out(await forgeSection(ctx.project.root, a))
           return out(await op('forge.describe', a.config ? { config: a.config } : { asset: a.asset }))
         case 'plan':
           return out(await op('forge.plan', { config: a.config }))
