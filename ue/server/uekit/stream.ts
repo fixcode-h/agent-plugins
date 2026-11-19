@@ -34,6 +34,8 @@ export const EXT_EVENT = 'uekit'
 interface Link {
   conns: Set<string>
   sock?: net.Socket
+  /** 正在找名片、建连接：同一页面的几个组件几乎同时登记（GameTest 页有三处），不能各建一条 */
+  connecting?: boolean
   pid?: number
   retry?: ReturnType<typeof setTimeout>
 }
@@ -74,10 +76,22 @@ async function streamCard(root: string): Promise<Card | undefined> {
 
 async function connect(p: UeProject) {
   const l = links.get(p.id)
-  if (!l || l.sock) return
-  const card = await streamCard(p.root)
+  if (!l || l.sock || l.connecting) return
+  // 找名片要 await：以前几处登记同时进来时都过了上面的判断，各建一条连接，每个事件推两三遍
+  // （用户 2026-11-19 报运行记录每步出现两次、画布上几个节点同时显示在跑）
+  l.connecting = true
+  let card: Card | undefined
+  try {
+    card = await streamCard(p.root)
+  } finally {
+    l.connecting = false
+  }
+  if (l.sock || links.get(p.id) !== l) return
   if (!card) {
     pushExt(p.id, { event: 'link', connected: false })
+    // 页面开着时编辑器还没起来（GameTest 脚本列表读磁盘，不用编辑器也能进页面）：过一会儿再找名片。
+    // 以前这里直接放弃，编辑器后来起来了也收不到录制、运行的推送，录制界面一直 0:00、停了也不知道（用户 2026-11-19 报）
+    retryLater(p, l)
     return
   }
   const sock = net.createConnection({ host: '127.0.0.1', port: card.stream! })
@@ -90,6 +104,11 @@ async function connect(p: UeProject) {
     sock.write(`${JSON.stringify({ cmd: 'subscribe', protocol: 2, topics: EXT_TOPICS, token: card.token })}\n`)
   })
   sock.on('data', (chunk: string) => {
+    // 已经被换掉的旧连接（编辑器换了、重连过）：不再转发，免得和新连接重复推
+    if (l.sock !== sock) {
+      sock.destroy()
+      return
+    }
     buf += chunk
     let i
     while ((i = buf.indexOf('\n')) >= 0) {
@@ -120,14 +139,19 @@ async function connect(p: UeProject) {
     l.sock = undefined
     pushExt(p.id, { event: 'link', connected: false })
     // 编辑器关了或重启：页面还开着就过一会儿再找一次名片
-    if (l.conns.size && !l.retry)
-      l.retry = setTimeout(() => {
-        l.retry = undefined
-        void connect(p)
-      }, 5000)
+    retryLater(p, l)
   }
   sock.on('error', onEnd)
   sock.on('close', onEnd)
+}
+
+/** 页面还开着就 5 秒后再连一次（找名片是读本机文件，不打扰编辑器）；页面都关了时 drop 会清掉定时器 */
+function retryLater(p: UeProject, l: Link) {
+  if (!l.conns.size || l.retry || links.get(p.id) !== l) return
+  l.retry = setTimeout(() => {
+    l.retry = undefined
+    void connect(p)
+  }, 5000)
 }
 
 /**

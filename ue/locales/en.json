@@ -4032,5 +4032,10 @@
   "次（0 = 不限）": "times (0 = unlimited)",
   "不填用默认；0 = 不限，一直等到成立或手动停止。写在块上是整块的总时限，块里每步各自的等待不变": "Empty uses the default; 0 = unlimited, waits until it holds or you stop it. On a block it limits the whole block; each step inside keeps its own wait",
   "毫秒（0 = 不限）": "ms (0 = unlimited)",
-  "次（0 = 不限），间隔至少": "times (0 = unlimited), at least"
+  "次（0 = 不限），间隔至少": "times (0 = unlimited), at least",
+  "正在录制「{name}」：先停止或放弃再打开别的脚本": "Recording \"{name}\": stop or discard it before opening another script",
+  "UE 那边已经停止录制了，录到的内容在场景根的 recorded/ 里": "UE has already stopped recording; what was recorded is in recorded/ under the scenario root",
+  "停止失败：{msg}": "Stop failed: {msg}",
+  "只关掉这里的录制界面": "Just close the recording view here",
+  "面板还没连上 UE 的推送通道，录到的步骤暂时显示不出来（UE 里照样在录，停止后照样保存）；连上后会自动补上": "The panel isn't connected to UE's event channel yet, so recorded steps can't show here (UE is still recording and will save on stop); they'll fill in once connected"
 }
