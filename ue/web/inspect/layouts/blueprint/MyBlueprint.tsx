@@ -1,11 +1,31 @@
-import { Braces, Eye, EyeOff, Hammer, Radio, SquareFunction, Workflow, type LucideIcon } from 'lucide-react'
+import {
+  Braces,
+  Eye,
+  EyeOff,
+  Hammer,
+  Lock,
+  Radio,
+  Shield,
+  SquareFunction,
+  Workflow,
+  type LucideIcon,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Caret } from '../../../details/controls.tsx'
 import { h, t } from '../../../host.ts'
 import { Hit, TreeSearch } from '../../../tree-search.tsx'
 import { Card, ErrorText } from '../../../ui.tsx'
 import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
-import { CONSTRUCTION, myBlueprint, typeTone, type BpOutline, type MyBpItem, type SectionId } from './model.ts'
+import {
+  byCategory,
+  CONSTRUCTION,
+  myBlueprint,
+  signature,
+  typeTone,
+  type BpOutline,
+  type MyBpItem,
+  type SectionId,
+} from './model.ts'
 
 const TITLES: Record<SectionId, () => string> = {
   graphs: () => t('图表'),
@@ -39,6 +59,8 @@ function aside(i: MyBpItem) {
     const n = i.inputs?.length ?? 0
     return n ? t('{n} 个输入', { n }) : ret ? `→ ${ret}` : ''
   }
+  // 分发器：2.18 起有签名就写签名，旧桥接只有类型
+  if (i.section === 'dispatchers' && i.params) return signature(i.params)
   return i.type ?? ''
 }
 
@@ -107,13 +129,25 @@ export function MyBlueprint({
                 <span className="ue:text-caption ue:font-normal ue:text-subtle">{s.items.length}</span>
               </button>
               {open && (
-                <ul className="ue:pb-1">
-                  {s.items.map((i) => (
-                    <li key={i.key}>
-                      <Row item={i} q={q} active={!!i.graph && i.graph === active} onGraph={onGraph} cn={cn} />
-                    </li>
+                <div className="ue:pb-1">
+                  {byCategory(s.items).map(([cat, items], _, all) => (
+                    <div key={cat || '_'}>
+                      {/* 只有一个分类时不画小标题（和 UE 一样，Default 不单列） */}
+                      {all.length > 1 && (
+                        <div className="ue:flex ue:h-6 ue:items-center ue:pl-7 ue:text-caption ue:text-subtle">
+                          {cat || 'Default'}
+                        </div>
+                      )}
+                      <ul>
+                        {items.map((i) => (
+                          <li key={i.key}>
+                            <Row item={i} q={q} active={!!i.graph && i.graph === active} onGraph={onGraph} cn={cn} />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </section>
           )
@@ -138,9 +172,19 @@ function Row({
 }) {
   const Icon = iconOf(i)
   const isVar = i.section === 'variables'
-  const title = [i.name, i.type, i.category && t('分类 {c}', { c: i.category }), i.replication]
+  const title = [
+    i.name,
+    i.type,
+    i.params && signature(i.params),
+    i.category && t('分类 {c}', { c: i.category }),
+    i.access,
+    i.isConst && 'const',
+    i.replication,
+    i.inherited && t('继承自父蓝图'),
+  ]
     .filter(Boolean)
     .join('\n')
+  const Access = i.access === 'private' ? Lock : i.access === 'protected' ? Shield : undefined
   const body = (
     <>
       {isVar ? (
@@ -152,9 +196,17 @@ function Row({
       ) : (
         <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-muted" />
       )}
-      <span className="ue:min-w-0 ue:flex-1 ue:truncate">
+      <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', i.inherited && 'ue:text-subtle')}>
         <Hit text={i.section === 'graphs' ? graphLabel(i.name, i.graphKind) : i.name} q={q} />
+        {i.inherited && <span className="ue:ml-1.5 ue:text-caption">{t('继承')}</span>}
+        {i.isConst && <span className="ue:ml-1.5 ue:font-mono ue:text-caption ue:text-subtle">const</span>}
       </span>
+      {Access && (
+        <Access
+          className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-subtle"
+          aria-label={i.access === 'private' ? t('私有') : t('受保护')}
+        />
+      )}
       <span className="ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">{aside(i)}</span>
       {isVar &&
         (i.editable ? (

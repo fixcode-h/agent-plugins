@@ -1,9 +1,15 @@
 import type { ComponentType } from 'react'
+import { AudioLayout } from './audio/AudioLayout.tsx'
 import { BlueprintLayout } from './blueprint/BlueprintLayout.tsx'
 import { DataTableLayout } from './datatable/DataTableLayout.tsx'
 import { LAYOUT_DEFS } from './defs.ts'
 import { GenericLayout } from './generic/GenericLayout.tsx'
+import { MaterialInstanceLayout, MaterialLayout } from './material/MaterialLayout.tsx'
+import { StaticMeshLayout } from './mesh/StaticMeshLayout.tsx'
+import { NiagaraLayout } from './niagara/NiagaraLayout.tsx'
 import { pickLayout } from './pick.ts'
+import { SkeletalLayout } from './skeletal/SkeletalLayout.tsx'
+import { TextureLayout } from './texture/TextureLayout.tsx'
 import type { Layout, LayoutInfo, LayoutProps } from './types.ts'
 import { UmgLayout } from './umg/UmgLayout.tsx'
 
@@ -15,6 +21,13 @@ const COMPONENTS: Record<string, ComponentType<LayoutProps>> = {
   umg: UmgLayout,
   datatable: DataTableLayout,
   blueprint: BlueprintLayout,
+  material: MaterialLayout,
+  'material-instance': MaterialInstanceLayout,
+  texture: TextureLayout,
+  'static-mesh': StaticMeshLayout,
+  skeletal: SkeletalLayout,
+  audio: AudioLayout,
+  niagara: NiagaraLayout,
   generic: GenericLayout,
 }
 

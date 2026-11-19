@@ -1,14 +1,16 @@
 // Actor 蓝图布局的纯函数单测：node --test ue/web/inspect/layouts/blueprint/blueprint.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { graphEdges, layoutGraph, nodeTone, pinRows, rankNodes, type GNode } from './graph.ts'
+import { graphEdges, hasPositions, layoutGraph, nodeTone, pinRows, rankNodes, type GNode } from './graph.ts'
 import {
+  byCategory,
   closeTab,
   CONSTRUCTION,
   defaultGraph,
   myBlueprint,
   openTab,
   resolveView,
+  signature,
   typeTone,
   type BpOutline,
 } from './model.ts'
@@ -171,4 +173,62 @@ test('节点行：执行引脚排第一行，节点配色', () => {
   assert.equal(nodeTone(GRAPH[1]), 'danger')
   assert.equal(nodeTone(GRAPH[3]), 'danger')
   assert.equal(nodeTone(GRAPH[4]), 'accent')
+})
+
+test('有 UE 坐标（bp.layout）：照原位置画，注释有框的画成框', () => {
+  const placed: GNode[] = GRAPH.map((n, i) =>
+    n.kind === 'comment' ? { ...n, x: -40, y: -60, w: 600, h: 300, color: '#3366aa' } : { ...n, x: i * 300, y: i * 10 },
+  )
+  assert.equal(hasPositions(placed), true)
+  assert.equal(hasPositions(GRAPH), false)
+  const r = layoutGraph(placed)
+  assert.equal(r.positioned, true)
+  assert.deepEqual(
+    r.nodes.map((n) => [n.node.id, n.x, n.y]),
+    placed.filter((n) => n.kind !== 'comment').map((n) => [n.id, n.x, n.y]),
+  )
+  assert.equal(r.comments.length, 0)
+  assert.deepEqual(
+    r.boxes.map((b) => [b.node.id, b.w, b.h, b.color]),
+    [['c0', 600, 300, '#3366aa']],
+  )
+  // 注释没给框：不画框，照旧列在上面
+  const noBox = placed.map((n) => (n.kind === 'comment' ? { ...n, w: undefined, h: undefined } : n))
+  assert.deepEqual(
+    layoutGraph(noBox).comments.map((c) => c.id),
+    ['c0'],
+  )
+  // 缺一个节点的坐标：整张自动排，不混着来
+  const partial = placed.map((n, i) => (i === 1 ? { ...n, x: undefined } : n))
+  assert.equal(layoutGraph(partial).positioned, false)
+})
+
+test('我的蓝图（bp.layout 字段）：分发器签名、函数分类和访问级别、继承变量', () => {
+  const o: BpOutline = {
+    ...OUTLINE,
+    variables: [...OUTLINE.variables, { name: 'Health', type: 'Float', instanceEditable: true, inherited: true }],
+    dispatchers: [{ name: 'OnHit', type: 'Multicast Delegate', params: [{ name: 'Damage', type: 'Float' }] }],
+    graphs: [
+      { name: 'Open', kind: 'function', nodes: 3, category: 'Door', access: 'private', const: true },
+      { name: 'Close', kind: 'function', nodes: 3 },
+    ],
+  }
+  const s = myBlueprint(o)
+  const fns = s.find((x) => x.id === 'functions')!.items
+  const open = fns.find((f) => f.name === 'Open')!
+  assert.equal(open.category, 'Door')
+  assert.equal(open.access, 'private')
+  assert.equal(open.isConst, true)
+  assert.deepEqual(
+    byCategory(fns).map(([c, items]) => [c, items.map((i) => i.name)]),
+    [
+      ['', ['Close']],
+      ['Door', ['Open']],
+    ],
+  )
+  const vars = s.find((x) => x.id === 'variables')!.items
+  assert.equal(vars.find((v) => v.name === 'Health')?.inherited, true)
+  const d = s.find((x) => x.id === 'dispatchers')!.items[0]
+  assert.equal(signature(d.params), '(Damage: Float)')
+  assert.equal(signature(undefined), '()')
 })

@@ -4,6 +4,7 @@ import { CircleAlert, Diamond, Play, SquareFunction, Variable, type LucideIcon }
 import { h } from '../../../host.ts'
 import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
 import { HEAD_H, nodeTone, ROW_H, type GPin, type PlacedNode } from './graph.ts'
+import { CommentBoxNode } from './CommentBox.tsx'
 import { typeTone } from './model.ts'
 
 export type GraphNodeData = { placed: PlacedNode; picked: boolean }
@@ -112,4 +113,4 @@ export const GraphNodeView = memo(function GraphNodeView({ data }: NodeProps<Nod
   )
 })
 
-export const GRAPH_NODE_TYPES = { bp: GraphNodeView }
+export const GRAPH_NODE_TYPES = { bp: GraphNodeView, comment: CommentBoxNode }

@@ -16,7 +16,20 @@ test('从具体到一般：控件蓝图先于蓝图，表先于通用', () => {
   assert.equal(pick('AnimBlueprint'), 'blueprint')
   assert.equal(pick('DataTable'), 'datatable')
   assert.equal(pick('CompositeDataTable', ['DataTable', 'Object']), 'datatable')
-  assert.equal(pick('StaticMesh'), 'generic')
+  assert.equal(pick('StaticMesh'), 'static-mesh')
+  assert.equal(pick('Material'), 'material')
+  assert.equal(
+    pick('MaterialInstanceConstant', ['MaterialInstance', 'MaterialInterface', 'Object']),
+    'material-instance',
+  )
+  assert.equal(pick('Texture2D', ['Texture', 'StreamableRenderAsset', 'Object']), 'texture')
+  assert.equal(pick('SkeletalMesh'), 'skeletal')
+  assert.equal(pick('AnimSequence', ['AnimSequenceBase', 'AnimationAsset', 'Object']), 'skeletal')
+  assert.equal(pick('SoundWave', ['SoundBase', 'Object']), 'audio')
+  assert.equal(pick('SoundCue'), 'audio')
+  assert.equal(pick('NiagaraSystem'), 'niagara')
+  // 材质函数不是材质
+  assert.equal(pick('MaterialFunction', ['MaterialFunctionInterface', 'Object']), 'generic')
   assert.equal(pick(undefined), 'generic')
 })
 
@@ -44,7 +57,10 @@ test('按路径猜类型、按配置 kind 定类型', () => {
   assert.equal(guessClass('/Game/Data/DT_Items.DT_Items'), 'DataTable')
   assert.equal(guessClass('/Game/BP_Hero.BP_Hero'), 'Blueprint')
   assert.equal(guessClass('/Game/BP_Hero.BP_Hero:Mesh'), undefined)
-  assert.equal(guessClass('/Game/SM_Rock.SM_Rock'), undefined)
+  assert.equal(guessClass('/Game/SM_Rock.SM_Rock'), 'StaticMesh')
+  assert.equal(guessClass('/Game/MI_Red.MI_Red'), 'MaterialInstanceConstant')
+  assert.equal(guessClass('/Game/M_Glow.M_Glow'), 'Material')
+  assert.equal(guessClass('/Game/Rock.Rock'), undefined)
   assert.equal(classOfKind('umg-widget'), 'WidgetBlueprint')
   assert.equal(classOfKind('material'), undefined)
 })
