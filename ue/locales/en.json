@@ -3792,7 +3792,6 @@
   "后台": "Background",
   "VS {s}": "VS {s}",
   "记录": "History",
-  "展开二级面板": "Expand side panel",
   "测试": "Tests",
   "删除段里前面所有步骤（{n} 步）": "Delete all earlier steps in this segment ({n})",
   "删除段里后面所有步骤（{n} 步）": "Delete all later steps in this segment ({n})",

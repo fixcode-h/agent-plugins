@@ -1,5 +1,5 @@
-import { Camera, PanelLeftOpen, Search, type LucideIcon } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Camera, Search, type LucideIcon } from 'lucide-react'
+import { useRef, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
 import { useUe } from '../ctx.tsx'
 import { SplitHandle, usePane } from '../split.tsx'
@@ -11,7 +11,7 @@ import { SlotCtx, useSlot } from './slot.tsx'
  * 二级面板只放这一页自己的导航（分区页面用 <SubNav> 放进来），页面没放就整列不画、主区占满
  * （用户 2026-11-18 定：项目卡去掉、目标卡挪进概览、没具体内容的二级面板不要）。宽度随内容，够显示文字就好。
  * 页面把整栏列表放进来时（对象页的大纲，用户 2026-11-18 定），二级面板加宽、可拖，列表占满面板。
- * 二级面板可收起，收起后页面照旧画自己的分段切换，图标轨底部出一个「展开」；收不收按分区记在本机。
+ * 二级面板不给收起按钮（用户 2026-11-19 定：有内容就一直在，没内容本来就不画）。
  * 分区要整页时（GameTest 编辑页）二级面板收起，图标轨留着
  */
 export interface RailSection {
@@ -38,21 +38,6 @@ const SHORT: Record<string, () => string> = {
 /** 二级面板的宽度：随内容，太窄不好点、太宽挤主区 */
 const SIDE_MIN = 200
 const SIDE_MAX = 300
-
-const closedKey = (section: string) => `ue:side-closed:${section}`
-function readClosed(section: string) {
-  try {
-    return localStorage.getItem(closedKey(section)) === '1'
-  } catch {
-    return false
-  }
-}
-function saveClosed(section: string, closed: boolean) {
-  try {
-    if (closed) localStorage.setItem(closedKey(section), '1')
-    else localStorage.removeItem(closedKey(section))
-  } catch {}
-}
 
 /** 左栏的数字换成图标轨的角标：错误写数字，待处理黄点，可升级强调色点；「3 项」这种只是信息，不画 */
 function railBadge(id: string, c: NavCount) {
@@ -93,16 +78,10 @@ export function RailLayout({
   const Action = ui.RailAction!
   const Panel = ui.SidePanel!
   const Back = ui.ProjectBackRail
-  const [closed, setClosed] = useState(() => readClosed(current.id))
-  useEffect(() => setClosed(readClosed(current.id)), [current.id])
-  const toggle = (c: boolean) => {
-    setClosed(c)
-    saveClosed(current.id, c)
-  }
   const slot = useSlot()
   const pane = usePane('side-list', '300px', 220)
   const paneRef = useRef<HTMLDivElement>(null)
-  const open = !closed && !wide
+  const open = !wide
   const items = sections.map((s) => ({
     id: s.id,
     label: s.label,
@@ -125,14 +104,7 @@ export function RailLayout({
             <Action icon={Search} short={t('搜索')} label={t('跳转：双击 Shift 或 Ctrl+K')} onClick={onJump} />
           </>
         }
-        bottom={
-          <>
-            {closed && !wide && (
-              <Action icon={PanelLeftOpen} short={t('展开')} label={t('展开二级面板')} onClick={() => toggle(false)} />
-            )}
-            <Action icon={Camera} short={t('截图')} label={t('截视口')} onClick={onShot} />
-          </>
-        }
+        bottom={<Action icon={Camera} short={t('截图')} label={t('截视口')} onClick={onShot} />}
       />
       {/* 插槽一直挂着（页面要先有插槽才能把导航放进来），没有页面放东西时整列不显示 */}
       {open && (
@@ -149,7 +121,6 @@ export function RailLayout({
         >
           <Panel
             title={current.label}
-            onCollapse={() => toggle(true)}
             className={slot.wide ? 'ue:w-full ue:flex-1 ue:md:overflow-hidden' : 'ue:w-full ue:flex-1'}
           >
             {/* 分区页面的 <SubNav> 用门户渲染进这里：页面在右边的 main 里，插槽的 Provider 包在 main 外面 */}
