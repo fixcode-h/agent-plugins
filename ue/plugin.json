@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.39.12",
+  "version": "0.39.14",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译，资源的版本差异（每一版改了哪些属性、组件、节点）；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -459,15 +459,6 @@
       "timeoutSec": 1800,
       "when": "改了 .uasset 时",
       "note": "用 UnrealEditor-Cmd 的 CompileAllBlueprints 编译项目里全部蓝图，要几分钟；编辑器开着时先用 ue_compile 逐个编译改过的蓝图，都通过了就不用再跑这条"
-    }
-  ],
-  "hooks": [
-    {
-      "id": "compile-after-save",
-      "name": "保存蓝图后自动编译",
-      "description": "Agent 用 ue_save 把资源写到磁盘后，编译刚保存的蓝图，没通过的把错误和节点 id 补给模型接着修；编辑器没开时不做",
-      "event": "tool.after",
-      "timeoutSec": 300
     }
   ],
   "mcpServers": ["ue"],
