@@ -4141,7 +4141,6 @@
   "读不懂这份文件，分不出段": "Can't parse this file, so no sections",
   "头": "Header",
   "样式": "Styles",
-  "组件树": "Component tree",
   "主体": "Body",
   "配置读不懂，画不出标记视图：先在「配置原文」把它修好": "Can't parse the config, so no markup view: fix it in “Config source” first",
   "按配置画成标签，只读；点标签或属性跳到配置原文对应的行": "The config drawn as tags (read-only); click a tag or attribute to jump to its line in the config source",

@@ -25,3 +25,4 @@ addUmgView({
   when: ({ offline }) => !offline,
   View: ({ path, onOpen }) => <InfoView path={path} onOpen={onOpen} />,
 })
+import './MarkupView.tsx'
