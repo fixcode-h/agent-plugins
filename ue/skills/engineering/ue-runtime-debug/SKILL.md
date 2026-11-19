@@ -37,6 +37,7 @@ user-invocable: true
 ## 改值、调函数、GM
 
 - **先在运行时验证**：`ue_set` 改值、`ue_call` 调函数、`ue_gm action=run` 跑 GM、`ue_console action=run` 执行命令，确认现象改善后再动资源或代码。
+- 多个对象或资源改同一个属性：`ue_set paths=[...]`（或 `select`，关卡里一类 Actor 用 `select={kind:"actor", class, tag}`）**一次调完**，不要逐个调或并行发多次；`ue_get paths=[...]` 同理。
 - 同步属性（`replicated`）在客户端世界改会被服务器盖掉：结果里 `client=true` 时，用 `target.world` 切到服务器世界再改。
 - 控制台变量：`ue_console action=cvars changed=true` 看改过的；`action=set` 改，结束前改回或告诉用户。
 - `ue_gm action=list` 看 GM 的参数类型和说明再执行；项目里存的宏用 `action=macro`。
