@@ -24,6 +24,7 @@ export function ListCol({
   footer,
   onBodyMenu,
   searchExtra,
+  searchAddon,
 }: {
   id: string
   title: string
@@ -41,6 +42,8 @@ export function ListCol({
   onBodyMenu?: (e: MouseEvent) => void
   /** 搜索框右边的按钮（AssetForge 的「新建配置」）：放这里不挤标题行 */
   searchExtra?: ReactNode
+  /** 输入框里最右边的小控件（AssetForge 的同步状态筛选图标，见 FilterButton） */
+  searchAddon?: ReactNode
 }) {
   const pane = usePane(`list-${id}`, '316px', 240)
   const ref = useRef<HTMLElement>(null)
@@ -54,32 +57,44 @@ export function ListCol({
     <>
       <div className="ue:flex ue:flex-col ue:gap-2.5 ue:px-4 ue:pt-4 ue:pb-2.5">
         {/* 栏拖窄时按钮整组换到下一行，不挤出栏外盖住右边的页面。
-            放进二级面板时个数挪到面板标题那一行（用户 2026-11-19：个数单独掉到标题下面一行），没有按钮就不画这一行 */}
-        {(!docked || extra) && (
+            放进二级面板时个数和按钮都挪到面板标题那一行（用户 2026-11-19：个数单独掉到标题下面一行、
+            按钮又单独占一行太空），这里就不画了 */}
+        {!docked && (
           <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-x-2 ue:gap-y-2">
-            {!docked && (
-              <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
-                {title}
-              </h1>
-            )}
-            {!docked && countBadge}
+            <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
+              {title}
+            </h1>
+            {countBadge}
             <div className="ue:ml-auto ue:flex ue:shrink-0 ue:flex-wrap ue:items-center ue:justify-end ue:gap-1.5">
               {extra}
             </div>
           </div>
         )}
-        {docked && <SubNavAside>{countBadge}</SubNavAside>}
+        {docked && (
+          <SubNavAside>
+            {countBadge}
+            {extra && (
+              <span className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-1 ue:text-body ue:font-normal">
+                {extra}
+              </span>
+            )}
+          </SubNavAside>
+        )}
         <div className="ue:flex ue:items-center ue:gap-1.5">
-          <label className="ue:relative ue:block ue:min-w-0 ue:flex-1">
-            <Search className="ue:pointer-events-none ue:absolute ue:top-1/2 ue:left-3 ue:h-4 ue:w-4 ue:-translate-y-1/2 ue:text-subtle" />
-            <input
-              value={query}
-              onChange={(e) => onQuery(e.target.value)}
-              placeholder={placeholder}
-              aria-label={placeholder}
-              className="ue:h-8 ue:w-full ue:rounded-(--c-input-radius) ue:border ue:border-line-strong ue:bg-field ue:pr-3 ue:pl-9 ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle ue:focus:border-focus"
-            />
-          </label>
+          <div className="ue:flex ue:h-8 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-1 ue:rounded-(--c-input-radius) ue:border ue:border-line-strong ue:bg-field ue:pr-1 ue:focus-within:border-focus">
+            <label className="ue:relative ue:flex ue:h-full ue:min-w-0 ue:flex-1 ue:items-center">
+              <Search className="ue:pointer-events-none ue:absolute ue:top-1/2 ue:left-3 ue:h-4 ue:w-4 ue:-translate-y-1/2 ue:text-subtle" />
+              <input
+                value={query}
+                onChange={(e) => onQuery(e.target.value)}
+                placeholder={placeholder}
+                aria-label={placeholder}
+                className="ue:h-full ue:w-full ue:min-w-0 ue:bg-transparent ue:pr-2 ue:pl-9 ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+              />
+            </label>
+            {/* 放在 label 外面：点它不会把焦点抢回输入框 */}
+            {searchAddon}
+          </div>
           {searchExtra}
         </div>
         {shelf}
