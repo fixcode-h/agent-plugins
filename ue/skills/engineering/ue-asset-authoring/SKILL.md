@@ -93,9 +93,33 @@ user-invocable: true
 - 整个不要了：`ue_asset action=revert`。新建、复制、改名、删除不能自动撤回。
 - `ue_asset action=dirty` 看有哪些没保存；保存前把改动讲清楚。
 
+## MCP 还是 Python
+
+**默认用 `ue_*` 工具，批量也一样**：一批（≤2000 个）就是一次调用，和一个 Python 脚本来回次数相同，还带演练、整批撤回、改前改后对比、编译通过才存、P4 签出和改动记录。Python 要写代码、5.4 / 5.8 的 API 有差异，常常试错几轮，实际更慢。
+
+一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除（`ue_asset`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
+
+只有这些情况写 `ue_python`，并在回复里一句话说明为什么工具不行：
+
+1. 工具没有的编辑器能力：导入 / 重新导入外部文件；资源上的编辑器函数（LOD、碰撞、Nanite、贴图压缩、合并重定向器）；材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑。
+2. 超过 2000 个资源。
+3. 每项的值要复杂计算，而且没法「一次批量读 → 算好 → `items` 一次批量写」（先试这条路）。
+4. 只读的全项目统计（用 Asset Registry，不加载资源）。只读脚本不受下面 2–4 条限制。
+
+写 Python 必须做到：
+
+1. 顶部 `DRY_RUN = True` 先演练，只打印每项「资源、改前、改后」，没问题再改成 `False` 跑同一份。
+2. 修改都放在 `with unreal.ScopedEditorTransaction("Agent: <做什么>"):` 里，改前 `obj.modify()`。
+3. 不保存、不碰源码控制、不 `rename_asset` / `delete_asset`：改完 `ue_asset action=dirty` 看脏包，再 `ue_save`（默认先编译蓝图，通过才写盘）。
+4. 开始前 `ue_asset action=dirty`，已经脏、不是本对话改的包传进脚本跳过。
+5. 每项 `try/except` 记下原因继续，结尾只打印一行 JSON `{changed, failed:[{path,error}], skipped}`；明细超过 4000 字写到 `Saved/AgentPanel/py-out/<名字>.json`，只打印路径。
+6. 超过 1 分钟用 `unreal.ScopedSlowTask`，按 500 个一批分几次调（单次上限 600 秒，期间编辑器卡住，先告诉用户）。
+7. 不确定的 API 先用小脚本 `print(dir(unreal.X))` 查，不要猜。
+8. 告诉用户改了哪些资源，以及这次不能 `ue_undo`（没保存前用编辑器撤销或 `ue_asset action=revert`）。
+
 ## 边界
 
 - 现在支持普通蓝图（Actor、组件、对象、函数库、接口）。控件蓝图的控件树、动画蓝图的状态机、材质和行为树的图表还不能用操作列表改；它们的属性仍可以用 `ue_get` / `ue_set`。
 - 另一个对话正在改、还没保存的资源会报错。等它保存或放弃，不要换路径或换办法去改同一个资源。
-- `ue_python` 是兜底：默认关，每次确认，没有事务和撤回。上面的工具能做的不要用它。
+- `ue_python` 是兜底，什么时候能用、用时必须做到什么见上一节。
 - 工具报错原样告诉用户，不绕过权限。

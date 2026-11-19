@@ -111,8 +111,10 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_python: {
     title: '执行 Python',
     summary: '在编辑器里执行 Python 脚本（兜底）',
-    useWhen: '只在别的 ue_* 工具都做不到的编辑器操作时用',
-    avoidWhen: '能用 ue_asset、ue_blueprint、ue_get / ue_set 做的都别用它：那些有事务、撤回和编译回读',
+    useWhen:
+      '只在这几种情况用，并先一句话说明为什么工具不行：工具没有的编辑器能力（导入外部文件、LOD / 碰撞 / 贴图压缩这类编辑器函数、材质图、控件树、动画状态机、Sequencer）；超过 2000 个资源；每项的值要复杂计算且没法批量读再 items 批量写；只读的全项目统计。写资源的脚本先 DRY_RUN 演练、包事务、不自己保存，改完 ue_save（默认先编译）',
+    avoidWhen:
+      '改属性、DataTable、蓝图、新建复制改名删除、编译保存、运行中游戏的读改都用对应的 ue_* 工具，多少个都一样：批量一次调用，有演练、撤回、P4 签出和改动记录，Python 没有',
     confirms: true,
     group: ASSET,
   },
