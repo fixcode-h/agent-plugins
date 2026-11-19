@@ -1,20 +1,36 @@
-import { useCallback, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { useReactFlow, type Connection, type Edge, type FinalConnectionState, type Node } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Hand, LayoutGrid, Maximize, MousePointer2, ShieldCheck, StickyNote } from 'lucide-react'
+import { CornerLeftUp, Hand, LayoutGrid, Maximize, MousePointer2, ShieldCheck, StickyNote } from 'lucide-react'
 import { CanvasToolbar, CanvasToolbarSep, GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
-import { pathStr, type GtGuard, type GtPath, type GtScript, type GtStep } from '../../../../../shared/gt-script/index.ts'
+import {
+  getAt,
+  pathStr,
+  type GtGuard,
+  type GtPath,
+  type GtScript,
+  type GtStep,
+} from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
 import { openMenu, type MenuItem } from '../../../../menu.tsx'
 import { callCopy } from '../../gt-edit/call-copy.ts'
 import { insertMenuItems } from '../../gt-edit/insert-menu.ts'
 import { canDrop, readDrop, wantsCopy } from '../dnd.ts'
-import { defaultCollapsed } from '../layout.ts'
 import { ReadableFit } from '../readable-fit.tsx'
 import { emptyRun, type FlowRunState } from '../run-state.ts'
 import { BpContext, type BpCtx } from './ctx.ts'
-import { addLoose, addNote, clearPositions, connect, disconnect, insertAtPin, setPositions, updateNote } from './edit.ts'
+import {
+  addLoose,
+  addNote,
+  clearPositions,
+  connect,
+  disconnect,
+  insertAtPin,
+  setPositions,
+  updateNote,
+} from './edit.ts'
 import { BP_EDGE_TYPES, type BpEdgeData } from './edge.tsx'
-import { bpGraph, pinOf, type BpAt, type BpNode } from './graph.ts'
+import { bpGraph, pinOf, scopeKey, type BpAt, type BpNode } from './graph.ts'
+import { CANVAS_KEYS } from './keys.ts'
 import { BP_NODE_TYPES, type BpData } from './nodes.tsx'
 
 /** 画布上选中的东西：一步（key = 步骤 id，没连上的前面带 ~），或者一条守护 */
@@ -35,10 +51,22 @@ export interface BpViewProps {
   run?: FlowRunState
   globalGuards?: GtGuard[]
   toolbar?: ReactNode
+  /** 进到哪个块里面看（块的路径）；不给是最外层 */
+  scope?: GtPath
+  /** 双击块：进到它里面；双击调用别的脚本的步骤：打开那个脚本。不给就不能进 */
+  onEnter?: (path: GtPath, step: GtStep) => void
+  /** 回到上一层（工具条上的按钮） */
+  onLeave?: () => void
+  /** 一起选中的节点 key（框选、Ctrl+A） */
+  picked?: string[]
+  /** 框选、Ctrl+A 选了几个（只有步骤，守护不算） */
+  onSelectMany?: (s: BpSelection[]) => void
 }
 
 type RFNode = Node<BpData>
 type RFEdge = Edge<BpEdgeData>
+/** 拖线弹菜单时那根临时线的终点节点、线的 id */
+const PENDING = '#pending'
 
 const selOf = (n: BpNode): BpSelection | undefined => {
   if (n.kind === 'guard' && n.guardPath) return { key: `guard:${pathStr(n.guardPath)}`, path: n.guardPath, guard: true }
@@ -75,18 +103,22 @@ function BpCanvas({
   run = emptyRun(),
   globalGuards,
   toolbar,
+  scope,
+  onEnter,
+  onLeave,
+  picked,
+  onSelectMany,
 }: BpViewProps) {
   const editable = !!onChange
   const { IconButton } = h().ui
   const { toast, cn } = h()
-  const [folds, setFolds] = useState<Record<string, boolean>>({})
-  const [mode, setMode] = useState<'auto' | 'open' | 'closed'>('auto')
-  const foldOf = useCallback(
-    (s: GtStep, k: string) => folds[k] ?? (mode === 'auto' ? defaultCollapsed(s) : mode === 'closed'),
-    [folds, mode],
-  )
   const [pan, setPan] = useState(false)
-  const graph = useMemo(() => bpGraph(doc, { folded: foldOf, globalGuards }), [doc, foldOf, globalGuards])
+  const graph = useMemo(() => bpGraph(doc, { scope, globalGuards }), [doc, scope, globalGuards])
+  // 这一层的 key：空白处加的节点、注释框记在这一层
+  const here = useMemo(() => {
+    const st = scope && (getAt(doc, scope) as GtStep | undefined)
+    return st && scope ? scopeKey(st, scope) : ''
+  }, [doc, scope])
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph])
 
   const nodes = useMemo<RFNode[]>(
@@ -95,7 +127,16 @@ function BpCanvas({
         id: n.id,
         type: n.kind,
         position: { x: n.x, y: n.y },
-        style: { width: n.kind === 'start' || n.kind === 'setup' ? undefined : n.kind === 'guard' ? 240 : n.kind === 'note' ? undefined : 220 },
+        style: {
+          width:
+            n.kind === 'start' || n.kind === 'setup' || n.kind === 'entry'
+              ? undefined
+              : n.kind === 'guard'
+                ? 240
+                : n.kind === 'note'
+                  ? undefined
+                  : 220,
+        },
         draggable: editable && !n.global,
         selectable: n.kind !== 'note' || editable,
         zIndex: n.kind === 'note' ? -1 : 1,
@@ -131,7 +172,27 @@ function BpCanvas({
 
   return (
     <BpInner
-      {...{ doc, graph, byId, nodes, edges, editable, apply, run, selected, onSelect, onNodeMenu, onAddGuard, pan, toolbar }}
+      {...{
+        doc,
+        graph,
+        byId,
+        nodes,
+        edges,
+        editable,
+        apply,
+        run,
+        selected,
+        onSelect,
+        onNodeMenu,
+        pan,
+        toolbar,
+        here,
+        onEnter,
+        onLeave,
+        picked,
+        onSelectMany,
+      }}
+      onAddGuard={here ? undefined : onAddGuard}
       toolbarLeft={
         <>
           <IconButton
@@ -151,16 +212,7 @@ function BpCanvas({
             onClick={() => setPan(!pan)}
           />
           <CanvasToolbarSep />
-          <IconButton
-            icon={graph.nodes.some((n) => n.folded !== undefined) ? ChevronsUpDown : ChevronsDownUp}
-            size="sm"
-            label={graph.nodes.some((n) => n.folded !== undefined) ? t('全部展开') : t('全部折叠')}
-            onClick={() => {
-              const fold = !graph.nodes.some((n) => n.folded !== undefined)
-              setFolds({})
-              setMode(fold ? 'closed' : 'open')
-            }}
-          />
+          {scope && onLeave && <IconButton icon={CornerLeftUp} size="sm" label={t('回到上一层')} onClick={onLeave} />}
           {editable && (
             <IconButton
               icon={LayoutGrid}
@@ -171,7 +223,6 @@ function BpCanvas({
           )}
         </>
       }
-      onToggle={(key, step) => setFolds((f) => ({ ...f, [key]: !foldOf(step, key) }))}
     />
   )
 }
@@ -193,7 +244,11 @@ function BpInner({
   pan,
   toolbar,
   toolbarLeft,
-  onToggle,
+  here,
+  onEnter,
+  onLeave,
+  picked,
+  onSelectMany,
 }: {
   doc: GtScript
   graph: ReturnType<typeof bpGraph>
@@ -210,16 +265,67 @@ function BpInner({
   pan: boolean
   toolbar?: ReactNode
   toolbarLeft: ReactNode
-  onToggle: (key: string, step: GtStep) => void
+  here: string
+  onEnter?: (path: GtPath, step: GtStep) => void
+  onLeave?: () => void
+  picked?: string[]
+  onSelectMany?: (s: BpSelection[]) => void
 }) {
+  const pickedSet = useMemo(() => new Set(picked ?? []), [picked])
+  // 进到块里面、回到上一层：换了一层就把这一层的节点收进视口（第一次打开由 ReadableFit 管）
+  const lastHere = useRef(here)
+  useEffect(() => {
+    if (lastHere.current === here) return
+    lastHere.current = here
+    const id = requestAnimationFrame(() => void rf.current?.fitView({ padding: 0.2, maxZoom: 1, duration: 150 }))
+    return () => cancelAnimationFrame(id)
+  }, [here])
+  const wrap = useRef<HTMLDivElement>(null)
   // ReactFlow 实例要在 GraphCanvas 里面才有：坐标换算放进 Bridge 里拿，存进 ref
   const rf = useRef<ReturnType<typeof useReactFlow> | null>(null)
   const toFlow = (x: number, y: number) => rf.current?.screenToFlowPosition({ x, y }) ?? { x, y }
+  // 拖线到空白处松手弹菜单时，那根线留着连到菜单（用户 2026-11-19）：菜单关掉（选了或取消）才拿掉
+  const [pending, setPending] = useState<{ node: string; pin: string; x: number; y: number }>()
+  const shownNodes = useMemo<RFNode[]>(
+    () =>
+      pending
+        ? [
+            ...nodes,
+            {
+              id: PENDING,
+              type: 'ghost',
+              position: { x: pending.x, y: pending.y },
+              draggable: false,
+              selectable: false,
+              data: { node: { id: PENDING, kind: 'note', x: pending.x, y: pending.y, outs: [], input: false } },
+            },
+          ]
+        : nodes,
+    [nodes, pending],
+  )
+  const shownEdges = useMemo<RFEdge[]>(
+    () =>
+      pending
+        ? [
+            ...edges,
+            {
+              id: PENDING,
+              source: pending.node,
+              sourceHandle: pending.pin,
+              target: PENDING,
+              targetHandle: 'in',
+              type: 'pending',
+              selectable: false,
+            },
+          ]
+        : edges,
+    [edges, pending],
+  )
   // 右键拖画布松手也会触发 contextmenu：按下和松开离得远就当是拖动，不弹菜单
   const down = useRef({ x: 0, y: 0 })
 
   /** 节点菜单：选一种节点，放在 (clientX, clientY)。from 给了就插在这个引脚后面并连上，不给就是一个没连上的节点 */
-  const pickNode = (clientX: number, clientY: number, from?: BpAt, extra: MenuItem[] = []) => {
+  const pickNode = (clientX: number, clientY: number, from?: BpAt, extra: MenuItem[] = [], onClose?: () => void) => {
     const p = toFlow(clientX, clientY)
     const e = new globalThis.MouseEvent('contextmenu', { clientX, clientY })
     openMenu(
@@ -232,12 +338,12 @@ function BpInner({
             const r = insertAtPin(doc, from, [step], p.x, p.y)
             apply(r?.doc, r?.path)
           } else {
-            const r = addLoose(doc, [step], p.x, p.y)
+            const r = addLoose(doc, [step], p.x, p.y, here)
             apply(r.doc, r.path)
           }
         }),
       ],
-      { search: t('找节点：输入名字…') },
+      { search: t('找节点：输入名字…'), onClose },
     )
   }
 
@@ -246,6 +352,7 @@ function BpInner({
       run,
       editable,
       selected,
+      picked: pickedSet,
       disconnect: (at) => apply(disconnect(doc, at)),
       insertAt: (at, steps, anchor) => {
         if (steps) {
@@ -258,7 +365,7 @@ function BpInner({
       editNote: (id, text) => apply(updateNote(doc, id, text === undefined ? undefined : { text })),
     }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- pickNode 每次渲染都新建，按它会每帧重建上下文
-    [run, editable, selected, doc, graph, apply],
+    [run, editable, selected, pickedSet, doc, graph, apply],
   )
 
   const onConnect = (c: Connection) => {
@@ -276,7 +383,20 @@ function BpInner({
     if (target) return
     const pin = pinOf(graph, s.fromNode.id, s.fromHandle.id)
     const pt = 'changedTouches' in e ? e.changedTouches[0] : e
-    if (pin) pickNode(pt.clientX, pt.clientY, pin.at)
+    if (!pin) return
+    const p = toFlow(pt.clientX, pt.clientY)
+    const node = s.fromNode.id
+    const handle = pin.id
+    setPending({ node, pin: handle, x: p.x, y: p.y })
+    const mine = (cur?: { node: string; pin: string }) => cur?.node === node && cur.pin === handle
+    pickNode(pt.clientX, pt.clientY, pin.at, [], () => setPending((cur) => (mine(cur) ? undefined : cur)))
+    // 菜单贴着窗口边时会挪开：等它弹出的动画放完、摆好了，线头接到菜单左边第一行
+    setTimeout(() => {
+      const r = document.querySelector<HTMLElement>('[role="menu"][data-floating]')?.getBoundingClientRect()
+      if (!r) return
+      const q = toFlow(r.left, r.top + 18)
+      setPending((cur) => (mine(cur) ? { node, pin: handle, x: q.x, y: q.y } : cur))
+    }, 220)
   }
 
   const paneMenu = (e: MouseEvent | globalThis.MouseEvent) => {
@@ -284,19 +404,75 @@ function BpInner({
     e.preventDefault()
     if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return
     const p = toFlow(e.clientX, e.clientY)
-    pickNode(e.clientX, e.clientY, undefined, [
-      onAddGuard && { label: t('加守护'), icon: ShieldCheck, onClick: onAddGuard },
-      { label: t('加注释框'), icon: StickyNote, onClick: () => apply(addNote(doc, p.x, p.y, '')) },
-      { label: t('全部收进视口'), icon: Maximize, onClick: () => void rf.current?.fitView({ padding: 0.1, duration: 200 }) },
-      'sep',
-    ].filter(Boolean) as MenuItem[])
+    pickNode(
+      e.clientX,
+      e.clientY,
+      undefined,
+      [
+        onAddGuard && { label: t('加守护'), icon: ShieldCheck, onClick: onAddGuard },
+        { label: t('加注释框'), icon: StickyNote, onClick: () => apply(addNote(doc, p.x, p.y, '', here)) },
+        {
+          label: t('全部收进视口'),
+          icon: Maximize,
+          onClick: () => void rf.current?.fitView({ padding: 0.1, duration: 200 }),
+        },
+        'sep',
+      ].filter(Boolean) as MenuItem[],
+    )
+  }
+
+  // 只认这一层图里还在的：进到块里面以后，画布还会把上一层选着的节点报上来一次
+  const stepSels = (ns: { id: string; data: BpData }[]) =>
+    ns
+      .filter((n) => byId.has(n.id))
+      .map((n) => n.data.node)
+      .filter((n) => n.kind === 'step')
+      .map(selOf)
+      .filter(Boolean) as BpSelection[]
+  /** 画布自己的快捷键（keys.ts）：处理了就不再往外传给编辑命令 */
+  const onKey = (e: React.KeyboardEvent) => {
+    if ((e.target as HTMLElement).closest('input, textarea, [contenteditable]')) return
+    const hit = (k: { match?: (e: React.KeyboardEvent) => boolean }) => k.match?.(e)
+    const sel = selected ? byId.get(selected) : undefined
+    let done = true
+    if (hit(CANVAS_KEYS.selectAll)) onSelectMany?.(stepSels(nodes))
+    else if (hit(CANVAS_KEYS.focus)) {
+      const ids = picked?.length ? picked : selected ? [selected] : []
+      void rf.current?.fitView({
+        nodes: ids.length ? ids.map((id) => ({ id })) : undefined,
+        padding: 0.3,
+        maxZoom: 1.2,
+        duration: 200,
+      })
+    } else if (hit(CANVAS_KEYS.fit)) void rf.current?.fitView({ padding: 0.1, duration: 200 })
+    else if (hit(CANVAS_KEYS.deselect)) onSelect?.(undefined)
+    else if (
+      hit(CANVAS_KEYS.enter) &&
+      sel?.step &&
+      sel.path &&
+      (sel.folded !== undefined || sel.step.action === 'call')
+    )
+      onEnter?.(sel.path, sel.step)
+    else if (hit(CANVAS_KEYS.leave) && here && onLeave) onLeave()
+    else done = false
+    if (!done) return
+    e.preventDefault()
+    e.stopPropagation()
   }
 
   return (
     <BpContext.Provider value={ctx}>
       <div
-        className="ue:h-full ue:w-full"
-        onPointerDownCapture={(e) => (down.current = { x: e.clientX, y: e.clientY })}
+        ref={wrap}
+        tabIndex={-1}
+        className="ue:h-full ue:w-full ue:outline-none"
+        onKeyDown={onKey}
+        onPointerDownCapture={(e) => {
+          down.current = { x: e.clientX, y: e.clientY }
+          // 画布按下会阻止默认动作、拿不到焦点：自己拿，Delete、Ctrl+C 这些快捷键才收得到
+          if (!(e.target as HTMLElement).closest('input, textarea, [contenteditable]'))
+            wrap.current?.focus({ preventScroll: true })
+        }}
         onDragOver={(e) => {
           if (!editable || !canDrop(e)) return
           e.preventDefault()
@@ -312,20 +488,20 @@ function BpInner({
           if (wantsCopy(e) && steps.length === 1 && steps[0].action === 'call')
             return void callCopy(steps[0]).then(
               (r) => {
-                const x = addLoose(doc, [r.group], p.x, p.y)
+                const x = addLoose(doc, [r.group], p.x, p.y, here)
                 apply(x.doc, x.path)
                 if (r.warn) h().toast.error(r.warn)
               },
               (err: Error) => h().toast.error(err.message),
             )
-          const r = addLoose(doc, steps, p.x, p.y)
+          const r = addLoose(doc, steps, p.x, p.y, here)
           apply(r.doc, r.path)
         }}
       >
         <GraphCanvas<RFNode, RFEdge>
           frameClassName="ue:h-full ue:w-full"
-          nodes={nodes}
-          edges={edges}
+          nodes={shownNodes}
+          edges={shownEdges}
           nodeTypes={BP_NODE_TYPES}
           edgeTypes={BP_EDGE_TYPES}
           editable={editable}
@@ -340,19 +516,33 @@ function BpInner({
           isValidConnection={(c) => byId.get(c.target)?.kind === 'step' && c.targetHandle === 'in'}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
+          // 框选：选中的步骤交给外壳（Delete、复制、包成段都按它）；数据一变画布会清掉自己的选中，空的不当回事
+          onSelectionChange={({ nodes: ns }) => {
+            const list = stepSels(ns as RFNode[])
+            if (list.length) onSelectMany?.(list)
+          }}
           onNodeDragStop={(_, __, moved) =>
-            apply(setPositions(doc, moved.map((n) => ({ key: n.id, x: n.position.x, y: n.position.y }))))
+            apply(
+              setPositions(
+                doc,
+                moved.map((n) => ({ key: n.id, x: n.position.x, y: n.position.y })),
+              ),
+            )
           }
           onNodeClick={(_, n) => onSelect?.(selOf(n.data.node))}
           onNodeDoubleClick={(_, n) => {
             const node = n.data.node
-            if (node.step && (node.folded !== undefined || node.outs.length > 1)) onToggle(node.id, node.step)
+            // 块、调用别的脚本：进到里面看（子图），顶上路径显示在第几层
+            if (node.step && node.path && (node.folded !== undefined || node.step.action === 'call'))
+              onEnter?.(node.path, node.step)
           }}
           onNodeContextMenu={(e, n) => {
             const node = n.data.node
             if (node.kind === 'note' && editable && node.note) {
               const id = node.note.id
-              return openMenu(e, [{ label: t('删掉注释框'), danger: true, onClick: () => apply(updateNote(doc, id, undefined)) }])
+              return openMenu(e, [
+                { label: t('删掉注释框'), danger: true, onClick: () => apply(updateNote(doc, id, undefined)) },
+              ])
             }
             const s = selOf(node)
             if (!s || !onNodeMenu) return

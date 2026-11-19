@@ -126,4 +126,24 @@ export const BpEdgeView = memo(function BpEdgeView(p: EdgeProps<Edge<BpEdgeData>
   )
 })
 
-export const BP_EDGE_TYPES = { bp: BpEdgeView }
+/** 拖线到空白处、菜单还开着时那根线：样子和拖动时的连接线一样，一直连到菜单，选完接上、取消才消失 */
+const BpPendingEdge = memo(function BpPendingEdge(p: EdgeProps) {
+  const [path] = getBezierPath({
+    sourceX: p.sourceX,
+    sourceY: p.sourceY,
+    targetX: p.targetX,
+    targetY: p.targetY,
+    sourcePosition: p.sourcePosition,
+    targetPosition: p.targetPosition,
+  })
+  return (
+    <BaseEdge
+      id={p.id}
+      path={path}
+      interactionWidth={0}
+      style={{ stroke: 'var(--xy-connectionline-stroke, var(--accent))', strokeWidth: 1.5 }}
+    />
+  )
+})
+
+export const BP_EDGE_TYPES = { bp: BpEdgeView, pending: BpPendingEdge }

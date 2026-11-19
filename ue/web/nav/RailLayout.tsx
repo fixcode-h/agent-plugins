@@ -120,7 +120,13 @@ export function RailLayout({
           }
         >
           <Panel
-            title={current.label}
+            // 标题后面留个位置给页面放个数（ListCol 放进来时），和标题同一行，不再单独占一行
+            title={
+              <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
+                <span className="ue:min-w-0 ue:truncate">{current.label}</span>
+                <span ref={slot.setAside} className="ue:flex ue:shrink-0 ue:items-center ue:empty:hidden" />
+              </span>
+            }
             className={slot.wide ? 'ue:w-full ue:flex-1 ue:md:overflow-hidden' : 'ue:w-full ue:flex-1'}
           >
             {/* 分区页面的 <SubNav> 用门户渲染进这里：页面在右边的 main 里，插槽的 Provider 包在 main 外面 */}

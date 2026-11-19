@@ -12,7 +12,17 @@ import {
   type GtScript,
   type GtStep,
 } from '../../../../../shared/gt-script/index.ts'
-import { LAYOUT_KEY, isLoosePath, layoutOf, looseSlot, type BpAt, type BpLayout, type BpNote } from './graph.ts'
+import {
+  LAYOUT_KEY,
+  findScope,
+  isLoosePath,
+  layoutOf,
+  looseSlot,
+  scopeOfSlot,
+  type BpAt,
+  type BpLayout,
+  type BpNote,
+} from './graph.ts'
 
 /**
  * 蓝图式画布上的改动（纯函数，单测在 graph.test.ts）：都返回新脚本，原来的不动。
@@ -80,8 +90,18 @@ const tilde = (id: string) => `~${id}`
  */
 export function tidyLoose(doc: GtScript): GtScript {
   const l = layoutOf(doc)
-  if (!Array.isArray(l.loose)) return doc
+  // 块删掉了，它里面没连上的串和注释框跟着没（看不到也连不回去了）
+  const alive = (scope?: string) => !scope || !!findScope(doc, scope)
+  if (Array.isArray(l.notes)) {
+    l.notes = l.notes.filter((n) => alive(n?.scope))
+    if (!l.notes.length) delete l.notes
+  }
+  if (!Array.isArray(l.loose)) {
+    if (doc[LAYOUT_KEY] && !Object.keys(l).length) delete doc[LAYOUT_KEY]
+    return doc
+  }
   l.loose = l.loose.filter((c) => c && Array.isArray(c.steps) && c.steps.some(isStep))
+  l.loose = l.loose.filter((c) => alive(c.scope))
   if (!l.loose.length) delete l.loose
   const used = usedIds(doc)
   const seen = new Set<string>()
@@ -112,10 +132,12 @@ export function disconnect(doc: GtScript, at: BpAt): GtScript | undefined {
 }
 
 function detachTail(out: GtScript, at: BpAt) {
+  // 断下来的那串留在原来那一层（进到块里面断开的，还画在块里面）
+  const scope = scopeOfSlot(out, at.slot)
   const tail = slotArr(out, at.slot).splice(at.index)
   if (!tail.length) return
   const l = layoutMut(out)
-  l.loose = [...(l.loose ?? []), { steps: tail as GtStep[] }]
+  l.loose = [...(l.loose ?? []), { steps: tail as GtStep[], ...(scope && { scope }) }]
   if (!isLoosePath(at.slot)) renamePos(out, tail, plain, tilde)
 }
 
@@ -164,7 +186,7 @@ export function connect(doc: GtScript, at: BpAt, target: GtPath): EditResult | u
     renamePos(out, chain, tilde, plain)
   } else if (!fromLoose && toLoose) renamePos(out, chain, plain, tilde)
   tidyLoose(out)
-  return { doc: out, path: [...(toLoose ? slotOfObject(out, dest) ?? at.slot : at.slot), index] }
+  return { doc: out, path: [...(toLoose ? (slotOfObject(out, dest) ?? at.slot) : at.slot), index] }
 }
 
 /** 没连上的串删掉空的以后下标会变：按数组对象找回它现在是第几串 */
@@ -174,7 +196,7 @@ function slotOfObject(doc: GtScript, a: unknown[]): GtPath | undefined {
 }
 
 /** 拖到空白处 / 右键加的节点：放进一串新的没连上的，记下位置 */
-export function addLoose(doc: GtScript, steps: GtStep[], x: number, y: number): EditResult {
+export function addLoose(doc: GtScript, steps: GtStep[], x: number, y: number, scope = ''): EditResult {
   const out = clone(doc)
   const next = idMaker(new Set([...usedIds(out), ...looseIds(out)]))
   const fresh = steps.map((s) => {
@@ -185,7 +207,7 @@ export function addLoose(doc: GtScript, steps: GtStep[], x: number, y: number): 
     return c
   })
   const l = layoutMut(out)
-  l.loose = [...(l.loose ?? []), { steps: fresh }]
+  l.loose = [...(l.loose ?? []), { steps: fresh, ...(scope && { scope }) }]
   l.pos = { ...(l.pos ?? {}), [tilde(fresh[0].id!)]: [Math.round(x), Math.round(y)] }
   return { doc: out, path: [...looseSlot(l.loose.length - 1), 0] }
 }
@@ -227,13 +249,13 @@ export function clearPositions(doc: GtScript): GtScript {
   return tidyLoose(out)
 }
 
-export function addNote(doc: GtScript, x: number, y: number, text: string): GtScript {
+export function addNote(doc: GtScript, x: number, y: number, text: string, scope = ''): GtScript {
   const out = clone(doc)
   const l = layoutMut(out)
   const notes = Array.isArray(l.notes) ? l.notes : []
   let i = notes.length + 1
   while (notes.some((n) => n.id === `n${i}`)) i++
-  l.notes = [...notes, { id: `n${i}`, x: Math.round(x), y: Math.round(y), text }]
+  l.notes = [...notes, { id: `n${i}`, x: Math.round(x), y: Math.round(y), text, ...(scope && { scope }) }]
   return out
 }
 

@@ -46,11 +46,14 @@ interface State {
   seq: number
   /** 带搜索框（流程图上的节点菜单）：框里的提示字 */
   search?: string
+  onClose?: () => void
 }
 
 export interface MenuOptions {
   /** 顶上放一个搜索框，按名字和右边的说明筛（项多的菜单：蓝图画布上的「加节点」） */
   search?: string
+  /** 菜单关掉时调（选了项、点外面、Esc、被新菜单顶掉都算）：蓝图画布拖线弹菜单时靠它收掉临时那根线 */
+  onClose?: () => void
 }
 
 /** 搜索：留下名字、说明里带关键字的项，小标题只在它下面还有项时留着 */
@@ -94,8 +97,13 @@ export function openMenu(
     list.push(it)
   }
   while (list.at(-1) === 'sep') list.pop()
-  if (!list.length) return
-  state = { x: e.clientX, y: e.clientY, items: list, seq: ++seq, search: o.search }
+  if (!list.length) {
+    o.onClose?.()
+    return
+  }
+  const old = state
+  state = { x: e.clientX, y: e.clientY, items: list, seq: ++seq, search: o.search, onClose: o.onClose }
+  old?.onClose?.()
   emit()
 }
 
@@ -111,8 +119,10 @@ export function openMenuAt(el: HTMLElement, items: (MenuItem | false | '' | unde
 
 export function closeMenu() {
   if (!state) return
+  const old = state
   state = undefined
   emit()
+  old.onClose?.()
 }
 
 /** 复制到剪贴板并提示（菜单里「复制…」都走这里） */
@@ -248,6 +258,8 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
     <div
       ref={ref}
       role="menu"
+      // 弹出的那个（设置里的示例是画在页里的同一个组件）：蓝图画布拖线弹菜单时按它找菜单摆在哪
+      data-floating={inline ? undefined : ''}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
         inline ? 'ue:relative' : 'ue:fixed ue:z-[1000]',
@@ -265,46 +277,46 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
         />
       )}
       <div className={cn(s.search !== undefined && 'ue:max-h-[min(420px,60vh)] ue:overflow-y-auto')}>
-      {!items.length && <div className="ue:px-2 ue:py-1.5 ue:text-caption ue:text-subtle">{t('没有对上的')}</div>}
-      {items.map((it, i) => {
-        if (it === 'sep') return <div key={i} className="ue:mx-1 ue:my-1 ue:h-px ue:bg-line" />
-        if ('title' in it)
+        {!items.length && <div className="ue:px-2 ue:py-1.5 ue:text-caption ue:text-subtle">{t('没有对上的')}</div>}
+        {items.map((it, i) => {
+          if (it === 'sep') return <div key={i} className="ue:mx-1 ue:my-1 ue:h-px ue:bg-line" />
+          if ('title' in it)
+            return (
+              <div key={i} className="ue:truncate ue:px-2 ue:pt-1.5 ue:pb-1 ue:text-caption ue:text-subtle">
+                {it.title}
+              </div>
+            )
+          const Icon = it.icon
           return (
-            <div key={i} className="ue:truncate ue:px-2 ue:pt-1.5 ue:pb-1 ue:text-caption ue:text-subtle">
-              {it.title}
-            </div>
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              disabled={it.disabled}
+              onPointerEnter={() => setAct(i)}
+              onClick={() => {
+                closeMenu()
+                it.onClick()
+              }}
+              className={cn(
+                'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:py-1 ue:text-left ue:transition-colors ue:duration-100 ue:disabled:opacity-40',
+                act === i && !it.disabled && 'ue:bg-hover',
+                it.danger ? 'ue:text-danger' : 'ue:text-fg',
+              )}
+            >
+              <span className="ue:flex ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:items-center ue:justify-center ue:text-subtle">
+                {it.checked ? (
+                  <Check className="ue:h-3.5 ue:w-3.5 ue:text-accent" />
+                ) : Icon ? (
+                  <Icon className={cn('ue:h-3.5 ue:w-3.5', it.danger && 'ue:text-danger')} />
+                ) : null}
+              </span>
+              {it.lead}
+              <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', it.dim && 'ue:opacity-50')}>{it.label}</span>
+              {it.hint && <span className="ue:shrink-0 ue:pl-3 ue:text-caption ue:text-subtle">{it.hint}</span>}
+            </button>
           )
-        const Icon = it.icon
-        return (
-          <button
-            key={i}
-            type="button"
-            role="menuitem"
-            disabled={it.disabled}
-            onPointerEnter={() => setAct(i)}
-            onClick={() => {
-              closeMenu()
-              it.onClick()
-            }}
-            className={cn(
-              'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:py-1 ue:text-left ue:transition-colors ue:duration-100 ue:disabled:opacity-40',
-              act === i && !it.disabled && 'ue:bg-hover',
-              it.danger ? 'ue:text-danger' : 'ue:text-fg',
-            )}
-          >
-            <span className="ue:flex ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:items-center ue:justify-center ue:text-subtle">
-              {it.checked ? (
-                <Check className="ue:h-3.5 ue:w-3.5 ue:text-accent" />
-              ) : Icon ? (
-                <Icon className={cn('ue:h-3.5 ue:w-3.5', it.danger && 'ue:text-danger')} />
-              ) : null}
-            </span>
-            {it.lead}
-            <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', it.dim && 'ue:opacity-50')}>{it.label}</span>
-            {it.hint && <span className="ue:shrink-0 ue:pl-3 ue:text-caption ue:text-subtle">{it.hint}</span>}
-          </button>
-        )
-      })}
+        })}
       </div>
     </div>
   )

@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { GtScript } from '../../../../../shared/gt-script/index.ts'
-import { addLoose, clearPositions, connect, disconnect, insertAtPin, setPositions } from './edit.ts'
-import { bpGraph, layoutOf, looseSlot, pinOf, START_KEY } from './graph.ts'
+import { addLoose, clearPositions, connect, disconnect, insertAtPin, setPositions, tidyLoose } from './edit.ts'
+import { bpGraph, findScope, layoutOf, looseSlot, pinOf, START_KEY } from './graph.ts'
 
 const doc = (): GtScript => ({
   schemaVersion: 3,
@@ -23,17 +23,18 @@ const doc = (): GtScript => ({
 const edge = (g: ReturnType<typeof bpGraph>, from: string, pin: string) =>
   g.edges.find((e) => e.from === from && e.pin === pin)?.to
 
-test('图：开始 → 一步一步接下去，块的子槽各一个引脚，之后接块后面那步', () => {
+test('图：开始 → 一步一步接下去，块只有「之后」接块后面那步，子槽是进到块里的入口', () => {
   const g = bpGraph(doc())
   assert.equal(edge(g, START_KEY, 'next'), 's1')
   assert.equal(edge(g, 's1', 'next'), 'if1')
-  assert.equal(edge(g, 'if1', 's:then'), 's2')
   assert.equal(edge(g, 'if1', 'next'), 's3')
-  assert.equal(edge(g, 'if1', 's:else'), undefined)
   assert.deepEqual(
     g.nodes.find((n) => n.id === 'if1')!.outs.map((p) => p.id),
-    ['s:then', 's:else', 'next'],
+    ['next'],
   )
+  const inside = bpGraph(doc(), { scope: ['steps', 1] })
+  assert.equal(edge(inside, '#in:then', 'next'), 's2')
+  assert.equal(edge(inside, '#in:else', 'next'), undefined)
   // 守护是事件节点，后面接处理步骤
   assert.equal(edge(g, 'g:g1', 'next'), 's9')
 })
@@ -125,4 +126,55 @@ test('没连上的 id 和流程里新插的撞了：没连上的换一个，接�
     assert.ok(!ids.has(m[1]), `重复 id ${m[1]}`)
     ids.add(m[1])
   }
+})
+
+const nested = (): GtScript =>
+  ({
+    schemaVersion: 3,
+    steps: [
+      {
+        id: 'g1',
+        action: 'group',
+        do: [
+          { id: 'a1', action: 'wait', seconds: 1 },
+          { id: 'r1', action: 'loop', until: { all: [] }, max: 2, do: [{ id: 'b1', action: 'wait', seconds: 1 }] },
+        ],
+      },
+      { id: 'g2', action: 'group', do: [{ id: 'c1', action: 'wait', seconds: 1 }] },
+    ],
+  }) as unknown as GtScript
+
+test('子图：块在外层只画一个节点，进到里面只画它里面的，子图里还能再进', () => {
+  const ids = (g: ReturnType<typeof bpGraph>) => g.nodes.map((n) => n.id).sort()
+  const top = bpGraph(nested())
+  assert.deepEqual(ids(top), [START_KEY, 'g1', 'g2'].sort())
+  assert.equal(top.nodes.find((n) => n.id === 'g1')!.folded, 3)
+  assert.deepEqual(
+    top.nodes.find((n) => n.id === 'g1')!.outs.map((p) => p.id),
+    ['next'],
+  )
+
+  const inG1 = bpGraph(nested(), { scope: ['steps', 0] })
+  assert.deepEqual(ids(inG1), ['#in:do', 'a1', 'r1'].sort())
+  assert.equal(edge(inG1, '#in:do', 'next'), 'a1')
+  assert.equal(edge(inG1, 'a1', 'next'), 'r1')
+
+  const r1 = findScope(nested(), 'r1')!
+  assert.deepEqual(r1, ['steps', 0, 'do', 1])
+  const inR1 = bpGraph(nested(), { scope: r1 })
+  assert.deepEqual(ids(inR1), ['#in:do', 'b1'].sort())
+})
+
+test('子图：里面加的、断开的节点记在这一层，块删了跟着没', () => {
+  const r = addLoose(nested(), [{ action: 'click', target: 'Q:W' }], 0, 0, 'g1')
+  const id = layoutOf(r.doc).loose![0].steps[0].id!
+  assert.ok(!bpGraph(r.doc).nodes.some((n) => n.id === `~${id}`))
+  assert.ok(bpGraph(r.doc, { scope: ['steps', 0] }).nodes.some((n) => n.id === `~${id}`))
+  // 在 g1 里面断开 r1：断下来的那串还在 g1 这一层
+  const d = disconnect(nested(), { slot: ['steps', 0, 'do'], index: 1 })!
+  assert.equal(layoutOf(d).loose![0].scope, 'g1')
+  assert.ok(bpGraph(d, { scope: ['steps', 0] }).nodes.some((n) => n.id === '~r1'))
+  // 删掉 g1：它那层的没连上的也清掉
+  const gone = tidyLoose({ ...r.doc, steps: r.doc.steps!.slice(1) })
+  assert.equal(layoutOf(gone).loose, undefined)
 })

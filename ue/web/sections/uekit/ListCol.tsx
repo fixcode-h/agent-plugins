@@ -2,7 +2,7 @@ import { Search } from 'lucide-react'
 import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h } from '../../host.ts'
-import { DockCol } from '../../nav/slot.tsx'
+import { DockCol, SubNavAside } from '../../nav/slot.tsx'
 import { SplitHandle, usePane } from '../../split.tsx'
 
 /**
@@ -19,6 +19,7 @@ export function ListCol({
   onQuery,
   placeholder,
   tabs,
+  shelf,
   children,
   footer,
   onBodyMenu,
@@ -32,6 +33,8 @@ export function ListCol({
   onQuery: (q: string) => void
   placeholder: string
   tabs?: ReactNode
+  /** 搜索框和页签之间常驻的一块（GameTest 的节点） */
+  shelf?: ReactNode
   children: ReactNode
   footer?: ReactNode
   /** 右键列表空白处（行自己的右键菜单会拦下冒泡，到这里的只有空白处） */
@@ -41,24 +44,31 @@ export function ListCol({
 }) {
   const pane = usePane(`list-${id}`, '316px', 240)
   const ref = useRef<HTMLElement>(null)
+  const countBadge = (
+    <span className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:text-footnote ue:font-normal ue:text-muted ue:tabular-nums">
+      {count}
+    </span>
+  )
   // docked：放进二级面板时面板标题已经是分区名，栏自己的大标题不再画
   const body = (docked: boolean) => (
     <>
       <div className="ue:flex ue:flex-col ue:gap-2.5 ue:px-4 ue:pt-4 ue:pb-2.5">
-        {/* 栏拖窄时按钮整组换到下一行，不挤出栏外盖住右边的页面 */}
-        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-x-2 ue:gap-y-2">
-          {!docked && (
-            <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
-              {title}
-            </h1>
-          )}
-          <span className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:text-footnote ue:text-muted ue:tabular-nums">
-            {count}
-          </span>
-          <div className="ue:ml-auto ue:flex ue:shrink-0 ue:flex-wrap ue:items-center ue:justify-end ue:gap-1.5">
-            {extra}
+        {/* 栏拖窄时按钮整组换到下一行，不挤出栏外盖住右边的页面。
+            放进二级面板时个数挪到面板标题那一行（用户 2026-11-19：个数单独掉到标题下面一行），没有按钮就不画这一行 */}
+        {(!docked || extra) && (
+          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-x-2 ue:gap-y-2">
+            {!docked && (
+              <h1 title={title} className="ue:min-w-0 ue:truncate ue:text-lg ue:font-semibold ue:text-fg">
+                {title}
+              </h1>
+            )}
+            {!docked && countBadge}
+            <div className="ue:ml-auto ue:flex ue:shrink-0 ue:flex-wrap ue:items-center ue:justify-end ue:gap-1.5">
+              {extra}
+            </div>
           </div>
-        </div>
+        )}
+        {docked && <SubNavAside>{countBadge}</SubNavAside>}
         <div className="ue:flex ue:items-center ue:gap-1.5">
           <label className="ue:relative ue:block ue:min-w-0 ue:flex-1">
             <Search className="ue:pointer-events-none ue:absolute ue:top-1/2 ue:left-3 ue:h-4 ue:w-4 ue:-translate-y-1/2 ue:text-subtle" />
@@ -72,6 +82,7 @@ export function ListCol({
           </label>
           {searchExtra}
         </div>
+        {shelf}
         {tabs}
       </div>
       <div
