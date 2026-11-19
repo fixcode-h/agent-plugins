@@ -62,3 +62,71 @@ declare module '@panel/web/src/components/ui/count-badge' {
     p: Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & { count: number; max?: number; corner?: boolean },
   ): ReactElement | null
 }
+
+/** 服务端：文件的版本记录和取某一版的字节（面板 server/exec/vcs-history.ts，表格插件也用）；资源页「版本差异」用 */
+declare module '@panel/server/exec/vcs-history' {
+  export interface FileRev {
+    id: string
+    label: string
+    author: string
+    time: string
+    message: string
+  }
+  export interface FileHistory {
+    vcs: 'git' | 'p4' | 'svn' | 'none'
+    base: string
+    revs: FileRev[]
+    error?: string
+  }
+  export class VcsInputError extends Error {}
+  export const MOVING_REV: RegExp
+  export function fileHistory(dir: string, rel: string, max?: number): Promise<FileHistory>
+  export function fileAt(dir: string, rel: string, rev: string): Promise<Buffer | null>
+}
+
+/** 网页：版本差异弹窗的外壳（左边版本列表可拖宽，面板 web/src/components/ui/version-diff.tsx，表格插件也用） */
+declare module '@panel/web/src/components/ui/version-diff' {
+  import type { ReactElement, ReactNode } from 'react'
+  export interface VersionRev {
+    id: string
+    label: string
+    author?: string
+    time?: string
+    message?: string
+  }
+  export interface VersionList {
+    vcs: 'git' | 'p4' | 'svn' | 'none'
+    revs: VersionRev[]
+    error?: string
+  }
+  export type VersionPick = 'local' | number
+  export function VersionDiffShell(props: {
+    open: boolean
+    onClose: () => void
+    meta: ReactNode
+    list: VersionList | null
+    failed?: string
+    pick: VersionPick
+    onPick: (p: VersionPick) => void
+    local?: { meta: string; message: string }
+    tags?: Record<string, ReactNode>
+    header: ReactNode
+    children: ReactNode
+    paneKey: string
+    className?: string
+  }): ReactElement
+}
+
+/** 网页：面板统一的 diff 画法（照 Claude Code，面板 web/src/components/ui/UnifiedDiff.tsx） */
+declare module '@panel/web/src/components/ui/UnifiedDiff' {
+  import type { ReactElement } from 'react'
+  export function UnifiedDiff(props: {
+    diff?: string
+    rows?: { kind: 'add' | 'del' | 'ctx' | 'hunk' | 'note'; text: string; n?: number }[]
+    file?: string
+    wrap?: boolean
+    max?: number
+    className?: string
+    label?: string
+  }): ReactElement
+}

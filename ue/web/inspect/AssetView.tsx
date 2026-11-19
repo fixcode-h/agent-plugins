@@ -11,6 +11,7 @@ import { PropMarksCtx } from '../details/marks.ts'
 import { h, t } from '../host.ts'
 import { useKept } from '../keep.ts'
 import { Props } from '../Props.tsx'
+import { DiffButton } from '../asset-diff/DiffButton.tsx'
 import { ForgeExport } from '../sections/uekit/ForgeExport.tsx'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card } from '../ui.tsx'
@@ -124,6 +125,7 @@ export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint, ma
                 {path.split('.')[0]}
               </span>
               <div className="ue:ml-auto ue:flex ue:items-center ue:gap-1">
+                <DiffButton asset={path} />
                 <ForgeExport asset={path} />
                 <ui.Segmented
                   size="sm"
@@ -147,7 +149,12 @@ export function AssetView({ path, comp = '', onComp, onOpen, onChanged, hint, ma
               bar
               onOpen={onOpen}
               readOnlyHint={hint}
-              aside={<ForgeExport asset={path} />}
+              aside={
+                <>
+                  <DiffButton asset={path} />
+                  <ForgeExport asset={path} />
+                </>
+              }
               mainLabel={isBlueprint ? t('类默认值') : undefined}
               noFns={isBlueprint}
               more={[
