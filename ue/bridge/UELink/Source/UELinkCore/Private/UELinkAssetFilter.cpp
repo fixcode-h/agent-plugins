@@ -1,4 +1,5 @@
 #include "UELinkAssetFilter.h"
+#include "AgentPanelAssetTree.h"
 #include "UELinkCompat.h"
 
 #include "AssetRegistry/ARFilter.h"
@@ -61,10 +62,34 @@ namespace AgentPanel
 				ParentOf.Add(D.AssetName.ToString().ToLower(), Normalize(Value));
 			}
 		}
+		// 2.15：要找的父类是 C++ 类时，蓝图最近的 C++ 父类是它的子类也算（BP 继承 Character，写 Pawn、Actor 也能选中）。
+		// 原生类在编辑器里都已加载，按名字找类不加载资源；同一个原生父类只判断一次
+		UClass* WantNative = FindClassByName(Parent);
+		if (WantNative && !WantNative->HasAnyClassFlags(CLASS_Native))
+		{
+			WantNative = nullptr;
+		}
+		TMap<FString, bool> NativeHit;
+		auto IsNativeChild = [&](const FString& Native)
+		{
+			if (!WantNative)
+			{
+				return false;
+			}
+			const FString Key = Normalize(Native);
+			if (const bool* Hit = NativeHit.Find(Key))
+			{
+				return *Hit;
+			}
+			UClass* C = FindClassByName(ClassName(Native));
+			const bool bHit = C != nullptr && C->IsChildOf(WantNative);
+			NativeHit.Add(Key, bHit);
+			return bHit;
+		};
 		Assets.RemoveAll([&](const FAssetData& D)
 		{
 			FString Native;
-			if (D.GetTagValue(NativeParentTag, Native) && Normalize(Native) == Want)
+			if (D.GetTagValue(NativeParentTag, Native) && (Normalize(Native) == Want || IsNativeChild(Native)))
 			{
 				return false;
 			}
@@ -81,6 +106,42 @@ namespace AgentPanel
 					return false;
 				}
 				Cur = *Up;
+			}
+			return true;
+		});
+	}
+
+	void FilterAssetsByName(const TArray<FString>& Include, const TArray<FString>& Exclude, TArray<FAssetData>& Assets)
+	{
+		if (Include.Num() == 0 && Exclude.Num() == 0)
+		{
+			return;
+		}
+		// 带 / 的模式比对包路径（/Game/Enemies/Boss/*），否则比对资源名（*_Boss）；都不分大小写
+		auto Matches = [](const FAssetData& D, const FString& Pattern)
+		{
+			const FString Subject = Pattern.Contains(TEXT("/")) ? D.PackageName.ToString() : D.AssetName.ToString();
+			return Subject.MatchesWildcard(Pattern, ESearchCase::IgnoreCase);
+		};
+		Assets.RemoveAll([&](const FAssetData& D)
+		{
+			for (const FString& X : Exclude)
+			{
+				if (Matches(D, X))
+				{
+					return true;
+				}
+			}
+			if (Include.Num() == 0)
+			{
+				return false;
+			}
+			for (const FString& I : Include)
+			{
+				if (Matches(D, I))
+				{
+					return false;
+				}
 			}
 			return true;
 		});
