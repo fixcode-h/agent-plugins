@@ -11,6 +11,8 @@ export interface BpCtx {
   editable: boolean
   /** 选中的节点 key */
   selected?: string
+  /** 一起选中的（框选、Ctrl+A），都画选中框 */
+  picked?: ReadonlySet<string>
   /** 断开这个引脚后面那串（Alt 点引脚、连线上的 ✕） */
   disconnect: (at: BpAt) => void
   /** 在连线上插入：带步骤（拖到连线上的）直接插，不带时弹节点菜单 */

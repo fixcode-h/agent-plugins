@@ -1,6 +1,6 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { CirclePlay, CircleX, ClipboardList, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
+import { CirclePlay, CircleX, ClipboardList, LogIn, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
@@ -118,7 +118,7 @@ function Card({
 /** 一步（叶子、块、折起来的段）：头部图标 + 名字，下面一行细节；块的子槽一行一个引脚 */
 export const BpStepNode = memo(function BpStepNode({ data }: Props) {
   const n = data.node
-  const { run, selected } = useBp()
+  const { run, selected, picked } = useBp()
   const { cn } = h()
   const step = n.step
   if (!step) return null
@@ -138,7 +138,7 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
         st && !n.loose && RUN_LOOK[st.status],
         // 失败的那步要一眼看到（上次运行的报告也按这个标）
         st?.status === 'failed' && !n.loose && 'ue:ring-2 ue:ring-danger/70',
-        selected === n.id && 'ue:ring-2 ue:ring-accent',
+        (selected === n.id || picked?.has(n.id)) && 'ue:ring-2 ue:ring-accent',
         run.paused && run.at === n.id && 'ue:ring-2 ue:ring-warning',
         (disabled || n.loose) && 'ue:opacity-55',
         n.loose && 'ue:border-dashed',
@@ -158,18 +158,18 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
     >
       {(face.sub || n.folded !== undefined) && (
         <div className="ue:truncate ue:px-2.5 ue:py-1.5 ue:font-mono ue:text-footnote ue:text-muted">
-          {n.folded !== undefined ? t('{n} 步 · 双击展开', { n: n.folded }) : face.sub}
+          {n.folded !== undefined ? t('{n} 步 · 双击进入', { n: n.folded }) : face.sub}
         </div>
       )}
       {subs.map((p) => (
-          <div
-            key={p.id}
-            className="ue:relative ue:flex ue:h-6 ue:items-center ue:justify-end ue:border-t ue:border-dashed ue:border-line ue:px-2.5 ue:text-footnote ue:text-muted"
-          >
-            {pinLabel(p, step.action)}
-            <OutPin pin={p} style={{ top: '50%' }} />
-          </div>
-        ))}
+        <div
+          key={p.id}
+          className="ue:relative ue:flex ue:h-6 ue:items-center ue:justify-end ue:border-t ue:border-dashed ue:border-line ue:px-2.5 ue:text-footnote ue:text-muted"
+        >
+          {pinLabel(p, step.action)}
+          <OutPin pin={p} style={{ top: '50%' }} />
+        </div>
+      ))}
       {st?.status === 'failed' && !n.loose && (
         <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-danger">
           <CircleX className="ue:h-3 ue:w-3" />
@@ -211,9 +211,7 @@ export const BpEventNode = memo(function BpEventNode({ data }: Props) {
         head={
           <>
             <ShieldCheck className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-success" />
-            <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-medium">
-              {String(g.name ?? '') || t('守护')}
-            </span>
+            <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-medium">{String(g.name ?? '') || t('守护')}</span>
             <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{n.global ? t('全局守护') : t('守护')}</span>
             {n.outs[0] && <OutPin pin={n.outs[0]} style={{ top: 17 }} />}
           </>
@@ -228,14 +226,19 @@ export const BpEventNode = memo(function BpEventNode({ data }: Props) {
     )
   }
   const setup = n.kind === 'setup'
-  const Icon = setup ? ClipboardList : CirclePlay
+  const Icon = setup ? ClipboardList : n.entry ? LogIn : CirclePlay
+  const label = setup
+    ? t('准备')
+    : n.entry
+      ? pinLabel({ id: '', kind: n.entry.kind, index: n.entry.index, at: { slot: [], index: 0 } }, n.entry.action)
+      : t('开始')
   return (
     <div
       data-gt-node={n.id}
       className="ue:relative ue:flex ue:h-[34px] ue:items-center ue:gap-1.5 ue:rounded-l-2xl ue:rounded-r-xl ue:border ue:border-success/45 ue:bg-[color-mix(in_oklab,var(--color-success)_14%,var(--color-card))] ue:px-3 ue:text-body ue:font-medium ue:shadow-card"
     >
       <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-success" />
-      {setup ? t('准备') : t('开始')}
+      {label}
       {n.outs[0] && <OutPin pin={n.outs[0]} style={{ top: 17 }} />}
     </div>
   )
@@ -276,10 +279,21 @@ export const BpNoteNode = memo(function BpNoteNode({ data }: Props) {
   )
 })
 
+/** 拖线到空白处松手、菜单还开着时，那根线的终点（看不见，只给线一个落脚的输入引脚；选完或取消就拿掉） */
+const BpGhostNode = memo(function BpGhostNode() {
+  return (
+    <div className="ue:pointer-events-none ue:h-px ue:w-px">
+      <Handle id="in" type="target" position={Position.Left} isConnectable={false} className="ue:!opacity-0" />
+    </div>
+  )
+})
+
 export const BP_NODE_TYPES = {
+  ghost: BpGhostNode,
   step: BpStepNode,
   start: BpEventNode,
   setup: BpEventNode,
+  entry: BpEventNode,
   guard: BpEventNode,
   note: BpNoteNode,
 }

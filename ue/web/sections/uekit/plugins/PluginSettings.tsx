@@ -16,6 +16,7 @@ import {
   ShieldX,
   SquareFunction,
   SkipForward,
+  Keyboard,
 } from 'lucide-react'
 import { useState } from 'react'
 import { pget, useLoad } from '../../../api.ts'
@@ -26,6 +27,7 @@ import { SettingGroup, SettingRow, SettingsLayout, type SettingsNavSection } fro
 import { Badge, ErrorText, PageHead } from '../../../ui.tsx'
 import { GtSettings } from '../GtSettings.tsx'
 import { GtApiSettings } from '../gt-author/GtApiSettings.tsx'
+import { ShortcutList } from '../gt-edit/ShortcutList.tsx'
 
 /**
  * UE 插件页里每个插件自己的设置页（卡片上的「设置」，地址 plugins/<插件名>）。
@@ -122,7 +124,13 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
         ],
       },
       { title: t('编写 · 这个项目'), items: [{ id: 'api', label: t('接口库'), icon: Library }] },
-      { title: t('编写 · 所有项目共用'), items: [{ id: 'live', label: t('连着游戏'), icon: MonitorPlay }] },
+      {
+        title: t('编写 · 所有项目共用'),
+        items: [
+          { id: 'live', label: t('连着游戏'), icon: MonitorPlay },
+          { id: 'shortcuts', label: t('编辑快捷键'), icon: Keyboard },
+        ],
+      },
       {
         title: t('录制 · 所有项目共用'),
         items: [
@@ -208,6 +216,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
             <SettingGroup page="live" title={t('连着游戏编辑')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 连着游戏']} />
             </SettingGroup>
+            <ShortcutList page="shortcuts" />
             <SettingGroup page="shots" title={t('录制截图')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 录制']} />
             </SettingGroup>

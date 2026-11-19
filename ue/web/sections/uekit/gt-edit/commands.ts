@@ -12,12 +12,15 @@ import {
   Layers,
   Play,
   Repeat,
+  Scissors,
+  SquareDashedMousePointer,
   Trash2,
   Ungroup,
   type LucideIcon,
   Sparkles,
 } from 'lucide-react'
 import {
+  allSteps,
   comparePath,
   duplicate,
   getAt,
@@ -170,6 +173,24 @@ export const COMMANDS: EditCommand[] = [
     },
   },
   {
+    id: 'cut',
+    group: 1,
+    multi: true,
+    label: () => t('剪切'),
+    icon: Scissors,
+    keys: 'Ctrl+X',
+    match: (e) => mod(e) && e.key.toLowerCase() === 'x' && !String(window.getSelection() ?? ''),
+    run: (c) => {
+      const list = roots(c.selected)
+      const steps = list.map((p) => stepAt(c, p))
+      void navigator.clipboard.writeText(JSON.stringify(steps.length === 1 ? steps[0] : steps, null, 2))
+      if (c.apply(remove(c.doc, list))) {
+        c.select([])
+        h().toast.success(t('已剪切 {n} 步', { n: steps.length }))
+      }
+    },
+  },
+  {
     id: 'paste',
     group: 1,
     label: () => t('粘贴到下面'),
@@ -291,6 +312,23 @@ export const COMMANDS: EditCommand[] = [
       const near = [place.index, place.index - 1].map((i) => [...place.slot, i]).find((p) => getAt(next, p))
       c.select(near ? [near] : [])
     },
+  },
+  {
+    id: 'select-all',
+    group: 4,
+    multi: true,
+    label: () => t('全选'),
+    icon: SquareDashedMousePointer,
+    keys: 'Ctrl+A',
+    match: (e) => mod(e) && e.key.toLowerCase() === 'a',
+    enabled: () => true,
+    // 只选最外层的（块里的跟着块走），复制、删、包成段都按最外层算
+    run: (c) =>
+      c.select(
+        allSteps(c.doc)
+          .filter((e) => e.depth === 0)
+          .map((e) => e.path),
+      ),
   },
 ]
 
