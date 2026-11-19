@@ -86,9 +86,9 @@ export const actions: Check = {
       if (a === 'loop') {
         const kinds = ['until', 'while', 'times', 'each', 'in'].filter((k) => has(o, k))
         if (!kinds.length) out.push(issue(s, 'param_missing', 'loop 要写 until / while / times / each / in 其中一个'))
-        if (!has(o, 'times') && !has(o, 'max'))
-          out.push(issue(s, 'loop_no_max', 'loop 要写 max（最多几轮，上限 1000），免得死循环'))
-        if (typeof o.max === 'number' && (o.max < 1 || o.max > 1000)) out.push(issue(s, 'bad_type', 'max 要在 1–1000'))
+        // max 不写或写 0 = 不限轮数（GameTest 1.11.3 起）；不限时靠块的 timeoutMs 或停止收住
+        if (typeof o.max === 'number' && (o.max < 0 || o.max > 1000000))
+          out.push(issue(s, 'bad_type', 'max 要在 0–1000000（0 = 不限）'))
       }
       if (a === 'call') need('script', '相对场景根的脚本路径')
       // set 有两种：设变量（var）和旧的「设置控件的值」（target + option / value / checked…，UE 那边按有没有 var 分）。

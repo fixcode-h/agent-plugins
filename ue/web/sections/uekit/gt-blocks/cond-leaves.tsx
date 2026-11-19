@@ -60,14 +60,7 @@ function Inspector({ step: raw, onChange }: { step: GtStep; onChange: (s: GtStep
   return (
     <div className="ue:flex ue:flex-col ue:gap-2.5">
       {step.action === 'wait' && <WaitMode step={step} onChange={onChange} />}
-      {step.action === 'wait' && (
-        <Row label={t('最多等')}>
-          <div className="ue:flex ue:items-center ue:gap-2">
-            <NumberField step={step} k="timeoutMs" onChange={onChange} placeholder="10000" />
-            <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
-          </div>
-        </Row>
-      )}
+      {/* 最多等多久就是下面「出错和跳过」的总时限（同一个 timeoutMs），这里不再重复一份 */}
       <CondEditor value={step.cond} onChange={(c) => onChange({ ...step, cond: c })} />
     </div>
   )

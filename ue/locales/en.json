@@ -3186,7 +3186,6 @@
   "返回值要满足（不写就不检查）": "Result must satisfy (leave empty to skip the check)",
   "调接口": "Call API",
   "按类找对象、读写属性、等加载完、看日志报错…": "Find objects by class, read or write properties, wait for loading, check log errors…",
-  "最多等": "Wait at most",
   "毫秒": "ms",
   "等到 {c}": "Wait until {c}",
   "等待 / 检查": "Wait / check",
@@ -3232,7 +3231,6 @@
   "JSON 数组，或 $变量、= 表达式": "JSON array, or $variable, = expression",
   "每个叫": "Each named",
   "最多": "At most",
-  "必填，上限 {n}": "Required, up to {n}",
   "次": "times",
   "每轮间隔": "Gap between rounds",
   "到了上限": "When the limit is reached",
@@ -3251,7 +3249,6 @@
   "这一步在做什么（报告里显示）": "What this step does (shown in reports)",
   "失败了": "On failure",
   "总时限": "Time limit",
-  "写在块上是整块的总时限；块里每步各自的等待不变": "On a block it limits the whole block; each step's own waits are unchanged",
   "值": "Value",
   "= 开头是表达式，例如 =$skipped + 1": "Starting with = makes it an expression, e.g. =$skipped + 1",
   "值，或 =表达式": "Value, or =expression",
@@ -3431,7 +3428,6 @@
   "整次运行失败": "Fail the run",
   "记警告继续": "Warn and continue",
   "最多触发": "Trigger at most",
-  "次，间隔至少": "times, at least",
   "正在执行的那一步要点的就在这个界面里时不触发": "Don't trigger when the current step targets this UI",
   "搜字段名、说明": "Search field name, description",
   "只读函数": "Read-only function",
@@ -4031,5 +4027,10 @@
   "隐藏小地图": "Hide minimap",
   "显示小地图": "Show minimap",
   "还没有资源索引：可以在上面直接写选择器": "No asset index yet; type a selector above",
-  "VS 正忙（可能在编译、启动调试或弹着对话框），过几秒再查调试状态": "VS is busy (building, starting the debugger or showing a dialog); checking the debug state again in a few seconds"
+  "VS 正忙（可能在编译、启动调试或弹着对话框），过几秒再查调试状态": "VS is busy (building, starting the debugger or showing a dialog); checking the debug state again in a few seconds",
+  "跑几轮还没结束就停；0 或不填 = 不限，不限时可以在下面「总时限」兜底": "Stop after this many rounds; 0 or empty = unlimited. Set a time limit below as a safety net",
+  "次（0 = 不限）": "times (0 = unlimited)",
+  "不填用默认；0 = 不限，一直等到成立或手动停止。写在块上是整块的总时限，块里每步各自的等待不变": "Empty uses the default; 0 = unlimited, waits until it holds or you stop it. On a block it limits the whole block; each step inside keeps its own wait",
+  "毫秒（0 = 不限）": "ms (0 = unlimited)",
+  "次（0 = 不限），间隔至少": "times (0 = unlimited), at least"
 }

@@ -1,12 +1,5 @@
 import { Repeat } from 'lucide-react'
-import {
-  LOOP_DEFAULT_MAX,
-  LOOP_MAX_LIMIT,
-  LOOP_MODES,
-  loopModeOf,
-  type GtStep,
-  type LoopMode,
-} from '../../../../shared/gt-script/index.ts'
+import { LOOP_MODES, loopModeOf, type GtStep, type LoopMode } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { condSummary } from '../gt-cond/summary.ts'
@@ -24,7 +17,7 @@ const modeLabel = (m: LoopMode) =>
     in: t('对一组值'),
   })[m]
 
-/** 换循环方式：去掉别的方式的字段，填上这种方式的骨架；除 times 外都要有 max */
+/** 换循环方式：去掉别的方式的字段，填上这种方式的骨架；max 不写就是不限 */
 function setMode(step: GtStep, m: LoopMode): GtStep {
   const out: GtStep = { ...step }
   for (const k of LOOP_MODES) delete out[k]
@@ -33,8 +26,10 @@ function setMode(step: GtStep, m: LoopMode): GtStep {
   if (m === 'times') out.times = 3
   if (m === 'each') out.each = ''
   if (m === 'in') out.in = []
-  if (m === 'times') delete out.max
-  else out.max = typeof step.max === 'number' ? step.max : LOOP_DEFAULT_MAX
+  if (m === 'times') {
+    delete out.max
+    delete out.onMax
+  }
   return out
 }
 
@@ -88,10 +83,10 @@ function LoopInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
         </>
       )}
       {m !== 'times' && (
-        <Row label={t('最多')} hint={t('必填，上限 {n}', { n: LOOP_MAX_LIMIT })}>
+        <Row label={t('最多')} hint={t('跑几轮还没结束就停；0 或不填 = 不限，不限时可以在下面「总时限」兜底')}>
           <div className="ue:flex ue:items-center ue:gap-2">
-            <NumberField step={step} k="max" onChange={onChange} placeholder={String(LOOP_DEFAULT_MAX)} />
-            <span className="ue:text-footnote ue:text-subtle">{t('次')}</span>
+            <NumberField step={step} k="max" onChange={onChange} placeholder="0" />
+            <span className="ue:text-footnote ue:text-subtle">{t('次（0 = 不限）')}</span>
           </div>
         </Row>
       )}
@@ -101,7 +96,7 @@ function LoopInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
           <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
         </div>
       </Row>
-      {m !== 'times' && (
+      {m !== 'times' && typeof step.max === 'number' && step.max > 0 && (
         <Row label={t('到了上限')}>
           <ui.Segmented
             size="sm"
@@ -121,7 +116,7 @@ function LoopInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
 
 function loopSummary(s: GtStep) {
   const m = loopModeOf(s)
-  const max = typeof s.max === 'number' ? t(' · 最多 {n} 次', { n: s.max }) : ''
+  const max = typeof s.max === 'number' && s.max > 0 ? t(' · 最多 {n} 次', { n: s.max }) : ''
   switch (m) {
     case 'until':
       return t('直到 {c}', { c: condSummary(s.until) }) + max

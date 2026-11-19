@@ -173,7 +173,7 @@ test('包成块：同一槽里从第一个到最后一个；跨槽不行', () =>
   assert.deepEqual(r.path, ['steps', 2])
   const lp = r.doc.steps![2]
   assert.equal(lp.action, 'loop')
-  assert.equal(lp.max, 30)
+  assert.equal(lp.max, undefined, "新循环不写 max = 不限")
   assert.deepEqual(
     (lp.do as { id: string }[]).map((s) => s.id),
     ['loop1', 's6'],

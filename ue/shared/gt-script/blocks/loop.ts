@@ -4,9 +4,9 @@ import type { BlockDef, CondRef } from '../types.ts'
 export const LOOP_MODES = ['until', 'while', 'times', 'each', 'in'] as const
 export type LoopMode = (typeof LOOP_MODES)[number]
 
-/** 面板新建循环时填的上限（协议：默认 30，上限 1000） */
-export const LOOP_DEFAULT_MAX = 30
-export const LOOP_MAX_LIMIT = 1000
+/** 循环最多几轮：0 或不写 = 不限（用户 2026-11-19，GameTest 1.11.3 起）；写正数时的上限只防手误 */
+export const LOOP_DEFAULT_MAX = 0
+export const LOOP_MAX_LIMIT = 1000000
 
 export const loopModeOf = (s: Record<string, unknown>): LoopMode | undefined => LOOP_MODES.find((m) => m in s)
 
@@ -21,5 +21,5 @@ export const loop: BlockDef = {
     if (s.while && typeof s.while === 'object') out.push({ key: ['while'], role: 'while' })
     return out
   },
-  make: () => ({ action: 'loop', until: { all: [] }, max: LOOP_DEFAULT_MAX, do: [] }),
+  make: () => ({ action: 'loop', until: { all: [] }, do: [] }),
 }

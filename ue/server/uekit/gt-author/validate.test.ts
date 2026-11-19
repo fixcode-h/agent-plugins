@@ -63,7 +63,7 @@ test('常见写错的地方都按错误码报出来', async () => {
     schemaVersion: 3,
     blockers: [],
     steps: [
-      { id: 's1', action: 'loop', until: { visible: true }, do: [{ id: 's1', action: 'key', key: 'E' }] },
+      { id: 's1', action: 'loop', until: { visible: true }, max: -1, do: [{ id: 's1', action: 'key', key: 'E' }] },
       { action: 'call', script: 'common/没有这个' },
       { action: 'call', script: 'common/翻完引导', with: { mxa: 3 } },
       { action: 'call', script: 'a' },
@@ -79,7 +79,7 @@ test('常见写错的地方都按错误码报出来', async () => {
   const c = codes(r)
   for (const code of [
     'blockers_removed',
-    'loop_no_max',
+    'bad_type',
     'dup_id',
     'call_missing',
     'param_missing',
