@@ -20,6 +20,7 @@ import {
   looseSlot,
   scopeOfSlot,
   type BpAt,
+  type BpGraph,
   type BpLayout,
   type BpNote,
 } from './graph.ts'
@@ -239,6 +240,32 @@ export function setPositions(doc: GtScript, moved: { key: string; x: number; y: 
   }
   l.pos = pos
   return out
+}
+
+/**
+ * 拖完节点：被拖的记新位置，后面连着、还没记过位置的节点钉在现在的位置上。
+ * 没记位置的节点是跟着前一个节点挪的（插新步骤时保持自动布局的相对位置），
+ * 不钉住的话拖前面的节点，后面整串都会跟着跳过去（用户 2026-11-19：后面的不要跟着动）
+ */
+export function moveNodes(doc: GtScript, g: BpGraph, moved: { key: string; x: number; y: number }[]) {
+  const saved = layoutOf(doc).pos ?? {}
+  const movedKeys = new Set(moved.map((m) => m.key))
+  const next = new Map<string, string[]>()
+  for (const e of g.edges) next.set(e.from, [...(next.get(e.from) ?? []), e.to])
+  const at = new Map(g.nodes.map((n) => [n.id, n]))
+  const pinned: { key: string; x: number; y: number }[] = []
+  const seen = new Set<string>()
+  const todo = [...movedKeys]
+  while (todo.length) {
+    for (const to of next.get(todo.pop()!) ?? []) {
+      if (seen.has(to) || movedKeys.has(to)) continue
+      seen.add(to)
+      todo.push(to)
+      const n = at.get(to)
+      if (n && !saved[to]) pinned.push({ key: to, x: n.x, y: n.y })
+    }
+  }
+  return setPositions(doc, [...pinned, ...moved])
 }
 
 /** 整理布局：忘掉记下的位置，全部按自动布局重排（注释框不动） */

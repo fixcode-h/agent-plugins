@@ -24,6 +24,9 @@ export const allBlocks = () => [...table.values()]
 /** 有子步骤槽的才算块 */
 export const isBlock = (s: unknown): s is GtStep => !!blockOf((s as GtStep | undefined)?.action)?.slots
 
+/** 画布上是子图节点（双击进去看）：段、调用脚本 */
+export const isSubgraph = (s: GtStep | undefined): boolean => !!s && !!blockOf(s.action)?.subgraph
+
 export const slotsOf = (s: GtStep): SlotRef[] => blockOf(s.action)?.slots?.(s) ?? []
 
 /** 一步上的条件字段：块自己的 + 所有步骤共用的 skipIf */

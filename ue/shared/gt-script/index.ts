@@ -21,6 +21,7 @@ export {
   isBlock,
   registerBlock,
   slotsOf,
+  isSubgraph,
   LOOP_DEFAULT_MAX,
   LOOP_MAX_LIMIT,
   LOOP_MODES,

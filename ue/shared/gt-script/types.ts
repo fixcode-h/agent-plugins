@@ -73,4 +73,9 @@ export interface BlockDef {
   conds?: (step: GtStep) => CondRef[]
   /** 新建时的骨架（插入菜单） */
   make: () => GtStep
+  /**
+   * 蓝图画布上画成子图节点：包着一整段流程（段、调用另一个脚本），双击进去看里面。
+   * 不写的块（如果、循环）在画布上直接摊开，子槽（是 / 否 / 每轮）是普通出口连线（用户 2026-11-19）
+   */
+  subgraph?: boolean
 }

@@ -1,5 +1,6 @@
 import {
   getAt,
+  isSubgraph,
   pathStr,
   slotsOf,
   type GtGuard,
@@ -12,7 +13,8 @@ import {
 /**
  * GameTest 蓝图式流程图的图模型（设计稿 designs/GameTest整页编辑器与蓝图画布-设计稿.md 第 3 节）。
  * 数据还是结构化的块数组，画法照 UE 蓝图：每一步一个节点，左边一个输入引脚，右边的输出引脚就是「接下来做什么」——
- * 一步接着一步走「下一步」引脚；块（如果、循环、步骤段）的每个子槽一个引脚（是 / 否 / 每轮…），外加「之后」接块后面那步。
+ * 一步接着一步走「下一步」引脚；如果、循环的每个子槽一个引脚（是 / 否 / 每轮…），外加「之后」接块后面那步，
+ * 子槽里的步骤在画布上直接连出来；段、调用脚本是子图节点（只画一个节点，双击进去看里面）。
  * 开始、每条守护是事件节点（守护后面接它的处理步骤）。
  *
  * 画布上的东西存在脚本顶层的 `_layout` 里（GameTest 读脚本不校验顶层下划线开头的字段，跑的时候不管它）：
@@ -81,7 +83,7 @@ export interface BpNode {
   step?: GtStep
   /** 没连上，不执行 */
   loose?: boolean
-  /** 块：里面有几步（块在画布上只画一个节点，双击进到里面看） */
+  /** 子图节点（段）：里面有几步（只画一个节点，双击进到里面看） */
   folded?: number
   /** 入口节点：是哪个子槽（then / else / do…）和第几个「否则如果」，块是什么（循环的 do 叫「每轮」） */
   entry?: { kind: SlotKind; index?: number; action: string }
@@ -159,7 +161,7 @@ function countInside(step: GtStep): number {
 }
 
 export interface GraphOptions {
-  /** 进到哪个块里面看（块的路径）；不给是最外层 */
+  /** 进到哪个子图（段）里面看（它的路径）；不给是最外层 */
   scope?: GtPath
   globalGuards?: GtGuard[]
 }
@@ -169,7 +171,8 @@ export const scopeKey = (step: GtStep, path: GtPath) =>
   typeof step.id === 'string' && step.id ? step.id : pathStr(path)
 
 /**
- * 一个步骤槽在哪一层：最近的外层块的 key；最外层（steps、setup、顶层守护）是 ''。
+ * 一个步骤槽在哪一层：最近的外层子图（段）的 key；最外层（steps、setup、顶层守护）是 ''。
+ * 如果、循环不算一层（它们在画布上摊开画在所在的那层里）。
  * 没连上的串的最外一层按它记的 scope
  */
 export function scopeOfSlot(doc: GtScript, slot: GtPath): string {
@@ -177,20 +180,20 @@ export function scopeOfSlot(doc: GtScript, slot: GtPath): string {
     const p = slot.slice(0, i)
     if (isLoosePath(slot) && p.length < 4) break
     const v = getAt(doc, p)
-    if (isStep(v)) return scopeKey(v, p)
+    if (isStep(v) && isSubgraph(v) && slotsOf(v).length) return scopeKey(v, p)
   }
   if (isLoosePath(slot)) return layoutOf(doc).loose?.[slot[2] as number]?.scope ?? ''
   return ''
 }
 
-/** 按块的 key 找回它现在的路径（找不到返回 undefined：块被删了或换了 id） */
+/** 按子图（段）的 key 找回它现在的路径（找不到返回 undefined：被删了或换了 id） */
 export function findScope(doc: GtScript, key: string): GtPath | undefined {
   let hit: GtPath | undefined
   const visit = (slot: GtPath) => {
     arr(doc, slot).forEach((raw, i) => {
       if (hit || !isStep(raw)) return
       const p = [...slot, i]
-      if (scopeKey(raw, p) === key && slotsOf(raw).length) return void (hit = p)
+      if (scopeKey(raw, p) === key && isSubgraph(raw) && slotsOf(raw).length) return void (hit = p)
       for (const r of slotsOf(raw)) visit([...p, ...r.key])
     })
   }
@@ -231,8 +234,8 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
       if (!isStep(raw)) return
       const path = [...slot, i]
       const key = bpKey(raw, path)
-      // 块只画一个节点（用户 2026-11-19：不在原地展开，双击进到里面看，顶上路径显示在第几层）
-      const folded = slotsOf(raw).length > 0
+      // 子图（段）只画一个节点，双击进去看，顶上路径显示在第几层；如果、循环在画布上摊开连线（用户 2026-11-19）
+      const folded = slotsOf(raw).length > 0 && isSubgraph(raw)
       const n = add({
         id: key,
         kind: 'step',

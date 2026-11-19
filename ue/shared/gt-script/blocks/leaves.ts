@@ -9,6 +9,8 @@ const expectCond = (): CondRef[] => [{ key: ['expect'], role: 'expect' }]
 export const call: BlockDef = {
   action: 'call',
   idPrefix: 'call',
+  // 调用另一个脚本：双击打开被调用的脚本（面包屑前面是调用方）
+  subgraph: true,
   make: () => ({ action: 'call', script: '', with: {} }),
 }
 
