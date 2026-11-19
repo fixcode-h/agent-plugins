@@ -301,43 +301,45 @@ function release(p: UeProject, packages: string[]) {
   for (const pkg of packages) owners.delete(ownerKey(p, pkg))
 }
 
+/**
+ * 设成只读的那一档：用户的指令优先（面板 ADR 0070，用户 2026-11-19 定），不再直接报错，
+ * 弹确认卡问这一次放不放行；同意只放这一次，不改设置。不在对话里（没法弹卡）时 ask 照旧报错
+ */
+const readOnlyAsk = (ctx: OpCtx, title: string, what: string) =>
+  ask(ctx, { title, detail: `${what}\n${t('同意只放行这一次，不改「权限与设置」。')}` })
+
 /** Agent 的权限（设计文档 6）：你在网页上的操作不受这个限制 */
 async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<string, unknown>) {
   if (ctx.actor.kind !== 'agent') return
   const { runtime, asset, struct, python } = ctx.project.perms
   const what = describe(op, args)
   if (kind === 'runtime') {
-    if (runtime === 'read')
-      throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what }))
+    if (runtime === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对运行时是只读，这次放行吗'), what)
     // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
     // 例外：你在 Lua 页批准过的片段（代码没改过）按「运行时」权限走，不再逐次确认（设计稿四.4）
     const approved = op === 'lua.exec' && !!ctx.approvedLua && ctx.approvedLua === args.code
     if (op === 'lua.exec' && !approved) await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
     else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
   } else if (kind === 'asset') {
-    if (asset === 'read')
-      throw new BridgeError(t('UE 页「权限与设置」里 Agent 对资源是只读，不能修改：{what}', { what }))
+    if (asset === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对资源是只读，这次放行吗'), what)
   } else if (kind === 'struct') {
     if (struct === 'read')
-      throw new BridgeError(
-        t('UE 页「权限与设置」里没有允许 Agent 做结构性操作（新建、复制、改名），不能执行：{what}', { what }),
-      )
+      return readOnlyAsk(ctx, t('「权限与设置」里没有允许 Agent 新建、复制、改名，这次放行吗'), what)
     if (struct === 'ask')
       await ask(ctx, {
         title: op.startsWith('editor.') ? t('Agent 要改编辑器里打开的关卡') : t('Agent 要新建 / 复制 / 改名 UE 资源'),
         detail: what,
       })
   } else if (kind === 'delete') {
-    if (struct === 'read')
-      throw new BridgeError(t('UE 页「权限与设置」里没有允许 Agent 做结构性操作，不能删除：{what}', { what }))
+    if (struct === 'read') return readOnlyAsk(ctx, t('「权限与设置」里没有允许 Agent 删除资源，这次放行吗'), what)
     // 删除跟结构性操作同一档：设成「允许，不用问我」就不再确认（用户 2026-11-19 定）
     if (struct === 'ask') await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
   } else if (kind === 'python') {
     if (python === 'read')
-      throw new BridgeError(t('UE 页「权限与设置」里没有打开「执行 Python」，Agent 不能在编辑器里执行 Python'))
+      return readOnlyAsk(ctx, t('「权限与设置」里没有打开「执行 Python」，这次放行吗'), what)
     if (python === 'ask') await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
   } else if (kind === 'save') {
-    if (asset === 'read') throw new BridgeError(t('UE 页「权限与设置」里 Agent 对资源是只读，不能保存'))
+    if (asset === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对资源是只读，要保存，这次放行吗'), what)
     if (asset === 'ask')
       await ask(ctx, {
         title: t('Agent 要保存 UE 资源（P4 项目会先签出）'),
@@ -429,8 +431,12 @@ export async function runOp(
   const args = { ...rawArgs }
   const kind = kindOf(op, args)
   // 非蓝图函数（受保护、私有、没标 BlueprintCallable）只让网页上你自己点的执行；Agent 的 ue_call 只能调蓝图开放的（用户 2026-11-11 定）
+  // 用户的指令优先（面板 ADR 0070）：不再直接拒绝，弹卡问这一次放不放行
   if (op === 'call' && args.any && ctx.actor.kind !== 'user')
-    throw new BridgeError(t('Agent 只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的）'))
+    await ask(ctx, {
+      title: t('Agent 要调用没有对蓝图开放的函数'),
+      detail: `${describe(op, args)}\n${t('Agent 默认只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的），同意只放行这一次。')}`,
+    })
   if (op === 'console') {
     const cmd = String(args.command ?? '').trim()
     const hit = dangerousMatch(cmd)
