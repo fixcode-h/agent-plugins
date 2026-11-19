@@ -72,7 +72,7 @@ export function Assets() {
 
   const col = () => (
     <>
-      <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} />
+      <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} hideEmpty />
       {/* 原来「文件夹 / 搜索」两个页签（用户 2026-11-19 合成一个）：树上方的搜索框直接搜整个项目 */}
       <AssetFolders
         selected={folder ? '' : path}

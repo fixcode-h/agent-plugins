@@ -1,4 +1,4 @@
-import { Copy, Folder as FolderIcon, FolderOpen, RefreshCw, Star, StarOff } from 'lucide-react'
+import { Copy, Folder as FolderIcon, FolderOpen, LocateFixed, RefreshCw, Star, StarOff } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { op } from '../../api.ts'
 import { assetIcon } from '../../asset-icons.ts'
@@ -176,7 +176,13 @@ export function AssetFolders({
     if (searching) {
       for (const n of found.nodes) {
         if (n.kind === 'item') {
-          out.push(itemLine({ name: n.hit.name, path: n.hit.path, class: n.hit.cls }, `s:i:${n.hit.path}`, n.depth))
+          const p = n.hit.path
+          out.push({
+            ...itemLine({ name: n.hit.name, path: p, class: n.hit.cls }, `s:i:${p}`, n.depth),
+            // 行尾「在文件夹里定位」（悬停露出）：清掉搜索，在原来的文件夹树里展开到它
+            action: <LocateButton onClick={() => locate(p, 'asset')} />,
+            onMenu: (e) => assetMenu(e, p, { onReveal: () => locate(p, 'asset') }),
+          })
           continue
         }
         out.push({
@@ -189,6 +195,7 @@ export function AssetFolders({
           open: n.open,
           onToggle: () => setFold({ q, m: { ...folded, [n.path]: n.open } }),
           ...folderBits(n.path),
+          onMenu: (e: MouseEvent) => folderMenu(e, n.path, () => locate(n.path, 'folder')),
         })
       }
       return out
@@ -293,10 +300,17 @@ export function AssetFolders({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [levels, open, selected, selFolder, folder, q, folded, favs, found.nodes, clsOpt.name])
 
-  function folderMenu(e: MouseEvent, path: string) {
+  /** 搜索结果里的「在文件夹里定位」：回到文件夹树，逐层展开到它并滚过去 */
+  function locate(path: string, kind: 'asset' | 'folder') {
+    clearSearch()
+    void goTo(path, kind)
+  }
+
+  function folderMenu(e: MouseEvent, path: string, onReveal?: () => void) {
     const on = favs.includes(path)
     openMenu(e, [
       { title: path },
+      onReveal && { label: t('在文件夹里定位'), icon: LocateFixed, onClick: onReveal },
       { label: on ? t('取消收藏') : t('收藏'), icon: on ? StarOff : Star, onClick: () => fav.toggle(path) },
       { label: t('重新读取'), icon: RefreshCw, onClick: () => void load(path) },
       { label: t('复制路径'), icon: Copy, onClick: () => copyText(path) },
@@ -307,20 +321,17 @@ export function AssetFolders({
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <div className="ue:flex">
-        <div className="ue:min-w-0 ue:flex-1">
-          <TreeSearch
-            key={boxKey}
-            value={q}
-            onChange={setQ}
-            placeholder={t('搜资源和文件夹：名字、/Game 路径或磁盘路径')}
-            hits={found.hits}
-            busy={found.loading}
-            extra={searchNote(found)}
-          />
-        </div>
-        <div className="ue:w-36 ue:shrink-0 ue:border-b ue:border-line ue:py-2 ue:pr-3">
+      <TreeSearch
+        key={boxKey}
+        value={q}
+        onChange={setQ}
+        placeholder={t('搜资源和文件夹：名字、/Game 路径或磁盘路径')}
+        hits={found.hits}
+        busy={found.loading}
+        extra={searchNote(found)}
+        addon={
           <ClassPicker
+            compact={{ label: t('按类型筛选') }}
             value={clsOpt.name ? clsOpt : { name: '', label: t('所有类型') }}
             common={[{ name: '', label: t('所有类型') }, ...COMMON.map((name) => ({ name }))]}
             placeholder={t('只列这个类型的资源')}
@@ -347,8 +358,8 @@ export function AssetFolders({
               setCls(c.path || c.name)
             }}
           />
-        </div>
-      </div>
+        }
+      />
       {root?.source === 'disk' && (
         <p className="ue:px-3 ue:pt-1.5 ue:text-caption ue:text-subtle">
           {t('编辑器没开，按磁盘上的 Content 列：资源类型点开才知道')}
@@ -400,4 +411,22 @@ function searchNote(f: ReturnType<typeof useFolderSearch>) {
     f.source === 'registry' && t('来自 UE 的资源注册表（只搜名字开头）'),
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : undefined
+}
+
+/** 搜索结果资源行尾的「在文件夹里定位」按钮（样式同收藏星标：悬停这一行才露出来） */
+function LocateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={t('在文件夹里定位')}
+      title={t('在文件夹里定位')}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className="ue:flex ue:h-5 ue:w-5 ue:cursor-pointer ue:items-center ue:justify-center ue:rounded ue:text-subtle ue:hover:bg-hover ue:hover:text-fg"
+    >
+      <LocateFixed className="ue:h-3 ue:w-3" />
+    </button>
+  )
 }

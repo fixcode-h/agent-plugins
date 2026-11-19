@@ -306,6 +306,7 @@ export function SearchBox({
   busy,
   allowEmpty,
   live,
+  addon,
 }: {
   initial?: string
   placeholder: string
@@ -317,6 +318,8 @@ export function SearchBox({
   allowEmpty?: boolean
   /** 筛的是已经取到网页上的列表（函数、GM）：边打字边筛，不要「搜索」按钮（用户 2026-11-15） */
   live?: boolean
+  /** 输入框里最右边的小控件（资源页的类型筛选图标）：放在 label 外面，点它不会把焦点抢回输入框 */
+  addon?: ReactNode
 }) {
   const [q, setQ] = useState(initial)
   const { Button } = h().ui
@@ -331,20 +334,23 @@ export function SearchBox({
         go()
       }}
     >
-      <label className="ue:flex ue:h-8 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:rounded-lg ue:border ue:border-line-strong ue:bg-field ue:px-2.5 ue:focus-within:border-focus">
-        <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-        <input
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value)
-            if (live) onSearch(e.target.value.trim())
-          }}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
-        />
-        {hint && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{hint}</span>}
-      </label>
+      <div className="ue:flex ue:h-8 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-1 ue:rounded-lg ue:border ue:border-line-strong ue:bg-field ue:pr-1 ue:pl-2.5 ue:focus-within:border-focus">
+        <label className="ue:flex ue:h-full ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:pr-1.5">
+          <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value)
+              if (live) onSearch(e.target.value.trim())
+            }}
+            placeholder={placeholder}
+            aria-label={placeholder}
+            className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+          />
+          {hint && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{hint}</span>}
+        </label>
+        {addon}
+      </div>
       {!live && (
         <Button type="submit" size="sm" variant="secondary" disabled={busy || (!q.trim() && !allowEmpty)}>
           {t('搜索')}
