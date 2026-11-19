@@ -167,8 +167,31 @@ export function GameTest() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, installed, live])
 
+  // 面板连没连上 UE 的推送通道（服务端 uekit/stream.ts 推的 link 事件）：断着时录到的步骤、计时都到不了页面
+  const [linked, setLinked] = useState<boolean>()
+  // 推送断过又连上：断的这段时间录制可能已经在 UE 工具栏上停了、或录了好几步，按 UE 现在的状态重来一遍
+  const syncRec = () => {
+    void op<RecordStatus>(project.id, 'gt.record.status', { last: 200 })
+      .then((r) => {
+        setHandlerSource(r.handlerSource)
+        setRec((old) => {
+          if (r.recording) return { ...r, last: r.last ?? old?.last }
+          // 面板以为在录（游戏录制），UE 那边已经停了：退出录制界面
+          if (old?.recording && old.target !== 'editor') {
+            reload()
+            return undefined
+          }
+          return old
+        })
+      })
+      .catch(() => undefined)
+  }
+
   useExtEvents(project.id, (e) => {
-    if (e.event === 'gt.job') {
+    if (e.event === 'link') {
+      setLinked(!!e.connected)
+      if (e.connected && live) syncRec()
+    } else if (e.event === 'gt.job') {
       const j = e as unknown as GtJob & { phase?: string; lastStep?: GtJob['steps'][number] }
       setJob((old) => mergeJobEvent(old, j))
       // 批量里每跑完一个场景，历史条和最近运行就要跟上：整批跑完前事件一直是 progress，按跑完的个数变没变判断
@@ -211,14 +234,26 @@ export function GameTest() {
   }, [runs])
   const lastOf = (s: Scenario) => lastRun.get(s.relativePath) ?? lastRun.get(s.name)
   const q = query.trim().toLowerCase()
+  // 正在录的脚本还没存盘（停止时 UE 才写文件）：左栏先放一条占位，选中它，录完换成真正的文件（用户 2026-11-19）
+  const recLeaf: Scenario | undefined =
+    rec?.recording && !rec.insert
+      ? {
+          name: rec.name ?? '',
+          relativePath: `${recordDir || 'recorded'}/${rec.name ?? ''}.json`,
+          steps: rec.steps ?? rec.last?.length ?? 0,
+          tags: ['recorded'],
+        }
+      : undefined
   const items: TreeLeaf<Scenario>[] = useMemo(
     () =>
-      (list?.scenarios ?? [])
+      [...(list?.scenarios ?? []), ...(recLeaf ? [recLeaf] : [])]
         // _ 开头的是场景根的配置和生成物（_settings.json、_vars.json、_api.json），不是场景
         .filter((s) => !/(^|\/)_[^/]*$/.test(s.relativePath))
         .filter((s) => !q || `${s.name} ${s.relativePath} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(q))
         .map((s) => ({ path: s.relativePath.replace(/\.json$/i, ''), data: s })),
-    [list, q],
+    // recLeaf 每次渲染都是新对象，按它的路径和步数判断变没变
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [list, q, recLeaf?.relativePath, recLeaf?.steps],
   )
 
   const selected = list?.scenarios.find((s) => s.relativePath === sub)
@@ -572,12 +607,16 @@ export function GameTest() {
             label={t('测试场景')}
             items={items}
             searching={!!q}
-            active={selected?.relativePath.replace(/\.json$/i, '')}
+            active={(recLeaf ?? (recording ? undefined : selected))?.relativePath.replace(/\.json$/i, '')}
             onOpen={(_p, s) => {
+              // 录制中右边是录制界面：不能换去别的脚本，先停止
+              if (recording)
+                return h().toast.error(t('正在录制「{name}」：先停止或放弃再打开别的脚本', { name: rec?.name ?? '' }))
               lib.setActiveFolder(undefined)
               open(s.relativePath)
             }}
-            onLeafMenu={menus.leafMenu}
+            // 录制中（含还没有文件的占位条目）不给脚本的右键菜单：改名、删除这些等录完再做
+            onLeafMenu={(e, p, s) => (recording ? undefined : menus.leafMenu(e, p, s))}
             onFolderMenu={lib.folderMenu}
             // 搜索时只看命中的场景，空文件夹不掺进来
             folders={q ? undefined : lib.folders}
@@ -692,6 +731,7 @@ export function GameTest() {
           <GtRecord
             status={rec}
             gtVersion={gtVersion}
+            linked={linked}
             onDone={(saved) => {
               setRec(undefined)
               shots.refresh()

@@ -1,5 +1,5 @@
 import { Camera, CircleCheck, CircleDot, Flag, Square } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -67,13 +67,34 @@ function describe(s: Record<string, unknown>) {
 }
 
 /** onDone：停止了；保存了时带上场景路径（相对场景根），父组件接着认截图里的字 */
+/**
+ * 录制时长：UE 只在录到步骤时推一次 seconds，中间不推心跳；面板按最近一次收到的值在本地往前走（只是显示，不问 UE），
+ * 免得一直停在 0:00 像是卡住了
+ */
+function useRecordClock(seconds: number | undefined) {
+  const base = useRef({ secs: 0, at: Date.now() })
+  const [, tick] = useState(0)
+  useEffect(() => {
+    base.current = { secs: seconds ?? 0, at: Date.now() }
+  }, [seconds])
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const secs = Math.max(0, Math.round(base.current.secs + (Date.now() - base.current.at) / 1000))
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+}
+
 export function GtRecord({
   status,
   gtVersion,
+  linked,
   onDone,
 }: {
   status: RecordStatus
   gtVersion?: string
+  /** 面板连没连上 UE 的推送通道；false 时录到的步骤到不了页面（停止后照样保存） */
+  linked?: boolean
   onDone: (saved?: string) => void
 }) {
   const { project } = useUe()
@@ -82,9 +103,10 @@ export function GtRecord({
   const [mark, setMark] = useState('')
   // 录制中改前面某一步的条目标识（GameTest 1.5.0）：候选在那一步的 hint.key.cands 里
   const [editing, setEditing] = useState<KeyAsk>()
+  // 停止失败、UE 也说不清现在录没录：给一个只关掉面板录制界面的出口，不让人卡在这一页
+  const [stuck, setStuck] = useState('')
   const steps = status.last ?? []
-  const secs = Math.round(status.seconds ?? 0)
-  const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+  const time = useRecordClock(status.seconds)
 
   const addMark = (screenshot: boolean) =>
     run('mark', async () => {
@@ -93,11 +115,21 @@ export function GtRecord({
     })
   const stop = (save: boolean) =>
     run('stop', async () => {
-      const r = await op<{ path?: string; steps?: number; inserted?: boolean; warning?: string }>(
-        project.id,
-        'gt.record.stop',
-        { save },
-      )
+      let r: { path?: string; steps?: number; inserted?: boolean; warning?: string }
+      try {
+        r = await op(project.id, 'gt.record.stop', { save })
+      } catch (e) {
+        // UE 那边可能已经停了（游戏视口工具栏上点了停止、推送没到面板）：问一下现在的状态，没在录就直接退出
+        const now = await op<{ recording?: boolean }>(project.id, 'gt.record.status', {}).catch(() => undefined)
+        if (now && !now.recording) {
+          toast.success(t('UE 那边已经停止录制了，录到的内容在场景根的 recorded/ 里'))
+          onDone(undefined)
+          return
+        }
+        setStuck((e as Error).message)
+        return
+      }
+      setStuck('')
       if (save && r.path)
         toast.success(
           r.inserted
@@ -150,7 +182,24 @@ export function GtRecord({
           </ui.Button>
         </div>
         <GtRecordQuick status={status} gtVersion={gtVersion} />
+        {stuck && (
+          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:text-footnote ue:text-danger">
+            <span className="ue:min-w-0 ue:flex-1">{t('停止失败：{msg}', { msg: stuck })}</span>
+            <ui.Button size="sm" variant="secondary" onClick={() => onDone(undefined)}>
+              {t('只关掉这里的录制界面')}
+            </ui.Button>
+          </div>
+        )}
       </div>
+      {linked === false && (
+        <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
+          <Note>
+            {t(
+              '面板还没连上 UE 的推送通道，录到的步骤暂时显示不出来（UE 里照样在录，停止后照样保存）；连上后会自动补上',
+            )}
+          </Note>
+        </div>
+      )}
       <p className="ue:border-b ue:border-line ue:px-4 ue:py-2 ue:text-footnote ue:leading-relaxed ue:text-subtle">
         {t(
           '在游戏窗口里正常操作就行：点控件录成对这个控件的点击，打字录成输入，点在游戏画面上和按键录成真实按键；按住 Ctrl+Alt 点一个控件录成断言（这一下不传给游戏）。要让角色走到某处，点「录移动」再走过去、到了点「结束移动」，回放时角色自己寻路走过去。还有一个悬浮的工具栏小窗口（默认在游戏视口中下方，可以拖到视口外），鼠标被游戏锁住时按 Alt+数字；工具栏、快捷键本身和编辑器其他面板上的操作都不录。停止后存到场景根下的 recorded/。',
