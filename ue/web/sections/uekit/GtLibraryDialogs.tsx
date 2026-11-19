@@ -29,6 +29,7 @@ export function NameDialog({
   initial,
   placeholder,
   note,
+  validate,
   onOk,
   onCancel,
 }: {
@@ -38,6 +39,8 @@ export function NameDialog({
   initial?: string
   placeholder?: string
   note?: ReactNode
+  /** 名字不能用时返回原因（脚本不许同名），弹窗里显示、不让确定 */
+  validate?: (name: string) => string | undefined
   onOk: (name: string) => void
   onCancel: () => void
 }) {
@@ -47,7 +50,8 @@ export function NameDialog({
   useEffect(() => {
     if (open) setName(initial ?? '')
   }, [open, initial])
-  const ok = () => name.trim() && onOk(name.trim())
+  const error = name.trim() ? validate?.(name) : undefined
+  const ok = () => name.trim() && !error && onOk(name.trim())
   return (
     <Confirm open={open} title={title} okText={okText} onOk={ok} onCancel={onCancel}>
       <div className="ue:flex ue:flex-col ue:gap-2">
@@ -58,6 +62,7 @@ export function NameDialog({
           onChange={(e: { target: { value: string } }) => setName(e.target.value)}
           onKeyDown={(e: { key: string }) => e.key === 'Enter' && ok()}
         />
+        {error && <p className="ue:text-footnote ue:text-danger">{error}</p>}
         {note && <p className="ue:text-footnote ue:leading-relaxed ue:text-subtle">{note}</p>}
       </div>
     </Confirm>

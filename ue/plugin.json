@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.39.16",
+  "version": "0.39.18",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译，资源的版本差异（每一版改了哪些属性、组件、节点）；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -26,6 +26,16 @@
           "label": "只有用了「UE 调试」技能的角色"
         }
       ]
+    },
+    {
+      "key": "batchListMax",
+      "type": "number",
+      "group": "Agent",
+      "label": "批量时逐个列出的上限",
+      "desc": "Agent 批量改资源时 paths / items 里逐个列出的资源超过这么多个，这次调用直接拦下不执行，让它改用 select 按目录、类型、父类、名字通配符选（select 不限个数）",
+      "default": 20,
+      "min": 1,
+      "max": 2000
     },
     {
       "key": "offline",

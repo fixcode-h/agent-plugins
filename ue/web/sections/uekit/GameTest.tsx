@@ -46,6 +46,7 @@ import { ApiLibrary } from './gt-api/ApiLibrary.tsx'
 import type { GtJob, GtRunSummary, GtScenarioFile } from './gt-run/types.ts'
 import { ListCol, useExtEvents } from './ListCol.tsx'
 import { NodeShelf } from './NodeShelf.tsx'
+import { nameTaken, uniqueName } from './gt-names.ts'
 import { NotInstalled } from './NotInstalled.tsx'
 import { FileTree, type TreeLeaf } from './tree.tsx'
 import { GT_COPY_MIME, GT_STEPS_MIME } from './gt-flow/dnd.ts'
@@ -443,18 +444,25 @@ export function GameTest() {
     remove: lib.removeScenario,
   })
   /** insert：编辑页「从这里接着录」，录到的段插进这个场景 after 这一步后面（GameTest 1.10.0） */
+  // 录制默认名（用户 2026-11-19）：Test，被占用就 Test1、Test2……；只当输入框的占位提示，不填进框里，不输就用它
+  const recDefault = uniqueName(list?.scenarios ?? [], 'Test')
+  const recNameError = recName.trim() ? nameTaken(list?.scenarios ?? [], recName) : undefined
   const startRecord = (insert?: { scenario: string; after?: string }) =>
     run('record', async () => {
+      if (!insert && recNameError) return
       setAsking(false)
+      // 名字只用这一次：下回打开录制弹窗又是空框 + 新的默认名，不会沿用上次的名字录出同名脚本
+      const name = recName.trim() || recDefault
+      setRecName('')
       // 接着录存回原场景，不挪文件夹
       if (insert) setRecordDir(undefined)
       if (!insert && recTarget === 'editor' && editorRecordSupported(gtVersion)) {
-        const e = await op<RecordStatus>(project.id, 'gt.editrec.start', { name: recName.trim() || t('编辑器录制') })
+        const e = await op<RecordStatus>(project.id, 'gt.editrec.start', { name })
         setRec({ ...e, target: 'editor', last: [] })
         return
       }
       const r = await op<RecordStatus>(project.id, 'gt.record.start', {
-        name: insert ? t('接着录') : recName.trim() || t('新录制'),
+        name: insert ? t('接着录') : name,
         keepPace,
         shots: shotsArg(gtVersion),
         ...keyAskArgs(),
@@ -878,9 +886,10 @@ export function GameTest() {
           <ui.Input
             autoFocus
             value={recName}
-            placeholder={t('场景名，例如 新手引导')}
+            placeholder={recDefault}
             onChange={(e: { target: { value: string } }) => setRecName(e.target.value)}
           />
+          {recNameError && <p className="ue:text-footnote ue:text-danger">{recNameError}</p>}
           {editorRecordSupported(gtVersion) && (
             <ui.Segmented
               size="sm"

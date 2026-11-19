@@ -208,9 +208,10 @@ namespace AgentPanel
 					Error = TEXT("批量要给 paths（路径数组）或 items（[{path, ...这一项的参数}]）");
 					return false;
 				}
-				if (Arr->Num() == 0 || Arr->Num() > MaxBatchItems)
+				// 2.15：不再限个数（用户 2026-11-19 定）：作业每帧做一点，个数多只是慢，客户端用 select 选一大批时不用自己切
+				if (Arr->Num() == 0)
 				{
-					Error = FString::Printf(TEXT("一次批量 1 到 %d 个资源，给了 %d 个：分几批调"), MaxBatchItems, Arr->Num());
+					Error = TEXT("paths / items 是空的");
 					return false;
 				}
 				TSet<FString> Seen;

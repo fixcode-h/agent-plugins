@@ -20,12 +20,12 @@ user-invocable: true
 
 对一批资源做同样的读或改（读几个蓝图的大纲、给一批蓝图的同一个组件改属性、编译一批蓝图），**只调一次工具**，不要一个资源调一次，也不要并行发十几次：
 
-- `paths=[...]` 给全部路径；或 `select={path, class, parent, tags}` 按条件选，关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
-- `select` 的条件可以组合，在资源注册表里筛、不加载资源：`path` 目录（`recursive=false` 不含子目录）、`class` 资源类型（Blueprint、WidgetBlueprint、DataTable…）、`parent` 蓝图父类（含间接继承）、`prefix` 名字前缀、`tags` 注册表标签。例：某目录下所有继承 BP_EnemyBase 的蓝图改 MaxHP：`ue_set select={path:"/Game/Characters", class:"Blueprint", parent:"BP_EnemyBase"} prop=MaxHP value=200`。`parent` 给 C++ 类时只认蓝图最近的那个 C++ 父类（BP 继承 Character 时写 Character 能选中，写 Pawn 选不中）；名字要通配、排除或多个目录时，先 `ue_find kind=asset` 列出来，筛好后用 `paths` 传。
+- **优先用 `select` 按条件选，不要把资源名逐个列进 `paths`**：`paths` / `items` 逐个列出超过上限（默认 20 个，用户可在 UE 插件设置里改）时这次调用直接被拦下、不执行；`select` 不限个数。关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
+- `select` 的条件可以组合，在资源注册表里筛、不加载资源：`path` 目录（可给目录数组；`recursive=false` 不含子目录）、`class` 资源类型（Blueprint、WidgetBlueprint、DataTable…）、`parent` 蓝图父类（含间接继承，C++ 类认整条继承链）、`name` / `exclude` 名字通配符（`"*_Boss"`、`["BP_Old*", "*_Test"]`；带 `/` 时比对路径，如 `"/Game/Enemies/Legacy/*"`）、`prefix` 名字前缀、`tags` 注册表标签。例：某目录下所有继承 BP_EnemyBase、名字不以 _Old 结尾的蓝图改 MaxHP：`ue_set select={path:"/Game/Characters", class:"Blueprint", parent:"BP_EnemyBase", exclude:"*_Old"} prop=MaxHP value=200`。拿不准选中了哪些时先 `dryRun=true` 看清单。
 - 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
 - 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。
 - 写操作先整批演练，全部通过才真改，失败自动撤回整批；`where` 只改当前值对得上的；`retry=<上一批作业号>` 只重做没成的；改完直接 `ue_save`：它先编译要保存的蓝图，全部通过才保存。
-- 报「UELink 不支持批量」时才逐个调，并提醒用户在 UE 页升级 UELink 到 2.14 后本地编译。
+- 报「UELink 不支持批量」时才逐个调，并提醒用户在 UE 页升级 UELink 后本地编译；`name` / `exclude`、多个目录、C++ 父类整条继承链、`select` 超过 2000 个要 UELink 2.15。
 
 ## 读：由粗到细
 
@@ -96,16 +96,15 @@ user-invocable: true
 
 ## MCP 还是 Python
 
-**默认用 `ue_*` 工具，批量也一样**：一批（≤2000 个）就是一次调用，和一个 Python 脚本来回次数相同，还带演练、整批撤回、改前改后对比、编译通过才存、P4 签出和改动记录。Python 要写代码、5.4 / 5.8 的 API 有差异，常常试错几轮，实际更慢。
+**默认用 `ue_*` 工具，批量也一样**：一批（`select` 不限个数）就是一次调用，和一个 Python 脚本来回次数相同，还带演练、整批撤回、改前改后对比、编译通过才存、P4 签出和改动记录。Python 要写代码、5.4 / 5.8 的 API 有差异，常常试错几轮，实际更慢。
 
 一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除（`ue_asset`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
 
 只有这些情况写 `ue_python`，并在回复里一句话说明为什么工具不行：
 
 1. 工具没有的编辑器能力：导入 / 重新导入外部文件；资源上的编辑器函数（LOD、碰撞、Nanite、贴图压缩、合并重定向器）；材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑。
-2. 超过 2000 个资源。
-3. 每项的值要复杂计算，而且没法「一次批量读 → 算好 → `items` 一次批量写」（先试这条路）。
-4. 只读的全项目统计（用 Asset Registry，不加载资源）。只读脚本不受下面 2–4 条限制。
+2. 每项的值要复杂计算，而且没法「一次批量读 → 算好 → `items` 一次批量写」（先试这条路）。
+3. 只读的全项目统计（用 Asset Registry，不加载资源）。只读脚本不受下面 2–4 条限制。
 
 写 Python 必须做到：
 
