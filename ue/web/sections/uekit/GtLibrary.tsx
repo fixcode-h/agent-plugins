@@ -7,6 +7,7 @@ import type { Scenario } from './GtMenus.tsx'
 import { DeleteDialog, MoveDialog, NameDialog } from './GtLibraryDialogs.tsx'
 import { dirOf, followMove, libOp, type DeletePlan, type MoveDone, type MovePlan } from './gt-library.ts'
 import type { DragSrc } from './tree-dnd.ts'
+import { nameTaken } from './gt-names.ts'
 
 /**
  * GameTest 场景库的整理（设计稿 12.1）：文件夹（空的也显示）、标题栏「新建」下拉、文件夹右键菜单、
@@ -21,6 +22,7 @@ interface Naming {
   initial?: string
   placeholder?: string
   note?: ReactNode
+  validate?: (name: string) => string | undefined
   run: (name: string) => void
 }
 
@@ -89,6 +91,7 @@ export function useScenarioLibrary(o: {
       okText: t('新建'),
       placeholder: t('脚本名，例如 每日福利'),
       note: t('{where}。先放一步「等 1 秒」占位，打开后在步骤列表里插入真正的步骤。', { where: where(dir) }),
+      validate: (name) => nameTaken(o.scenarios, name),
       run: (name) =>
         void libOp<{ path: string }>(o.project, o.root, 'create', { dir, name })
           .then((r) => {
@@ -169,6 +172,8 @@ export function useScenarioLibrary(o: {
       note: dir
         ? t('有别的脚本 call 这个文件夹里的脚本时，先列出要跟着改的路径，确认后一起改。')
         : t('文件名和场景里的名字一起改，文件留在原来的文件夹；有别的脚本 call 它时先列出来，确认后一起改。'),
+      // 脚本不许同名；文件夹不管
+      validate: dir ? undefined : (name) => nameTaken(o.scenarios, name, path),
       run: (name) => void move(path, { name }),
     })
   const reveal = (path: string) =>
@@ -254,6 +259,7 @@ export function useScenarioLibrary(o: {
         initial={naming?.initial}
         placeholder={naming?.placeholder}
         note={naming?.note}
+        validate={naming?.validate}
         onOk={(name) => {
           const run = naming?.run
           setNaming(undefined)
