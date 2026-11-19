@@ -146,23 +146,19 @@ export async function runBatch(tool: string, a: Record<string, unknown>, ctx: Op
     ...(a.dryRunFirst === false ? { dryRunFirst: false } : {}),
   }
   const res = await runOp(ctx, opOf(e, a), args, e.timeoutMs, { job: true })
-  return finishBatch(res, e, ctx)
+  return finishBatch(res, e)
 }
 
-/** 批量结果收尾：没做完回作业号；做完了交给 after 并整理汇总（Agent 带 job 再调时也走这里） */
-export async function finishBatch(res: Record<string, unknown>, e: BatchEntry | undefined, ctx: OpCtx) {
+/** 批量结果收尾：没做完回作业号；做完了整理汇总（Agent 带 job 再调时也走这里） */
+export async function finishBatch(res: Record<string, unknown>, e: BatchEntry | undefined) {
   if (!res.batch) return mcpText(JSON.stringify(res, null, 1))
-  if (e?.after) {
-    const report = await readReport(res.report)
-    if (report) e.after(ctx, report.steps ?? [])
-  }
   return mcpText(JSON.stringify(await formatBatch(res, !!e?.write), null, 1))
 }
 
 /** Agent 带 job 再调：批量作业的结果同样整理成汇总，普通作业原样给出 */
-export async function jobResult(res: Record<string, unknown>, tool: string, action: unknown, ctx: OpCtx) {
+export async function jobResult(res: Record<string, unknown>, tool: string, action: unknown) {
   if (!res.batch) return mcpText(JSON.stringify(res, null, 1))
-  return finishBatch(res, batchEntry(tool, action), ctx)
+  return finishBatch(res, batchEntry(tool, action))
 }
 
 /** 只重做上一批没成的（失败、跳过、被回滚的）：参数照上一批每个资源实际用的，onError 可以重新给 */
@@ -170,5 +166,5 @@ async function retryBatch(job: string, e: BatchEntry, a: Record<string, unknown>
   const { op, items } = await retryItems(ctx.project.root, job)
   if (!items.length) return mcpText(`作业 ${job} 里没有要重做的资源：都成功了`)
   const res = await runOp(ctx, op, { items, ...(a.onError ? { onError: a.onError } : {}) }, e.timeoutMs, { job: true })
-  return finishBatch(res, e, ctx)
+  return finishBatch(res, e)
 }

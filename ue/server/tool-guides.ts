@@ -95,8 +95,8 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_save: {
     title: '保存资源',
-    summary: '把编辑器里改了没保存的资源写回磁盘（P4 项目自动签出）',
-    useWhen: '资源和蓝图改完、蓝图 ue_compile 通过、要让修改留下来时',
+    summary: '先编译要保存的蓝图，全部通过才写回磁盘（P4 项目自动签出）',
+    useWhen: '资源和蓝图改完、要让修改留下来时；蓝图不用先 ue_compile，ue_save 会先编译，编不过整批不存并返回错误',
     avoidWhen: '只是试验数值时别存，用 ue_undo 撤回即可',
     confirms: true,
     group: ASSET,
@@ -104,7 +104,7 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_compile: {
     title: '编译蓝图',
     summary: '编译蓝图，给出错误和警告所在的图和节点；通过的结果进完成依据',
-    useWhen: '改完蓝图、保存之前，确认编译通过时；多个蓝图用 paths / select 一次编',
+    useWhen: '改完蓝图、还不想保存时确认编译通过；多个蓝图用 paths / select 一次编',
     avoidWhen: 'C++ 代码用面板的 request_build 编译，或 ue_editor 的 livecoding 热重载',
     group: ASSET,
   },

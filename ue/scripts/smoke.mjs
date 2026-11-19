@@ -850,27 +850,12 @@ try {
   assert.deepEqual(compiled.verified, { passed: true, name: '蓝图编译', files: [bpFile] })
   assert.ok((await call('ue_blueprint', { action: 'compile', path: bridge.bp })).isError)
   assert.ok((await call('ue_asset', { action: 'save' })).isError)
+  // 先编译后保存：编不过的整批不保存（P4 也不签出），错误交给 Agent
+  const brokenSave = await call('ue_save', { packages: ['/Game/Data/BP_Broken', bridge.bp.split('.')[0]] }, yes)
+  assert.ok(brokenSave.isError && /整批没有保存/.test(text(brokenSave)), text(brokenSave))
   const savedRes = await call('ue_save', { packages: [bridge.bp.split('.')[0]] }, yes)
   assert.ok(!savedRes.isError, text(savedRes))
   assert.deepEqual(savedRes.changed, [bpFile])
-
-  // 写后编译钩子（清单 hooks 的 compile-after-save）：ue_save 之后编译刚保存的蓝图；这个对话里已经编译通过的不再编
-  const hookIn = (taskId, name) => ({
-    event: 'tool.after',
-    task: { id: taskId, title: '', parent: true },
-    project: { id: 'p1', path: proj },
-    agent: { id: 'a', name: 'A' },
-    cli: 'claude',
-    tool: { kind: 'any', name, input: {}, result: { output: '' } },
-  })
-  assert.equal(await plugin.hook('compile-after-save', hookIn('t1', 'mcp__ue__ue_save')), undefined)
-  assert.equal(await plugin.hook('compile-after-save', hookIn('t1', 'Bash')), undefined)
-  assert.ok(!(await call('ue_save', { packages: [bridge.bp.split('.')[0]] }, { ...yes, taskId: 't9' })).isError)
-  const hooked = await plugin.hook('compile-after-save', hookIn('t9', 'mcp__ue__ue_save'))
-  assert.match(hooked?.context ?? '', /刚保存的 1 个蓝图已自动编译，都通过了/)
-  // 取一次就清掉：同一次保存不会编两遍
-  assert.equal(await plugin.hook('compile-after-save', hookIn('t9', 'mcp__ue__ue_save')), undefined)
-  assert.equal(await plugin.hook('other', hookIn('t9', 'mcp__ue__ue_save')), undefined)
 
   // 评审转 .uasset：临时文件在项目 Saved 下、用完删掉，包名按 Content 换成 /Game；同一内容不再调桥接
   assert.deepEqual(plugin.textify.exts, ['uasset'])
