@@ -3,7 +3,7 @@ import type { MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
-import type { GtRunSummary } from './GtRun.tsx'
+import type { GtRunSummary } from './gt-run/types.ts'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 
 /** GameTest 左栏一项场景（gt.scenarios 的一条） */

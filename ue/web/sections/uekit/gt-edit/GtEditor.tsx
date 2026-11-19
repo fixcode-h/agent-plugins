@@ -1,17 +1,28 @@
-import { Info, ListChecks, Loader2, TriangleAlert } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  CircleCheck,
+  CircleX,
+  Copy,
+  Download,
+  Loader2,
+  ScanSearch,
+  Sparkles,
+  TriangleAlert,
+  Undo2,
+} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   getAt,
-  parseScript,
-  versionOf,
-  wrap,
+  isBlock,
   type GtPath,
   type GtScript,
   type GtStep,
 } from '../../../../shared/gt-script/index.ts'
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
-import { Confirm, ErrorText } from '../../../ui.tsx'
+import { ErrorText, fmtTime } from '../../../ui.tsx'
+import type { MenuItem } from '../../../menu.tsx'
+import { PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
 import { useApis } from '../gt-api/model.ts'
 import { RunControls } from '../gt-debug/RunControls.tsx'
 import { RunPanel } from '../gt-debug/RunPanel.tsx'
@@ -25,7 +36,12 @@ import { EditorHeader } from './EditorHeader.tsx'
 import { Inspector } from './Inspector.tsx'
 import { useRecordHere } from './record-here.ts'
 import { useTidyHere } from './tidy-here.ts'
-import { EditRail } from './rail/EditRail.tsx'
+import { PaletteGrid } from './rail/PaletteGrid.tsx'
+import { useSelectorCheck } from './selector-check.tsx'
+import { copyScenarioJson, downloadScenarioJson } from '../gt-export.ts'
+import type { GtHistoryRun } from '../gt-step-history.ts'
+import { GtStepHistory } from '../GtStepHistory.tsx'
+import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useScript } from './use-script.ts'
@@ -42,46 +58,49 @@ const readView = () => {
   }
 }
 
-/** 场景库里的一项（GameTest 页的场景列表），左栏的脚本库用 */
+/** 场景库里的一项（GameTest 页的场景列表） */
 export interface EditScenario {
   name: string
   relativePath: string
   steps: number
   tags?: string[]
+  revision?: number
 }
 
 /**
- * 场景编辑页（定稿第 9 节、效果图 1）：整页编辑器。上面一条顶栏（面包屑、编写 / 录制、视图切换、目标、保存、试节点、运行），
- * 左栏是节点面板和脚本库，中间是视图，右栏是检查器 / 脚本设置；在跑这个脚本时顶栏下面多一条运行横条。
+ * 场景编辑页（定稿第 9 节、效果图 1）：进 GameTest 就是它（2026-11-19 起没有单独的运行结果页）。
+ * 上面一条顶栏（面包屑、编写 / 录制、视图切换、目标、保存、⋯、试节点、运行），中间是视图（左上角一枚上次运行的结果），
+ * 右栏「检查器 / 运行」两页、能拖边调宽并记住；场景库和节点面板在 UE 页的二级栏里（节点面板由 GameTest 页给一个位置，
+ * 这里用 portal 画进去，和画布共用同一份脚本）。在跑这个脚本时顶栏下面多一条运行横条。
  * 视图来自视图注册表，块的样子来自块 UI 注册表，节点面板来自面板格子注册表，这里只管把它们拼起来、读写文件
  */
 export function GtEditor({
   project,
   root,
   scenario,
-  scenarios,
   live,
   gtVersion,
-  onClose,
   onSaved,
-  onOpen,
   onRecord,
   onRecordHere,
   onRun,
   run,
+  paletteHost,
+  paletteQuery = '',
+  onFolder,
+  more = [],
+  runExtra,
+  openRun,
+  lastRun,
+  onDirty,
 }: {
   project: string
   /** 场景根的绝对路径 */
   root: string
   scenario: EditScenario
-  /** 场景库全部场景（左栏脚本库） */
-  scenarios: EditScenario[]
   live: boolean
   gtVersion?: string
-  onClose: () => void
   onSaved: () => void
-  /** 打开另一个脚本（脚本库里点的） */
-  onOpen: (relativePath: string) => void
   /** 开始录制（录成新脚本，放在这个脚本的文件夹里） */
   onRecord?: () => void
   /** 从选中这一步后面接着录（GameTest 1.10.0）：after 是步骤 id；不给时菜单项灰掉 */
@@ -93,23 +112,41 @@ export function GtEditor({
   onRun?: (from?: { doc: GtScript; index: number }, extra?: Record<string, unknown>) => void
   /** 正在跑这个脚本时的进度 */
   run?: EditRun
+  /** 二级栏「节点」页签给的位置：节点面板画进去 */
+  paletteHost?: HTMLElement | null
+  /** 二级栏的搜索词（节点页签时筛节点） */
+  paletteQuery?: string
+  /** 面包屑里点了文件夹 */
+  onFolder?: (folder: string) => void
+  /** 顶栏「⋯」里接在后面的（运行设置、接口库、条目规则） */
+  more?: (MenuItem | false | undefined)[]
+  /** 「运行」下拉里接在后面的（全部照做、批量运行） */
+  runExtra?: (MenuItem | false | undefined)[]
+  /** 左栏「最近运行」里点的那次：右栏切到运行面板看它的报告 */
+  openRun?: { runId: string; n: number }
+  /** 这个脚本最近一次运行（画布左上角的结果） */
+  lastRun?: GtRunSummary
+  /** 有没有没存的改动（换脚本前外面要先问一句） */
+  onDirty?: (dirty: boolean) => void
 }) {
   const { ui } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
   const apis = useApis(project, root, live)
   const [aliases, setAliases] = useState<string[]>([])
   const [view, setView] = useState(readView)
-  const [leaving, setLeaving] = useState(false)
-  // 有改动时在脚本库里点了另一个脚本：先问一句
-  const [switchTo, setSwitchTo] = useState<string>()
-  // 右栏换成运行面板（开跑时自动打开，跑完留着看报告，关掉回到检查器）
-  const [panel, setPanel] = useState(false)
+  // 右栏在「运行」页（开跑时、左栏点了某次运行时自动切过来，跑完留着看报告）
+  const [panel, setPanel] = useState(!!openRun)
   const views = allViews()
   const View = (views.find((v) => v.id === view) ?? views[0]).Component
-  const fileVersion = (() => {
-    const p = parseScript(s.base)
-    return 'doc' in p ? versionOf(p.doc) : 3
-  })()
+  // 右栏宽度：拖边调整，记在本机（用户 2026-11-19：分栏都能拖、记住）
+  const aside = usePane('gt-edit-aside', '380px', 300)
+  const asideRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (openRun) setPanel(true)
+  }, [openRun])
+  useEffect(() => onDirty?.(s.dirty), [s.dirty, onDirty])
+  // 画布左上角「看报告」点的那次（每点一次 n 换一个，同一次再点也切过来）
+  const [reportReq, setReportReq] = useState<{ runId: string; n: number }>()
 
   useEffect(() => {
     void ppost<{ vars: Record<string, unknown> }>(project, 'ext/gt/aliases', { root })
@@ -170,6 +207,45 @@ export function GtEditor({
   useEffect(() => {
     if (debug.flow.active) setPanel(true)
   }, [debug.flow.active])
+  // 这个脚本最近 10 次运行（gt.history，跨编辑器会话）：运行面板的「历史」页、检查器里这一步的「最近几次」；
+  // 旧 GameTest 没有这个操作时是 undefined。跑完一次（lastRun 换了）重拉
+  const [history, setHistory] = useState<GtHistoryRun[]>()
+  useEffect(() => {
+    let off = false
+    op<{ runs?: GtHistoryRun[] }>(project, 'gt.history', {
+      scenario: scenario.relativePath,
+      ...(live ? {} : { disk: true }),
+    }).then(
+      (r) => !off && setHistory(r.runs ?? []),
+      () => !off && setHistory(undefined),
+    )
+    return () => {
+      off = true
+    }
+  }, [project, scenario.relativePath, live, lastRun?.runId])
+  // 上次运行失败的步骤在画布上标红（读那次的报告，按步骤 id 对）；开跑后换成实时的运行态，跑完再按新报告标
+  const [lastFailed, setLastFailed] = useState<Record<string, 'fail'>>()
+  const failedRun = lastRun && !lastRun.succeeded ? lastRun.runId : undefined
+  useEffect(() => {
+    setLastFailed(undefined)
+    if (!failedRun) return
+    let off = false
+    loadReport(project, failedRun, !live).then(
+      (rows) => {
+        if (off) return
+        const out: Record<string, 'fail'> = {}
+        for (const r of rows) {
+          const id = (r as { id?: unknown }).id
+          if (r.status === 'failed' && typeof id === 'string') out[id] = 'fail'
+        }
+        setLastFailed(out)
+      },
+      () => undefined,
+    )
+    return () => {
+      off = true
+    }
+  }, [project, failedRun, live])
   const sel = s.selected.length === 1 ? s.selected[0] : undefined
   const selStep = sel && s.doc && (getAt(s.doc, sel) as GtStep | undefined)
   const selKey = selStep && typeof selStep === 'object' ? stepKey(selStep, sel!) : undefined
@@ -221,6 +297,46 @@ export function GtEditor({
     onTidy: tidyHere.onTidy,
   }
   const steps = (s.doc?.steps ?? []) as GtStep[]
+  const hasBlocks = steps.some((x) => isBlock(x))
+  const check = useSelectorCheck(project, s.doc, (p) => s.select([p]))
+  const { tidy } = tidyHere
+  const moreItems: (MenuItem | false | undefined)[] = [
+    {
+      label: t('整理成流程'),
+      icon: Sparkles,
+      onClick: () => tidy.ask(),
+    },
+    tidy.hasBackup && { label: t('恢复成原录制'), icon: Undo2, hint: t('整理前的备份'), onClick: tidy.restore },
+    {
+      label: t('核对选择器'),
+      icon: check.checking ? Loader2 : ScanSearch,
+      hint: live ? t('只解析，不执行') : t('要先启动编辑器'),
+      disabled: !live || check.checking,
+      onClick: check.start,
+    },
+    'sep' as const,
+    {
+      label: t('复制为 JSON'),
+      icon: Copy,
+      onClick: () => copyScenarioJson(project, root, scenario.relativePath),
+    },
+    {
+      label: t('导出 JSON'),
+      icon: Download,
+      onClick: () => downloadScenarioJson(project, root, scenario.relativePath),
+    },
+    more.some(Boolean) && ('sep' as const),
+    ...more,
+  ]
+  const historyOf = (p: GtPath) =>
+    history && (
+      <GtStepHistory
+        runs={history}
+        row={{ key: p.join('.'), slot: p.slice(0, -1).join('.'), i: Number(p[p.length - 1]) }}
+        hasBlocks={hasBlocks}
+        revision={scenario.revision}
+      />
+    )
 
   return (
     <EditContext.Provider
@@ -231,7 +347,9 @@ export function GtEditor({
           name={scenario.name}
           folder={scenario.relativePath.split('/').slice(0, -1).join('/')}
           recorded={(scenario.tags ?? []).includes('recorded')}
-          onBack={() => (s.dirty ? setLeaving(true) : onClose())}
+          onFolder={onFolder}
+          more={moreItems}
+          runExtra={runExtra}
           views={views}
           view={view}
           onView={setViewKept}
@@ -259,29 +377,7 @@ export function GtEditor({
             })}
           </p>
         )}
-        {s.doc && fileVersion < 3 && (
-          <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:border-b ue:border-line ue:bg-accent/6 ue:px-4 ue:py-1.5 ue:text-footnote ue:text-fg">
-            <Info className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-accent" />
-            {t('旧格式（v{n}）的场景：保存时整理成 v3、给每步补 id，步骤和行为不变。', { n: fileVersion })}
-            {steps.length > 1 && !steps.some((x) => x.action === 'group') && (
-              <ui.Button
-                size="sm"
-                variant="link"
-                onClick={() =>
-                  s.apply(
-                    wrap(
-                      s.doc!,
-                      steps.map((_, i) => ['steps', i]),
-                      'group',
-                    ),
-                  )
-                }
-              >
-                {t('把主流程包成一段')}
-              </ui.Button>
-            )}
-          </div>
-        )}
+        {check.banner}
         {s.error ? (
           <div className="ue:p-4">
             <ErrorText>{s.error}</ErrorText>
@@ -292,16 +388,7 @@ export function GtEditor({
           </div>
         ) : (
           <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto ue:lg:flex-row ue:lg:overflow-hidden">
-            <EditRail
-              doc={s.doc}
-              selected={s.selected}
-              onChange={s.apply}
-              onSelect={s.select}
-              scenarios={scenarios}
-              current={scenario.relativePath}
-              onOpen={(p) => (p === scenario.relativePath ? undefined : s.dirty ? setSwitchTo(p) : onOpen(p))}
-            />
-            <section className="ue:flex ue:min-h-[50vh] ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">
+            <section className="ue:relative ue:flex ue:min-h-[50vh] ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">
               <View
                 doc={s.doc}
                 onChange={s.apply}
@@ -309,32 +396,74 @@ export function GtEditor({
                 onSelect={s.select}
                 onTry={onTry}
                 history={{ undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo }}
+                run={!run && !debug.flow.active && lastFailed ? { status: lastFailed } : undefined}
               />
-            </section>
-            <aside className="ue:min-h-0 ue:shrink-0 ue:overflow-auto ue:border-t ue:border-line ue:lg:w-[380px] ue:lg:border-t-0 ue:lg:border-l">
-              {panel ? (
-                <RunPanel
-                  project={project}
-                  doc={s.doc}
-                  debug={debug}
-                  onSelect={(p) => s.select([p])}
-                  onClose={() => setPanel(false)}
+              {lastRun && !run && (
+                <LastRunChip
+                  run={lastRun}
+                  onOpen={() => {
+                    setPanel(true)
+                    setReportReq({ runId: lastRun.runId, n: Date.now() })
+                  }}
                 />
-              ) : s.selected.length && cmdCtx ? (
-                <Inspector doc={s.doc} selected={s.selected} onChange={s.apply} ctx={cmdCtx} onTry={onTry} />
-              ) : (
-                <ScriptSettings doc={s.doc} onChange={(d) => s.apply(d)} />
               )}
-              {!panel && debug.log.entries.length > 0 && (
-                <ui.Button size="sm" variant="ghost" className="ue:m-3" onClick={() => setPanel(true)}>
-                  <ListChecks className="ue:h-3.5 ue:w-3.5" />
-                  {t('看上次运行的记录和报告')}
-                </ui.Button>
-              )}
+            </section>
+            <aside
+              ref={asideRef}
+              style={aside.style('60%')}
+              className={`ue:relative ue:flex ue:min-h-0 ue:flex-col ue:border-t ue:border-line ue:lg:border-t-0 ue:lg:border-l ${PANE_FIXED}`}
+            >
+              <div className="ue:absolute ue:inset-y-0 ue:left-0 ue:z-10 ue:hidden ue:lg:block">
+                <SplitHandle pane={aside} paneRef={asideRef} side="right" reserve={() => 480} />
+              </div>
+              <div className="ue:flex ue:shrink-0 ue:items-center ue:border-b ue:border-line ue:px-3 ue:py-2">
+                <ui.Segmented
+                  size="sm"
+                  fill
+                  label={t('检查器 / 运行')}
+                  value={panel ? 'run' : 'inspect'}
+                  onChange={(v: string) => setPanel(v === 'run')}
+                  options={[
+                    { id: 'inspect', label: t('检查器') },
+                    { id: 'run', label: debug.flow.active ? t('运行中') : t('运行') },
+                  ]}
+                />
+              </div>
+              <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
+                {panel ? (
+                  <RunPanel
+                    project={project}
+                    doc={s.doc}
+                    debug={debug}
+                    onSelect={(p) => s.select([p])}
+                    onClose={() => setPanel(false)}
+                    history={history}
+                    open={reportReq ?? openRun}
+                    disk={!live}
+                  />
+                ) : s.selected.length && cmdCtx ? (
+                  <Inspector
+                    doc={s.doc}
+                    selected={s.selected}
+                    onChange={s.apply}
+                    ctx={cmdCtx}
+                    onTry={onTry}
+                    history={historyOf}
+                  />
+                ) : (
+                  <ScriptSettings doc={s.doc} onChange={(d) => s.apply(d)} />
+                )}
+              </div>
             </aside>
           </div>
         )}
       </div>
+      {paletteHost &&
+        s.doc &&
+        createPortal(
+          <PaletteGrid doc={s.doc} selected={s.selected} onChange={s.apply} onSelect={s.select} q={paletteQuery} />,
+          paletteHost,
+        )}
       {debug.pending && s.doc && (
         <RunParams
           doc={s.doc}
@@ -343,34 +472,28 @@ export function GtEditor({
           onCancel={debug.cancelParams}
         />
       )}
-      <Confirm
-        open={leaving}
-        title={t('有改动没存')}
-        okText={t('不存，离开')}
-        danger
-        onOk={() => {
-          setLeaving(false)
-          onClose()
-        }}
-        onCancel={() => setLeaving(false)}
-      >
-        <p className="ue:text-footnote ue:text-fg">{t('离开后这次的改动就丢了。要留着就先点「保存」。')}</p>
-      </Confirm>
-      <Confirm
-        open={!!switchTo}
-        title={t('有改动没存')}
-        okText={t('不存，打开那个')}
-        danger
-        onOk={() => {
-          const p = switchTo
-          setSwitchTo(undefined)
-          if (p) onOpen(p)
-        }}
-        onCancel={() => setSwitchTo(undefined)}
-      >
-        <p className="ue:text-footnote ue:text-fg">{t('打开别的脚本，这次的改动就丢了。要留着就先点「保存」。')}</p>
-      </Confirm>
       {tidyHere.dialogs}
     </EditContext.Provider>
+  )
+}
+
+/** 画布左上角：这个脚本上次运行的结果（原来运行结果页的头一眼），点「看报告」右栏切到运行面板 */
+function LastRunChip({ run, onOpen }: { run: GtRunSummary; onOpen: () => void }) {
+  const { cn } = h()
+  return (
+    <div className="ue:absolute ue:top-3 ue:left-3 ue:z-10 ue:flex ue:h-8 ue:items-center ue:gap-2 ue:rounded-xl ue:bg-card ue:px-2.5 ue:text-footnote ue:shadow-pop">
+      {run.succeeded ? (
+        <CircleCheck className="ue:h-3.5 ue:w-3.5 ue:text-success" />
+      ) : (
+        <CircleX className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
+      )}
+      <span className={cn(run.succeeded ? 'ue:text-fg' : 'ue:text-danger')}>
+        {run.succeeded ? t('上次运行通过') : t('上次运行失败')}
+      </span>
+      {run.startedAtUtc && <span className="ue:text-subtle">{fmtTime(run.startedAtUtc)}</span>}
+      <button type="button" onClick={onOpen} className="ue:cursor-pointer ue:text-accent ue:hover:underline">
+        {t('看报告')}
+      </button>
+    </div>
   )
 }

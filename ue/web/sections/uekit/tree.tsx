@@ -1,5 +1,5 @@
 import { ChevronRight, Folder, FolderOpen, type LucideIcon } from 'lucide-react'
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import { h } from '../../host.ts'
 import { useTreeDnd, type DragSrc } from './tree-dnd.ts'
 
@@ -113,6 +113,7 @@ export function FileTree<T>({
   activeFolder,
   onFolderClick,
   onMove,
+  dragData,
   label,
   empty,
 }: {
@@ -148,13 +149,15 @@ export function FileTree<T>({
   onFolderClick?: (path: string) => void
   /** 拖动移动：给了才能拖（tree-dnd.ts），toDir 是放进的文件夹，'' 是根 */
   onMove?: (src: DragSrc<T>, toDir: string) => void
+  /** 拖叶子时额外带的数据（GameTest：拖进流程图就是「调用脚本」）：{ MIME: 内容 }；ev 用来看是不是按着 Alt */
+  dragData?: (d: T, ev: DragEvent) => Record<string, string> | undefined
   label: string
   empty: ReactNode
 }) {
   const { cn } = h()
   const tree = useMemo(() => build(items, folders), [items, folders])
   const [opened, setOpened] = useState<Set<string>>(() => new Set())
-  const dnd = useTreeDnd(onMove, (dir) => setOpened((s) => (s.has(dir) ? s : new Set(s).add(dir))))
+  const dnd = useTreeDnd(onMove, (dir) => setOpened((s) => (s.has(dir) ? s : new Set(s).add(dir))), dragData)
   // 只有一个顶层目录时展开它；选中项的上级目录跟着展开（从别处跳过来时看得到它在哪）
   const single = tree.length === 1 && !tree[0].leaf ? tree[0].path : ''
   useEffect(() => {

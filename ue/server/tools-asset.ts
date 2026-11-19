@@ -1,8 +1,25 @@
 import type { McpResult } from '../../sdk/server.ts'
-import { packageToDisk } from './asset-query.ts'
+import { diskToPackage, packageToDisk } from './asset-query.ts'
+import { noteCompile, noteSaved, packageName } from './bp-check/state.ts'
+import { resumeJob } from './long-ops.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+
+const taskOf = (ctx: OpCtx) => (ctx.actor.kind === 'agent' ? ctx.actor.taskId : '')
+/** 桥接的编译结果：ok、warnings 算通过 */
+const compileOk = (res: Record<string, unknown>) => {
+  const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
+  return status === 'ok' || status === 'warnings'
+}
+/** 保存的磁盘文件换回包名；不在 Content 里的（不该有）跳过 */
+function toPackage(file: string, root: string) {
+  try {
+    return [diskToPackage(file.replace(/\\/g, '/').replace(/\.(uasset|umap)$/i, ''), root)]
+  } catch {
+    return []
+  }
+}
 
 /**
  * 资源和蓝图读写的工具（设计稿「UE 插件扩充设计：资源与蓝图读写」，在仓库 ue/docs/asset-blueprint-design.md）：
@@ -67,7 +84,7 @@ const HELP: Record<string, unknown> = {
       'ue_blueprint graph': 'path, graph?, node?, format?(pseudo|json), around?, hops?, offset?, limit?',
       'ue_blueprint node_search': 'path, graph?, query',
       'ue_blueprint edit': 'path, ops[], dryRun?, compile?',
-      'ue_compile（单独的工具）': 'path：编译并给出通过没有，保存前用它确认'
+      'ue_compile（单独的工具）': 'path：编译并给出通过没有，保存前用它确认',
     },
   },
   DataAsset: { 说明: '没有专用动作：describe / export 看内容，ue_get / ue_set 读改属性' },
@@ -83,12 +100,21 @@ function help(cls: string) {
     : { 通用: HELP.通用, 提示: `${cls} 没有专用动作，用通用动作和 ue_get / ue_set` }
 }
 
+/** 长操作交给 UE 当作业跑：20 秒内做完照常返回，没做完回作业号（long-ops.ts） */
+const JOB = { job: true }
+
+/** 长操作的说明：几个工具共用 */
+export const JOB_HINT =
+  '耗时长的操作（编译、改名、删除、批量校验、蓝图修改）在 UE 里作为作业跑：20 秒内做完照常返回；没做完返回 job（作业号），带 job 再调同一个工具接着等，不要重新发起。'
+
 /** ue_asset 的通用动作；不是这里管的 action 返回 undefined，交回 tools.ts 里 DataTable 和保存那几个 */
 export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promise<McpResult | undefined> {
   const need = (...keys: string[]) => {
     const miss = keys.filter((k) => !a[k])
     return miss.length ? mcpText(`action=${a.action} 要给 ${miss.join('、')}`, true) : undefined
   }
+  // 带 job：接着等之前没做完的作业（改名、删除、批量校验……），不管 action
+  if (a.job) return out(await resumeJob(ctx.project.id, str(a.job)))
   switch (a.action) {
     case 'help':
       return out(help(str(a.class)))
@@ -121,7 +147,7 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
     case 'validate':
       // UELink 2.4 起 paths 一次查多个（提交前检查）：只回条数和前几条，完整结果在 report 文件里
       if (Array.isArray(a.paths) && a.paths.length)
-        return out(await runOp(ctx, 'asset.validate', { paths: a.paths.map(String) }, 600000))
+        return out(await runOp(ctx, 'asset.validate', { paths: a.paths.map(String) }, 600000, JOB))
       return need('path') ?? out(await runOp(ctx, 'asset.validate', { path: a.path }, 120000))
     case 'create':
       return (
@@ -147,12 +173,12 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
       if (a.row) return undefined
       return (
         need('path', 'to') ??
-        out(await runOp(ctx, `asset.${a.action}`, { path: a.path, to: a.to, dryRun: !!a.dryRun }, 300000))
+        out(await runOp(ctx, `asset.${a.action}`, { path: a.path, to: a.to, dryRun: !!a.dryRun }, 300000, JOB))
       )
     case 'delete':
       return (
         need('path') ??
-        out(await runOp(ctx, 'asset.delete', { path: a.path, force: !!a.force, dryRun: !!a.dryRun }, 300000))
+        out(await runOp(ctx, 'asset.delete', { path: a.path, force: !!a.force, dryRun: !!a.dryRun }, 300000, JOB))
       )
     default:
       return undefined
@@ -173,7 +199,9 @@ export const ASSET_TOOLS = [
     '读写蓝图（path 是蓝图资源路径 /Game/...；普通蓝图：Actor、组件、对象、函数库、接口）。由粗到细读：action=outline 大纲（父类、接口、变量、组件树、各张图和函数的入参出参、编译状态和上次的错误）；action=graph 读一张图（graph 是图名，不写是事件图）：默认给伪代码（沿执行线一行一句，行尾 #节点id，@id.引脚 指某个节点的输出），format=json 给节点和引脚连线（offset / limit 分页，around=节点id + hops 只取周围几跳），node=节点id 看一个节点的全部引脚。' +
       'action=node_search 按 query 查能放的节点（和编辑器右键菜单一致），结果里的 spawner 给 add_node 用。' +
       'action=edit 按操作列表修改（改完自动编译并返回每步结果、新节点 id、编译错误和对应的节点 id、受影响的子类和调用方）；dryRun=true 演练：真实执行和编译，拿到结果后取消，不留改动。复杂修改先演练。只编译用 ue_compile。' +
-      '修改只在内存里（标脏），用 ue_save 保存；没保存前可以 ue_undo 撤回。类默认值和组件模板的属性也可以用 ue_get / ue_set。\n' +
+      '修改只在内存里（标脏），用 ue_save 保存；没保存前可以 ue_undo 撤回。类默认值和组件模板的属性也可以用 ue_get / ue_set。' +
+      JOB_HINT +
+      '\n' +
       EDIT_HELP,
     {
       action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit'] },
@@ -189,11 +217,13 @@ export const ASSET_TOOLS = [
       ops: { type: 'array', items: { type: 'object' } },
       dryRun: { type: 'boolean' },
       compile: { type: 'boolean' },
+      job: { type: 'string' },
       target: TARGET,
     },
     ['action', 'path'],
     async (a, ctx) => {
       const path = a.path
+      if (a.job) return out(await resumeJob(ctx.project.id, str(a.job)))
       switch (a.action) {
         case 'outline':
           return out(await runOp(ctx, 'bp.outline', { path }, 120000))
@@ -226,9 +256,12 @@ export const ASSET_TOOLS = [
           )
         case 'edit':
           if (!Array.isArray(a.ops) || !a.ops.length) return mcpText('action=edit 要给 ops（操作数组）', true)
-          return out(
-            await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile: a.compile !== false }, 300000),
-          )
+          const compile = a.compile !== false
+          const r = await runOp(ctx, 'bp.edit', { path, ops: a.ops, dryRun: !!a.dryRun, compile }, 300000, JOB)
+          // 写后编译钩子据此跳过已经编过的蓝图（bp-check/state.ts）；演练不留改动，不记。
+          // 转成作业（长操作）时这里拿不到编译结果，按「没确认过」记，保存后钩子会再编一次
+          if (!a.dryRun) noteCompile(taskOf(ctx), packageName(path), compile ? compileOk(r) : undefined)
+          return out(r)
         // 编译拆成了 ue_compile（面板据此把编译结果算进完成依据）；老会话里还按旧说明调的，指过去
         case 'compile':
           return mcpText('只编译改用 ue_compile 工具（path 参数不变）', true)
@@ -246,6 +279,12 @@ export const ASSET_TOOLS = [
       const res = await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000)
       // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
       const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
+      // 交给写后编译钩子（bp-check/hook.ts）：保存之后编译其中的蓝图，没通过的把错误补给模型
+      noteSaved(
+        taskOf(ctx),
+        ctx.project.id,
+        saved.flatMap((f) => toPackage(f, ctx.project.root)),
+      )
       return { ...out(res), changed: saved }
     },
     {
@@ -257,17 +296,27 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_compile',
-    '编译蓝图（path 是蓝图资源路径 /Game/...），返回编译状态（ok / warnings / error）、错误和警告（带图名和节点 id）、受影响的子类和调用方。改完蓝图、保存之前用它确认通过；有错按节点 id 用 ue_blueprint edit 修，再编译。',
-    { path: { type: 'string' }, target: TARGET },
+    '编译蓝图（path 是蓝图资源路径 /Game/...），返回编译状态（ok / warnings / error）、错误和警告（带图名和节点 id）、受影响的子类和调用方。改完蓝图、保存之前用它确认通过；有错按节点 id 用 ue_blueprint edit 修，再编译。' +
+      '大蓝图编译久：20 秒内没编完返回 job，带 path 和 job 再调一次接着等。',
+    { path: { type: 'string' }, job: { type: 'string' }, target: TARGET },
     ['path'],
     async (a, ctx) => {
-      const res = await runOp(ctx, 'bp.compile', { path: a.path }, 300000)
+      const res = a.job
+        ? await resumeJob(ctx.project.id, str(a.job))
+        : await runOp(ctx, 'bp.compile', { path: a.path }, 300000, JOB)
+      // 还在编：不给完成依据，等带 job 再调拿到结果
+      if (res.job && !res.compile) return out(res)
       const status = String((res.compile as { status?: string } | undefined)?.status ?? '')
+      noteCompile(taskOf(ctx), packageName(a.path), compileOk(res))
       const file = packageToDisk(ctx.project.root, str(a.path))
       // 编译结论交给面板的完成依据：通过的蓝图不再要求跑项目的测试步骤，没通过时不让对话结束
       return {
         ...out(res),
-        verified: { passed: status === 'ok' || status === 'warnings', name: '蓝图编译', ...(file && { files: [file] }) },
+        verified: {
+          passed: status === 'ok' || status === 'warnings',
+          name: '蓝图编译',
+          ...(file && { files: [file] }),
+        },
       }
     },
     { effect: 'verify' },

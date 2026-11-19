@@ -44,6 +44,33 @@ interface State {
   y: number
   items: MenuItem[]
   seq: number
+  /** 带搜索框（流程图上的节点菜单）：框里的提示字 */
+  search?: string
+}
+
+export interface MenuOptions {
+  /** 顶上放一个搜索框，按名字和右边的说明筛（项多的菜单：蓝图画布上的「加节点」） */
+  search?: string
+}
+
+/** 搜索：留下名字、说明里带关键字的项，小标题只在它下面还有项时留着 */
+function filterItems(items: MenuItem[], q: string): MenuItem[] {
+  const k = q.trim().toLowerCase()
+  if (!k) return items
+  const out: MenuItem[] = []
+  let title: MenuItem | undefined
+  for (const it of items) {
+    if (it === 'sep') continue
+    if ('title' in it) {
+      title = it
+      continue
+    }
+    if (!`${it.label} ${it.hint ?? ''}`.toLowerCase().includes(k)) continue
+    if (title) out.push(title)
+    title = undefined
+    out.push(it)
+  }
+  return out
 }
 
 let state: State | undefined
@@ -52,7 +79,11 @@ const subs = new Set<() => void>()
 const emit = () => subs.forEach((f) => f())
 
 /** 在鼠标位置打开菜单；空菜单不开。会拦掉浏览器自己的右键菜单 */
-export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: (MenuItem | false | '' | undefined | null)[]) {
+export function openMenu(
+  e: MouseEvent | globalThis.MouseEvent,
+  items: (MenuItem | false | '' | undefined | null)[],
+  o: MenuOptions = {},
+) {
   e.preventDefault()
   e.stopPropagation()
   // 去掉条件不满足的项，以及开头、结尾、连着的分隔线
@@ -64,16 +95,17 @@ export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: (MenuItem
   }
   while (list.at(-1) === 'sep') list.pop()
   if (!list.length) return
-  state = { x: e.clientX, y: e.clientY, items: list, seq: ++seq }
+  state = { x: e.clientX, y: e.clientY, items: list, seq: ++seq, search: o.search }
   emit()
 }
 
 /** 挂在按钮下面打开（下拉菜单：导航条的「最近看过」、分类栏的「更多」），不是右键 */
-export function openMenuAt(el: HTMLElement, items: (MenuItem | false | '' | undefined | null)[]) {
+export function openMenuAt(el: HTMLElement, items: (MenuItem | false | '' | undefined | null)[], o?: MenuOptions) {
   const r = el.getBoundingClientRect()
   openMenu(
     { clientX: r.left, clientY: r.bottom + 4, preventDefault() {}, stopPropagation() {} } as unknown as MouseEvent,
     items,
+    o,
   )
 }
 
@@ -143,7 +175,14 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
   const { cn } = h()
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: s.x, top: s.y, ox: 'left', oy: 'top' })
+  const [q, setQ] = useState('')
+  const items = s.search === undefined ? s.items : filterItems(s.items, q)
   const [act, setAct] = useState(-1)
+  // 搜索时默认选中第一项：打几个字直接回车
+  useEffect(() => {
+    if (s.search !== undefined) setAct(items.findIndex(isAction))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 只在关键字变时重选，items 每次渲染都是新数组
+  }, [q])
 
   // 贴着屏幕边时往左 / 往上翻，动画的原点跟着换
   useLayoutEffect(() => {
@@ -168,7 +207,7 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
     }
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') return closeMenu()
-      const idx = s.items.map((x, i) => (isAction(x) ? i : -1)).filter((i) => i >= 0)
+      const idx = items.map((x, i) => (isAction(x) ? i : -1)).filter((i) => i >= 0)
       if (!idx.length) return
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
@@ -177,7 +216,7 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
         setAct(idx[at < 0 && e.key === 'ArrowUp' ? idx.length - 1 : next])
       } else if (e.key === 'Enter' && act >= 0) {
         e.preventDefault()
-        const it = s.items[act]
+        const it = items[act]
         if (isAction(it)) {
           closeMenu()
           it.onClick()
@@ -189,16 +228,21 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
     addEventListener('keydown', key)
     addEventListener('blur', closeMenu)
     addEventListener('resize', closeMenu)
-    addEventListener('wheel', closeMenu, { passive: true })
+    // 菜单里面滚（带搜索的长菜单）不关
+    const wheel = (e: Event) => {
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return
+      closeMenu()
+    }
+    addEventListener('wheel', wheel, { passive: true })
     return () => {
       removeEventListener('pointerdown', away, true)
       removeEventListener('contextmenu', away, true)
       removeEventListener('keydown', key)
       removeEventListener('blur', closeMenu)
       removeEventListener('resize', closeMenu)
-      removeEventListener('wheel', closeMenu)
+      removeEventListener('wheel', wheel)
     }
-  }, [s, act, inline])
+  }, [s, act, inline, items])
 
   return (
     <div
@@ -211,7 +255,18 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
       )}
       style={inline ? undefined : { left: pos.left, top: pos.top, transformOrigin: `${pos.oy} ${pos.ox}` }}
     >
-      {s.items.map((it, i) => {
+      {s.search !== undefined && (
+        <input
+          autoFocus
+          value={q}
+          placeholder={s.search}
+          onChange={(e) => setQ(e.target.value)}
+          className="ue:mb-1 ue:h-7 ue:w-full ue:rounded-(--c-menu-itemRadius) ue:border-b ue:border-line ue:bg-transparent ue:px-2 ue:text-footnote ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+        />
+      )}
+      <div className={cn(s.search !== undefined && 'ue:max-h-[min(420px,60vh)] ue:overflow-y-auto')}>
+      {!items.length && <div className="ue:px-2 ue:py-1.5 ue:text-caption ue:text-subtle">{t('没有对上的')}</div>}
+      {items.map((it, i) => {
         if (it === 'sep') return <div key={i} className="ue:mx-1 ue:my-1 ue:h-px ue:bg-line" />
         if ('title' in it)
           return (
@@ -250,6 +305,7 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
           </button>
         )
       })}
+      </div>
     </div>
   )
 }

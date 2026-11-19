@@ -90,7 +90,7 @@ export function applyFlowEvent(s: FlowRunState, e: GtFlowEvent): FlowRunState {
   }
 }
 
-/** gt.job 里流程图用到的几项（GtRun.tsx 的 GtJob 多带的 at、guards，协议第 10 节） */
+/** gt.job 里流程图用到的几项（gt-run/types.ts 的 GtJob 多带的 at、guards，协议第 10 节） */
 export interface GtJobFlowPart {
   runId?: string
   busy?: boolean

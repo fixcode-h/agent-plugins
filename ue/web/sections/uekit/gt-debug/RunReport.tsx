@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { GtPath, GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { ErrorText } from '../../../ui.tsx'
-import { loadReport } from '../GtRun.tsx'
+import { loadReport } from '../gt-run/types.ts'
 import { ms, StepIcon, type GtStep as ReportStep } from '../GtStepDetail.tsx'
 import { titleOfKey } from './lookup.ts'
 import { stepVars, varsLine } from './VarsTable.tsx'
@@ -19,10 +19,13 @@ export function RunReport({
   active,
   doc,
   onSelect,
+  disk,
 }: {
   project: string
   runId?: string
   active: boolean
+  /** 编辑器没连上：由面板从磁盘读报告 */
+  disk?: boolean
   doc?: GtScript
   onSelect: (p: GtPath) => void
 }) {
@@ -34,13 +37,13 @@ export function RunReport({
     setError('')
     if (!runId || active) return
     let off = false
-    loadReport(project, runId, false)
+    loadReport(project, runId, !!disk)
       .then((s) => !off && setSteps(s))
       .catch((e: Error) => !off && setError(e.message))
     return () => {
       off = true
     }
-  }, [project, runId, active])
+  }, [project, runId, active, disk])
 
   if (!runId)
     return <p className="ue:p-4 ue:text-footnote ue:text-subtle">{t('还没在这里跑过：跑完后这里是这次运行的报告')}</p>

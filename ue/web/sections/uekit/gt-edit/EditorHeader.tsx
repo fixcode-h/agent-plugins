@@ -5,26 +5,31 @@ import {
   FlaskConical,
   Gamepad2,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Play,
   PlayCircle,
   StepForward,
 } from 'lucide-react'
 import { h, t } from '../../../host.ts'
-import { openMenuAt } from '../../../menu.tsx'
+import { openMenuAt, type MenuItem } from '../../../menu.tsx'
 import { kindLabel, useTargetInfo, worldLabel } from '../../../ui.tsx'
 import type { ViewDef } from './views.ts'
 
 /**
  * 编辑页顶栏（效果图 1）：左边面包屑（GameTest / 文件夹 / 脚本名 + 编写或录制的标签），
- * 右边依次是「编写 / 录制」、视图切换、目标（PIE · 客户端 0）、保存状态、「试这个节点」、「运行」。
+ * 右边依次是「编写 / 录制」、视图切换、目标（PIE · 客户端 0）、保存状态、「⋯」、「试这个节点」、「运行」。
+ * 进 GameTest 就是编辑页（2026-11-19 取消了运行结果页），面包屑不再回到别的页：点文件夹是在左栏场景库里定位到它。
+ * 原来运行结果页头上的整理、核对选择器、复制 / 导出 JSON 和场景列表上的设置入口收进「⋯」，批量运行并进「运行」的下拉。
  * 只管摆放和点击，动作都由外壳（GtEditor）给
  */
 export function EditorHeader({
   name,
   folder,
   recorded,
-  onBack,
+  onFolder,
+  more,
+  runExtra,
   views,
   view,
   onView,
@@ -43,7 +48,12 @@ export function EditorHeader({
   folder: string
   /** 录制出来的脚本（tags 含 recorded） */
   recorded: boolean
-  onBack: () => void
+  /** 点面包屑里的文件夹：在左栏场景库里定位到它（folder 是到这一级的相对路径） */
+  onFolder?: (folder: string) => void
+  /** 「⋯」菜单 */
+  more: (MenuItem | false | undefined)[]
+  /** 「运行」下拉里接在后面的（全部照做、批量运行） */
+  runExtra?: (MenuItem | false | undefined)[]
   views: ViewDef[]
   view: string
   onView: (id: string) => void
@@ -69,22 +79,25 @@ export function EditorHeader({
   return (
     <header className="ue:flex ue:min-h-12 ue:flex-wrap ue:items-center ue:gap-x-3 ue:gap-y-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
       <nav aria-label={t('位置')} className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-body">
-        <button
-          type="button"
-          title={t('回到运行结果')}
-          onClick={onBack}
-          className="ue:flex ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1.5 ue:font-mono ue:text-muted ue:hover:text-fg"
-        >
+        <span className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-muted">
           <FlaskConical className="ue:h-3.5 ue:w-3.5" />
           GameTest
-        </button>
+        </span>
         {folder
           .split('/')
           .filter(Boolean)
-          .map((f, i) => (
+          .map((f, i, all) => (
             <span key={i} className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:font-mono ue:text-muted">
               <span className="ue:text-subtle">/</span>
-              {f}
+              <button
+                type="button"
+                title={t('在场景库里定位到这个文件夹')}
+                disabled={!onFolder}
+                onClick={() => onFolder?.(all.slice(0, i + 1).join('/'))}
+                className="ue:cursor-pointer ue:hover:text-fg ue:disabled:cursor-default"
+              >
+                {f}
+              </button>
             </span>
           ))}
         <span className="ue:text-subtle">/</span>
@@ -135,6 +148,12 @@ export function EditorHeader({
             {t('已保存')}
           </span>
         )}
+        <ui.IconButton
+          icon={MoreHorizontal}
+          size="sm"
+          label={t('更多：整理、核对选择器、复制 / 导出 JSON、运行设置')}
+          onClick={(e: React.MouseEvent<HTMLElement>) => openMenuAt(e.currentTarget, more)}
+        />
         <ui.Button
           size="sm"
           variant="secondary"
@@ -182,6 +201,7 @@ export function EditorHeader({
                   disabled: !onRunTo,
                   onClick: () => onRunTo?.(),
                 },
+                ...(runExtra?.length ? ['sep' as const, ...runExtra] : []),
               ])
             }
           >

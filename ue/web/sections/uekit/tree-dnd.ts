@@ -28,6 +28,7 @@ export function canDrop(src: { path: string; dir: boolean }, toDir: string) {
 export function useTreeDnd<T>(
   onMove: ((src: DragSrc<T>, toDir: string) => void) | undefined,
   expand: (dir: string) => void,
+  extra?: (d: T, e: DragEvent) => Record<string, string> | undefined,
 ) {
   const src = useRef<DragSrc<T> | undefined>(undefined)
   // 现在悬停的目标文件夹（'' 是根）；undefined 是没在拖或放不下
@@ -76,8 +77,11 @@ export function useTreeDnd<T>(
       draggable: true,
       onDragStart: (e: DragEvent) => {
         src.current = it
-        e.dataTransfer.effectAllowed = 'move'
+        const more = it.data !== undefined && !it.dir ? extra?.(it.data, e) : undefined
+        // 带了别的数据（拖进流程图当「调用脚本」）时也允许复制，放进流程图那边按 copy 收
+        e.dataTransfer.effectAllowed = more ? 'copyMove' : 'move'
         e.dataTransfer.setData('text/plain', it.path)
+        for (const [k, v] of Object.entries(more ?? {})) e.dataTransfer.setData(k, v)
       },
       onDragEnd: end,
       onDragOver: (e: DragEvent) => hover(e, toDir, it.dir && collapsed),
