@@ -20,7 +20,7 @@ user-invocable: true
 
 对一批资源做同样的读或改（读几个蓝图的大纲、给一批蓝图的同一个组件改属性、编译一批蓝图），**只调一次工具**，不要一个资源调一次，也不要并行发十几次：
 
-- **优先用 `select` 按条件选，不要把资源名逐个列进 `paths`**：`paths` / `items` 逐个列出超过上限（默认 20 个，用户可在 UE 插件设置里改）时这次调用直接被拦下、不执行；`select` 不限个数。关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
+- **优先用 `select` 按条件选，不要把资源名逐个列进 `paths`**：`paths` / `items` 逐个列出超过上限（默认 20 个，用户可在 UE 插件设置里改）时这次调用直接被拦下、不执行；`select` 不限个数。每项参数各不相同（比如按表给 300 个蓝图各设不同的值）又超过上限时，把 items 写成 JSON 文件（`[{"path": "/Game/...", "value": ...}]`，放进 `Saved/AgentPanel/` 或项目里的临时目录），用 `itemsFile=<路径>` 传。关卡里的 Actor 用 `select={kind:"actor", class, tag}`。
 - `select` 的条件可以组合，在资源注册表里筛、不加载资源：`path` 目录（可给目录数组；`recursive=false` 不含子目录）、`class` 资源类型（Blueprint、WidgetBlueprint、DataTable…）、`parent` 蓝图父类（含间接继承，C++ 类认整条继承链）、`name` / `exclude` 名字通配符（`"*_Boss"`、`["BP_Old*", "*_Test"]`；带 `/` 时比对路径，如 `"/Game/Enemies/Legacy/*"`）、`prefix` 名字前缀、`tags` 注册表标签。例：某目录下所有继承 BP_EnemyBase、名字不以 _Old 结尾的蓝图改 MaxHP：`ue_set select={path:"/Game/Characters", class:"Blueprint", parent:"BP_EnemyBase", exclude:"*_Old"} prop=MaxHP value=200`。拿不准选中了哪些时先 `dryRun=true` 看清单。
 - 例：一批蓝图的根组件改成静态：`ue_set paths=["/Game/A.A_C:DefaultSceneRoot_GEN_VARIABLE", "/Game/B.B_C:DefaultSceneRoot_GEN_VARIABLE"] prop=Mobility value="Static"`；路径规律一样时用 `select` + `items` 里的 `{name}` 占位符。
 - 一个蓝图里多个组件改同一个属性：`ue_blueprint action=edit` 的 `setProperty` 给 `name` 名字数组、通配符或 `componentClass`，多个属性用 `props`。
@@ -98,24 +98,24 @@ user-invocable: true
 
 **默认用 `ue_*` 工具，批量也一样**：一批（`select` 不限个数）就是一次调用，和一个 Python 脚本来回次数相同，还带演练、整批撤回、改前改后对比、编译通过才存、P4 签出和改动记录。Python 要写代码、5.4 / 5.8 的 API 有差异，常常试错几轮，实际更慢。
 
-一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除（`ue_asset`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
+一律用工具：改属性和类默认值（`ue_set`）、DataTable 行（`ue_asset`）、蓝图变量 / 节点 / 组件（`ue_blueprint`）、新建复制改名删除和导入（`ue_asset`）、编辑器函数库（`ue_call class=...`）、编译保存、运行中游戏里的读改调、AssetForge 管着的资产（改配置）。
 
 只有这些情况写 `ue_python`，并在回复里一句话说明为什么工具不行：
 
-1. 工具没有的编辑器能力：导入 / 重新导入外部文件；资源上的编辑器函数（LOD、碰撞、Nanite、贴图压缩、合并重定向器）；材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑。
+1. 工具没有的编辑器能力：材质图、控件树、动画状态机、行为树、Sequencer；关卡里 spawn / destroy 以外的批量编辑；编辑器函数库里没有、只有 Python API 才有的操作。导入外部文件用 `ue_asset action=import`、重新导入用 `action=reimport`；LOD、碰撞、贴图设置这类编辑器函数先 `ue_call class=<函数库> action=list`（不知道类名用 `query` 搜）找，一批资源用 `select` + `args` 里的 `"{path}"` 一次调（UELink 2.16）。
 2. 每项的值要复杂计算，而且没法「一次批量读 → 算好 → `items` 一次批量写」（先试这条路）。
 3. 只读的全项目统计（用 Asset Registry，不加载资源）。只读脚本不受下面 2–4 条限制。
 
 写 Python 必须做到：
 
 1. 顶部 `DRY_RUN = True` 先演练，只打印每项「资源、改前、改后」，没问题再改成 `False` 跑同一份。
-2. 修改都放在 `with unreal.ScopedEditorTransaction("Agent: <做什么>"):` 里，改前 `obj.modify()`。
+2. 面板会自动把整段脚本包进一个编辑器事务（不用自己写）；改资源前照样 `obj.modify()`，否则事务记不下这次改动。返回里的 `changed` 是这次改了的包，`ue_undo` 能整次撤回。
 3. 不保存、不碰源码控制、不 `rename_asset` / `delete_asset`：改完 `ue_asset action=dirty` 看脏包，再 `ue_save`（默认先编译蓝图，通过才写盘）。
 4. 开始前 `ue_asset action=dirty`，已经脏、不是本对话改的包传进脚本跳过。
 5. 每项 `try/except` 记下原因继续，结尾只打印一行 JSON `{changed, failed:[{path,error}], skipped}`；明细超过 4000 字写到 `Saved/AgentPanel/py-out/<名字>.json`，只打印路径。
 6. 超过 1 分钟用 `unreal.ScopedSlowTask`，按 500 个一批分几次调（单次上限 600 秒，期间编辑器卡住，先告诉用户）。
 7. 不确定的 API 先用小脚本 `print(dir(unreal.X))` 查，不要猜。
-8. 告诉用户改了哪些资源，以及这次不能 `ue_undo`（没保存前用编辑器撤销或 `ue_asset action=revert`）。
+8. 告诉用户改了哪些资源（返回的 `changed`）；要撤回用 `ue_undo`，之后编辑器里又改过别的就只能 `ue_asset action=revert` 放弃。
 
 ## 边界
 

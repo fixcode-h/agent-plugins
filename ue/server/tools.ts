@@ -305,30 +305,45 @@ const DEFS = [
   ),
   tool(
     'ue_call',
-    '调函数：action=list 列出对象（path）上能调的函数（BlueprintCallable、Exec、标了 AgentPanel 元数据的）和参数；action=call 调 function，args 是对象（按参数名）或数组（按顺序）。返回值和输出参数在结果里。调用按 UE 页的运行时权限放行或请用户确认，不能自动撤回。',
+    '调函数：action=list 列出对象（path）上能调的函数（BlueprintCallable、Exec、标了 AgentPanel 元数据的）和参数；action=call 调 function，args 是对象（按参数名）或数组（按顺序）。返回值和输出参数在结果里。调用按 UE 页的运行时权限放行或请用户确认，不能自动撤回。' +
+      '编辑器函数库（UELink 2.16）：给 class（如 EditorStaticMeshLibrary、EditorAssetLibrary）不给 path，list 列它的静态函数（不知道类名时用 query 搜），call 调用；按「执行 Python」权限放行，包进编辑器事务，ue_undo 能撤。对一批资源各调一次用 select / paths，args 里写 "{path}" 代表当前资源（如 {StaticMesh: "{path}", LODCount: 3}）。',
     {
       action: { type: 'string', enum: ['list', 'call'] },
       path: { type: 'string' },
+      class: { type: 'string' },
+      query: { type: 'string' },
       function: { type: 'string' },
       args: {},
+      ...BATCH_PROPS,
       target: TARGET,
     },
-    ['path'],
-    async (a, ctx) =>
-      a.action === 'call' || a.function
+    [],
+    async (a, ctx) => {
+      const call = a.action === 'call' || (!!a.function && a.action !== 'list')
+      // 编辑器函数库：一批资源各调一次
+      if (isBatch(a)) return runBatch('ue_call', a, ctx)
+      if (a.class || (!a.path && a.query)) {
+        if (!call) return out(await runOp(ctx, 'editor.functions', { class: a.class, query: a.query }))
+        if (!a.function) return mcpText('action=call 要给 function', true)
+        return out(await runOp(ctx, 'editor.call', { class: a.class, function: a.function, args: a.args ?? [] }))
+      }
+      if (!a.path) return mcpText('要给 path（对象路径），或给 class 调编辑器函数库', true)
+      return call
         ? out(await runOp(ctx, 'call', { path: a.path, function: a.function, args: a.args ?? [] }))
-        : out(await runOp(ctx, 'functions', { path: a.path })),
+        : out(await runOp(ctx, 'functions', { path: a.path }))
+    },
   ),
   tool(
     'ue_asset',
     '资源：通用读写和 DataTable。' +
-      '读：describe（摘要：类、文件、标签、子对象、引用数量）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 递归层数）；validate（数据校验，paths 一次查多个）。' +
-      '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（path 写 /Game/目录/名字，class 默认 Blueprint 要给 parent 父类；DataTable 要给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删；每次都请用户确认）。' +
+      '读：describe（摘要）；export（整份属性和内嵌子对象，depth 限深、offset / limit 分页，file=true 写成文件只回路径）；refs（direction=dependencies 它用了谁 / referencers 谁用了它 / both，hard 只看硬引用，depth 层数）；validate（数据校验，paths 一次查多个）。' +
+      '结构性操作（按权限确认，dryRun=true 只检查）：create 新建（class 默认 Blueprint 要给 parent；DataTable 给 rowStruct；也可以是 DataAsset 子类、曲线）；duplicate 复制到 to；rename 改名或移动到 to（引用它的资源一起改）；delete 删除（有引用方时拒绝并列出，force=true 强删）。' +
       'DataTable：rows 分页读行（filter 筛行名前缀或单元格文字）；row 读一行；set 改单元格（row + column + value；row 给数组或通配符、或 where {列: 值} 按别的列挑行时一次改多行，结果带改前改后，dryRun 演练；多张表或不同列用 items）；add / remove / duplicate（给 row 时是复制行）/ rename 增删行（to 是新行名）。' +
+      'import 导入 FBX、贴图等外部文件（files 磁盘路径 → to 目录，force 覆盖已有，先 dryRun）；reimport 按源文件重新导入。' +
       '没保存的改动：dirty 列出改了没保存的；revert 放弃改动；保存用 ue_save。open 在编辑器里打开。' +
       'help 列出某个类型（class）有哪些专用动作和参数。属性读写用 ue_get / ue_set，蓝图的图表和成员用 ue_blueprint。编辑器没开时走后台编辑器（默认不自动起，先 ue_editor background_start）。' +
       JOB_HINT +
-      ' describe / refs / export / duplicate / rename / delete 能批量（export 批量时一律写文件）。' +
+      ' describe / refs / export / duplicate / rename / delete / reimport 能批量（export 批量时一律写文件）。' +
       BATCH_HINT,
     {
       action: { type: 'string', enum: ASSET_ACTIONS },
@@ -341,6 +356,7 @@ const DEFS = [
       hard: { type: 'boolean' },
       depth: { type: 'number' },
       file: { type: 'boolean' },
+      files: { type: 'array', items: { type: 'string' } },
       force: { type: 'boolean' },
       dryRun: { type: 'boolean' },
       // 改单元格时可以给行名数组或通配符（一次改多行）

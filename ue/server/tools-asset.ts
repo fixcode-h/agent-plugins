@@ -31,6 +31,8 @@ export const ASSET_ACTIONS = [
   'dirty',
   'revert',
   'open',
+  'import',
+  'reimport',
   'help',
 ]
 
@@ -51,6 +53,9 @@ const HELP: Record<string, unknown> = {
       delete: 'path, force?, dryRun?',
       'dirty / revert': 'packages?（不给就是所有改了没保存的）；保存用 ue_save 工具',
       open: 'path',
+      import:
+        'files（磁盘文件路径数组）, to（导到哪个 /Game 目录）, force?（覆盖已有的）, dryRun?：FBX、贴图、音频等，不弹对话框、不自动保存（UELink 2.16）',
+      reimport: 'path，或 paths / select 一批：按资源记下的源文件重新导入，dryRun? 先看能不能（UELink 2.16）',
     },
   },
   DataTable: {
@@ -164,6 +169,18 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
         need('path', 'to') ??
         out(await runOp(ctx, `asset.${a.action}`, { path: a.path, to: a.to, dryRun: !!a.dryRun }, 300000, JOB))
       )
+    case 'import': {
+      const files = Array.isArray(a.files) ? a.files.map(String) : typeof a.files === 'string' ? [a.files] : []
+      if (!files.length) return mcpText('action=import 要给 files（磁盘文件路径数组）', true)
+      return (
+        need('to') ??
+        out(
+          await runOp(ctx, 'asset.import', { files, dest: a.to, replace: !!a.force, dryRun: !!a.dryRun }, 1800000, JOB),
+        )
+      )
+    }
+    case 'reimport':
+      return need('path') ?? out(await runOp(ctx, 'asset.reimport', { path: a.path, dryRun: !!a.dryRun }, 600000, JOB))
     case 'delete':
       return (
         need('path') ??
@@ -336,7 +353,7 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_python',
-    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些用 select 一次选一批、不限个数，有演练、撤回、编译回读和 P4 签出，Python 没有）。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；修改包在 unreal.ScopedEditorTransaction 里；不保存、不签出、不改名删除，改完用 ue_save 存（默认先编译通过才写盘）；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
+    '在 UE 编辑器里执行 Python（兜底用：别的 ue_* 工具做不到的编辑器操作）。按 UE 页「权限与设置」的「执行 Python」：默认直接执行，用户也可设成每次确认或不允许；项目要启用引擎的 Python Editor Script Plugin。code 是完整脚本（import unreal），print 的内容和执行期间的日志在 output 里。能用 ue_asset、ue_blueprint、ue_get / ue_set 做的不要用它（批量也一样：那些用 select 一次选一批、不限个数，有演练、逐项结果和编译回读）。面板自动把整段包进一个编辑器事务：改了资源时返回 changed（改了哪些包）和 tx，ue_undo 能整次撤回。会改资源的脚本必须：DRY_RUN=True 先演练打印改前改后；不保存、不签出、不改名删除，改完用 ue_save 存（默认先编译通过才写盘）；每项 try/except，结尾只打印一行 JSON 汇总，长明细写 Saved/AgentPanel/py-out/ 只打印路径；单次不超过 600 秒。细则见技能 ue-asset-authoring「MCP 还是 Python」。',
     { code: { type: 'string' }, timeoutMs: { type: 'number' }, target: TARGET },
     ['code'],
     async (a, ctx) => {

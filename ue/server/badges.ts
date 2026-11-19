@@ -22,9 +22,7 @@ export async function badges(ctx: OpCtx, overview = false) {
     quiet(readLocal(p.id)),
     quiet(liveKeys(p).then(async (isLive) => (await readHistory(p.id)).filter(isLive).length)),
     // 资源改动只暂存在编辑器（或后台编辑器）里；只有游戏进程时没有
-    cards.some((c) => c.kind === 'editor')
-      ? quiet(dirtyList(ctx))
-      : undefined,
+    cards.some((c) => c.kind === 'editor') ? quiet(dirtyList(ctx)) : undefined,
   ])
   // 概览页（overview=1）多要几项：崩溃、没保存的名字、帧时间、最近的错误（server/overview.ts）
   const extra = overview ? await overviewExtra(ctx, cards, dirty) : undefined
