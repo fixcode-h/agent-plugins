@@ -3752,5 +3752,6 @@
   "运行设置里改": "Edit in run settings",
   "双击写说明": "Double-click to add a note",
   "只解析，不执行": "Resolve only, don't run",
-  "加了守护「{id}」：从它的引脚拖出处理步骤，触发条件在右边「这个脚本的守护」里填": "Added guard \"{id}\": drag its handling steps out of its pin, and set the trigger under \"Guards of this script\" on the right"
+  "加了守护「{id}」：从它的引脚拖出处理步骤，触发条件在右边「这个脚本的守护」里填": "Added guard \"{id}\": drag its handling steps out of its pin, and set the trigger under \"Guards of this script\" on the right",
+  "在这一步失败": "Failed here"
 }

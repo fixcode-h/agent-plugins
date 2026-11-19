@@ -41,7 +41,7 @@ import { useSelectorCheck } from './selector-check.tsx'
 import { copyScenarioJson, downloadScenarioJson } from '../gt-export.ts'
 import type { GtHistoryRun } from '../gt-step-history.ts'
 import { GtStepHistory } from '../GtStepHistory.tsx'
-import type { GtRunSummary } from '../gt-run/types.ts'
+import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useScript } from './use-script.ts'
@@ -223,6 +223,29 @@ export function GtEditor({
       off = true
     }
   }, [project, scenario.relativePath, live, lastRun?.runId])
+  // 上次运行失败的步骤在画布上标红（读那次的报告，按步骤 id 对）；开跑后换成实时的运行态，跑完再按新报告标
+  const [lastFailed, setLastFailed] = useState<Record<string, 'fail'>>()
+  const failedRun = lastRun && !lastRun.succeeded ? lastRun.runId : undefined
+  useEffect(() => {
+    setLastFailed(undefined)
+    if (!failedRun) return
+    let off = false
+    loadReport(project, failedRun, !live).then(
+      (rows) => {
+        if (off) return
+        const out: Record<string, 'fail'> = {}
+        for (const r of rows) {
+          const id = (r as { id?: unknown }).id
+          if (r.status === 'failed' && typeof id === 'string') out[id] = 'fail'
+        }
+        setLastFailed(out)
+      },
+      () => undefined,
+    )
+    return () => {
+      off = true
+    }
+  }, [project, failedRun, live])
   const sel = s.selected.length === 1 ? s.selected[0] : undefined
   const selStep = sel && s.doc && (getAt(s.doc, sel) as GtStep | undefined)
   const selKey = selStep && typeof selStep === 'object' ? stepKey(selStep, sel!) : undefined
@@ -373,6 +396,7 @@ export function GtEditor({
                 onSelect={s.select}
                 onTry={onTry}
                 history={{ undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo }}
+                run={!run && !debug.flow.active && lastFailed ? { status: lastFailed } : undefined}
               />
               {lastRun && !run && (
                 <LastRunChip

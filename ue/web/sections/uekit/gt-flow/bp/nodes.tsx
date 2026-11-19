@@ -1,6 +1,6 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { CirclePlay, ClipboardList, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
+import { CirclePlay, CircleX, ClipboardList, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
@@ -136,6 +136,8 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
       tone={HEAD[ui.tone]}
       className={cn(
         st && !n.loose && RUN_LOOK[st.status],
+        // 失败的那步要一眼看到（上次运行的报告也按这个标）
+        st?.status === 'failed' && !n.loose && 'ue:ring-2 ue:ring-danger/70',
         selected === n.id && 'ue:ring-2 ue:ring-accent',
         run.paused && run.at === n.id && 'ue:ring-2 ue:ring-warning',
         (disabled || n.loose) && 'ue:opacity-55',
@@ -168,6 +170,12 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
             <OutPin pin={p} style={{ top: '50%' }} />
           </div>
         ))}
+      {st?.status === 'failed' && !n.loose && (
+        <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-danger">
+          <CircleX className="ue:h-3 ue:w-3" />
+          {t('在这一步失败')}
+        </div>
+      )}
       {n.loose && (
         <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-warning">
           <Unlink className="ue:h-3 ue:w-3" />
