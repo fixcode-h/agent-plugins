@@ -78,6 +78,34 @@ namespace
 
 	TSharedPtr<FJsonValue> Obj(const TSharedPtr<FJsonObject>& O) { return MakeShared<FJsonValueObject>(O); }
 
+	/** 字符串或字符串数组都认（"a" 和 ["a", "b"]），空项去掉 */
+	TArray<FString> StrList(const TSharedPtr<FJsonObject>& A, const TCHAR* Key)
+	{
+		TArray<FString> Out;
+		if (!A.IsValid())
+		{
+			return Out;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+		FString One;
+		if (A->TryGetArrayField(Key, Arr) && Arr)
+		{
+			for (const TSharedPtr<FJsonValue>& V : *Arr)
+			{
+				FString S;
+				if (V.IsValid() && V->TryGetString(S) && !S.TrimStartAndEnd().IsEmpty())
+				{
+					Out.Add(S.TrimStartAndEnd());
+				}
+			}
+		}
+		else if (A->TryGetStringField(Key, One) && !One.TrimStartAndEnd().IsEmpty())
+		{
+			Out.Add(One.TrimStartAndEnd());
+		}
+		return Out;
+	}
+
 	/** 控制台变量是谁设的（「改过的」筛选和界面上的来源标签） */
 	FString SetByName(EConsoleVariableFlags F)
 	{
@@ -1207,7 +1235,19 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		FARFilter Filter;
 		// 2.14：recursive=false 只看这一层目录
 		Filter.bRecursivePaths = Bool(A, TEXT("recursive"), true);
-		Filter.PackagePaths.Add(FName(*Str(A, TEXT("path"), TEXT("/Game"))));
+		// 2.15：paths 一次给多个目录，给了就不看 path
+		const TArray<FString> Dirs = StrList(A, TEXT("paths"));
+		if (Dirs.Num() > 0)
+		{
+			for (const FString& Dir : Dirs)
+			{
+				Filter.PackagePaths.Add(FName(*Dir));
+			}
+		}
+		else
+		{
+			Filter.PackagePaths.Add(FName(*Str(A, TEXT("path"), TEXT("/Game"))));
+		}
 		const FString ClassName = Str(A, TEXT("class"));
 		if (!ClassName.IsEmpty())
 		{
@@ -1233,8 +1273,12 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 		{
 			FilterAssetsByTags(*Tags, Found);
 		}
+		// 2.15：name / exclude 是通配符（字符串或数组），Agent 不用把几百个资源名逐个列进 paths
+		FilterAssetsByName(StrList(A, TEXT("name")), StrList(A, TEXT("exclude")), Found);
 		const FString Prefix = Str(A, TEXT("prefix"));
-		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 300), 1, 2000);
+		// 2.15：limit=0 不截断（批量操作的 select 不限个数）；其他照旧最多 2000
+		const int32 WantLimit = Int(A, TEXT("limit"), 300);
+		const int32 Limit = WantLimit == 0 ? MAX_int32 : FMath::Clamp(WantLimit, 1, 2000);
 		TArray<TSharedPtr<FJsonValue>> Items;
 		int32 Total = 0;
 		for (const FAssetData& D : Found)

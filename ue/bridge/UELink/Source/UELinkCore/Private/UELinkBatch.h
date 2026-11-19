@@ -9,9 +9,6 @@
 
 namespace AgentPanel
 {
-	/** 一次最多多少个资源 */
-	constexpr int32 MaxBatchItems = 2000;
-
 	/** 展开成作业并排队，Out 是作业摘要（job 作业号、batch: true、items 资源数） */
 	bool StartBatch(const FString& Op, const FAgentPanelBatchInfo& Info, const TSharedPtr<FJsonObject>& Args, TSharedPtr<FJsonObject>& Out, FString& Error);
 	/** job.batch {op, paths | items, ...参数}：和直接给操作传 paths 一样，给想显式调批量的客户端；get / props / set 的批量登记也在这里 */
