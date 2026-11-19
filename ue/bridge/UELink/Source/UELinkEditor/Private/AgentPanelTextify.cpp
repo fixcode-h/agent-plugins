@@ -203,6 +203,51 @@ namespace
 	}
 }
 
+bool AgentPanelEd::WithTempAsset(const FString& File, const FString& Original, TFunctionRef<void(UObject* Asset, const FString& TempPkg, const FString& TempRoot)> Fn, FString& Error)
+{
+	if (!FPaths::FileExists(File))
+	{
+		Error = FString::Printf(TEXT("没有这个文件：%s"), *File);
+		return false;
+	}
+	const FString Name = FPaths::GetBaseFilename(File);
+	const FString Dir = FPaths::GetPath(File) + TEXT("/");
+	// 每次一个新挂载点：前后两版同名，挂在同一个根下会撞包名
+	const FString Root = FString::Printf(TEXT("/APTextify%s/"), *FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(12));
+	const FString TempPkg = Root + Name;
+	FPackageName::RegisterMountPoint(Root, Dir);
+
+	UPackage* Pkg = LoadPackage(nullptr, *TempPkg, LOAD_NoWarn | LOAD_Quiet);
+	UObject* Asset = Pkg ? MainAsset(Pkg, Name) : nullptr;
+	if (Asset)
+	{
+		Fn(Asset, TempPkg, Root);
+	}
+
+	// 卸载：加载蓝图时会顺手编译、可能标脏，这里不保存，直接连脏的一起卸掉
+	if (Pkg)
+	{
+		Pkg->SetDirtyFlag(false);
+		TArray<UPackage*> Pkgs;
+		Pkgs.Add(Pkg);
+		FText UnloadError;
+		UPackageTools::UnloadPackages(Pkgs, UnloadError, true);
+	}
+	FPackageName::UnRegisterMountPoint(Root, Dir);
+
+	if (!Pkg)
+	{
+		Error = FString::Printf(TEXT("加载不了这一版的 %s：文件可能不完整，或者是更新的引擎版本存的"), *Original);
+		return false;
+	}
+	if (!Asset)
+	{
+		Error = FString::Printf(TEXT("这一版的 %s 里没有找到资源对象"), *Original);
+		return false;
+	}
+	return true;
+}
+
 void AgentPanelEd::RegisterTextifyOps()
 {
 	FAgentPanelBridge& B = FAgentPanelBridge::Get();
@@ -211,23 +256,9 @@ void AgentPanelEd::RegisterTextifyOps()
 	B.AddOp(TEXT("asset.textify"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 	{
 		const FString File = FPaths::ConvertRelativePathToFull(Str(A, TEXT("file")));
-		if (!FPaths::FileExists(File))
-		{
-			Error = FString::Printf(TEXT("没有这个文件：%s"), *File);
-			return false;
-		}
-		const FString Name = FPaths::GetBaseFilename(File);
-		const FString Original = Str(A, TEXT("package"), TEXT("/Game/") + Name);
-		const FString Dir = FPaths::GetPath(File) + TEXT("/");
-		// 每次一个新挂载点：前后两版同名，挂在同一个根下会撞包名
-		const FString Root = FString::Printf(TEXT("/APTextify%s/"), *FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(12));
-		const FString TempPkg = Root + Name;
-		FPackageName::RegisterMountPoint(Root, Dir);
-
-		UPackage* Pkg = LoadPackage(nullptr, *TempPkg, LOAD_NoWarn | LOAD_Quiet);
-		UObject* Asset = Pkg ? MainAsset(Pkg, Name) : nullptr;
+		const FString Original = Str(A, TEXT("package"), TEXT("/Game/") + FPaths::GetBaseFilename(File));
 		FString Text;
-		if (Asset)
+		const bool bOk = WithTempAsset(File, Original, [&Text, &Original](UObject* Asset, const FString& TempPkg, const FString& Root)
 		{
 			Text += FString::Printf(TEXT("资源 %s（%s）\n"), *Original, *Asset->GetClass()->GetName());
 			if (UBlueprint* BP = Cast<UBlueprint>(Asset))
@@ -241,27 +272,9 @@ void AgentPanelEd::RegisterTextifyOps()
 			// 文本里的临时包名换回项目里的包名：同一内容两次转出来的文本才一样
 			Text.ReplaceInline(*TempPkg, *Original, ESearchCase::CaseSensitive);
 			Text.ReplaceInline(*Root, *(FPackageName::GetLongPackagePath(Original) + TEXT("/")), ESearchCase::CaseSensitive);
-		}
-
-		// 卸载：加载蓝图时会顺手编译、可能标脏，这里不保存，直接连脏的一起卸掉
-		if (Pkg)
+		}, Error);
+		if (!bOk)
 		{
-			Pkg->SetDirtyFlag(false);
-			TArray<UPackage*> Pkgs;
-			Pkgs.Add(Pkg);
-			FText UnloadError;
-			UPackageTools::UnloadPackages(Pkgs, UnloadError, true);
-		}
-		FPackageName::UnRegisterMountPoint(Root, Dir);
-
-		if (!Pkg)
-		{
-			Error = FString::Printf(TEXT("加载不了这一版的 %s：文件可能不完整，或者是更新的引擎版本存的"), *Original);
-			return false;
-		}
-		if (!Asset)
-		{
-			Error = FString::Printf(TEXT("这一版的 %s 里没有找到资源对象"), *Original);
 			return false;
 		}
 		Out->SetStringField(TEXT("text"), Text);

@@ -161,6 +161,7 @@ export async function info(card: Card): Promise<Instance> {
       lua: body.lua,
       extensions: body.extensions ?? card.extensions,
       ops: Array.isArray(body.ops) ? body.ops : undefined,
+      batchOps: Array.isArray(body.batchOps) ? body.batchOps : undefined,
     }
   } catch (e) {
     const err = e as Error

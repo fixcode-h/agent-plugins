@@ -56,6 +56,8 @@ namespace AgentPanel
 
 	/** 值转 JSON：结构体、数组、Map 都转；太大的（序列化后超过 MaxChars）换成摘要，按路径单独取全量 */
 	UELINKCORE_API TSharedPtr<FJsonValue> ToJson(FProperty* Prop, const void* Value, int32 MaxChars = 4000);
+	/** 2.14：两个 JSON 值算不算相同（改属性的 where 条件用）：字符串不分大小写，数字按数值，其他按紧凑 JSON 文本 */
+	UELINKCORE_API bool SameJsonValue(const TSharedPtr<FJsonValue>& A, const TSharedPtr<FJsonValue>& B);
 
 	/** JSON 写进属性：先按 JSON 转，转不了的字符串按 UE 的文本格式（ImportText）写 */
 	UELINKCORE_API bool FromJson(FProperty* Prop, void* Value, const TSharedPtr<FJsonValue>& Json, FString& Error);
@@ -65,6 +67,9 @@ namespace AgentPanel
 
 	/** 一个结构的属性列表（名字、类型、分类、同步、只读、值），Filter 是名字前缀 */
 	UELINKCORE_API TArray<TSharedPtr<FJsonValue>> ListProps(UStruct* Struct, const void* Container, const FString& Filter, int32 MaxChars, const UObject* Owner = nullptr);
+
+	/** 对象存盘的属性（跳过 Transient：两版内容一样时它也可能不一样，比版本差异时会造出假差异），每项的形状和 ListProps 一样（2.14） */
+	UELINKCORE_API TArray<TSharedPtr<FJsonValue>> ListSavedProps(UObject* Obj, int32 MaxChars);
 
 	/** 函数的参数说明：[{name, type, enum?:[]}]，不含返回值 */
 	UELINKCORE_API TArray<TSharedPtr<FJsonValue>> ParamsOf(UFunction* Func);

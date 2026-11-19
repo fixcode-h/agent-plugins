@@ -1,6 +1,9 @@
 import type { McpResult } from '../../sdk/server.ts'
 import { diskToPackage, packageToDisk } from './asset-query.ts'
+import { compileBeforeSave } from './bp-check/compile-before-save.ts'
 import { noteCompile, noteSaved, packageName } from './bp-check/state.ts'
+import { BATCH_HINT, BATCH_PROPS, jobResult, runBatch } from './batch/run.ts'
+import { isBatch } from './batch/targets.ts'
 import { resumeJob } from './long-ops.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
@@ -114,7 +117,9 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
     return miss.length ? mcpText(`action=${a.action} 要给 ${miss.join('、')}`, true) : undefined
   }
   // 带 job：接着等之前没做完的作业（改名、删除、批量校验……），不管 action
-  if (a.job) return out(await resumeJob(ctx.project.id, str(a.job)))
+  if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_asset', a.action, ctx)
+  // 批量（paths / items / select）；validate 的 paths 是它自己的老用法，照旧
+  if (isBatch(a) && a.action !== 'validate') return runBatch('ue_asset', a, ctx)
   switch (a.action) {
     case 'help':
       return out(help(str(a.class)))
@@ -187,24 +192,46 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
 
 const EDIT_HELP = `ops 是操作数组，整批在一个编辑器事务里执行，任一步失败整批取消。每个操作 {op, ...}：
 成员：add_variable {name, type, default?, category?, instanceEditable?, replicated?, exposeOnSpawn?}；set_variable {name, type?, rename?, default?, …同上}；remove_variable {name}；add_function {name, inputs?:[{name,type}], outputs?:[{name,type}], pure?}；remove_function {name}。
-类设置：add_interface / remove_interface {interface}；reparent {parent}；set_default {prop, value}（类默认值，prop 同 ue_get 的属性路径）。
+类设置：add_interface / remove_interface {interface}；reparent {parent}；set_default {prop, value}（类默认值，prop 同 ue_get）。
 组件：add_component {name, class, parent?}；remove_component {name}；set_component {name, prop, value}。
-节点（graph 不写是事件图）：add_node {graph?, as?, spawner 或 kind, x?, y?, comment?, pins?:{引脚名:默认值}}，kind 有 call {function:"类名.函数名"}、get / set {variable}、branch、sequence、cast {class}、self、event {name:"BeginPlay"}（重写父类事件）、custom_event {name, inputs?}、macro {macro:"ForEachLoop"}，其余节点先 node_search 拿 spawner；remove_node {node}；set_pin {pin:"节点.引脚", value}；connect / disconnect {from:"节点.引脚", to:"节点.引脚"}（disconnect 不写 to 是断开这个引脚的所有连线）；move {node, x, y}；comment {graph?, text, nodes?:[节点]}。
-类型写法：bool、int、int64、float、byte、name、string、text、结构体名（Vector、Rotator、Transform、自定义结构）、枚举名、类名（对象引用）、class<类>、soft<类>，可以套 array<>、set<>、map<键,值>。
-节点用 id（graph 结果里 # 后面那段）或这一批里 add_node 的 as 临时名引用；引脚名 exec / then / self / return 是常用别名。不指定位置时自动排。`
+一条改多个：set_variable / remove_variable / remove_function / set_component / remove_component 的 name 可给数组，每项可写通配符（* ?，不分大小写）；组件另可 componentClass（组件类，含子类），不写 name 就是这个类的全部组件；remove_node 的 node 可给 id 数组。展开后在同一个事务里逐个做，任一个失败整批取消；结果带 count 和 each。
+改属性（set_component / set_default）：props {属性路径: 值} 一次改多个属性；where 是期望的当前值（用 props 时写 {属性路径: 期望值}），对不上的跳过（skipped）；结果带 prev 和 value，演练也有，可以先看改前改后。
+没有才加：add_variable / add_function / add_component / add_interface 加 ifMissing: true，已经有了就跳过，同一组操作可以重跑。
+节点（graph 不写是事件图）：add_node {graph?, as?, spawner 或 kind, x?, y?, comment?, pins?:{引脚名:默认值}}，kind 有 call {function:"类名.函数名"}、get / set {variable}、branch、sequence、cast {class}、self、event {name:"BeginPlay"}、custom_event {name, inputs?}、macro {macro:"ForEachLoop"}，其余先 node_search 拿 spawner；remove_node {node}；set_pin {pin:"节点.引脚", value}；connect / disconnect {from:"节点.引脚", to:"节点.引脚"}（disconnect 不写 to 断开全部连线）；move {node, x, y}；comment {graph?, text, nodes?:[节点]}。
+类型：bool、int、int64、float、byte、name、string、text、结构体名（Vector、Transform、自定义结构）、枚举名、类名（对象引用）、class<类>、soft<类>，可套 array<> / set<> / map<键,值>。
+节点用 id（graph 结果里 # 后那段）或本批 add_node 的 as 名引用；引脚别名 exec / then / self / return；不给位置自动排。`
+
+/** ue_compile 的批量：汇总里全部 ok / warnings 才算通过，交给面板的完成依据 */
+async function compileBatch(a: Record<string, unknown>, ctx: OpCtx) {
+  const r = a.job
+    ? await jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_compile', undefined, ctx)
+    : await runBatch('ue_compile', a, ctx)
+  if (r.isError) return r
+  let sum: { status?: string; items?: number; ok?: number; lines?: string[] } = {}
+  try {
+    sum = JSON.parse(String((r.content?.[0] as { text?: string } | undefined)?.text ?? '{}'))
+  } catch {
+    return r
+  }
+  // 还在编：不给完成依据
+  if (!sum.status || sum.status === 'running' || sum.status === 'queued') return r
+  return { ...r, verified: { passed: sum.status === 'done' && sum.ok === sum.items, name: '蓝图编译' } }
+}
 
 export const ASSET_TOOLS = [
   tool(
     'ue_blueprint',
     '读写蓝图（path 是蓝图资源路径 /Game/...；普通蓝图：Actor、组件、对象、函数库、接口）。由粗到细读：action=outline 大纲（父类、接口、变量、组件树、各张图和函数的入参出参、编译状态和上次的错误）；action=graph 读一张图（graph 是图名，不写是事件图）：默认给伪代码（沿执行线一行一句，行尾 #节点id，@id.引脚 指某个节点的输出），format=json 给节点和引脚连线（offset / limit 分页，around=节点id + hops 只取周围几跳），node=节点id 看一个节点的全部引脚。' +
-      'action=node_search 按 query 查能放的节点（和编辑器右键菜单一致），结果里的 spawner 给 add_node 用。' +
-      'action=edit 按操作列表修改（改完自动编译并返回每步结果、新节点 id、编译错误和对应的节点 id、受影响的子类和调用方）；dryRun=true 演练：真实执行和编译，拿到结果后取消，不留改动。复杂修改先演练。只编译用 ue_compile。' +
-      '修改只在内存里（标脏），用 ue_save 保存；没保存前可以 ue_undo 撤回。类默认值和组件模板的属性也可以用 ue_get / ue_set。' +
-      JOB_HINT +
-      '\n' +
-      EDIT_HELP,
+      'action=node_search 按 query 查能放的节点，spawner 给 add_node 用。' +
+      'action=edit 按操作列表修改（改完自动编译，返回每步结果、新节点 id、编译错误及节点 id、受影响的子类）；dryRun=true 演练（真实执行和编译后取消，不留改动），复杂修改先演练。' +
+      '修改只在内存里（标脏），ue_save 保存，保存前可 ue_undo 撤回；类默认值用 ue_get / ue_set。' +
+      '20 秒没做完回 job，带 job 再调接着等。' +
+      BATCH_HINT +
+      ' compile="end" 整批改完再编译。' +
+      '\nedit 的 ops 是 [{op, ...}]，op 有：add_variable / set_variable / remove_variable、add_function / remove_function、add_interface / remove_interface、reparent、set_default、add_component / set_component / remove_component、add_node / remove_node / set_pin / connect / disconnect / move / comment。' +
+      '一条可以改多个：name 给数组或通配符（组件可按 componentClass 选），set_component / set_default 用 props 一次改多个属性，where 只改当前值对得上的，add_* 加 ifMissing 已有就跳过。每个 op 的参数和类型写法先 action=help 看一次。',
     {
-      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit'] },
+      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit', 'help'] },
       path: { type: 'string' },
       graph: { type: 'string' },
       node: { type: 'string' },
@@ -216,14 +243,19 @@ export const ASSET_TOOLS = [
       query: { type: 'string' },
       ops: { type: 'array', items: { type: 'object' } },
       dryRun: { type: 'boolean' },
-      compile: { type: 'boolean' },
+      // true / false，或 "end"（批量时整批改完再统一编译）
+      compile: {},
       job: { type: 'string' },
+      ...BATCH_PROPS,
       target: TARGET,
     },
-    ['action', 'path'],
+    ['action'],
     async (a, ctx) => {
       const path = a.path
-      if (a.job) return out(await resumeJob(ctx.project.id, str(a.job)))
+      if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_blueprint', a.action, ctx)
+      if (a.action === 'help') return out(EDIT_HELP)
+      if (isBatch(a)) return runBatch('ue_blueprint', a, ctx)
+      if (!path) return mcpText('要给 path（蓝图资源路径），多个用 paths / select', true)
       switch (a.action) {
         case 'outline':
           return out(await runOp(ctx, 'bp.outline', { path }, 120000))
@@ -272,11 +304,16 @@ export const ASSET_TOOLS = [
   ),
   tool(
     'ue_save',
-    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过。',
-    { packages: { type: 'array', items: { type: 'string' } }, target: TARGET },
+    '保存资源：把编辑器里改了没保存的包写回磁盘（packages 不给就是所有改了没保存的，ue_asset action=dirty 先看有哪些）。按「权限与设置」的资源权限请用户确认；P4 项目先签出、新文件 add，都进默认变更列表不提交。蓝图保存前先 ue_compile 确认编译通过；或者 compile=true 让它先把要保存的蓝图一起编一遍，有没编过的就整批不保存（改完蓝图直接 ue_save compile=true 一步到位）。',
+    { packages: { type: 'array', items: { type: 'string' } }, compile: { type: 'boolean' }, target: TARGET },
     [],
     async (a, ctx) => {
-      const res = await runOp(ctx, 'asset.save', { packages: a.packages ?? [] }, 120000)
+      const packages = Array.isArray(a.packages) ? a.packages.map(String) : []
+      if (a.compile) {
+        const gate = await compileBeforeSave(ctx, packages)
+        if (!gate.ok) return mcpText(gate.message ?? '编译没通过，没有保存', true)
+      }
+      const res = await runOp(ctx, 'asset.save', { packages }, 120000)
       // 实际写回的文件交给面板记成这一轮的改动（进改动卡片和完成依据），不交给 Agent
       const saved = ((res.saved as unknown[]) ?? []).map(String).filter(Boolean)
       // 交给写后编译钩子（bp-check/hook.ts）：保存之后编译其中的蓝图，没通过的把错误补给模型
@@ -297,10 +334,12 @@ export const ASSET_TOOLS = [
   tool(
     'ue_compile',
     '编译蓝图（path 是蓝图资源路径 /Game/...），返回编译状态（ok / warnings / error）、错误和警告（带图名和节点 id）、受影响的子类和调用方。改完蓝图、保存之前用它确认通过；有错按节点 id 用 ue_blueprint edit 修，再编译。' +
-      '大蓝图编译久：20 秒内没编完返回 job，带 path 和 job 再调一次接着等。',
-    { path: { type: 'string' }, job: { type: 'string' }, target: TARGET },
-    ['path'],
+      '大蓝图编译久：20 秒内没编完返回 job，带 path 和 job 再调一次接着等。一次编多个蓝图用 paths / select（结果按蓝图汇总，全部通过才算通过）。',
+    { path: { type: 'string' }, job: { type: 'string' }, ...BATCH_PROPS, target: TARGET },
+    [],
     async (a, ctx) => {
+      if (isBatch(a) || (a.job && !a.path)) return compileBatch(a, ctx)
+      if (!a.path) return mcpText('要给 path（蓝图资源路径），多个用 paths / select', true)
       const res = a.job
         ? await resumeJob(ctx.project.id, str(a.job))
         : await runOp(ctx, 'bp.compile', { path: a.path }, 300000, JOB)

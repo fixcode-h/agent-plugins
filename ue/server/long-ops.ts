@@ -21,10 +21,28 @@ async function canJob(card: Card) {
   return yes
 }
 
+/** 进程（pid）能批量的操作（UELink 2.14 /info 的 batchOps），问一次记住 */
+const batchSupport = new Map<number, Set<string>>()
+
+/** 参数里给了 paths / items：交给 UELink 的批量（一个操作作用到多个资源，展开成一个作业） */
+export const isBatchArgs = (args: Record<string, unknown>) => Array.isArray(args.paths) || Array.isArray(args.items)
+
+async function canBatch(card: Card, op: string) {
+  let ops = batchSupport.get(card.pid)
+  if (!ops) {
+    const inst = await info(card)
+    ops = new Set(inst.batchOps ?? [])
+    if (inst.online) batchSupport.set(card.pid, ops)
+  }
+  return ops.has(op)
+}
+
 export type JobOutcome = { done: true; res: Record<string, unknown> } | { done: false; res: Record<string, unknown> }
 
 /** 作业的结果：一步的拆出 result（和直接调这个操作的回包一样），失败、取消按报错抛；多步的整个给出 */
 function unwrap(r: Record<string, unknown>): Record<string, unknown> {
+  // 批量作业：按资源的汇总（batch）整个给出，失败的资源在汇总里，不按报错抛
+  if (r.batch) return r
   const steps = Number(r.total ?? 1)
   if (r.status === 'cancelled' && steps === 1) throw new BridgeError(`作业 ${r.id} 已取消`)
   if (steps !== 1) return r
@@ -66,6 +84,15 @@ export async function runAsJob(
   args: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<JobOutcome> {
+  // 批量：操作本身收到 paths / items 就回作业号（UELink 2.14），不再套一层 job.start
+  if (isBatchArgs(args)) {
+    if (!(await canBatch(card, op)))
+      throw new BridgeError(
+        `这个 UE 进程的 UELink 不支持批量 ${op}（要 UELink 2.14 起，在 UE 页「UE 插件」升级后完整编译）：先逐个调`,
+      )
+    const started = await rpc(card, op, args, 60000)
+    return waitJob(card, String(started.job))
+  }
   if (!(await canJob(card))) return { done: true, res: await rpc(card, op, args, timeoutMs) }
   const started = await rpc(card, 'job.start', { op, args }, 30000)
   return waitJob(card, String(started.job))
