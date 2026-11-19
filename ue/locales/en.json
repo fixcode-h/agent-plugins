@@ -3862,5 +3862,6 @@
   "只列前 {n} 个，多打几个字缩小范围": "Showing the first {n}; type more to narrow it down",
   "来自本地扫盘的索引": "From the local disk index",
   "来自 UE 的资源注册表（只搜名字开头）": "From the UE asset registry (name prefix only)",
-  "搜索中…": "Searching…"
+  "搜索中…": "Searching…",
+  "按类型筛选": "Filter by type"
 }

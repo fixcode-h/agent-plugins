@@ -14,11 +14,14 @@ export function SelectionBar({
   page,
   current,
   onOpen,
+  hideEmpty,
 }: {
   page: 'objects' | 'assets'
   /** 面板里正在看的对象 / 资源路径 */
   current: string
   onOpen: (path: string) => void
+  /** 编辑器里没选中东西时整条不显示（资源页：平时不占一行，用户 2026-11-19）；「跟随」开着照样记着，选中了再出来 */
+  hideEmpty?: boolean
 }) {
   const { project } = useUe()
   const { ui, cn, toast } = h()
@@ -29,6 +32,7 @@ export function SelectionBar({
   const count = page === 'objects' ? (sel.data?.actorCount ?? 0) : (sel.data?.assets.length ?? 0)
   useFollowEffect(first?.path, follow, onOpen)
   if (!sel.supported || !sel.inst) return null
+  if (hideEmpty && !first) return null
 
   const label: string = first
     ? ('label' in first && typeof first.label === 'string' && first.label) || first.name

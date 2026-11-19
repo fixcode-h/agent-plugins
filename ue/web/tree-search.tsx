@@ -81,6 +81,7 @@ export function TreeSearch({
   partial,
   busy,
   extra,
+  addon,
 }: {
   value: string
   onChange: (q: string) => void
@@ -93,11 +94,13 @@ export function TreeSearch({
   busy?: boolean
   /** 命中数后面再补一句（截断、数据来源） */
   extra?: ReactNode
+  /** 输入框里最右边的小控件（资源页的类型筛选） */
+  addon?: ReactNode
 }) {
   const q = value.trim()
   return (
     <div className="ue:flex ue:flex-col ue:gap-1.5 ue:border-b ue:border-line ue:px-3 ue:py-2">
-      <SearchBox initial={value} placeholder={placeholder} onSearch={onChange} allowEmpty live />
+      <SearchBox initial={value} placeholder={placeholder} onSearch={onChange} allowEmpty live addon={addon} />
       {q && (
         <span className="ue:text-caption ue:text-subtle">
           {busy ? t('搜索中…') : hits ? t('{n} 个匹配', { n: hits }) : t('没有匹配的')}
