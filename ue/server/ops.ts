@@ -335,8 +335,7 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
     // 删除跟结构性操作同一档：设成「允许，不用问我」就不再确认（用户 2026-11-19 定）
     if (struct === 'ask') await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
   } else if (kind === 'python') {
-    if (python === 'read')
-      return readOnlyAsk(ctx, t('「权限与设置」里没有打开「执行 Python」，这次放行吗'), what)
+    if (python === 'read') return readOnlyAsk(ctx, t('「权限与设置」里没有打开「执行 Python」，这次放行吗'), what)
     if (python === 'ask') await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
   } else if (kind === 'save') {
     if (asset === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对资源是只读，要保存，这次放行吗'), what)
