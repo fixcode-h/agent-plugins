@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import type { PluginServerContext } from '../../sdk/server.ts'
-import { diskChildren, pickAssetCard, projectPlugins, unsupported } from './asset-folders-disk.ts'
+import { diskChildren, mergeWithDisk, pickAssetCard, projectPlugins, unsupported } from './asset-folders-disk.ts'
 import type { Card } from './instances.ts'
 import { setCtx } from './util.ts'
 
@@ -142,4 +142,36 @@ test('选进程：编辑器 > 后台编辑器 > 游戏，不问专用服务器�
   assert.ok(unsupported('这个进程不支持 assets.children'))
   assert.ok(unsupported('unknown op: assets.children'))
   assert.ok(!unsupported('UE 进程 3 在 30 秒内没有回应'))
+})
+
+test('游戏进程的注册表不全：并上磁盘列到的，类型以注册表为准', () => {
+  const r = mergeWithDisk(
+    {
+      path: '/Game',
+      folders: [{ name: 'Maps', path: '/Game/Maps' }],
+      items: [{ name: 'BP_Hero', path: '/Game/BP_Hero.BP_Hero', class: 'Blueprint' }],
+      source: 'bridge',
+    },
+    {
+      path: '/Game',
+      folders: [
+        { name: 'maps', path: '/Game/maps', count: 2 },
+        { name: 'Data', path: '/Game/Data', count: 3 },
+      ],
+      items: [
+        { name: 'BP_Hero', path: '/Game/BP_Hero.BP_Hero', class: '' },
+        { name: 'DT_Items', path: '/Game/DT_Items.DT_Items', class: '' },
+      ],
+      source: 'disk',
+    },
+  )
+  assert.equal(r.source, 'bridge')
+  assert.deepEqual(
+    r.folders.map((f) => f.path),
+    ['/Game/Data', '/Game/Maps'],
+  )
+  assert.deepEqual(
+    r.items.map((i) => `${i.name}:${i.class}`),
+    ['BP_Hero:Blueprint', 'DT_Items:'],
+  )
 })

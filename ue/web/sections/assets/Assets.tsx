@@ -7,7 +7,7 @@ import { useNavHistory } from '../../inspect/history.ts'
 import { Inspector } from '../../inspect/Inspector.tsx'
 import { splitSub } from '../../inspect/nav-state.ts'
 import { keep, useKept } from '../../keep.ts'
-import { setPending, takePending } from '../../pending.ts'
+import { takePending } from '../../pending.ts'
 import { DockCol } from '../../nav/slot.tsx'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
 import { Card, PageHead } from '../../ui.tsx'
@@ -16,11 +16,10 @@ import { AssetFolders } from './Folders.tsx'
 import { FolderView } from './FolderView.tsx'
 import { PrecheckButton } from '../../precheck/PrecheckButton.tsx'
 import { SelectionBar } from '../../selection/SelectionBar.tsx'
-import { AssetSearch } from './Search.tsx'
 
 /**
- * 资源页（设计稿第 3、8 节）：和对象页同一套「浏览栏 + 检视区」布局，左边浏览栏两个页签——文件夹（默认，照 Content Browser
- * 点开才读下一层）和搜索（类型 + 名字前缀）；右边检视区和对象页是同一个组件、同一份导航历史。
+ * 资源页（设计稿第 3、8 节）：和对象页同一套「浏览栏 + 检视区」布局，左边浏览栏是文件夹树（照 Content Browser
+ * 点开才读下一层），树上方的搜索框搜整个项目（原来单独的「搜索」页签 2026-11-19 合进来）；右边检视区和对象页是同一个组件、同一份导航历史。
  * 资源的改动只暂存在编辑器里，页头「保存」才写回（P4 先签出）；保存只放在这里，对象页里改的也在这里存
  */
 export function Assets() {
@@ -30,15 +29,11 @@ export function Assets() {
   const save = useAssetSave()
   const { path } = splitSub(sub)
   const kk = `${project.id}/assets`
-  // Ctrl+K 带过来的名字、路径：切到「搜索」，由它取走再搜（lazy 初始值只看一次，切回来不会再切）
+  // Ctrl+K、日志、配置里带过来的名字、路径：填进文件夹树上方的搜索框直接搜（lazy 初始值只看一次，切回来不会再填）
   useState(() => {
     const p = takePending('assets')
-    if (p) {
-      setPending('assets', p)
-      keep(`${kk}/browse`, 'search')
-    }
+    if (p) keep(`${kk}/folders/q`, p)
   })
-  const [tab, setTab] = useKept<'folders' | 'search'>(`${kk}/browse`, 'folders')
   // 要在文件夹树里定位的资源：「在文件夹里定位」、从别处（对象页点引用、Ctrl+K、对话）跳过来的
   const [reveal, setReveal] = useKept<string | undefined>(`${kk}/reveal`, undefined)
   const [tick, setTick] = useState(0)
@@ -75,41 +70,18 @@ export function Assets() {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [path, cur?.from])
 
-  const col = (docked: boolean) => (
+  const col = () => (
     <>
       <SelectionBar page="assets" current={folder ? '' : path} onOpen={(p) => openAsset(p, 'assetSearch')} />
-      <div className={docked ? '' : 'ue:border-b ue:border-line ue:px-3 ue:pt-3 ue:pb-2'}>
-        <ui.Segmented
-          size="sm"
-          label={t('文件夹 / 搜索')}
-          value={tab}
-          onChange={setTab}
-          options={[
-            { id: 'folders' as const, label: t('文件夹') },
-            { id: 'search' as const, label: t('搜索') },
-          ]}
-        />
-      </div>
-      {tab === 'folders' ? (
-        <AssetFolders
-          key={tick}
-          selected={folder ? '' : path}
-          onSelect={(p) => openAsset(p, 'folders')}
-          reveal={reveal}
-          folder={folder}
-          onFolder={showFolder}
-        />
-      ) : (
-        <AssetSearch
-          key={tick}
-          selected={path}
-          onOpen={(p) => openAsset(p, 'assetSearch')}
-          onReveal={(p) => {
-            setTab('folders')
-            setReveal(p)
-          }}
-        />
-      )}
+      {/* 原来「文件夹 / 搜索」两个页签（用户 2026-11-19 合成一个）：树上方的搜索框直接搜整个项目 */}
+      <AssetFolders
+        selected={folder ? '' : path}
+        onSelect={(p) => openAsset(p, 'folders')}
+        reveal={reveal}
+        folder={folder}
+        onFolder={showFolder}
+        tick={tick}
+      />
     </>
   )
 
@@ -141,7 +113,7 @@ export function Assets() {
                 style={pane.style('calc(100% - 600px)')}
                 bodyClass="ue:flex ue:min-h-0 ue:flex-col"
               >
-                {col(false)}
+                {col()}
               </Card>
               <SplitHandle pane={pane} paneRef={ref} reserve={() => 600} />
             </>
@@ -164,10 +136,7 @@ export function Assets() {
             page="assets"
             empty={t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看组件、大纲和图表')}
             onChanged={save.reload}
-            onReveal={(p) => {
-              setTab('folders')
-              setReveal(p)
-            }}
+            onReveal={setReveal}
           />
         )}
       </div>

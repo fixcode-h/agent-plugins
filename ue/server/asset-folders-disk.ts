@@ -207,7 +207,7 @@ export async function diskChildren(
   folderEnts.sort(byName)
   items.sort(byName)
   const total = folderEnts.length + items.length
-  // 先给文件夹再给资源，超过上限截断（一层几千个时网页画不过来，用搜索页签找）
+  // 先给文件夹再给资源，超过上限截断（一层几千个时网页画不过来，用资源页树上方的搜索框找）
   const keepFolders = folderEnts.slice(0, limit)
   const keepItems = items.slice(0, Math.max(0, limit - keepFolders.length))
   const folders = await Promise.all(
@@ -223,5 +223,27 @@ export async function diskChildren(
     out.total = total
   }
   if (note) out.note = note
+  return out
+}
+
+/**
+ * 游戏进程（-game，非 Shipping 的未烹饪运行）的资源注册表不会像编辑器那样启动时扫全盘，
+ * 只认得已经加载过或被显式扫过的包：直接用它列，没加载过的文件夹就显示成空的（用户 2026-11-19「有些文件夹展开显示为空」）。
+ * 这时把磁盘上列到的并进来：文件夹、资源取并集，类型以注册表的为准（磁盘认不出类型）
+ */
+export function mergeWithDisk(bridge: Children, disk: Children): Children {
+  const folders = new Map(bridge.folders.map((f) => [f.path.toLowerCase(), f]))
+  for (const f of disk.folders) if (!folders.has(f.path.toLowerCase())) folders.set(f.path.toLowerCase(), f)
+  const items = new Map(bridge.items.map((i) => [i.path.toLowerCase(), i]))
+  for (const i of disk.items) if (!items.has(i.path.toLowerCase())) items.set(i.path.toLowerCase(), i)
+  const out: Children = {
+    ...bridge,
+    folders: [...folders.values()].sort(byName),
+    items: [...items.values()].sort(byName),
+  }
+  if (disk.more || bridge.more) {
+    out.more = true
+    out.total = Math.max(bridge.total ?? 0, disk.total ?? 0) || undefined
+  }
   return out
 }

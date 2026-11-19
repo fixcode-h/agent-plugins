@@ -8,15 +8,16 @@ import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { copyText, MenuHost, openMenu } from '../../menu.tsx'
 import { TreeList, type TreeLine } from '../../TreeList.tsx'
-import { Hit, hitText, keepSet, TreeSearch } from '../../tree-search.tsx'
+import { Hit, TreeSearch } from '../../tree-search.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { useAssetMenu } from './asset-menu.ts'
 import { useFavFolders } from './fav-data.ts'
 import { FavFolders, FavStar } from './FavFolders.tsx'
 import { RedirectorDialog, redirectorMenuItem } from './Redirectors.tsx'
 import { pkgOf, useFolderData, type Folder, type Item } from './folder-data.ts'
+import { SEARCH_MAX, useFolderSearch } from './folder-search.ts'
 
-/** 类型下拉不打字时列的常用类型（和资源页搜索页签差不多，少几个不常按文件夹找的） */
+/** 类型下拉不打字时列的常用类型（少几个不常按文件夹找的） */
 const COMMON = [
   'Blueprint',
   'WidgetBlueprint',
@@ -52,6 +53,7 @@ export function AssetFolders({
   reveal,
   folder,
   onFolder,
+  tick = 0,
 }: {
   /** 当前选中的资源路径（/Game/A/B.B 或 /Game/A/B） */
   selected: string
@@ -63,13 +65,29 @@ export function AssetFolders({
   folder?: string
   /** 点了一个文件夹（或收藏）：右栏列它的内容 */
   onFolder?: (path: string) => void
+  /** 页头「刷新」点了几次：变了就重读挂载根和展开着的层 */
+  tick?: number
 }) {
   const { project, target, state } = useUe()
   const data = useFolderData(project.id, target)
-  const { levels, open, toggle, load, setCls, revealPath } = data
+  const { levels, open, toggle, load, reload, setCls, revealPath } = data
   const kk = `${project.id}/assets/folders`
   const [q, setQ] = useKept(`${kk}/q`, '')
-  // 搜索时自动展开露出命中项的节点，用户再点收起记在这里（换关键词清掉），和 UObject 树一样
+  // 搜索框不受控（SearchBox 只认 initial）：要从外面清空时换 key 重建
+  const [boxKey, setBoxKey] = useState(0)
+  const clearSearch = () => {
+    setQ('')
+    setBoxKey((n) => n + 1)
+  }
+  const ticked = useRef(tick)
+  useEffect(() => {
+    if (tick === ticked.current) return
+    ticked.current = tick
+    reload()
+    // 只在刷新次数变了时重读
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick])
+  // 搜索结果默认全展开，用户再点收起记在这里（换关键词清掉）
   const [fold, setFold] = useState<{ q: string; m: Record<string, boolean> }>({ q: '', m: {} })
   const folded = fold.q === q ? fold.m : NONE
   const [clsOpt, setClsOpt] = useKept<ClassOpt>(`${kk}/clsOpt`, { name: '' })
@@ -103,7 +121,10 @@ export function AssetFolders({
     onFolder?.(p)
   }
   useEffect(() => {
-    if (reveal) void goTo(reveal, 'asset')
+    if (!reveal) return
+    // 要在文件夹树里定位：搜索结果里不一定有它，回到文件夹树
+    if (q.trim()) clearSearch()
+    void goTo(reveal, 'asset')
     // 只在要定位的资源变了时定位一次
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal])
@@ -115,7 +136,64 @@ export function AssetFolders({
   // 有编辑器（或已经起来的后台编辑器）才去取类型列表：只是点开下拉，不为它启动后台编辑器
   const canList = (state?.instances ?? []).some((i) => i.kind === 'editor' || i.kind === 'background')
 
-  const { lines, hits } = useMemo(() => {
+  const searching = !!q.trim()
+  const found = useFolderSearch(project.id, q, clsOpt, folded)
+
+  const lines = useMemo(() => {
+    const out: TreeLine[] = []
+    const label = (s: string) => (searching ? <Hit text={s} q={q} /> : s)
+    const itemLine = (it: Item, key: string, depth: number): TreeLine => {
+      const ic = assetIcon(it.class)
+      return {
+        key,
+        depth,
+        label: label(it.name),
+        icon: ic.icon,
+        iconTone: ic.tone,
+        expandable: false,
+        open: false,
+        selected: !!selected && pkgOf(selected) === pkgOf(it.path),
+        title: it.path,
+        aside: it.class ? label(it.class) : undefined,
+        onSelect: () => onSelect(it.path),
+        onMenu: (e) => assetMenu(e, it.path),
+      }
+    }
+    // 文件夹行共用的部分：选中、右键、收藏星标
+    const folderBits = (path: string) => ({
+      selected: folder ? folder === path : selFolder === path,
+      title: path,
+      onSelect: onFolder ? () => pickFolder(path) : undefined,
+      // 单击文件夹行：选中（右栏列内容）同时展开收起，像 VS Code 的资源管理器；原来只展开不收起，双击又会收回去（用户嫌不灵活，2026-11-16）
+      clickToggles: true,
+      onMenu: (e: MouseEvent) => folderMenu(e, path),
+      // 行尾星标：收藏了一直显示实心的，没收藏的悬停才露出来
+      action: <FavStar on={favs.includes(path)} onClick={() => fav.toggle(path)} />,
+      actionShown: favs.includes(path),
+    })
+
+    // 搜索：命中的资源和文件夹按目录摆成的树（folder-search.ts），默认全展开，用户收起的记在 fold 里
+    if (searching) {
+      for (const n of found.nodes) {
+        if (n.kind === 'item') {
+          out.push(itemLine({ name: n.hit.name, path: n.hit.path, class: n.hit.cls }, `s:i:${n.hit.path}`, n.depth))
+          continue
+        }
+        out.push({
+          key: `s:f:${n.path}`,
+          depth: n.depth,
+          label: n.hit ? label(n.name) : n.name,
+          icon: n.open ? FolderOpen : FolderIcon,
+          iconTone: 'ue:text-subtle',
+          expandable: n.expandable,
+          open: n.open,
+          onToggle: () => setFold({ q, m: { ...folded, [n.path]: n.open } }),
+          ...folderBits(n.path),
+        })
+      }
+      return out
+    }
+
     const folderNode = (f: Folder, name = f.name): N => ({ kind: 'folder', key: `f:${f.path}`, name, f })
     const tops: N[] = [
       folderNode(mounts.find((f) => f.path === '/Game') ?? { name: 'Content', path: '/Game' }, 'Content'),
@@ -135,55 +213,24 @@ export function AssetFolders({
         ...lv.items.map((it): N => ({ kind: 'item', key: `i:${pkgOf(it.path)}`, name: it.name, it })),
       ]
     }
-    const searching = !!q.trim()
-    const { keep, hits } = searching
-      ? keepSet(
-          tops,
-          kidsOf,
-          (n) => n.key,
-          (n) => hitText(q, n.name, n.kind === 'item' ? n.it.class : undefined),
-        )
-      : { keep: new Set<string>(), hits: 0 }
-    const out: TreeLine[] = []
-    const label = (s: string, filter: boolean) => (filter ? <Hit text={s} q={q} /> : s)
-    const walk = (list: N[], depth: number, filter: boolean) => {
+    const walk = (list: N[], depth: number) => {
       for (const n of list) {
-        if (filter && !keep.has(n.key)) continue
         if (n.kind === 'item') {
-          const ic = assetIcon(n.it.class)
-          out.push({
-            key: n.key,
-            depth,
-            label: label(n.name, filter),
-            icon: ic.icon,
-            iconTone: ic.tone,
-            expandable: false,
-            open: false,
-            selected: !!selected && pkgOf(selected) === pkgOf(n.it.path),
-            title: n.it.path,
-            aside: n.it.class ? label(n.it.class, filter) : undefined,
-            onSelect: () => onSelect(n.it.path),
-            onMenu: (e) => assetMenu(e, n.it.path),
-          })
+          out.push(itemLine(n.it, n.key, depth))
           continue
         }
-        const forced = filter && kidsOf(n).some((c) => keep.has(c.key))
-        const isOpen = forced ? !folded[n.key] : !!open[n.kind === 'group' ? n.key : n.f.path]
+        const isOpen = !!open[n.kind === 'group' ? n.key : n.f.path]
         const fpath = n.kind === 'folder' ? n.f.path : ''
         const lv = fpath ? levels[fpath] : undefined
-        const onToggle = forced
-          ? () => setFold({ q, m: { ...folded, [n.key]: isOpen } })
-          : () => toggle(n.kind === 'group' ? n.key : n.f.path)
         out.push({
           key: n.key,
           depth,
-          label: label(n.name, filter),
+          label: n.name,
           icon: isOpen ? FolderOpen : FolderIcon,
           iconTone: 'ue:text-subtle',
           expandable: true,
           open: isOpen,
-          selected: n.kind === 'folder' && (folder ? folder === n.f.path : selFolder === n.f.path),
-          title: n.kind === 'folder' ? n.f.path : undefined,
+          selected: false,
           aside: lv?.busy
             ? t('读取中…')
             : n.kind === 'group'
@@ -194,27 +241,23 @@ export function AssetFolders({
                   lv && !lv.error
                   ? (lv.total ?? lv.folders.length + lv.items.length)
                   : undefined,
-          onToggle,
-          onSelect: n.kind === 'folder' && onFolder && !forced ? () => pickFolder(n.f.path) : undefined,
-          // 单击文件夹行：选中（右栏列内容）同时展开收起，像 VS Code 的资源管理器；原来只展开不收起，双击又会收回去（用户嫌不灵活，2026-11-16）
-          clickToggles: true,
-          onMenu: n.kind === 'folder' ? (e) => folderMenu(e, n.f.path) : undefined,
-          // 行尾星标：收藏了一直显示实心的，没收藏的悬停才露出来
-          action:
-            n.kind === 'folder' ? (
-              <FavStar on={favs.includes(n.f.path)} onClick={() => fav.toggle(n.f.path)} />
-            ) : undefined,
-          actionShown: n.kind === 'folder' && favs.includes(n.f.path),
+          onToggle: () => toggle(n.kind === 'group' ? n.key : n.f.path),
+          ...(n.kind === 'folder' ? folderBits(n.f.path) : {}),
         })
         if (!isOpen) continue
-        if (forced) {
-          walk(kidsOf(n), depth + 1, true)
-          continue
-        }
-        walk(kidsOf(n), depth + 1, false)
+        walk(kidsOf(n), depth + 1)
         if (!lv) continue
         if (lv.error) out.push(note(`${n.key}#error`, depth + 1, lv.error, 'ue:text-danger'))
         if (lv.note) out.push(note(`${n.key}#note`, depth + 1, lv.note))
+        // 读完了确实什么都没有：写出来，别让人以为没读到（选了类型时多半是这一层没有这个类型的资源）
+        if (!lv.error && !lv.busy && !lv.loading && !lv.folders.length && !lv.items.length && !lv.note)
+          out.push(
+            note(
+              `${n.key}#empty`,
+              depth + 1,
+              clsOpt.name ? t('这一层没有 {cls} 类型的资源', { cls: clsOpt.name }) : t('空文件夹'),
+            ),
+          )
         if (lv.loading)
           out.push(
             note(
@@ -238,17 +281,17 @@ export function AssetFolders({
             note(
               `${n.key}#more`,
               depth + 1,
-              rest > 0 ? t('还有 {n} 个，用搜索页签找', { n: rest }) : t('还有更多，用搜索页签找'),
+              rest > 0 ? t('还有 {n} 个，在上面的搜索框里搜', { n: rest }) : t('还有更多，在上面的搜索框里搜'),
             ),
           )
         }
       }
     }
-    walk(tops, 0, searching)
-    return { lines: out, hits }
+    walk(tops, 0)
+    return out
     // toggle、onSelect、folderMenu 每次渲染都是新的，按数据变化重算就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [levels, open, selected, selFolder, folder, q, folded, favs])
+  }, [levels, open, selected, selFolder, folder, q, folded, favs, found.nodes, clsOpt.name])
 
   function folderMenu(e: MouseEvent, path: string) {
     const on = favs.includes(path)
@@ -266,7 +309,15 @@ export function AssetFolders({
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <div className="ue:flex">
         <div className="ue:min-w-0 ue:flex-1">
-          <TreeSearch value={q} onChange={setQ} placeholder={t('筛当前展开的文件夹')} hits={hits} partial />
+          <TreeSearch
+            key={boxKey}
+            value={q}
+            onChange={setQ}
+            placeholder={t('搜资源和文件夹：名字、/Game 路径或磁盘路径')}
+            hits={found.hits}
+            busy={found.loading}
+            extra={searchNote(found)}
+          />
         </div>
         <div className="ue:w-36 ue:shrink-0 ue:border-b ue:border-line ue:py-2 ue:pr-3">
           <ClassPicker
@@ -337,4 +388,16 @@ function note(key: string, depth: number, text: ReactNode, tone = 'ue:text-subtl
     open: false,
     selected: false,
   }
+}
+
+/** 搜索框下面那行小字的补充：截断、数据来源、出错 */
+function searchNote(f: ReturnType<typeof useFolderSearch>) {
+  if (f.error) return <span className="ue:text-danger">{f.error}</span>
+  const parts = [
+    f.capped && t('只列前 {n} 个，多打几个字缩小范围', { n: SEARCH_MAX }),
+    f.source === 'uetovs' && t('来自 UEToVS 的索引'),
+    f.source === 'disk' && t('来自本地扫盘的索引'),
+    f.source === 'registry' && t('来自 UE 的资源注册表（只搜名字开头）'),
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : undefined
 }

@@ -1,5 +1,5 @@
 import { Box } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { t } from './host.ts'
 import { TreeList, type TreeLine } from './TreeList.tsx'
 import { SearchBox } from './ui.tsx'
@@ -79,6 +79,8 @@ export function TreeSearch({
   placeholder,
   hits,
   partial,
+  busy,
+  extra,
 }: {
   value: string
   onChange: (q: string) => void
@@ -87,6 +89,10 @@ export function TreeSearch({
   hits?: number
   /** 树是懒加载的：只搜了已经展开读过的层 */
   partial?: boolean
+  /** 结果还没回来（要问服务端的搜索）：先写「搜索中…」，不说没有匹配 */
+  busy?: boolean
+  /** 命中数后面再补一句（截断、数据来源） */
+  extra?: ReactNode
 }) {
   const q = value.trim()
   return (
@@ -94,8 +100,9 @@ export function TreeSearch({
       <SearchBox initial={value} placeholder={placeholder} onSearch={onChange} allowEmpty live />
       {q && (
         <span className="ue:text-caption ue:text-subtle">
-          {hits ? t('{n} 个匹配', { n: hits }) : t('没有匹配的')}
+          {busy ? t('搜索中…') : hits ? t('{n} 个匹配', { n: hits }) : t('没有匹配的')}
           {partial && ` · ${t('只搜已经展开过的层，没展开的层先展开再搜')}`}
+          {extra && !busy && <> · {extra}</>}
         </span>
       )}
     </div>
