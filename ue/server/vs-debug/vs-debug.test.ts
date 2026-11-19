@@ -201,6 +201,11 @@ test('网页状态 1.5 秒内拿不到就返回不可用，不拖慢刷新', asy
   assert.ok(Date.now() - t0 < 2500)
   assert.equal(s?.available, false)
   assert.ok(s?.message)
+  // 没回应后先别追着问：10 秒内直接说 VS 正忙，不再连管道（免得请求在 VS 里越积越多）
+  const t1 = Date.now()
+  const again = await vsDebugState(p)
+  assert.ok(Date.now() - t1 < 500)
+  assert.match(again?.message ?? '', /VS 正忙/)
   // 停在断点的提示只是补充：VS 不回时返回空，不另报错
   assert.equal(await vsBreakNote(p.root), undefined)
   setPipeOverride(undefined)

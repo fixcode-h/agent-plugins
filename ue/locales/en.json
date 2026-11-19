@@ -4030,5 +4030,6 @@
   "关掉搜索": "Close search",
   "隐藏小地图": "Hide minimap",
   "显示小地图": "Show minimap",
-  "还没有资源索引：可以在上面直接写选择器": "No asset index yet; type a selector above"
+  "还没有资源索引：可以在上面直接写选择器": "No asset index yet; type a selector above",
+  "VS 正忙（可能在编译、启动调试或弹着对话框），过几秒再查调试状态": "VS is busy (building, starting the debugger or showing a dialog); checking the debug state again in a few seconds"
 }

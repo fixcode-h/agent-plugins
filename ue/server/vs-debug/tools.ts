@@ -100,7 +100,9 @@ export const VS_TOOLS = [
       const op = `bp.${String(a.action ?? '')}`
       if (!(BP_OPS as readonly string[]).includes(op))
         throw new VsDebugError(t('不认识的 action：{a}', { a: String(a.action) }))
-      return out(await vsCall(ctx.project, op, rest(a)))
+      // Agent 列断点多半是查「为什么没停」：要绑定数（UEToVS 0.9.6 起默认只在停下时数，运行中数会拖慢 VS）
+      const args = op === 'bp.list' ? { bound: true, ...rest(a) } : rest(a)
+      return out(await vsCall(ctx.project, op, args))
     },
   ),
   tool(
