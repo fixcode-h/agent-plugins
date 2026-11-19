@@ -2,9 +2,9 @@ import { typeTone } from './model.ts'
 
 /**
  * 蓝图图表的画法（效果图 A2）：bp.graph format=json 回的节点和引脚连线 → 画布上的节点位置和连线。
- * UELink 的节点列表不给坐标（只有单个节点的详情带 x / y），所以按连线自动排：
- * 沿连线分层（执行线和数据线都算，从左往右），只往外给数据的纯节点（Get 变量、Make…）挪到用它的节点左边一列，
- * 互不相连的几簇上下叠开。排出来的位置和 UE 里不一样，画布上标明「自动排布」。纯函数，单测在 blueprint.test.ts
+ * UELink 2.18 起（bp.layout）列表里每个节点带 UE 里的坐标 x / y，注释节点带框的 w / h / color：照原位置画，注释画成框。
+ * 旧桥接不给坐标时按连线自动排：沿连线分层（执行线和数据线都算，从左往右），只往外给数据的纯节点（Get 变量、Make…）
+ * 挪到用它的节点左边一列，互不相连的几簇上下叠开，画布上标明「自动排布」。纯函数，单测在 blueprint.test.ts
  */
 
 export interface GPin {
@@ -24,6 +24,23 @@ export interface GNode {
   comment?: string
   error?: string
   pins: GPin[]
+  /** UE 图表坐标（bp.graph layout:true，2.18） */
+  x?: number
+  y?: number
+  /** 注释框的尺寸和颜色（#rrggbb） */
+  w?: number
+  h?: number
+  color?: string
+}
+
+/** 注释框（照 UE 的位置和大小画在节点下面） */
+export interface CommentBox {
+  node: GNode
+  x: number
+  y: number
+  w: number
+  h: number
+  color?: string
 }
 
 export interface PlacedNode {
@@ -136,13 +153,9 @@ function clusters(nodes: GNode[], edges: GEdge[]): string[][] {
 }
 
 /**
- * 摆位置：每簇按列（分层）从左往右，列里按上游节点的平均高度排（少交叉），簇和簇上下叠开。
- * 注释节点（comment）不进图：UELink 不给注释框的大小和位置，单独列在画布上方
+ * 摆位置：每簇按列（分层）从左往右，列里按上游节点的平均高度排（少交叉），簇和簇上下叠开
  */
-export function layoutGraph(all: GNode[]): { nodes: PlacedNode[]; edges: GEdge[]; comments: GNode[] } {
-  const comments = all.filter((n) => n.kind === 'comment')
-  const nodes = all.filter((n) => n.kind !== 'comment')
-  const edges = graphEdges(nodes)
+function autoPlace(nodes: GNode[], edges: GEdge[]): PlacedNode[] {
   const rank = rankNodes(nodes, edges)
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const placed = new Map<string, PlacedNode>()
@@ -177,7 +190,43 @@ export function layoutGraph(all: GNode[]): { nodes: PlacedNode[]; edges: GEdge[]
     }
     top = bottom + CLUSTER_GAP
   }
-  return { nodes: nodes.map((n) => placed.get(n.id)!), edges, comments }
+  return nodes.map((n) => placed.get(n.id)!)
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** 除注释外每个节点都有坐标：照 UE 的位置画（有一个没有就整张自动排，不混着来） */
+export const hasPositions = (nodes: GNode[]) =>
+  nodes.some((n) => n.kind !== 'comment') && nodes.every((n) => n.kind === 'comment' || (isNum(n.x) && isNum(n.y)))
+
+/**
+ * 整张图：有坐标（UELink 2.18 bp.layout）时照 UE 的位置，注释节点有框的位置和大小时画成框（boxes）；
+ * 没坐标时自动排，注释节点没有位置，单独列在画布上方（comments）
+ */
+export function layoutGraph(all: GNode[]): {
+  nodes: PlacedNode[]
+  edges: GEdge[]
+  comments: GNode[]
+  boxes: CommentBox[]
+  positioned: boolean
+} {
+  const notes = all.filter((n) => n.kind === 'comment')
+  const nodes = all.filter((n) => n.kind !== 'comment')
+  const edges = graphEdges(nodes)
+  const positioned = hasPositions(all)
+  if (!positioned) return { nodes: autoPlace(nodes, edges), edges, comments: notes, boxes: [], positioned }
+  const placed = nodes.map((node) => {
+    const rows = pinRows(node)
+    return { node, x: node.x!, y: node.y!, w: NODE_W, h: nodeHeight(rows.length), rows }
+  })
+  const framed = (n: GNode) => isNum(n.x) && isNum(n.y) && isNum(n.w) && isNum(n.h) && n.w > 0 && n.h > 0
+  return {
+    nodes: placed,
+    edges,
+    comments: notes.filter((n) => !framed(n)),
+    boxes: notes.filter(framed).map((n) => ({ node: n, x: n.x!, y: n.y!, w: n.w!, h: n.h!, color: n.color })),
+    positioned,
+  }
 }
 
 /** 节点头部的颜色（照 UE：事件红、函数调用蓝、纯节点绿、流程控制灰、变量看类型、入口出口紫） */

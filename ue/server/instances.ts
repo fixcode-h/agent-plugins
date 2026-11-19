@@ -142,6 +142,7 @@ export async function info(card: Card): Promise<Instance> {
     startedAt: card.startedAt,
     online: false,
     extensions: card.extensions,
+    features: card.features,
     worlds: [],
   }
   try {

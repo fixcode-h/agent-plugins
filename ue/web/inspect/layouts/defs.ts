@@ -1,3 +1,4 @@
+import { audioDef } from './audio/def.ts'
 import { blueprintDef } from './blueprint/def.ts'
 import { curveDef } from './curve/def.ts'
 import { dataAssetDef } from './dataasset/def.ts'
@@ -5,6 +6,11 @@ import { dataTableDef } from './datatable/def.ts'
 import { enumDef } from './enum/def.ts'
 import { genericDef } from './generic/def.ts'
 import { structDef } from './struct/def.ts'
+import { materialDef, materialInstanceDef } from './material/def.ts'
+import { staticMeshDef } from './mesh/def.ts'
+import { niagaraDef } from './niagara/def.ts'
+import { skeletalDef } from './skeletal/def.ts'
+import { textureDef } from './texture/def.ts'
 import type { LayoutDef } from './types.ts'
 import { umgDef } from './umg/def.ts'
 
@@ -20,5 +26,13 @@ export const LAYOUT_DEFS: LayoutDef[] = [
   enumDef,
   structDef,
   curveDef,
+  // 预览类（第四期）：asset.preview 画中间，细节在右
+  materialDef,
+  materialInstanceDef,
+  textureDef,
+  staticMeshDef,
+  skeletalDef,
+  audioDef,
+  niagaraDef,
   genericDef,
 ]

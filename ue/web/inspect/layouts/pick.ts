@@ -25,8 +25,18 @@ export function guessClass(path: string): string | undefined {
   if (/^(BP|ABP|BPI|BPFL)_/.test(name)) return 'Blueprint'
   if (/^DA_/.test(name)) return 'DataAsset'
   if (/^E_/.test(name)) return 'UserDefinedEnum'
-  return undefined
+  return PREVIEW_PREFIX.find(([re]) => re.test(name))?.[1]
 }
+
+/** 预览类资源的常见前缀（UE 命名规范）：MI_ 要先于 M_ 比 */
+const PREVIEW_PREFIX: [RegExp, string][] = [
+  [/^MI_/, 'MaterialInstanceConstant'],
+  [/^M_/, 'Material'],
+  [/^T_/, 'Texture2D'],
+  [/^SM_/, 'StaticMesh'],
+  [/^SK_/, 'SkeletalMesh'],
+  [/^NS_/, 'NiagaraSystem'],
+]
 
 /** AssetForge 配置的 kind → 资源的类（资源还没生成时用配置挑布局） */
 const KIND_CLASS: Record<string, string> = {

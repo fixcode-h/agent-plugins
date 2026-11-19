@@ -168,6 +168,11 @@ export interface Instance {
   ops?: string[]
   /** 能批量（paths / items）的操作（UELink 2.14 /info 的 batchOps），旧 UELink 没有 */
   batchOps?: string[]
+  /**
+   * 名片上的能力名（UELink 推送通道的 features）：不是操作、只是已有操作多了字段的（bp.layout）只能从这里看出来。
+   * /info 不回这个字段，取名片上的；旧 UELink 的名片没有
+   */
+  features?: string[]
 }
 
 export interface Target {
