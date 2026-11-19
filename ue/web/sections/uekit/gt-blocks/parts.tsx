@@ -134,10 +134,13 @@ export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: G
             </div>
           </Row>
         )}
-        <Row label={t('总时限')} hint={t('写在块上是整块的总时限；块里每步各自的等待不变')}>
+        <Row
+          label={t('总时限')}
+          hint={t('不填用默认；0 = 不限，一直等到成立或手动停止。写在块上是整块的总时限，块里每步各自的等待不变')}
+        >
           <div className="ue:flex ue:items-center ue:gap-2">
             <NumberField step={step} k="timeoutMs" onChange={onChange} placeholder={t('默认')} />
-            <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
+            <span className="ue:text-footnote ue:text-subtle">{t('毫秒（0 = 不限）')}</span>
           </div>
         </Row>
       </FieldGroup>

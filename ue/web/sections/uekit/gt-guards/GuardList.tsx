@@ -180,7 +180,7 @@ function GuardCard({
           <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
             <span className={label}>{t('最多触发')}</span>
             {num('max', 20)}
-            <span className="ue:text-footnote ue:text-subtle">{t('次，间隔至少')}</span>
+            <span className="ue:text-footnote ue:text-subtle">{t('次（0 = 不限），间隔至少')}</span>
             {num('cooldownMs', 1000)}
             <span className="ue:text-footnote ue:text-subtle">{t('毫秒')}</span>
           </div>

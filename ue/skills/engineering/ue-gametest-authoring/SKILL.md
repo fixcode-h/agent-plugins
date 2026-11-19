@@ -49,7 +49,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 ```
 
 - **id**：每步写 `id`（字母数字下划线，场景内唯一）；报告、断点、`from` / `to` 都按它。
-- **块**：`group`（`do`）、`if`（`cond` / `then` / `elif` / `else`）、`loop`（`until` / `while` / `times` / `each` / `in`，除 `times` 外**必须写 `max`**）、`call`（`script` + `with`）、`set`、`invoke`、`api`、`break` / `continue` / `return` / `fail`、`widget.close` / `widget.call`。
+- **块**：`group`（`do`）、`if`（`cond` / `then` / `elif` / `else`）、`loop`（`until` / `while` / `times` / `each` / `in`，`max` 不写或 0 = 不限轮数，Agent 写的循环**仍要给 `max` 兜底**，免得条件写错一直跑）、`call`（`script` + `with`）、`set`、`invoke`、`api`、`break` / `continue` / `return` / `fail`、`widget.close` / `widget.call`。
 - **统一条件**：`{ "all": [...] }` / `{ "any": [...] }` / `{ "not": … }` 任意嵌套；一条判断可以是控件（`target` + `onScreen` / `visible` / `enabled` / `text` / `number` / `field`…）、代码变量（`value: "@ps.Gold", gte: 100`）、脚本变量（`value: "$n"`）、只读接口（`api` + `args`）、表达式（`expr`）、常用名（`alias`）。`settleMs`（默认 300）防刚打开的界面误判。
 - **表达式**：填值处写 `"=…"`，条件写 `{"expr": "…"}`。只算值：`$var`、`@来源.路径`、`text(sel)`、`number(sel)`、`len` `min` `format`… 和**只读**接口。改状态的函数只能用 `invoke` / `api` 步骤。
 - **取值来源**：`@gi @gs @gm @ps @pc @pawn @hud`、`@sub.<子系统类>`、`@actor[tag=X]`、`@obj.<名字>`、`@luaMod.<require 路径>`、`@luaG.<全局>`、`@cvar.<名字>`。路径照 `vars` 返回的 `path` 抄，不要猜。
