@@ -49,6 +49,16 @@ export const blankGuard = (used: Set<string>): GtGuard => {
   return { id: `g${n}`, name: '', when: { target: '', onScreen: true }, do: [{ action: 'widget.close', target: '' }] }
 }
 
+/**
+ * 删掉脚本上第 i 条守护（流程图里选中守护节点按 Delete、右键「删掉这条守护」；用户 2026-11-19：画布上加了删不掉）。
+ * 删空了连 guards 字段一起去掉，不在文件里留个空数组
+ */
+export function removeGuard<T extends { guards?: GtGuard[] }>(doc: T, i: number): T {
+  const list = Array.isArray(doc.guards) ? doc.guards.filter((_, j) => j !== i) : []
+  const { guards: _old, ...rest } = doc
+  return (list.length ? { ...rest, guards: list } : rest) as T
+}
+
 /** 存盘前：去掉没写条件也没写动作的空条；默认值不写进文件 */
 export function tidyGuards(list: GtGuard[]): GtGuard[] {
   const DEFAULTS: Record<string, unknown> = {
