@@ -27,6 +27,8 @@ export interface TreeLine {
   onDouble?: () => void
   /** 右键这一行（资源文件夹树的收藏、资源的「在 UE 编辑器打开」） */
   onMenu?: (e: MouseEvent) => void
+  /** 鼠标移到这一行上（GameTest 的 Widget 树：悬停时在游戏画面上描边） */
+  onHover?: () => void
   /** 行尾的小按钮（文件夹的收藏星标）：平时隐藏，悬停或键盘选中这一行才露出来；actionShown 时一直显示（已收藏） */
   action?: ReactNode
   actionShown?: boolean
@@ -100,6 +102,7 @@ export function TreeList({
                 l.onDouble ?? (l.onSelect && l.expandable && !l.clickToggles ? () => l.onToggle?.() : undefined)
               }
               onContextMenu={l.onMenu}
+              onMouseEnter={l.onHover}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') activate(l)
                 else if (e.key === 'ArrowLeft' && l.expandable && l.open) l.onToggle?.()
