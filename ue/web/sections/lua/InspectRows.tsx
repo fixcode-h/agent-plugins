@@ -5,8 +5,9 @@ import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { luaText, type LuaField } from '../../Lua.tsx'
-import { Badge, ErrorText } from '../../ui.tsx'
+import { ErrorText } from '../../ui.tsx'
 import { parseArg, signature, type CallRes, type LuaFn, type LuaRoot } from './inspect-data.ts'
+import { parseSrc } from './objects-tree/tree-model.ts'
 
 const SCALAR = new Set(['nil', 'boolean', 'number', 'string'])
 export const keyOf = (f: LuaField): LuaKey | undefined =>
@@ -141,26 +142,53 @@ export function FieldRow({
   )
 }
 
-/** 函数行：点开是调用表单。第一个参数叫 self 时默认按 obj:fn() 调 */
-export function FnRow({ root, fn, onChanged }: { root: LuaRoot; fn: LuaFn; onChanged: () => void }) {
+/**
+ * 函数行：点开是调用表单。第一个参数叫 self 时默认按 obj:fn() 调。
+ * 定义位置只写「:行号」（同一层的文件写在分组标题上），点了用编辑器打开到那一行；C 函数（UE 导出）没有位置
+ */
+export function FnRow({
+  root,
+  fn,
+  onChanged,
+  onOpen,
+}: {
+  root: LuaRoot
+  fn: LuaFn
+  onChanged: () => void
+  onOpen?: (file: string, line?: number) => void
+}) {
   const { cn } = h()
   const [open, setOpen] = useState(false)
+  const at = fn.src ? parseSrc(fn.src) : undefined
   return (
     <div className="ue:border-b ue:border-line/60">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="ue:flex ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:px-4 ue:py-1.5 ue:text-left ue:hover:bg-hover"
-      >
-        <ChevronRight
-          className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle ue:transition-transform', open && 'ue:rotate-90')}
-        />
-        <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-body ue:text-fg">{signature(fn)}</span>
-        {fn.from > 0 && <Badge>{t('继承 · 第 {n} 层', { n: fn.from })}</Badge>}
-        <span className="ue:ml-auto ue:shrink-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
-          {fn.src ?? t('C 函数')}
-        </span>
-      </button>
+      <div className="ue:group ue:flex ue:items-center ue:gap-2 ue:px-4 ue:hover:bg-hover">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-2 ue:py-1.5 ue:text-left"
+        >
+          <ChevronRight
+            className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle ue:transition-transform', open && 'ue:rotate-90')}
+          />
+          <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-body ue:text-fg">{signature(fn)}</span>
+          <span className="ue:flex ue:shrink-0 ue:items-center ue:gap-1 ue:text-caption ue:text-subtle ue:opacity-0 ue:group-hover:opacity-100">
+            <Play className="ue:h-3 ue:w-3" /> {t('调用')}
+          </span>
+        </button>
+        {at?.line !== undefined ? (
+          <button
+            type="button"
+            title={`${at.file}:${at.line}`}
+            onClick={() => onOpen?.(at.file, at.line)}
+            className="ue:shrink-0 ue:cursor-pointer ue:font-mono ue:text-caption ue:text-subtle ue:hover:text-accent-text ue:hover:underline"
+          >
+            :{at.line}
+          </button>
+        ) : (
+          <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{fn.src ? fn.src : t('C 函数')}</span>
+        )}
+      </div>
       {open && <CallForm root={root} fn={fn} onChanged={onChanged} />}
     </div>
   )

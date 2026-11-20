@@ -1,8 +1,8 @@
 import { t } from '../../host.ts'
-import type { LeakItem, SnapCapture } from './debug-types.ts'
-import { CaptureView, LeakList } from './DebugViews.tsx'
+import type { SnapCapture } from './debug-types.ts'
+import { CaptureView } from './DebugViews.tsx'
 
-/** 设置 →「组件」里 Lua「调试」页签两块结果的示例（示例数据，不连 UE） */
+/** 设置 →「组件」里 Lua「调试」页签快照记录的示例（示例数据，不连 UE） */
 const ROOT = 'D:/Proj/MyGame'
 
 const CAP: SnapCapture = {
@@ -30,17 +30,6 @@ const CAP: SnapCapture = {
   stack: ["...Script/UI/BagPanel.lua:152: in method 'RefreshSlots'", "...Script/UI/BagPanel.lua:96: in method 'Tick'"],
 }
 
-const LEAKS: LeakItem[] = [
-  { kind: 'destroyed', module: 'UI.ShopPanel', path: '_G.UIManager.OpenedPanels[3]' },
-  {
-    kind: 'noworld',
-    module: 'Gameplay.Buff',
-    object: '/Game/Maps/Test.Test:PersistentLevel.BP_Hero_C_0',
-    class: 'BP_Hero_C',
-    path: 'BuffSystem<upvalue Owners>[12]',
-  },
-]
-
 const noop = () => undefined
 
 export function LuaDebugSpecimen() {
@@ -49,10 +38,6 @@ export function LuaDebugSpecimen() {
       <div>
         <div className="ue:mb-2 ue:text-caption ue:text-subtle">{t('快照点')}</div>
         <CaptureView cap={CAP} onOpen={noop} />
-      </div>
-      <div>
-        <div className="ue:mb-2 ue:text-caption ue:text-subtle">{t('Lua 持有的已销毁对象')}</div>
-        <LeakList items={LEAKS} />
       </div>
     </div>
   )

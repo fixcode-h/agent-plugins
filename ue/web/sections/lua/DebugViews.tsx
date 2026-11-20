@@ -1,11 +1,11 @@
 import { SquarePen } from 'lucide-react'
 import { t } from '../../host.ts'
 import { luaText } from '../../Lua.tsx'
-import { Badge, Term, fmtTime, type Tone } from '../../ui.tsx'
-import { shortFile, type LeakItem, type LeakKind, type OpenAt, type SnapCapture } from './debug-types.ts'
+import { Term, fmtTime } from '../../ui.tsx'
+import { shortFile, type OpenAt, type SnapCapture } from './debug-types.ts'
 
 /**
- * Lua「调试」页签的结果视图（快照记录、持有的 UObject）：只吃数据不取数，
+ * Lua「调试」页签的结果视图（快照记录；持有的已销毁 UObject 2026-11-20 挪到对象页的树）：只吃数据不取数，
  * 页签（Debug.tsx）和设置里的组件示例（DebugSpecimen.tsx）共用
  */
 
@@ -85,50 +85,3 @@ export function CaptureView({ cap, onOpen }: { cap: SnapCapture; onOpen: OpenAt 
   )
 }
 
-const LEAK: Record<LeakKind, { tone: Tone; label: () => string; hint: () => string }> = {
-  destroyed: {
-    tone: 'danger',
-    label: () => t('对象已销毁'),
-    hint: () => t('Lua 还拿着这个实例表，UnLua 的对象表里已经没有它（对象多半已经销毁）'),
-  },
-  stale: {
-    tone: 'danger',
-    label: () => t('对象已不在'),
-    hint: () => t('UnLua 的对象表里还有这一项，UObject 已经不在了'),
-  },
-  garbage: { tone: 'warn', label: () => t('已标记销毁'), hint: () => t('UObject 已标记销毁，还在 UnLua 的对象表里') },
-  noworld: { tone: 'warn', label: () => t('世界已关'), hint: () => t('Actor、组件或控件所在的世界已经关了') },
-}
-
-/** 持有的已销毁 UObject：种类、模块、Lua 里从哪拿着它（照这条路径去把引用清掉） */
-export function LeakList({ items }: { items: LeakItem[] }) {
-  return (
-    <div className="ue:divide-y ue:divide-line/60">
-      {items.map((x, i) => {
-        const k = LEAK[x.kind] ?? LEAK.destroyed
-        return (
-          <div key={i} className="ue:flex ue:items-start ue:gap-3 ue:px-3 ue:py-2 ue:hover:bg-hover">
-            <Badge tone={k.tone} title={k.hint()}>
-              {k.label()}
-            </Badge>
-            <div className="ue:min-w-0 ue:flex-1">
-              <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
-                <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
-                  {x.module || x.class || t('（没认出模块）')}
-                </span>
-                {x.object && (
-                  <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={x.object}>
-                    {x.object}
-                  </span>
-                )}
-              </div>
-              <div className="ue:truncate ue:font-mono ue:text-caption ue:text-muted" title={x.path}>
-                {x.path ? `${t('拿着它的')}：${x.path}` : t('只有 UnLua 的对象表拿着它')}
-              </div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
