@@ -1837,7 +1837,7 @@
   "等 {n} 个": "and {n} more",
   "在编辑器里选中并对焦": "Select and focus in the editor",
   "在内容浏览器里定位": "Show in the Content Browser",
-  "开着时编辑器里点哪个，这里跟到哪个": "When on, this follows whatever you select in the editor",
+  "开着时编辑器里点哪个，这里跟到哪个（打开时先跳到现在选中的）": "When on, this follows whatever you select in the editor (jumps to the current selection when turned on)",
   "跟随": "Follow",
   "UELink 升级到 2.4 后，编辑器里选中的 Actor 和资源会显示在这里，也会告诉 Agent": "After updating UELink to 2.4, the Actors and assets selected in the editor show up here and are shared with the Agent",
   "编辑器里现在什么都没选中": "Nothing is selected in the editor",
