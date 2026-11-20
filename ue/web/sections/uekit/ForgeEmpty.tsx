@@ -49,7 +49,7 @@ export function ForgeEmpty({
   const body =
     kind === 'no-root'
       ? t(
-          '配置根默认跟项目文档根走（项目外层有 ProjectDoc/docs 时是 ProjectDoc/docs/AssetForge，否则是项目里的 docs/AssetForge），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目和 ProjectDoc 里建目录；在资源页导出到 JSON 时 UE 也会建出来。',
+          '配置根默认是项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目、ProjectDoc 和项目文档根里建目录；在资源页导出到 JSON 时 UE 也会建出来。',
         )
       : kind === 'empty-root'
         ? t('从模板新建一份，让 AI 按需求写一份，或者在资源页把已有资产「导出到 JSON」纳管。')

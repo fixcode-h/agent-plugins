@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { t } from '../util.ts'
+import { hintDocsRoot } from './docs-sub.ts'
 
 /**
  * GameTest 场景、AssetForge 配置这类项目文档的路径核对（从 gt-files.ts 分出来）：不 import 桥接（instances.ts），
@@ -7,12 +8,13 @@ import { t } from '../util.ts'
  */
 
 /**
- * 只认项目目录和项目外层同级的 ProjectDoc 里的文件（P4 / SVN 项目的文档根在那，AssetForge 配置、GameTest 场景跟着它）。
- * 相对路径按项目根算（gt 报告里的 path 就是这样）
+ * 只认项目目录、项目外层同级的 ProjectDoc 和面板给的项目文档根（docs-sub.ts，P4 / SVN 各分支共用的那份可能在别的分支目录下）
+ * 里的文件：AssetForge 配置、GameTest 场景跟着文档根走。相对路径按项目根算（gt 报告里的 path 就是这样）
  */
 export function insideProject(root: string, rel: string) {
   const abs = path.resolve(root, rel)
-  if (!within(root, abs) && !within(path.join(path.dirname(root), 'ProjectDoc'), abs))
+  const hint = hintDocsRoot(root)
+  if (!within(root, abs) && !within(path.join(path.dirname(root), 'ProjectDoc'), abs) && !(hint && within(hint, abs)))
     throw new Error(t('只能读项目目录和 ProjectDoc 里的文件：{p}', { p: rel }))
   return abs
 }
