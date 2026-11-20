@@ -84,8 +84,8 @@ const DEFS = [
     [],
     async (a, ctx) => {
       const action = str(a.action) || (a.command ? 'run' : a.name ? 'set' : 'cvars')
-      if (action === 'config') return mcpText(await consoleConfig(ctx, a))
-      if (action === 'tags') return mcpText(await consoleTags(ctx, a))
+      if (action === 'config') return consoleConfig(ctx, a)
+      if (action === 'tags') return consoleTags(ctx, a)
       if (action === 'run') return out(await runOp(ctx, 'console', { command: a.command }))
       if (action === 'set') return out(await runOp(ctx, 'cvar.set', { name: a.name, value: str(a.value) }))
       return out(await runOp(ctx, 'cvars', { query: a.query ?? '', changed: !!a.changed, limit: 80 }))
@@ -450,9 +450,22 @@ const DEFS = [
       const lines = ((r.lines as { category: string; verbosity: string; text: string }[]) ?? []).map(
         (l) => `${l.category}${l.verbosity && l.verbosity !== 'Log' ? ` ${l.verbosity}` : ''}: ${l.text}`,
       )
-      return out(
-        `cursor=${r.cursor ?? 0} errors=${r.errors ?? 0} warnings=${r.warnings ?? 0} file=${r.file ?? ''}${r.live ? '' : '（UE 没在运行，读的是日志文件）'}\n${lines.join('\n')}`,
-      )
+      // out 截列表时留开头；日志要最新的，所以这里先从前面丢掉放不下的行，写明丢了几行
+      let room = 10000
+      let from = lines.length
+      while (from > 0 && room - lines[from - 1].length - 3 > 0) room -= lines[--from].length + 3
+      return out({
+        cursor: r.cursor ?? 0,
+        errors: r.errors ?? 0,
+        warnings: r.warnings ?? 0,
+        file: r.file ?? '',
+        ...(!r.live && { note: 'UE 没在运行，读的是日志文件' }),
+        ...(from > 0 && {
+          dropped: from,
+          dropHint: '更早的行太长没列出：加 category / verbosity / contains 筛，或直接读 file',
+        }),
+        lines: lines.slice(from),
+      })
     },
   ),
   tool(

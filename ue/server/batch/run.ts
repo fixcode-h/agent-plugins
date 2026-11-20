@@ -1,6 +1,6 @@
 import type { McpResult } from '../../../sdk/server.ts'
 import { runOp, type OpCtx } from '../ops.ts'
-import { str } from '../toolkit.ts'
+import { out, str } from '../toolkit.ts'
 import { mcpText } from '../util.ts'
 import { retryItems } from './retry.ts'
 import './actions/asset.ts'
@@ -160,13 +160,13 @@ export async function runBatch(tool: string, a: Record<string, unknown>, ctx: Op
 
 /** 批量结果收尾：没做完回作业号；做完了整理汇总（Agent 带 job 再调时也走这里） */
 export async function finishBatch(res: Record<string, unknown>, e: BatchEntry | undefined) {
-  if (!res.batch) return mcpText(JSON.stringify(res, null, 1))
-  return mcpText(JSON.stringify(await formatBatch(res, !!e?.write), null, 1))
+  if (!res.batch) return out(res)
+  return out(await formatBatch(res, !!e?.write))
 }
 
 /** Agent 带 job 再调：批量作业的结果同样整理成汇总，普通作业原样给出 */
 export async function jobResult(res: Record<string, unknown>, tool: string, action: unknown) {
-  if (!res.batch) return mcpText(JSON.stringify(res, null, 1))
+  if (!res.batch) return out(res)
   return finishBatch(res, batchEntry(tool, action))
 }
 

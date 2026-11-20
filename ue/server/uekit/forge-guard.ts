@@ -2,6 +2,7 @@ import type { McpResult } from '../../../sdk/server.ts'
 import { runOp, type OpCtx } from '../ops.ts'
 import { installedIn } from './catalog.ts'
 import { editedAsset } from './forge-edited.ts'
+import { withTip } from '../json-result.ts'
 
 /**
  * Agent 用 ue_set / ue_asset / ue_blueprint 直接改了 AssetForge 纳管的资产时，在结果后面提醒一句：
@@ -30,7 +31,7 @@ export async function forgeNotice(tool: string, a: Record<string, unknown>, ctx:
   const tip = gone
     ? `注意：${asset} 由 AssetForge 配置 ${entry.config ?? ''} 管着，改名或删除后配置指向的资产就不在了：同步改配置的 asset 字段，或删掉这份配置。`
     : `注意：${asset} 由 AssetForge 配置 ${entry.config ?? ''} 管着（配置是唯一真源）。只改资产会和配置对不上，下次导入会被覆盖：要保留就改配置再 ue_forge import，或者改完用 ue_forge export 写回配置；只是试数值可以不管。`
-  return { ...r, content: [...r.content, { type: 'text' as const, text: tip }] }
+  return withTip(r, tip)
 }
 
 export const FORGE_GUARDED = new Set(['ue_set', 'ue_asset', 'ue_blueprint'])

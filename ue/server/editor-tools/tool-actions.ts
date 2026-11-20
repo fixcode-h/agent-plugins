@@ -1,6 +1,7 @@
 import { runOp, type OpCtx } from '../ops.ts'
 import { configView } from './config.ts'
 import { listTags, tagRefs } from './tags.ts'
+import { jsonResult } from '../json-result.ts'
 
 /**
  * ue_console 的 config / tags、ue_editor 的 spawn / destroy（工具定义在 tools.ts，这里是给 Agent 的结果整理）。
@@ -9,10 +10,8 @@ import { listTags, tagRefs } from './tags.ts'
 const LIMIT = 4000
 const s = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
-function fit(data: unknown, hint: string) {
-  const text = JSON.stringify(data, null, 1)
-  return text.length <= LIMIT ? text : `${text.slice(0, LIMIT)}\n…（太长截断了：${hint}）`
-}
+/** 超长按列表截短（json-result.ts），hint 写进 clipped 告诉 Agent 怎么缩小范围 */
+const fit = (data: unknown, hint: string) => jsonResult(data, LIMIT, hint ? `太长只列了一部分：${hint}` : undefined)
 
 export async function consoleConfig(ctx: OpCtx, a: Record<string, unknown>) {
   const r = await configView(ctx, {
@@ -24,7 +23,11 @@ export async function consoleConfig(ctx: OpCtx, a: Record<string, unknown>) {
   })
   if ('hits' in r)
     return fit(
-      { query: r.query, more: r.more, hits: r.hits.map((h) => `${h.type} [${h.section}] ${h.key}=${h.value} · ${h.layer}:${h.line}`) },
+      {
+        query: r.query,
+        more: r.more,
+        hits: r.hits.map((h) => `${h.type} [${h.section}] ${h.key}=${h.value} · ${h.layer}:${h.line}`),
+      },
       '换更具体的 query',
     )
   if ('types' in r) return fit({ files: r.types, next: '给 file（如 Engine）列 section' }, '')
