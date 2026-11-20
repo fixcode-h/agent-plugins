@@ -1,6 +1,6 @@
 import type { McpResult, McpToolEffect } from '../../sdk/server.ts'
 import type { OpCtx } from './ops.ts'
-import { clip, mcpText } from './util.ts'
+import { jsonResult } from './json-result.ts'
 
 /** 各个工具定义文件共用的小东西（tools.ts、tools-asset.ts） */
 export const TARGET = {
@@ -10,7 +10,8 @@ export const TARGET = {
   properties: { instance: { type: ['string', 'number'] }, world: { type: 'string' } },
 }
 
-export const out = (data: unknown) => mcpText(clip(typeof data === 'string' ? data : JSON.stringify(data, null, 1)))
+/** 给 Agent 的结果：对象是紧凑 JSON + structuredContent，超长按列表截短（json-result.ts）；字符串照旧 */
+export const out = (data: unknown, max?: number) => jsonResult(data, max)
 export const str = (v: unknown) => (v === undefined || v === null ? '' : String(v))
 
 export type Handler = (a: Record<string, unknown>, ctx: OpCtx) => Promise<McpResult>

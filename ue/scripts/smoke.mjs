@@ -165,7 +165,7 @@ try {
   }
 
   const st = await call('ue_status', {})
-  assert.match(text(st), /"online": true/)
+  assert.match(text(st), /"online":true/)
   const st2 = await api('GET', '/p/p1/state')
   assert.equal(st2.instances[0].worlds.length, 2)
 
@@ -259,7 +259,7 @@ try {
   // 演练：不留改动、不进操作记录；正式修改：记录里能撤回
   const addVar = [{ op: 'add_variable', name: 'Shield', type: 'float' }]
   const dry = await call('ue_blueprint', { action: 'edit', path: bridge.bp, ops: addVar, dryRun: true })
-  assert.ok(!dry.isError && /"dryRun": true/.test(text(dry)), text(dry))
+  assert.ok(!dry.isError && /"dryRun":true/.test(text(dry)), text(dry))
   assert.equal(bridge.state.bp.vars.length, 1)
   const histBefore = (await api('GET', '/p/p1/history')).items.length
   const edited = await call('ue_blueprint', { action: 'edit', path: bridge.bp, ops: addVar })
@@ -396,7 +396,7 @@ try {
   assert.match(text(luaFound), /Game\.Core\.GameInstance/)
   const inst = await call('ue_get', { path: bridge.gi, lua: '' })
   assert.match(text(inst), /ReceiveBeginPlay/)
-  assert.match(text(inst), /"k": "Gold"/)
+  assert.match(text(inst), /"k":"Gold"/)
   const glob = await call('ue_get', { lua: '_G.GameSystemManager.Players[2]' })
   assert.match(text(glob), /bob/)
   const lset = await call('ue_set', { path: bridge.gi, lua: 'Bag.Size', value: 30 })
@@ -475,7 +475,7 @@ try {
   const called = await call('ue_lua', { action: 'call', path: bridge.gi, lua: 'AddGold', self: true, args: [5] })
   assert.ok(!called.isError, text(called))
   assert.equal(bridge.state.lua.inst.Gold, gold + 5)
-  assert.match(text(called), /"after": 105/)
+  assert.match(text(called), /"after":105/)
   const sig = await call('ue_get', { path: bridge.gi, lua: '', functions: true })
   assert.match(text(sig), /MAX_GOLD/)
   const callHist = JSON.parse(text(await call('ue_undo', {}))).find((i) => i.op === 'lua.call')
@@ -516,7 +516,8 @@ try {
   // 日志：增量取、清空
   const tail = await call('ue_log', { action: 'tail' })
   assert.match(text(tail), /connection timeout/)
-  const cursor = Number(/cursor=(\d+)/.exec(text(tail))[1])
+  const cursor = Number(JSON.parse(text(tail)).cursor)
+  assert.ok(cursor > 0 && tail.structuredContent?.cursor === cursor, '日志结果是结构化的：脚本能直接取 cursor')
   await call('ue_console', { command: 'stat unit' })
   const more = await call('ue_log', { action: 'tail', since: cursor })
   assert.doesNotMatch(text(more), /connection timeout/)

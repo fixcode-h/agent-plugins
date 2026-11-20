@@ -14,8 +14,8 @@ import { exportTrace } from './perf/export.ts'
 import { recordTrace, waitCapture } from './perf/record.ts'
 import { traceAgentQuery, traceDiagnose, traceSummary } from './perf/trace-agent.ts'
 import { traceCompare } from './perf/trace-compare.ts'
-import { str, TARGET, tool } from './toolkit.ts'
-import { clip, mcpText, t } from './util.ts'
+import { out, str, TARGET, tool } from './toolkit.ts'
+import { t } from './util.ts'
 
 /**
  * 性能和内存分析的两个工具（设计稿「性能与内存分析」第一期）：
@@ -99,7 +99,6 @@ trace 的 what（范围是秒，耗时是毫秒；列表都能 top / offset 翻�
 读数提示：时间类的列单位是毫秒；memreport 的大小是 KB；ResExcKB 是对象持有的资源（贴图、网格数据）的大小，通常比 NumKB 更能说明问题。`
 
 /** 性能结果是大段数字：紧凑 JSON（不缩进）省一半字数，同样的 12000 字上限能多放不少（设计稿 4.4） */
-const out = (data: unknown) => mcpText(clip(typeof data === 'string' ? data : JSON.stringify(data)))
 
 export const PERF_DEFS = [
   tool(
