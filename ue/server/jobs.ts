@@ -2,11 +2,35 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import type { Job } from './types.ts'
 import { now, run, t, uid } from './util.ts'
 
-/** 后台作业（编译、安装）：内存里留最近 30 个，网页轮询看输出 */
-const jobs = new Map<string, Job & { project: string }>()
+/**
+ * 后台作业（编译、安装）：内存里留最近 30 个，网页轮询看输出。
+ * 作业表和子进程表挂在 globalThis 上，不放模块变量：面板升级 UE 插件时会重新 import 插件入口（新模块），
+ * 模块变量跟着清空，正在跑的 Build.bat 就没人管了——网页刷新后看不到它，再编译时被它的互斥量挡住一直等
+ * （「Build.bat is already running」）。挂在进程上，新旧两份模块看的是同一张表，旧模块里子进程的输出回调照样写进来。
+ */
+interface JobStore {
+  jobs: Map<string, Job & { project: string }>
+  /** 正在跑的子进程，取消、认出「这次自己起的进程」时用 */
+  children: Map<string, ChildProcess>
+  /** 没有自己子进程的作业（接着看的旧编译）取消时做什么 */
+  cancels?: Map<string, () => Promise<void>>
+}
+const g = globalThis as { __agentPanelUeJobs?: JobStore }
+const store: JobStore = (g.__agentPanelUeJobs ??= { jobs: new Map(), children: new Map() })
+const { jobs, children } = store
+const cancels = (store.cancels ??= new Map())
+
+/** 登记作业取消时做的事（作业结束时调 offCancel 撤掉） */
+export const onCancel = (id: string, fn: () => Promise<void>) => void cancels.set(id, fn)
+export const offCancel = (id: string) => void cancels.delete(id)
 const MAX_LOG = 4000
-/** 正在跑的子进程，取消时用 */
-const children = new Map<string, ChildProcess>()
+
+/** 跑着的作业的子进程 PID（作业 id → PID），扫编译进程时据此分出「面板起的」和残留的 */
+export function jobPids() {
+  const out = new Map<number, string>()
+  for (const [id, c] of children) if (c.pid && jobs.get(id)?.status === 'running') out.set(c.pid, id)
+  return out
+}
 
 export function newJob(project: string, kind: Job['kind'], title: string) {
   const job = { id: uid(), project, kind, title, status: 'running' as const, log: [], startedAt: now() }
@@ -35,8 +59,14 @@ export const projectJobs = (project: string) =>
 export const runningJob = (project: string, kind: Job['kind']) =>
   [...jobs.values()].find((j) => j.project === project && j.kind === kind && j.status === 'running')
 
-/** 起一个子进程，输出写进作业；shell 只在 Windows 跑 .bat 时用（spawn 不能直接执行 .bat） */
-export function spawnJob(job: Job, cmd: string, args: string[], cwd: string): Promise<boolean> {
+/** 起一个子进程，输出写进作业（onText 另外看一眼输出）；shell 只在 Windows 跑 .bat 时用（spawn 不能直接执行 .bat） */
+export function spawnJob(
+  job: Job,
+  cmd: string,
+  args: string[],
+  cwd: string,
+  onText?: (text: string) => void,
+): Promise<boolean> {
   jobLog(job, `> ${[cmd, ...args].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`)
   return new Promise((resolve) => {
     const bat = process.platform === 'win32' && /\.(bat|cmd)$/i.test(cmd)
@@ -44,8 +74,12 @@ export function spawnJob(job: Job, cmd: string, args: string[], cwd: string): Pr
       ? spawn(`"${cmd}" ${args.map((a) => `"${a}"`).join(' ')}`, { cwd, shell: true, windowsHide: true })
       : spawn(cmd, args, { cwd, windowsHide: true })
     children.set(job.id, child)
-    child.stdout?.on('data', (d) => jobLog(job, String(d)))
-    child.stderr?.on('data', (d) => jobLog(job, String(d)))
+    const out = (d: unknown) => {
+      jobLog(job, String(d))
+      onText?.(String(d))
+    }
+    child.stdout?.on('data', out)
+    child.stderr?.on('data', out)
     child.on('error', (e) => {
       jobLog(job, e.message)
       endJob(job, false)
@@ -66,6 +100,13 @@ export function spawnJob(job: Job, cmd: string, args: string[], cwd: string): Pr
 export async function cancelJob(id: string) {
   const job = jobs.get(id)
   if (!job || job.status !== 'running') return false
+  const hook = cancels.get(id)
+  if (hook) {
+    job.canceled = true
+    jobLog(job, t('已取消'))
+    await hook()
+    return true
+  }
   const child = children.get(id)
   if (!child?.pid) return false
   job.canceled = true

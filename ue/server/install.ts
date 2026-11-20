@@ -1,6 +1,7 @@
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { guardStale, watchWaitMutex } from './build/stale.ts'
 import { endJob, jobLog, newJob, runningJob, spawnJob } from './jobs.ts'
 import { guardBuild } from './build-guard.ts'
 import { closeBackground } from './editor.ts'
@@ -252,11 +253,12 @@ const NO_TOOLCHAIN =
 /**
  * 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat。
  * 用 Build.bat 时先过 guardBuild（build-guard.ts）：编辑器开着或 Live Coding 的锁还在就不跑，作业带上 hint，网页给出处理方式；
- * force 跳过检查（检查认错时用）；kill 先强制结束占着的进程再编（用户在网页上确认过未保存的改动会丢）。
+ * 再之前先查这个引擎有没有别的编译在跑（build/stale.ts），killStale 是用户确认过的「结束旧的再编」。
+ * force 跳过编辑器检查（检查认错时用）；kill 先强制结束占着的进程再编（用户在网页上确认过未保存的改动会丢）。
  * 不管哪种方式，输出里出现 Live Coding 拒绝编译也带上 hint。
  */
-export async function build(p: UeProject, opts: { force?: boolean; kill?: boolean } = {}) {
-  const { force = false, kill = false } = opts
+export async function build(p: UeProject, opts: { force?: boolean; kill?: boolean; killStale?: boolean } = {}) {
+  const { force = false, kill = false, killStale = false } = opts
   const busy = runningJob(p.id, 'build')
   if (busy) return busy
   const job = newJob(p.id, 'build', t('编译项目（含桥接插件）'))
@@ -273,6 +275,9 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
       if (!p.cpp && job.status === 'failed' && job.log.some((l) => NO_TOOLCHAIN.test(l)))
         jobLog(job, t('纯蓝图项目：编译桥接插件需要本机装好 Visual Studio（含「使用 C++ 的游戏开发」）'))
     })
+  // 同一个引擎还有编译在跑时新的 Build.bat 会一直排队：先问用户接着看还是结束旧的（build/stale.ts）
+  if (!(await guardStale(p, job, killStale))) return job
+  const onText = watchWaitMutex(p, job)
   if (p.buildCmd.trim()) {
     finish(
       spawnJob(
@@ -280,6 +285,7 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
         process.platform === 'win32' ? 'cmd.exe' : 'sh',
         process.platform === 'win32' ? ['/d', '/s', '/c', p.buildCmd] : ['-c', p.buildCmd],
         p.root,
+        onText,
       ),
     )
     return job
@@ -296,6 +302,6 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
     return job
   }
   if (!force && !(await guardBuild(p, job, kill))) return job
-  finish(spawnJob(job, script, args, p.root))
+  finish(spawnJob(job, script, args, p.root, onText))
   return job
 }

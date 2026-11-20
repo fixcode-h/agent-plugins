@@ -16,7 +16,7 @@ export function BuildHint({
   busy,
   onBuild,
 }: {
-  hint: NonNullable<Job['hint']>
+  hint: Extract<NonNullable<Job['hint']>, { kind: 'live-coding' }>
   busy: boolean
   onBuild: (mode: 'normal' | 'force' | 'kill') => void
 }) {

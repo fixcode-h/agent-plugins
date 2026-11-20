@@ -7,6 +7,8 @@ import { clearHistory } from './history.ts'
 import { editFavs, moveFavs, readFavs } from './favorites.ts'
 import { build, install, uninstall } from './install.ts'
 import { cancelJob, getJob } from './jobs.ts'
+import { buildProcs } from './build/procs.ts'
+import { killBuildProcs, watchBuildProcs } from './build/routes.ts'
 import { crashes } from './logs.ts'
 import { dangerousMatch, runOp, type OpCtx } from './ops.ts'
 import { perfRoute } from './perf-api.ts'
@@ -148,7 +150,18 @@ export async function handle(req: Request): Promise<Response> {
         return json({ job: job.id })
       }
       case 'POST build':
-        return json({ job: (await build(project, { force: b.force === true, kill: b.kill === true })).id })
+        return json({
+          job: (
+            await build(project, { force: b.force === true, kill: b.kill === true, killStale: b.killStale === true })
+          ).id,
+        })
+      // 这个引擎正在跑的编译进程（面板跟踪的和残留的），网页「编译进程」和编译前的提示用（build/procs.ts）
+      case 'GET build-procs':
+        return json(await buildProcs(project))
+      case 'POST build-procs/kill':
+        return json(await killBuildProcs(project, b.pids))
+      case 'POST build-procs/watch':
+        return json(await watchBuildProcs(project, b.pids))
       // 资源页「版本差异」：版本记录；点开一条记录时才取两边的快照比（asset-diff/snapshot.ts）
       case 'GET asset-history':
         return json(await assetHistory(project, url.searchParams.get('path') ?? ''))
