@@ -188,15 +188,18 @@ export function typeTone(type: string): string {
   return 'subtle'
 }
 
-/** 中间可切的视图：视口、图表（页签里开着的那些图）、类默认值（视口 + 右栏 Actor 自身）、摘要与引用 */
-export type BpView = 'viewport' | 'graph' | 'defaults' | 'info'
+/**
+ * 中间可切的视图：图表（页签里开着的那些图）、类默认值（右栏 Actor 自身）、摘要与引用。
+ * 视口去掉了（用户 2026-11-20：「Actor不显示视口，直接显示图表就行」）；以前记住的 'viewport' 读出来按图表处理
+ */
+export type BpView = 'graph' | 'defaults' | 'info'
 
 /**
- * 实际显示哪个视图：不是 Actor 蓝图（函数库、动画蓝图，组件读出 null）时没有视口，「视口」「类默认值」换成图表；
- * 组件还没读回来（undefined）时照记住的来，不闪
+ * 实际显示哪个视图：记住的旧值 'viewport' 和不认识的值落到图表；不是 Actor 蓝图（函数库、动画蓝图，组件读出 null）时没有「类默认值」，也落到图表
  */
-export function resolveView(want: BpView, hasActor: boolean | undefined): BpView {
-  if (hasActor === false && (want === 'viewport' || want === 'defaults')) return 'graph'
+export function resolveView(want: string, hasActor: boolean | undefined): BpView {
+  if (want !== 'graph' && want !== 'defaults' && want !== 'info') return 'graph'
+  if (hasActor === false && want === 'defaults') return 'graph'
   return want
 }
 
