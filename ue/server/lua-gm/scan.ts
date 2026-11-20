@@ -3,7 +3,7 @@ import { existsSync, watch, type FSWatcher } from 'node:fs'
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
 import { c, t } from '../util.ts'
-import { configFile, matchFiles, readConfig, scriptFile, storeDir } from './config.ts'
+import { adoptOld, configFile, matchFiles, readConfig, scriptFile, storeDir } from './config.ts'
 import type { LuaGmItem, LuaGmParam, LuaGmScan } from './types.ts'
 
 /** 推给打开着 GM 页的网页：扫描结果变了（文件改了自动重扫、手动重扫），网页收到再取，不轮询 */
@@ -149,6 +149,8 @@ let gen = 0
 async function doScan(p: UeProject): Promise<LuaGmScan> {
   const t0 = Date.now()
   const my = gen
+  // 复制失败（文档根没权限、只读）不挡扫描：旧位置照样读得到
+  await adoptOld(p).catch((e: Error) => c().log?.warn('UE：Lua GM 脚本搬到项目文档根失败', { error: e.message }))
   const cfg = await readConfig(p)
   const script = scriptFile(p)
   const { files, dirs } = await matchFiles(p.root, cfg.files)

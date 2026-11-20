@@ -9,7 +9,8 @@ import type { PluginServerContext } from '../../../sdk/server.ts'
 import type { UeProject } from '../types.ts'
 import { setCtx } from '../util.ts'
 import { luaCall, luaValue } from './call.ts'
-import { matchFiles, patchConfig, readConfig, splitPattern, storeDir } from './config.ts'
+import { matchFiles, patchConfig, readConfig, scriptFile, splitPattern, storeDir } from './config.ts'
+import { setDocsRootForTest } from '../doc-root.ts'
 import { normalize, scan, stopLuaGmWatch } from './scan.ts'
 
 let base = ''
@@ -200,4 +201,33 @@ test('参数关联按键合并，null 表示去掉脚本给的关联，undefined
   assert.ok(!('AddItem.count' in c.bindings))
   // .. 不收；全局路径（项目外的绝对路径）收，见上面「全局路径」那条
   assert.deepEqual((await patchConfig(p, { files: ['../a.lua', 'GM/*.lua'] })).files, ['GM/*.lua'])
+})
+
+test('P4 各分支共用文档根：旧规则位置的脚本搬过去，另一个分支直接复用', async () => {
+  // 分支 Main 的 UE 项目：升级前脚本和设置按旧规则存在 Main/ProjectDoc/docs 下
+  const main = { id: 'main', root: path.join(base, 'p4', 'Main', 'Game'), favStore: 'docs' } as UeProject
+  const dev = { id: 'dev', root: path.join(base, 'p4', 'Dev', 'Game'), favStore: 'docs' } as UeProject
+  const shared = path.join(base, 'p4', 'Shared', 'ProjectDoc', 'docs')
+  for (const p of [main, dev]) {
+    await mkdir(path.join(p.root, 'Content/Script/GM'), { recursive: true })
+    await writeFile(path.join(p.root, 'Content/Script/GM/GMBag.lua'), GM_BAG)
+  }
+  const old = path.join(base, 'p4', 'Main', 'ProjectDoc', 'docs', 'AgentPanel', 'UE')
+  await mkdir(old, { recursive: true })
+  await writeFile(path.join(old, 'lua-gm-scan.mjs'), SCRIPT)
+  await writeFile(path.join(old, 'lua-gm.json'), JSON.stringify({ files: ['Content/Script/GM/*.lua'], bindings: {} }))
+  // 面板给的文档根是各分支共用的那份
+  setDocsRootForTest('main', shared)
+  setDocsRootForTest('dev', shared)
+  let r = await scan(main)
+  assert.equal(r.error, undefined)
+  assert.equal(r.items.length, 2)
+  assert.equal(scriptFile(main), path.join(shared, 'AgentPanel', 'UE', 'lua-gm-scan.mjs'))
+  // 另一个分支没写过脚本，打开就能用
+  r = await scan(dev)
+  assert.equal(r.hasScript, true)
+  assert.equal(r.items.length, 2)
+  setDocsRootForTest('main', undefined)
+  setDocsRootForTest('dev', undefined)
+  stopLuaGmWatch()
 })

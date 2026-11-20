@@ -25,8 +25,8 @@ before(async () => {
 
 test('存放位置跟资源收藏的设置走：docs/AgentPanel/UE 或 .agent-panel/ue', () => {
   const p = proj('a')
-  assert.equal(snippetFile(p), path.join(p.root, 'docs', 'AgentPanel', 'UE', 'lua-snippets.json'))
-  assert.equal(snippetFile(proj('a', 'project')), path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json'))
+  assert.equal(snippetFile(p).write, path.join(p.root, 'docs', 'AgentPanel', 'UE', 'lua-snippets.json'))
+  assert.equal(snippetFile(proj('a', 'project')).write, path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json'))
 })
 
 test('保存、批准、改名带着批准、删除', async () => {
@@ -50,7 +50,7 @@ test('保存、批准、改名带着批准、删除', async () => {
 test('仓库里的片段被改过（代码或 self）批准自动失效：批准只在本机、认的是哈希', async () => {
   const p = proj('c')
   await editSnippets(p, { action: 'save', name: 'GM', code: 'GM.AddItem(1, 1)', approve: true })
-  const file = snippetFile(p)
+  const file = snippetFile(p).write
   const data = JSON.parse(await readFile(file, 'utf8')) as { snippets: { code: string; self?: string }[] }
   data.snippets[0].code = 'os.exit()'
   await writeFile(file, JSON.stringify(data))

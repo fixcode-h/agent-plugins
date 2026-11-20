@@ -56,7 +56,16 @@ export function LuaStatus({
         </>
       ) : (
         <>
-          <span>{scan.error || t('还没设置 Lua GM：选好 GM 文件，让 AI 写一个扫描脚本，以后自动列出')}</span>
+          <span>
+            {scan.error ||
+              (scan.hasScript
+                ? t('已有扫描脚本，还没选 GM 文件：在设置里选好就能列出')
+                : t('还没设置 Lua GM：选好 GM 文件，让 AI 写一个扫描脚本，以后自动列出'))}
+          </span>
+          {/* 找的是哪个位置：脚本存在项目文档根下（P4 项目是各分支共用的那份），写过却提示没设置时一眼能看出找错了地方 */}
+          <span className="ue:truncate" title={scan.script}>
+            {t('扫描脚本位置：{p}', { p: scan.script })}
+          </span>
           <button type="button" className={cn(link, 'ue:self-start')} onClick={onSetup}>
             {t('Lua GM 扫描设置')}
           </button>

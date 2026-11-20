@@ -49,7 +49,7 @@ export interface LuaGmItem {
   call?: string
 }
 
-/** 存在项目里的 GM 扫描设置（和资源页收藏同一个存放位置：docs/AgentPanel/UE 或 .agent-panel/ue） */
+/** 存在项目里的 GM 扫描设置（和资源页收藏同一个存放位置：项目文档根的 AgentPanel/UE 或 .agent-panel/ue） */
 export interface LuaGmConfig {
   /** GM 文件：相对项目根的路径，可以带 * 和 **（Content/Script/GM/**\/*.lua） */
   files: string[]

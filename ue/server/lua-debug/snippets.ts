@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import { docsRoot } from '../favorites.ts'
+import { ueDocFile } from '../doc-root.ts'
 import type { UeProject } from '../types.ts'
 import { c, now, readJson, t, writeJson } from '../util.ts'
 
@@ -27,10 +27,11 @@ export interface SnippetView extends Snippet {
 const NAME_MAX = 60
 const MAX = 200
 
-export function snippetFile(p: Pick<UeProject, 'root' | 'favStore'>) {
-  return p.favStore === 'project'
-    ? path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json')
-    : path.join(docsRoot(p.root), 'AgentPanel', 'UE', 'lua-snippets.json')
+/** 片段文件：read 是读的位置（升级前存在旧文档根的照样读得到），write 是写的位置（面板给的文档根，见 doc-root.ts） */
+export function snippetFile(p: Pick<UeProject, 'id' | 'root' | 'favStore'>) {
+  if (p.favStore !== 'project') return ueDocFile(p, 'lua-snippets.json')
+  const f = path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json')
+  return { read: f, write: f }
 }
 
 const approvedFile = (id: string) => path.join(c().dataDir, 'lua-approved', `${encodeURIComponent(id)}.json`)
@@ -65,14 +66,14 @@ async function readApproved(id: string) {
 }
 
 export async function listSnippets(p: UeProject): Promise<{ items: SnippetView[]; file: string }> {
-  const file = snippetFile(p)
-  const items = clean((await readJson<{ snippets?: unknown }>(file, {})).snippets)
+  const { read, write: file } = snippetFile(p)
+  const items = clean((await readJson<{ snippets?: unknown }>(read, {})).snippets)
   const ok = await readApproved(p.id)
   return { items: items.map((s) => ({ ...s, approved: ok[s.name] === snippetHash(s) })), file }
 }
 
 async function writeSnippets(p: UeProject, items: Snippet[]) {
-  await writeJson(snippetFile(p), { snippets: items })
+  await writeJson(snippetFile(p).write, { snippets: items })
 }
 
 /**
