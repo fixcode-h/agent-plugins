@@ -8,6 +8,7 @@ import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
 import { availableVersion } from './uelink.ts'
 import { projectJobs } from './jobs.ts'
 import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile, tailFile } from './logs.ts'
+import { markOf, readMarks, saveMark } from './log-clear/mark.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { hasUnLua } from './lua/unlua-detect.ts'
@@ -93,7 +94,12 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
   if (cards.length) {
     const r = await runOp(ctx, 'log.tail', { ...a, limit: a.limit ?? 300 })
     // 桥接的 verbosity 是最低级别（Warning 连错误也给）；网页要「只看这一级」时在这里再筛一遍，旧桥接也适用
-    const got = (r.lines as (RawLine & { verbosity?: string })[]) ?? []
+    // 清空过的进程只给清空之后的行：缓冲里的旧行桥接没丢（log-clear/mark.ts）
+    const pid = (r.instance as { pid?: number } | undefined)?.pid
+    const mark = markOf(await readMarks(ctx.project.id), cards.find((x) => x.pid === pid))
+    const got = ((r.lines as (RawLine & { verbosity?: string; seq?: number })[]) ?? []).filter(
+      (l) => !mark || typeof l.seq !== 'number' || l.seq > mark,
+    )
     const lines = a.exact && a.verbosity ? got.filter((l) => levelMatches(l.verbosity ?? '', a.verbosity, true)) : got
     return { live: true, ...r, lines: withWallTime(lines, r.now as number | undefined) }
   }
@@ -166,7 +172,12 @@ export async function clearLogs(ctx: OpCtx, pids: number[] | undefined, backup: 
   const pick = pids?.length ? cards.filter((x) => pids.includes(x.pid)) : cards.slice(0, 1)
   const cleared: unknown[] = []
   for (const card of pick) {
-    const res = await runOp({ ...ctx, target: { instance: card.pid } }, 'log.clear', { backup })
+    const at = { ...ctx, target: { instance: card.pid } }
+    // 清空前的序号当水位线：之后在这一行之后写的（包括桥接自己那句「日志已清空」）才显示
+    const before = await runOp(at, 'log.tail', { since: 1e15, limit: 1 }, 5000).catch(() => undefined)
+    const res = await runOp(at, 'log.clear', { backup })
+    const seq = Number(before?.cursor ?? res.cursor)
+    if (seq > 0) await saveMark(ctx.project.id, card, seq, cards)
     cleared.push({ pid: card.pid, kind: card.kind, file: res.file, size: res.size, backup: res.backup })
   }
   return { cleared }
