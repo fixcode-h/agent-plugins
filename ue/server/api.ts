@@ -2,6 +2,7 @@ import { clearLogs, logTail, logTargets, projectState, runMacro, undo } from './
 import { detect } from './detect.ts'
 import { closeBackground, ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { badges } from './badges.ts'
+import { closeInstance } from './editor-close/close.ts'
 import { clearHistory } from './history.ts'
 import { editFavs, moveFavs, readFavs } from './favorites.ts'
 import { build, install, uninstall } from './install.ts'
@@ -219,6 +220,9 @@ export async function handle(req: Request): Promise<Response> {
         return json(await precheck(ctx))
       case 'POST editor':
         return json(await launchEditor(project))
+      // 目标下拉右键「关闭编辑器」：先正常关，没退出再由网页确认后 force 强制结束（editor-close/close.ts）
+      case 'POST close-instance':
+        return json(await closeInstance(project, Number(b.pid), b.force === true))
       default: {
         // UEKit 扩展（UE 插件、AssetForge、GameTest）的接口在 uekit/api-ext.ts
         const ext = await extRoute(ctx, `${req.method} ${route}`, b, url)

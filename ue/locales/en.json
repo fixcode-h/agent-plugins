@@ -4322,5 +4322,22 @@
   "扫描脚本位置：{p}": "Scan script: {p}",
   "在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时用项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）": "Change it in UE under \"Project Settings → Plugins → Asset Forge → Config Root\" (saved to Config/DefaultEditor.ini); when empty, AssetForge under the project doc root is used (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches)",
   "在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时用项目文档根下的 GameTest（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）": "Change it in UE under \"Project Settings → Plugins → Game Test → Scenario Root\" (saved to Config/DefaultGame.ini); when empty, GameTest under the project doc root is used (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches)",
-  "配置根默认是项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目、ProjectDoc 和项目文档根里建目录；在资源页导出到 JSON 时 UE 也会建出来。": "The config root defaults to AssetForge under the project doc root (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches); change it in UE under Project Settings → Plugins → Asset Forge. The panel can only create folders inside the project, ProjectDoc and the project doc root; UE also creates it when you export to JSON from the Assets page."
+  "配置根默认是项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目、ProjectDoc 和项目文档根里建目录；在资源页导出到 JSON 时 UE 也会建出来。": "The config root defaults to AssetForge under the project doc root (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches); change it in UE under Project Settings → Plugins → Asset Forge. The panel can only create folders inside the project, ProjectDoc and the project doc root; UE also creates it when you export to JSON from the Assets page.",
+  "后台编辑器 15 秒内没有退出": "The background editor did not exit within 15 seconds",
+  "强制结束 PID {pid} 失败：{msg}（编辑器是用管理员权限打开的话，面板也要用管理员权限运行）": "Failed to force-kill PID {pid}: {msg} (if the editor runs as administrator, run the panel as administrator too)",
+  "已经强制结束 PID {pid}，{s} 秒后还没退出": "Force-killed PID {pid}, but it has not exited after {s} seconds",
+  "没法正常关闭：{msg}": "Could not close normally: {msg}",
+  "{s} 秒内没有退出：可能在弹窗问要不要保存（到编辑器里点一下），也可能卡住了": "Did not exit within {s} seconds: it may be asking whether to save (answer it in the editor), or it may be stuck",
+  "{name} 是失效的旧记录（进程早就退出了），已清掉": "{name} was a stale record (the process exited long ago); cleared",
+  "{name} 已关闭": "{name} closed",
+  "关闭编辑器": "Close editor",
+  "关闭这个进程": "Close this process",
+  "强制结束": "Force kill",
+  "没保存的会丢": "Unsaved work is lost",
+  "强制结束 {name}？": "Force kill {name}?",
+  "关闭 {name}？": "Close {name}?",
+  "直接结束进程（连同它起的 Live Coding 控制台），没保存的改动会丢。": "Kills the process right away (along with its Live Coding console). Unsaved changes are lost.",
+  "和点窗口右上角的关闭一样：有没保存的改动，UE 会弹窗问你要不要保存。10 秒内没退出会再问你要不要强制结束。": "Same as clicking the window's close button: if there are unsaved changes, UE asks whether to save. If it hasn't exited within 10 seconds you'll be asked whether to force kill it.",
+  "它现在没有回应（{e}），正常关闭可能没反应。": "It isn't responding right now ({e}); a normal close may do nothing.",
+  "没有回应": "Not responding"
 }
