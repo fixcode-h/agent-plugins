@@ -1,114 +1,195 @@
-import { memo } from 'react'
+import { memo, type CSSProperties, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { CircleAlert, Diamond, Play, SquareFunction, Variable, type LucideIcon } from 'lucide-react'
-import { h } from '../../../host.ts'
-import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
-import { HEAD_H, nodeTone, ROW_H, type GPin, type PlacedNode } from './graph.ts'
+import { t } from '../../../host.ts'
+import type { PlacedNode } from './graph.ts'
 import { CommentBoxNode } from './CommentBox.tsx'
-import { typeTone } from './model.ts'
+import { PinCell } from './GraphPin.tsx'
+import { NodeIconGlyph } from './NodeIcon.tsx'
+import { HEAD_H, nodeStyle, pinColor, pinLabel, ROW_H, SET_H, SUB_H, type NodeStyle } from './ue-style.ts'
+import { UE_CANVAS, UE_TEXT, UE_TITLE } from './ue-theme.ts'
 
 export type GraphNodeData = { placed: PlacedNode; picked: boolean }
 
-const ICONS: Record<string, LucideIcon> = {
-  event: Diamond,
-  custom_event: Diamond,
-  entry: Play,
-  get: Variable,
-  set: Variable,
+/** 节点外框：选中（点选或框选）时 UE 的橙黄描边，编译出错时红框，平时一圈暗边加投影 */
+function frame(on: boolean, error: boolean, radius: number, body: string): CSSProperties {
+  const ring = on
+    ? `0 0 0 2px ${UE_CANVAS.selected}`
+    : error
+      ? `0 0 0 2px ${UE_CANVAS.error}`
+      : `0 0 0 1px ${UE_CANVAS.bodyBorder}`
+  return { borderRadius: radius, background: body, boxShadow: `${ring}, ${UE_CANVAS.shadow}` }
 }
 
-/** 引脚：执行线是小三角、数据是圆点，颜色按类型（UE 的配色换成主题色）；连上了填实 */
-function PinDot({ pin, side, row }: { pin: GPin; side: 'in' | 'out'; row: number }) {
-  const exec = pin.type === 'exec'
-  const ink = toneColor(typeTone(pin.type))
-  const linked = !!pin.to?.length
-  return (
-    <Handle
-      id={`${side}:${pin.name}`}
-      type={side === 'in' ? 'target' : 'source'}
-      position={side === 'in' ? Position.Left : Position.Right}
-      isConnectable={false}
-      className="ue:!min-w-0 ue:!border-0"
-      style={{
-        // 面板画布只读时把引脚藏起来（.read-only .react-flow__handle）；蓝图的引脚是内容的一部分，要显示
-        opacity: 1,
-        top: HEAD_H + row * ROW_H + ROW_H / 2 + 4,
-        width: exec ? 10 : 9,
-        height: exec ? 10 : 9,
-        borderRadius: exec ? 1 : 999,
-        clipPath: exec ? 'polygon(0 0, 100% 50%, 0 100%)' : undefined,
-        // 三角形用 clip-path 剪出来，描边会被剪掉：没连线的执行引脚改成淡色实心
-        background: linked ? ink : exec ? `color-mix(in oklab, ${ink} 35%, transparent)` : 'var(--card)',
-        boxShadow: exec ? undefined : `0 0 0 1.5px ${ink}`,
-      }}
-    />
-  )
+/** 标题条的底：上半截一层白色光泽，下面是标题色从左往右渐隐（UE 的 TitleGloss + ColorSpill） */
+function titleBg(color: string) {
+  return [
+    `linear-gradient(180deg, ${UE_CANVAS.gloss} 0%, transparent 55%)`,
+    `linear-gradient(90deg, ${color} 0%, color-mix(in srgb, ${color} 72%, transparent) 55%, color-mix(in srgb, ${color} 18%, transparent) 100%)`,
+  ].join(', ')
 }
 
-/** 一行里一侧的引脚名（执行线 execute / then 这类不写名字，和 UE 一样）；没连线的输入写默认值 */
-function PinLabel({ pin, side }: { pin?: GPin; side: 'in' | 'out' }) {
-  if (!pin) return <span className="ue:flex-1" />
-  const hideName = pin.type === 'exec' && /^(execute|then|exec)$/i.test(pin.name)
+function subtitleText(st: NodeStyle) {
+  if (!st.subtitle) return ''
+  return st.subtitle.kind === 'custom' ? t('自定义事件') : t('目标是 {name}', { name: st.subtitle.name })
+}
+
+/** 引脚行：左输入右输出，一行一对 */
+function Rows({ placed, hideOutData }: { placed: PlacedNode; hideOutData?: boolean }) {
+  return placed.rows.map((r, i) => (
+    <div key={i} className="ue:flex ue:items-center ue:gap-3 ue:px-2" style={{ height: ROW_H }}>
+      <PinCell pin={r.in} side="in" />
+      <PinCell pin={r.out} side="out" hideName={!!hideOutData && r.out?.type !== 'exec'} />
+    </div>
+  ))
+}
+
+/** 普通节点：按种类着色的标题条（图标 + 标题 + 可选副标题），下面是引脚行 */
+function FullNode({ placed, st, on }: { placed: PlacedNode; st: NodeStyle; on: boolean }) {
+  const { node, w } = placed
+  const sub = subtitleText(st)
   return (
-    <span
-      className={h().cn(
-        'ue:flex ue:min-w-0 ue:flex-1 ue:items-center ue:gap-1 ue:truncate',
-        side === 'out' && 'ue:justify-end',
-      )}
-      title={`${pin.name} · ${pin.type}${pin.default !== undefined ? ` = ${pin.default}` : ''}`}
-    >
-      {!hideName && <span className="ue:truncate">{pin.name}</span>}
-      {side === 'in' && pin.default !== undefined && !pin.to?.length && (
-        <span className="ue:max-w-20 ue:truncate ue:rounded-[4px] ue:bg-field ue:px-1 ue:font-mono ue:text-caption ue:text-subtle">
-          {pin.default}
-        </span>
-      )}
-    </span>
+    <div style={{ width: w, ...frame(on, !!node.error, 8, UE_CANVAS.body) }}>
+      <div
+        className="ue:flex ue:flex-col ue:justify-center ue:rounded-t-[8px] ue:px-2"
+        style={{ height: HEAD_H + (sub ? SUB_H : 0), background: titleBg(UE_TITLE[st.title]) }}
+      >
+        <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+          <NodeIconGlyph icon={st.icon} />
+          <span className="ue:truncate ue:text-[12.5px] ue:font-semibold" style={{ color: UE_CANVAS.title }}>
+            {node.title}
+          </span>
+        </div>
+        {sub && (
+          <span
+            className="ue:truncate ue:pl-5 ue:text-[10.5px] ue:italic ue:leading-[13px]"
+            style={{ color: UE_CANVAS.subtitle }}
+          >
+            {sub}
+          </span>
+        )}
+      </div>
+      <div className="ue:py-1 ue:text-[11.5px]">
+        <Rows placed={placed} />
+      </div>
+    </div>
   )
 }
 
 /**
- * 图表画布上的一个蓝图节点（效果图 A2）：按种类上色的头部（事件红、调用蓝、纯函数绿、变量随类型…）、
- * 下面一行一对引脚（左输入右输出）。只读：不能拖线、不能改；点一下在右栏看引脚和连线
+ * 变量 Get / Set：没有标题条的胶囊，主体从左往右带一抹变量类型色。
+ * Get 的名字写在左边（引脚不再重复写），Set 顶上居中写「SET」
  */
-export const GraphNodeView = memo(function GraphNodeView({ data }: NodeProps<Node<GraphNodeData>>) {
-  const { cn } = h()
-  const { node, rows, w } = data.placed
-  const tone = nodeTone(node)
-  const Icon = node.error ? CircleAlert : (ICONS[node.kind] ?? SquareFunction)
+function VarNode({ placed, on }: { placed: PlacedNode; on: boolean }) {
+  const { node, w } = placed
+  const v = node.pins.find((p) => p.type !== 'exec' && p.name !== 'self')
+  const tint = v ? pinColor(v.type) : UE_CANVAS.pinText
+  const body = `linear-gradient(90deg, color-mix(in srgb, ${tint} 30%, transparent) 0%, transparent 70%), ${UE_CANVAS.varBody}`
+  const isSet = node.kind === 'set'
+  // 变量名照 UE 的显示名写（bIsOpen → Is Open），和引脚名同一套规则
+  const name = (v && pinLabel(v)) || node.member || node.title
+  return (
+    <div className="ue:py-1 ue:text-[11.5px]" style={{ width: w, ...frame(on, !!node.error, 14, body) }}>
+      {isSet && (
+        <div
+          className="ue:text-center ue:text-[11px] ue:font-bold ue:tracking-wide"
+          style={{ height: SET_H, color: UE_CANVAS.title }}
+        >
+          {/* 和节点标题一样是 UE 节点上的原文（标题都是 UE 回的英文），不当界面文案翻译 */}
+          SET
+        </div>
+      )}
+      {isSet ? (
+        // Set 的输出数据引脚（Output_Get）在 UE 里不写名字
+        <Rows placed={placed} hideOutData />
+      ) : (
+        placed.rows.map((r, i) => (
+          <div key={i} className="ue:flex ue:items-center ue:gap-2 ue:px-2.5" style={{ height: ROW_H }}>
+            {r.in ? (
+              <PinCell pin={r.in} side="in" />
+            ) : (
+              <span className="ue:min-w-0 ue:flex-auto ue:truncate ue:font-semibold" style={{ color: UE_CANVAS.title }}>
+                {i === 0 ? name : ''}
+              </span>
+            )}
+            <PinCell pin={r.out} side="out" hideName={r.out === v} />
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+/** 类型转换：两头各一个引脚的小圆点 */
+function DotNode({ placed, on }: { placed: PlacedNode; on: boolean }) {
+  const { node, w, h } = placed
+  const pin = (dir: 'in' | 'out') => placed.rows.map((r) => r[dir]).find(Boolean)
   return (
     <div
-      className={cn(
-        'ue:overflow-visible ue:rounded-[8px] ue:border ue:bg-card ue:text-footnote ue:text-fg ue:shadow-card',
-        data.picked ? 'ue:border-accent ue:ring-2 ue:ring-accent/40' : 'ue:border-line-strong',
-        node.error && 'ue:border-danger',
-      )}
-      style={{ width: w }}
-      title={[node.title, node.member, node.comment, node.error].filter(Boolean).join('\n')}
+      className="ue:flex ue:items-center ue:justify-between ue:px-1"
+      style={{ width: w, height: h, ...frame(on, !!node.error, h / 2, UE_CANVAS.varBody) }}
     >
-      <div
-        className="ue:flex ue:items-center ue:gap-1.5 ue:rounded-t-[7px] ue:px-2.5 ue:font-medium"
+      <PinCell pin={pin('in')} side="in" hideName />
+      <PinCell pin={pin('out')} side="out" hideName />
+    </div>
+  )
+}
+
+/** 转接点：线上的一个小圆，进出两个引脚叠在圆心两侧 */
+function KnotNode({ placed, on }: { placed: PlacedNode; on: boolean }) {
+  const { node, w, h } = placed
+  const p = node.pins.find((x) => x.dir !== 'in') ?? node.pins[0]
+  const ink = p ? pinColor(p.type) : UE_CANVAS.pinText
+  const handle = (side: 'in' | 'out', name?: string): ReactNode =>
+    name !== undefined && (
+      <Handle
+        id={`${side}:${name}`}
+        type={side === 'in' ? 'target' : 'source'}
+        position={side === 'in' ? Position.Left : Position.Right}
+        isConnectable={false}
         style={{
-          height: HEAD_H,
-          background: `color-mix(in oklab, ${toneColor(tone)} 22%, var(--card))`,
-          borderBottom: `1px solid color-mix(in oklab, ${toneColor(tone)} 40%, var(--line))`,
+          position: 'relative',
+          inset: 'auto',
+          transform: 'none',
+          width: 0,
+          height: 0,
+          minWidth: 0,
+          border: 'none',
+          opacity: 0,
         }}
-      >
-        <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0" style={{ color: toneColor(node.error ? 'danger' : tone) }} />
-        <span className="ue:truncate">{node.title}</span>
-      </div>
-      <div className="ue:relative ue:py-1">
-        {rows.map((r, i) => (
-          <div key={i} className="ue:flex ue:items-center ue:gap-2 ue:px-3" style={{ height: ROW_H }}>
-            <PinLabel pin={r.in} side="in" />
-            <PinLabel pin={r.out} side="out" />
-          </div>
-        ))}
-      </div>
-      {rows.map((r, i) => [
-        r.in && <PinDot key={`i${i}`} pin={r.in} side="in" row={i} />,
-        r.out && <PinDot key={`o${i}`} pin={r.out} side="out" row={i} />,
-      ])}
+      />
+    )
+  return (
+    <div className="ue:flex ue:items-center ue:justify-center" style={{ width: w, height: h }}>
+      {handle('in', node.pins.find((x) => x.dir === 'in')?.name)}
+      <span
+        className="ue:h-2.5 ue:w-2.5 ue:rounded-full"
+        style={{ background: ink, boxShadow: on ? `0 0 0 2px ${UE_CANVAS.selected}` : undefined }}
+      />
+      {handle('out', node.pins.find((x) => x.dir !== 'in')?.name)}
+    </div>
+  )
+}
+
+/**
+ * 图表画布上的一个蓝图节点，照 UE 5.4 蓝图编辑器的样子（配色在 ue-theme.ts，外形判断在 ue-style.ts）。
+ * 只读：不能拖线、不能改；点一下在右栏看引脚和连线
+ */
+export const GraphNodeView = memo(function GraphNodeView({ data, selected }: NodeProps<Node<GraphNodeData>>) {
+  const { placed } = data
+  const { node } = placed
+  const st = nodeStyle(node)
+  const on = data.picked || !!selected
+  return (
+    <div style={{ ...UE_TEXT }} title={[node.title, node.member, node.comment, node.error].filter(Boolean).join('\n')}>
+      {st.look === 'var' ? (
+        <VarNode placed={placed} on={on} />
+      ) : st.look === 'dot' ? (
+        <DotNode placed={placed} on={on} />
+      ) : st.look === 'knot' ? (
+        <KnotNode placed={placed} on={on} />
+      ) : (
+        <FullNode placed={placed} st={st} on={on} />
+      )}
     </div>
   )
 })
