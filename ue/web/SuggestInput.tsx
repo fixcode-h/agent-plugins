@@ -1,5 +1,14 @@
 import { CircleDot, type LucideIcon } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { ASSET_KINDS } from './asset-icons.ts'
 import { h, t } from './host.ts'
 
@@ -21,7 +30,9 @@ export interface SuggestRow {
  * 能手填、也能边打字边从下拉里挑的输入框（用户 2026-11-17：阻挡界面的 WBP 输入框要能下拉搜索）。
  * 和 SearchPick 不同，框本身就是输入框，下拉只是建议：不选也照样用手填的文字。
  * 候选由 suggest 同步给（本地索引里筛，不发请求）；聚焦就展开，上下键选、回车填入、Esc 收起。
- * 下拉和面板的菜单同一套样式（--c-menu-*），设置 →「组件」里跟「菜单」「输入框」的调节项
+ * 下拉和面板的菜单同一套样式（--c-menu-*），设置 →「组件」里跟「菜单」「输入框」的调节项。
+ * 下拉画到 body 上、按输入框位置 fixed 定位（用户 2026-11-20：在分栏、弹窗里被 overflow 裁得只露一条边），
+ * 下面放不下就往上开
  */
 export function SuggestInput({
   value,
@@ -53,12 +64,40 @@ export function SuggestInput({
   const [focused, setFocused] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const pop = useRef<HTMLDivElement>(null)
+  const [at, setAt] = useState<CSSProperties>()
   const { rows, total } = open ? suggest(value) : { rows: [], total: 0 }
+
+  // 跟着输入框走：打开时量一次，滚动（任何一层滚动容器）、窗口变大小时再量
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const r = box.current?.getBoundingClientRect()
+      if (!r) return
+      const below = window.innerHeight - r.bottom
+      const up = below < 280 && r.top > below
+      setAt({
+        position: 'fixed',
+        left: r.left,
+        width: r.width,
+        ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+        maxHeight: Math.max(120, (up ? r.top : below) - 12),
+      })
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
 
   // 点外面收起；输入框失焦不收（点下拉里的行时输入框会先失焦）
   useEffect(() => {
     if (!open) return
-    const off = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false)
+    const off = (e: PointerEvent) =>
+      !box.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node) && setOpen(false)
     document.addEventListener('pointerdown', off)
     return () => document.removeEventListener('pointerdown', off)
   }, [open])
@@ -108,55 +147,62 @@ export function SuggestInput({
           e.preventDefault()
         }}
       />
-      {open && (rows.length > 0 || status || empty) && (
-        <div
-          role="listbox"
-          className="ue:absolute ue:inset-x-0 ue:top-full ue:z-30 ue:mt-1 ue:flex ue:flex-col ue:rounded-(--c-menu-radius) ue:border-(length:--c-menu-border) ue:border-pop-edge ue:bg-(--c-menu-bg) ue:p-1 ue:text-footnote ue:shadow-pop ue:motion-safe:animate-pop"
-        >
-          <div ref={list} className="ue:max-h-60 ue:overflow-auto">
-            {rows.map((r, i) => {
-              const Icon = r.icon ?? CircleDot
-              return (
-                <button
-                  key={r.key}
-                  type="button"
-                  data-i={i}
-                  role="option"
-                  aria-selected={i === act}
-                  // 按下时不让输入框失焦，点完光标还在框里
-                  onPointerDown={(e) => e.preventDefault()}
-                  onPointerEnter={() => setAct(i)}
-                  onClick={() => pick(r)}
-                  className={cn(
-                    'ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:text-left',
-                    i === act && 'ue:bg-hover',
-                    r.dim && 'ue:opacity-70',
-                  )}
-                >
-                  <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', r.tone ?? 'ue:text-subtle')} />
-                  <span className="ue:shrink-0 ue:truncate ue:font-mono ue:text-fg">{r.label}</span>
-                  {r.detail && (
-                    <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-right ue:font-mono ue:text-caption ue:text-subtle">
-                      {r.detail}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-            {!rows.length && (
-              <p className="ue:px-2 ue:py-1.5 ue:text-subtle">
-                {value.trim() ? t('没有匹配的，保存时照填的用') : (empty ?? t('没有候选，可以直接填'))}
-              </p>
-            )}
-          </div>
-          {(status || total > rows.length) && (
-            <div className="ue:mt-1 ue:flex ue:items-center ue:gap-2 ue:border-t ue:border-line ue:px-2 ue:pt-1.5 ue:pb-0.5 ue:text-caption ue:text-subtle">
-              {total > rows.length && <span>{t('还有 {n} 个，多打几个字', { n: total - rows.length })}</span>}
-              {status && <span className="ue:ml-auto ue:min-w-0 ue:truncate">{status}</span>}
+      {open &&
+        at &&
+        (rows.length > 0 || status || empty) &&
+        createPortal(
+          <div
+            ref={pop}
+            role="listbox"
+            // 弹窗（Radix）打开时 body 上是 pointer-events: none，画到 body 上的下拉要自己打开
+            style={{ ...at, pointerEvents: 'auto' }}
+            className="ue:z-[80] ue:flex ue:flex-col ue:rounded-(--c-menu-radius) ue:border-(length:--c-menu-border) ue:border-pop-edge ue:bg-(--c-menu-bg) ue:p-1 ue:text-footnote ue:shadow-pop ue:motion-safe:animate-pop"
+          >
+            <div ref={list} className="ue:max-h-60 ue:min-h-0 ue:overflow-auto">
+              {rows.map((r, i) => {
+                const Icon = r.icon ?? CircleDot
+                return (
+                  <button
+                    key={r.key}
+                    type="button"
+                    data-i={i}
+                    role="option"
+                    aria-selected={i === act}
+                    // 按下时不让输入框失焦，点完光标还在框里
+                    onPointerDown={(e) => e.preventDefault()}
+                    onPointerEnter={() => setAct(i)}
+                    onClick={() => pick(r)}
+                    className={cn(
+                      'ue:flex ue:h-7 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:text-left',
+                      i === act && 'ue:bg-hover',
+                      r.dim && 'ue:opacity-70',
+                    )}
+                  >
+                    <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', r.tone ?? 'ue:text-subtle')} />
+                    <span className="ue:shrink-0 ue:truncate ue:font-mono ue:text-fg">{r.label}</span>
+                    {r.detail && (
+                      <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-right ue:font-mono ue:text-caption ue:text-subtle">
+                        {r.detail}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+              {!rows.length && (
+                <p className="ue:px-2 ue:py-1.5 ue:text-subtle">
+                  {value.trim() ? t('没有匹配的，保存时照填的用') : (empty ?? t('没有候选，可以直接填'))}
+                </p>
+              )}
             </div>
-          )}
-        </div>
-      )}
+            {(status || total > rows.length) && (
+              <div className="ue:mt-1 ue:flex ue:items-center ue:gap-2 ue:border-t ue:border-line ue:px-2 ue:pt-1.5 ue:pb-0.5 ue:text-caption ue:text-subtle">
+                {total > rows.length && <span>{t('还有 {n} 个，多打几个字', { n: total - rows.length })}</span>}
+                {status && <span className="ue:ml-auto ue:min-w-0 ue:truncate">{status}</span>}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

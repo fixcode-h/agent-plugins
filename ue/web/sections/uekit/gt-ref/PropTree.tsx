@@ -12,7 +12,7 @@ import { stateHint, stateOfProp } from './compare-table.ts'
 import { classShort } from './describe.ts'
 import { useColWidths, usePrefs } from './prefs.ts'
 
-/** 两种用法：标识（多选，点准星加进标识组 / 再点移出）、判断（单选，选要判断的那个属性） */
+/** 两种用法：标识（多选，点行尾准星加进标识组 / 再点移出）、判断（单选，点准星选要判断的那个属性）；点行本身不选 */
 export type PropTreeMode = 'ident' | 'judge'
 
 const SRC_LABEL: Record<GtPropItem['src'], () => string> = {
@@ -88,7 +88,8 @@ export function PropTree({
   const { ui, cn } = h()
   const [prefs, setPrefs] = usePrefs()
   const [q, setQ] = useState('')
-  const [closed, setClosed] = useState<Set<string>>(new Set())
+  // 组展开没有：没点过时按默认（部件组按需读，默认收起；其余展开），点过按点的
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
   const [parts, setParts] = useState<Record<string, PartState>>({})
   const cols = useColWidths('gt-proptree', { name: 220, type: 130, sib: 84 })
   const live = !!data?.groups.some((g) => g.items.some((i) => i.value !== undefined))
@@ -110,14 +111,10 @@ export function PropTree({
   ].join(' ')
   const gridStyle: CSSProperties = { gridTemplateColumns: template, height: prefs.rowH }
 
+  const isOpen = (g: GtPropGroup, key: string) => (openMap[key] ?? !g.collapsed) && (!g.collapsed || !!parts[key])
   const toggleGroup = async (g: GtPropGroup, key: string) => {
-    const open = closed.has(key) || (g.collapsed && !parts[key])
-    setClosed((s) => {
-      const n = new Set(s)
-      if (open) n.delete(key)
-      else n.add(key)
-      return n
-    })
+    const open = !isOpen(g, key)
+    setOpenMap((m) => ({ ...m, [key]: open }))
     // 嵌套界面第一次展开：按部件再读一次（协议 7.3：items 为空，面板展开时用 part 调）
     if (open && g.collapsed && g.part && loadPart && !parts[key]) {
       setParts((p) => ({ ...p, [key]: 'loading' }))
@@ -143,10 +140,10 @@ export function PropTree({
         aria-selected={on}
         title={!ok ? (it.why ?? t('这种类型不能比')) : state ? stateHint(state) : it.note}
         style={gridStyle}
-        onClick={() => ok && onPick(it)}
+        // 只有行尾的准星加 / 移出（用户 2026-11-20 定）：点行本身不动标识组，免得浏览、选值时误加
         className={cn(
           'ue:grid ue:items-center ue:gap-2 ue:border-b ue:border-line/40 ue:pr-1 ue:text-footnote',
-          ok ? 'ue:cursor-pointer ue:hover:bg-hover' : 'ue:opacity-55',
+          ok ? 'ue:hover:bg-hover' : 'ue:opacity-55',
           on && 'ue:bg-accent/8',
         )}
       >
@@ -193,7 +190,8 @@ export function PropTree({
   const group = (g: GtPropGroup, depth: number, prefix: string): ReactNode => {
     const key = `${prefix}${g.id}`
     const nested = parts[key]
-    const open = !closed.has(key) && (!g.collapsed || !!nested)
+    // 搜索时有命中的组总展开
+    const open = isOpen(g, key) || (!!k && !g.collapsed && g.items.some(keep))
     const items = g.items.filter(keep)
     const srcCount = g.id === 'self' ? countSrc(g.items) : undefined
     // 搜索时没有命中的组整组藏起来（嵌套界面还没展开的留着，里面可能有）

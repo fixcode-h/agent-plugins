@@ -4636,5 +4636,8 @@
   "已销毁，Lua 还拿着": "Destroyed, held by Lua",
   "UObject 已经被 UE 回收，Lua 里还有表或 upvalue 拿着它的实例表，Lua 的垃圾回收收不掉": "The UObject was collected by UE, but a Lua table or upvalue still holds its instance table, so Lua's GC can't free it",
   "已关的世界": "Closed worlds",
-  "PIE 实例 {n}": "PIE instance {n}"
+  "PIE 实例 {n}": "PIE instance {n}",
+  "索引里没有蓝图类，可以直接填类名（C++ 类也行）": "No Blueprint classes in the index; type a class name directly (C++ classes work too)",
+  "正在读项目索引…": "Reading the project index…",
+  "项目里的蓝图类，按名字开头匹配；C++ 类直接填": "Blueprint classes in the project, matched by name prefix; type C++ classes directly"
 }
