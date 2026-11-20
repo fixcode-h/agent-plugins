@@ -71,10 +71,11 @@ test('类型配色', () => {
   assert.equal(typeTone('Multicast Delegate'), 'ask')
 })
 
-test('视图：非 Actor 蓝图没有视口，落到图表', () => {
-  assert.equal(resolveView('viewport', false), 'graph')
+test('视图：没有视口，记住的旧值 viewport 落到图表；非 Actor 蓝图没有类默认值', () => {
+  assert.equal(resolveView('viewport', true), 'graph')
+  assert.equal(resolveView('viewport', undefined), 'graph')
   assert.equal(resolveView('defaults', false), 'graph')
-  assert.equal(resolveView('viewport', undefined), 'viewport')
+  assert.equal(resolveView('defaults', true), 'defaults')
   assert.equal(resolveView('info', false), 'info')
 })
 
