@@ -227,7 +227,10 @@ namespace UELinkUmgRenderImpl
 		Target->ClearColor = FLinearColor::Transparent;
 		// 8 位 BGRA、线性：渲染器做了 gamma 校正，读回来的就是屏幕上看到的颜色
 		Target->InitCustomFormat(Width, Height, PF_B8G8R8A8, true);
-		Target->UpdateResourceImmediately(true);
+		// InitCustomFormat 里已经建过资源；这里不用 UpdateResourceImmediately（用户的 5.4 引擎上 UTextureRenderTarget2D 没有这个成员，编不过），
+		// 改用所有版本都有的 UTexture::UpdateResource，再等渲染线程把资源建好，下面 DrawWidget 才有目标可画
+		Target->UpdateResource();
+		FlushRenderingCommands();
 		TArray<FColor> Pixels;
 		{
 			FWidgetRenderer Renderer(true, true);
