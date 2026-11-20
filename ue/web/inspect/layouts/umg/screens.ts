@@ -14,7 +14,3 @@ export const SCREENS = () => [
   { id: '2340x1080', w: 2340, h: 1080, label: t('手机横屏') },
   { id: '2048x1536', w: 2048, h: 1536, label: t('平板') },
 ]
-
-/** 缩放：适应窗口，或固定比例 */
-export const ZOOMS = ['fit', '0.25', '0.5', '0.75', '1'] as const
-export type Zoom = (typeof ZOOMS)[number]
