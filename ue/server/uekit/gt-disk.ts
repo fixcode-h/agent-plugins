@@ -77,6 +77,9 @@ function validate(doc: Record<string, unknown>) {
   if (typeof v !== 'number' || !Number.isInteger(v))
     errors.push(`缺少必填字段 schemaVersion（当前支持 ${SUPPORTED_SCHEMA}）`)
   else if (v <= 0) errors.push(`schemaVersion 应为正数，收到 ${v}`)
+  // GameTest 2.0 只认 v4，旧格式跑了也是 schema_old：列表里标出来，运行和批量里不让选（编辑页照样能打开、点「升级脚本」）
+  else if (v < SUPPORTED_SCHEMA)
+    errors.push(`旧格式脚本（schemaVersion ${v}），先在编辑页点「升级脚本」转成 v${SUPPORTED_SCHEMA} 再运行`)
   else if (v > SUPPORTED_SCHEMA)
     errors.push(`schemaVersion ${v} 高于本插件支持的 ${SUPPORTED_SCHEMA}（升级插件或把场景降到支持的版本）`)
   if (typeof doc.name !== 'string' || !doc.name) errors.push('缺少必填字段 name（场景名，进报告与产物目录）')

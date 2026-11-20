@@ -240,17 +240,13 @@ test('1.x 写在步骤上的 assert 判断、skipIf 省略 target 用这一步�
   assert.deepEqual(r.steps[1].target, { obj: { class: 'W' }, part: 'Claim' })
 })
 
-test('widget.close / widget.call → obj.close how remove / call', () => {
+test('widget.close → obj.close how remove，widget.call → obj.call（不一定是关界面）', () => {
   const r = steps([
     { action: 'widget.close', target: 'WBP_Notice:.' },
     { action: 'widget.call', target: 'WBP_Notice:.', function: 'CloseSelf' },
   ])
   assert.deepEqual(r.steps[0], { action: 'obj.close', obj: { class: 'WBP_Notice' }, how: [{ by: 'remove' }] })
-  assert.deepEqual(r.steps[1], {
-    action: 'obj.close',
-    obj: { class: 'WBP_Notice' },
-    how: [{ by: 'call', function: 'CloseSelf' }],
-  })
+  assert.deepEqual(r.steps[1], { action: 'obj.call', obj: { class: 'WBP_Notice' }, function: 'CloseSelf' })
 })
 
 test('invoke → obj.call（object 改 obj），find → obj.find', () => {

@@ -54,8 +54,20 @@ const WIDGET_KEYS = [
   'selectedProperty',
   'stateKey',
 ]
-/** 快照 state 键 → 控件上确定的反射属性（其余按首字母大写猜，写 todo） */
-const STATE_KEY_PROPS: Record<string, string> = { value: 'Value', activeIndex: 'ActiveWidgetIndex' }
+/** 快照 state 键 → 控件上确定的反射属性 */
+const STATE_KEY_PROPS: Record<string, string> = { value: 'Value', option: 'SelectedOption' }
+/** 快照 state 键 → 算出状态（只有 getter 的那几种，C++ GameTestStateControl.cpp；其余按首字母大写猜属性，写 todo） */
+const STATE_KEY_STATES: Record<string, string> = {
+  index: ':selectedIndex',
+  selectedCount: ':selectedCount',
+  offset: ':scrollOffset',
+  open: ':open',
+  key: ':selectedKey',
+  activeIndex: ':activeIndex',
+  numWidgets: ':count',
+  expanded: ':expanded',
+  checked: ':checked',
+}
 /** 条件根上的配置（稳住时间、skipIf 的 also / verify…）：不是判断，迁移时留在根上 */
 const ROOT_KEYS = ['settleMs', 'elseSettleMs', 'also', 'verify', 'verifyTimeoutMs', 'by']
 
@@ -102,14 +114,21 @@ function migrateCheck(leaf: Obj, ctx: MigrateCtx, defTarget?: unknown): Obj {
       // field 读的是控件所在 WBP（对象）的字段，不是部件的，所以路径照抄、不拼部件
       const c = cmpOf(leaf)
       out.push({ ...base, prop: v, ...(c ? { op: c.op, value: c.value } : {}) })
-    } else if ((k === 'stateKey' || k === 'selectedProperty') && typeof v === 'string' && v) {
-      // 快照 state 里的键 / 列表选中项的属性：v4 读控件自己的属性，按常见控件猜一个，猜不准的写 todo
-      const exact = STATE_KEY_PROPS[v]
-      const name = k === 'stateKey' ? (exact ?? v[0].toUpperCase() + v.slice(1)) : `SelectedItem.${v}`
-      const prop = t.part ? `@${t.part}.${name}` : `@self.${name}`
-      if (!exact) todo(ctx, `${k}「${v}」改成了读属性 ${prop}，按控件实际的属性名核对`)
+    } else if (k === 'selectedProperty' && typeof v === 'string' && v) {
+      // 列表选中项的数据对象属性：v4 改成「容器里选中的那一条」的 @item.X（条目类迁移时不知道，写 todo）
       const c = cmpOf(leaf)
-      out.push({ ...base, prop, ...(c ? { op: typeof c.value === 'boolean' ? 'is' : c.op, value: c.value } : {}) })
+      const entry = { class: 'UserWidget', in: { obj: t.obj, ...(t.part ? { part: t.part } : {}) }, ident: [{ prop: ':selected', op: 'is', value: true }] }
+      todo(ctx, `selectedProperty「${v}」改成了读选中条目的 @item.${v}；条目类不知道，先写了 UserWidget：改成列表里条目的类`)
+      out.push({ obj: entry, prop: `@item.${v}`, ...(c ? { op: c.op, value: c.value } : {}) })
+    } else if (k === 'stateKey' && typeof v === 'string' && v) {
+      // 快照 state 里的键：只有 getter 的几种落到算出状态，有属性的读属性，其余按首字母大写猜、写 todo
+      const state = STATE_KEY_STATES[v]
+      const exact = STATE_KEY_PROPS[v]
+      const prop = state ? on(state) : `@${t.part ?? 'self'}.${exact ?? v[0].toUpperCase() + v.slice(1)}`
+      if (!state && !exact) todo(ctx, `stateKey「${v}」改成了读属性 ${prop}，按控件实际的属性名核对`)
+      const c = cmpOf(leaf)
+      const value = v === 'checked' && typeof c?.value === 'boolean' ? (c.value ? 'Checked' : 'Unchecked') : c?.value
+      out.push({ ...base, prop, ...(c ? { op: typeof c.value === 'boolean' ? 'is' : c.op, value } : {}) })
     } else todo(ctx, `判断里的 ${k} 没有对应的写法，改成 {obj, prop, op, value}`)
   }
   if (!out.length) return leaf

@@ -1,22 +1,24 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "AssetForge 示例界面：真实鼠标和键盘",
   "_note": "配套「控件」页（AssetForge 1.5.0 起）。用真实鼠标（via: pointer）和按键：悬停、长按蓄力、拖动滑条、滚轮、点开下拉框选项、菜单、输入框里退格和回车、按键选择器。会真的移动光标，跑的时候别动鼠标；PIE 窗口要在前台。",
   "revision": 1,
-  "tags": ["sample","assetforge","pointer"],
+  "tags": [
+    "sample",
+    "assetforge",
+    "pointer"
+  ],
   "stepDelayMs": 200,
-  "vars": {
-    "crumb": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb",
-    "status": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/StatusChip/Status",
-    "back": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Back"
-  },
   "steps": [
     {
       "id": "open",
       "action": "call",
       "script": "AssetForgeSample/common/打开示例界面",
-      "with": {"nav":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Controls__Nav","title":"控件"},
+      "with": {
+        "nav": "Go_Page_Controls__Nav",
+        "title": "控件"
+      },
       "saveAs": "opened",
       "note": "进图、重置示例界面、切到「控件」页"
     },
@@ -28,47 +30,93 @@
         {
           "id": "pointNormal",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Btn_Normal"
+          },
           "via": "pointer"
         },
-        {"id":"pointed","action":"assert","expr":"contains(text($status), '普通按钮')"},
+        {
+          "id": "pointed",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+        },
         {
           "id": "hover",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoverRow/Hover_Card",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Hover_Card"
+          },
           "via": "pointer",
           "note": "真实鼠标移上去会触发悬停"
         },
         {
           "id": "hovered",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoverRow/Hover_Card_Value",
-          "text": "悬停中"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Hover_Card_Value:text",
+            "op": "eq",
+            "value": "悬停中"
+          }
         },
-        {"id":"moveAway","action":"input.cursor","x":0.02,"y":0.98},
+        {
+          "id": "moveAway",
+          "action": "input.cursor",
+          "x": 0.02,
+          "y": 0.98
+        },
         {
           "id": "unhovered",
           "action": "wait",
           "until": "cond",
           "cond": {
-            "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoverRow/Hover_Card_Value",
-            "text": "未悬停"
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Hover_Card_Value:text",
+            "op": "eq",
+            "value": "未悬停"
           },
           "timeoutMs": 3000
         },
         {
           "id": "aimHold",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Hold_Charge"
+          },
           "via": "pointer",
           "note": "先点一下把光标放到按钮上（这次是短按）"
         },
-        {"id":"holdMouse","action":"key","key":"LeftMouseButton","holdMs":1300,"note":"在光标处按住 1.3 秒再松开"},
+        {
+          "id": "holdMouse",
+          "action": "key",
+          "key": "LeftMouseButton",
+          "holdMs": 1300,
+          "note": "在光标处按住 1.3 秒再松开"
+        },
         {
           "id": "charged",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge_Value",
-          "text": "蓄力完成"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Hold_Charge_Value:text",
+            "op": "eq",
+            "value": "蓄力完成"
+          }
         }
       ]
     },
@@ -80,41 +128,79 @@
         {
           "id": "dragBright",
           "action": "drag",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
-          "at": [0.5,0.5],
-          "toTarget": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
-          "toAt": [0.95,0.5],
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Brightness"
+          },
+          "at": [
+            0.5,
+            0.5
+          ],
+          "toTarget": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Brightness"
+          },
+          "toAt": [
+            0.95,
+            0.5
+          ],
           "note": "从滑块（值 50 在正中）拖到右端：拖动会广播"
         },
         {
           "id": "brightHigh",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/Brightness_Value",
-          "number": {"gte":80}
+          "cond": {
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Controls.Brightness_Value:text\")) >= 80"
+          }
         },
         {
           "id": "wheelLogs",
           "action": "wheel",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.LogList"
+          },
           "delta": -3
         },
         {
           "id": "scrolled",
           "action": "snapshot",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.LogList"
+          },
           "note": "快照里 state.offset 是滚过的距离"
         },
         {
           "id": "pickLog8",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__8",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Pick_LogPicked__8"
+          },
           "via": "pointer"
         },
         {
           "id": "log8",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogHead/LogPicked",
-          "textContains": "日志 08"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.LogPicked:text",
+            "op": "contains",
+            "value": "日志 08"
+          }
         }
       ]
     },
@@ -126,31 +212,67 @@
         {
           "id": "openCombo",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Server"
+          },
           "via": "pointer",
           "note": "点开下拉框"
         },
         {
           "id": "pickOption",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server>>STableRow[text=华东一区]",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Server",
+            "slate": "STableRow[text=华东一区]"
+          },
           "via": "pointer",
           "note": "下拉列表在单独的弹出窗口里：用 >> 进 Slate 层按文字找行"
         },
         {
           "id": "comboEcho",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/Server_Value",
-          "text": "华东一区"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Server_Value:text",
+            "op": "eq",
+            "value": "华东一区"
+          }
         },
         {
           "id": "openMenu",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/Menu_ActionAnchor",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Menu_ActionAnchor"
+          },
           "via": "pointer"
         },
-        {"id":"pickCopy","action":"click","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuCopy","via":"pointer"},
-        {"id":"copied","action":"assert","expr":"contains(text($status), '菜单：复制')"}
+        {
+          "id": "pickCopy",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "part": "MenuCopy"
+          },
+          "via": "pointer"
+        },
+        {
+          "id": "copied",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '菜单：复制')"
+        }
       ]
     },
     {
@@ -161,35 +283,69 @@
         {
           "id": "typeAbc",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/SearchBox",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.SearchBox"
+          },
           "text": "abcd"
         },
         {
           "id": "backspace",
           "action": "key",
           "key": "BackSpace",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/SearchBox"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.SearchBox"
+          }
         },
         {
           "id": "enter",
           "action": "key",
           "key": "Enter",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/SearchBox"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.SearchBox"
+          }
         },
-        {"id":"committed","action":"assert","expr":"contains(text($status), '输入：abc')"},
+        {
+          "id": "committed",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '输入：abc')"
+        },
         {
           "id": "listenKey",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKeySize/JumpKey",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.JumpKey"
+          },
           "via": "pointer",
           "note": "点一下按键选择器，进入等按键状态"
         },
-        {"id":"pressJ","action":"key","key":"J"},
+        {
+          "id": "pressJ",
+          "action": "key",
+          "key": "J"
+        },
         {
           "id": "jumpIsJ",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKey_Value",
-          "text": "J"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.JumpKey_Value:text",
+            "op": "eq",
+            "value": "J"
+          }
         }
       ]
     },
@@ -198,9 +354,20 @@
       "action": "group",
       "name": "截图收尾",
       "do": [
-        {"id":"shot","action":"screenshot","name":"forge-sample-real-input"},
-        {"id":"stop","action":"pie.stop"},
-        {"id":"stopped","action":"wait","until":"pieStopped"}
+        {
+          "id": "shot",
+          "action": "screenshot",
+          "name": "forge-sample-real-input"
+        },
+        {
+          "id": "stop",
+          "action": "pie.stop"
+        },
+        {
+          "id": "stopped",
+          "action": "wait",
+          "until": "pieStopped"
+        }
       ]
     }
   ]

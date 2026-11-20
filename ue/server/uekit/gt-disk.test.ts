@@ -17,7 +17,7 @@ const json = async (file: string, v: unknown) => {
 }
 const scen = (name: string, extra: Record<string, unknown> = {}) => ({
   kind: 'gametest-scenario',
-  schemaVersion: 2,
+  schemaVersion: 4,
   name,
   steps: [{ action: 'ping' }, { action: 'wait', seconds: 1 }],
   ...extra,

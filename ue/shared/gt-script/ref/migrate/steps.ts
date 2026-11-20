@@ -48,12 +48,12 @@ const STEP_TABLE: Record<string, StepMigrator> = {
     s.how = [{ by: 'remove' }]
     delete s.target
   },
+  // v3 的 widget.call 只是「调界面上的无参函数」，不一定是关界面（示例里的 ResetScreen 就是重置）：迁成 obj.call，
+  // 迁成 obj.close 会默认核对「找不到了」，没关的界面会让这一步失败
   'widget.call'(s, ctx) {
-    s.action = 'obj.close'
+    s.action = 'obj.call'
     s.obj = selectorToRef(s.target, ctx, '要调函数') ?? ''
-    s.how = [{ by: 'call', function: s.function }]
     delete s.target
-    delete s.function
   },
   invoke(s, ctx) {
     s.action = 'obj.call'

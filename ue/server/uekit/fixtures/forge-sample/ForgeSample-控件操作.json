@@ -1,23 +1,36 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "AssetForge 示例界面：各类控件操作",
   "_note": "配套「控件」页（AssetForge 1.5.0 起）。每种能操作的 UMG 控件各练一遍：按钮（普通、禁用到可用）、单行 / 多行输入框、滑条、微调框、下拉框、复选框、单选按钮组、按键选择器、滚动框、切换器、菜单锚点；最后一段是观察类动作（ping、find、snapshot、probe、标注截图）和临时加界面。都用代码方式（不动鼠标），真实鼠标键盘见「真实输入」。",
   "revision": 1,
-  "tags": ["sample","assetforge","controls"],
+  "tags": [
+    "sample",
+    "assetforge",
+    "controls"
+  ],
   "stepDelayMs": 200,
-  "params": {"nickname":{"default":"火焰骑士","type":"string","note":"昵称框填什么"},"server":{"default":"海外","type":"string","note":"下拉框选哪一项"}},
-  "vars": {
-    "crumb": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb",
-    "status": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/StatusChip/Status",
-    "back": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Back"
+  "params": {
+    "nickname": {
+      "default": "火焰骑士",
+      "type": "string",
+      "note": "昵称框填什么"
+    },
+    "server": {
+      "default": "海外",
+      "type": "string",
+      "note": "下拉框选哪一项"
+    }
   },
   "steps": [
     {
       "id": "open",
       "action": "call",
       "script": "AssetForgeSample/common/打开示例界面",
-      "with": {"nav":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Controls__Nav","title":"控件"},
+      "with": {
+        "nav": "Go_Page_Controls__Nav",
+        "title": "控件"
+      },
       "saveAs": "opened",
       "note": "进图、重置示例界面、切到「控件」页"
     },
@@ -29,51 +42,102 @@
         {
           "id": "clickNormal",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Btn_Normal"
+          }
         },
-        {"id":"normalDone","action":"assert","expr":"contains(text($status), '普通按钮')"},
+        {
+          "id": "normalDone",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+        },
         {
           "id": "lockGate",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/Enable_Btn_Gated",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Enable_Btn_Gated"
+          },
           "checked": false,
           "note": "复选框 set 会广播：父类跟着把按钮禁用"
         },
         {
           "id": "gateLocked",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated",
-          "enabled": false
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Btn_Gated:enabled",
+            "op": "is",
+            "value": false
+          }
         },
         {
           "id": "openGate",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/Enable_Btn_Gated",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Enable_Btn_Gated"
+          },
           "checked": true
         },
         {
           "id": "gateOpen",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated",
-          "enabled": true
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Btn_Gated:enabled",
+            "op": "is",
+            "value": true
+          }
         },
         {
           "id": "clickGated",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Gated"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Btn_Gated"
+          }
         },
-        {"id":"gatedDone","action":"assert","expr":"contains(text($status), '勾上才能点')"},
+        {
+          "id": "gatedDone",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '勾上才能点')"
+        },
         {
           "id": "tapHold",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Hold_Charge"
+          },
           "note": "代码点击在同一帧按下松开：算短按（长按见「真实输入」）"
         },
         {
           "id": "tapShort",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/HoldRow/Hold_Charge_Value",
-          "text": "短按"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Hold_Charge_Value:text",
+            "op": "eq",
+            "value": "短按"
+          }
         }
       ]
     },
@@ -85,33 +149,63 @@
         {
           "id": "typeNick",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/NicknameBg/Nickname",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Nickname"
+          },
           "text": "$nickname"
         },
         {
           "id": "saveNick",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/Submit_Nickname"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Submit_Nickname"
+          }
         },
         {
           "id": "nickEcho",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/NicknameRow/Nickname_Echo",
-          "text": "$nickname"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Nickname_Echo:text",
+            "op": "eq",
+            "value": "$nickname"
+          }
         },
         {
           "id": "typeSearch",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/SearchBox",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.SearchBox"
+          },
           "text": "火焰剑",
           "commit": true,
           "note": "commit：打完按回车"
         },
-        {"id":"searchCommitted","action":"assert","expr":"contains(text($status), '输入：火焰剑')"},
+        {
+          "id": "searchCommitted",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '输入：火焰剑')"
+        },
         {
           "id": "typeFeedback",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackSize/Feedback",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Feedback"
+          },
           "text": "第一行\n第二行",
           "via": "code",
           "note": "多行框用代码写入（换行符直接写进去）"
@@ -119,7 +213,12 @@
         {
           "id": "appendFeedback",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackSize/Feedback",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Feedback"
+          },
           "text": "（补充）",
           "via": "code",
           "append": true
@@ -127,7 +226,12 @@
         {
           "id": "sendFeedback",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Submit_Feedback"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Submit_Feedback"
+          }
         },
         {
           "id": "feedbackEcho",
@@ -135,12 +239,20 @@
           "cond": {
             "all": [
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Feedback_Echo",
-                "textContains": "第二行"
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.Feedback_Echo:text",
+                "op": "contains",
+                "value": "第二行"
               },
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/TextCard/TextCardCol/FeedbackRow/Feedback_Echo",
-                "textContains": "（补充）"
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.Feedback_Echo:text",
+                "op": "contains",
+                "value": "（补充）"
               }
             ]
           }
@@ -155,29 +267,45 @@
         {
           "id": "setBright",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Brightness"
+          },
           "value": 80,
           "note": "滑条 set 不广播 OnValueChanged：右边的数字不变，用 stateKey 看滑条自己的值"
         },
         {
           "id": "brightValue",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/BrightnessRow/BrightnessSize/Brightness",
-          "stateKey": "value",
-          "equals": 80
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Brightness.Value",
+            "op": "eq",
+            "value": 80
+          }
         },
         {
           "id": "setAmount",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/AmountRow/AmountSize/Amount",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Amount"
+          },
           "value": 5,
           "note": "微调框 set 会广播"
         },
         {
           "id": "amountEcho",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/NumCard/NumCardCol/AmountRow/Amount_Value",
-          "number": {"eq":5}
+          "cond": {
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Controls.Amount_Value:text\")) == 5"
+          }
         }
       ]
     },
@@ -189,19 +317,35 @@
         {
           "id": "pickServer",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Server"
+          },
           "option": "$server"
         },
         {
           "id": "serverEcho",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/Server_Value",
-          "text": "$server"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Server_Value:text",
+            "op": "eq",
+            "value": "$server"
+          }
         },
         {
           "id": "pickServerByIndex",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Server"
+          },
           "index": 1,
           "note": "按序号选第二项"
         },
@@ -211,13 +355,20 @@
           "cond": {
             "all": [
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/Server_Value",
-                "text": "华南二区"
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.Server_Value:text",
+                "op": "eq",
+                "value": "华南二区"
               },
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/ServerRow/ServerSize/Server",
-                "stateKey": "index",
-                "equals": 1
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.Server:selectedIndex",
+                "op": "eq",
+                "value": 1
               }
             ]
           }
@@ -225,13 +376,23 @@
         {
           "id": "lootOff",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.AutoLoot"
+          },
           "checked": false
         },
         {
           "id": "lootToggle",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.AutoLoot"
+          },
           "note": "代码点击复选框：切换勾选"
         },
         {
@@ -240,12 +401,20 @@
           "cond": {
             "all": [
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot",
-                "checked": true
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.AutoLoot:checked",
+                "op": "is",
+                "value": "Checked"
               },
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/AutoLootRow/AutoLoot_Value",
-                "text": "开"
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_Controls.AutoLoot_Value:text",
+                "op": "eq",
+                "value": "开"
               }
             ]
           }
@@ -253,28 +422,49 @@
         {
           "id": "pickHard",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/DifficultyRow/Pick_Difficulty__Hard",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Pick_Difficulty__Hard"
+          },
           "note": "一组按钮当单选"
         },
         {
           "id": "hardPicked",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/DifficultyRow/Difficulty",
-          "text": "困难"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Difficulty:text",
+            "op": "eq",
+            "value": "困难"
+          }
         },
         {
           "id": "bindJump",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKeySize/JumpKey",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.JumpKey"
+          },
           "key": "SpaceBar",
           "note": "按键选择器 set 不广播：看控件自己的 key"
         },
         {
           "id": "jumpBound",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard/ChoiceCardCol/JumpKeyRow/JumpKeySize/JumpKey",
-          "stateKey": "key",
-          "equals": "SpaceBar"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.JumpKey:selectedKey",
+            "op": "eq",
+            "value": "SpaceBar"
+          }
         }
       ]
     },
@@ -286,25 +476,46 @@
         {
           "id": "scrollEnd",
           "action": "scroll",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.LogList"
+          },
           "mode": "end"
         },
         {
           "id": "pickLast",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__20",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Pick_LogPicked__20"
+          },
           "note": "滚到底再点最后一条"
         },
         {
           "id": "lastPicked",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogHead/LogPicked",
-          "textContains": "日志 20"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.LogPicked:text",
+            "op": "contains",
+            "value": "日志 20"
+          }
         },
         {
           "id": "scrollStart",
           "action": "scroll",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.LogList"
+          },
           "mode": "start"
         },
         {
@@ -312,9 +523,12 @@
           "action": "wait",
           "until": "cond",
           "cond": {
-            "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
-            "stateKey": "offset",
-            "equals": 0
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.LogList:scrollOffset",
+            "op": "eq",
+            "value": 0
           },
           "timeoutMs": 3000,
           "note": "滚动在下一帧布局时才生效：等它读回 0"
@@ -322,7 +536,12 @@
         {
           "id": "scrollTo12",
           "action": "scroll",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.LogList"
+          },
           "mode": "widget",
           "widget": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__12",
           "note": "滚到某个子控件露出来"
@@ -330,39 +549,71 @@
         {
           "id": "pick12",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogSize/LogList/Pick_LogPicked__12"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Pick_LogPicked__12"
+          }
         },
         {
           "id": "picked12",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/LogHead/LogPicked",
-          "textContains": "日志 12"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.LogPicked:text",
+            "op": "contains",
+            "value": "日志 12"
+          }
         },
         {
           "id": "stepB",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/StepTabs/Go_StepB",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Go_StepB"
+          },
           "note": "按钮切切换器的页"
         },
         {
           "id": "onStepB",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps",
-          "stateKey": "activeIndex",
-          "equals": 1
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.Steps:activeIndex",
+            "op": "eq",
+            "value": 1
+          }
         },
         {
           "id": "setStepC",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Steps"
+          },
           "index": 2,
           "note": "直接设切换器页号"
         },
         {
           "id": "onStepC",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/BoxCard/BoxCardCol/Steps/StepC",
-          "visible": true
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.StepC:shown",
+            "op": "is",
+            "value": true
+          }
         }
       ]
     },
@@ -371,31 +622,66 @@
       "action": "group",
       "name": "观察：连通、标记、句柄、快照、命中测试、标注截图、临时界面",
       "do": [
-        {"id":"ping","action":"ping"},
-        {"id":"mark","action":"mark","text":"下面这段只观察，不改界面"},
+        {
+          "id": "ping",
+          "action": "ping"
+        },
+        {
+          "id": "mark",
+          "action": "mark",
+          "text": "下面这段只观察，不改界面"
+        },
         {
           "id": "findBtn",
-          "action": "find",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal",
-          "into": "normalBtn",
-          "note": "捕获控件句柄，后面用 @normalBtn 引用"
+          "action": "obj.find",
+          "note": "捕获控件句柄，后面用 @normalBtn 引用",
+          "obj": {
+            "class": "WBP_ForgeSample"
+          },
+          "saveAs": "normalBtn"
         },
-        {"id":"clickHandle","action":"click","target":"@normalBtn"},
-        {"id":"handleClicked","action":"assert","expr":"contains(text($status), '普通按钮')"},
+        {
+          "id": "clickHandle",
+          "action": "click",
+          "target": {
+            "obj": "$normalBtn",
+            "part": "Page_Controls.Btn_Normal"
+          }
+        },
+        {
+          "id": "handleClicked",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+        },
         {
           "id": "snap",
           "action": "snapshot",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/ChoiceCard",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.ChoiceCard"
+          },
           "props": true,
           "note": "只取「选择」卡片这棵子树"
         },
         {
           "id": "probe",
           "action": "probe",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsLeft/BtnCard/BtnCardCol/BtnRow1/Btn_Normal",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Btn_Normal"
+          },
           "note": "只读命中测试：按钮中心有没有被挡住"
         },
-        {"id":"shotAnnotated","action":"screenshot","name":"forge-sample-controls","annotate":true},
+        {
+          "id": "shotAnnotated",
+          "action": "screenshot",
+          "name": "forge-sample-controls",
+          "annotate": true
+        },
         {
           "id": "addMenu",
           "action": "widget.add",
@@ -403,9 +689,41 @@
           "zOrder": 50,
           "note": "不靠游戏流程，直接把一个界面加进视口（放在菜单那段之前：屏上只有这一个 ForgeSampleMenu）"
         },
-        {"id":"menuAdded","action":"wait","until":"widget","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuDelete"},
-        {"id":"removeMenu","action":"widget.remove","target":"ForgeSampleMenu:."},
-        {"id":"menuRemoved","action":"wait","until":"widgetGone","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuDelete"}
+        {
+          "id": "menuAdded",
+          "action": "wait",
+          "until": "cond",
+          "cond": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "prop": "@MenuDelete:exists",
+            "op": "is",
+            "value": true
+          }
+        },
+        {
+          "id": "removeMenu",
+          "action": "widget.remove",
+          "target": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            }
+          }
+        },
+        {
+          "id": "menuRemoved",
+          "action": "wait",
+          "until": "cond",
+          "cond": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "prop": "@MenuDelete:exists",
+            "op": "is",
+            "value": false
+          }
+        }
       ]
     },
     {
@@ -416,40 +734,118 @@
         {
           "id": "openMenu",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/Menu_ActionAnchor"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.Menu_ActionAnchor"
+          }
         },
         {
           "id": "menuOpen",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
-          "stateKey": "open",
-          "equals": true
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.ActionAnchor:open",
+            "op": "is",
+            "value": true
+          }
         },
-        {"id":"pickRename","action":"click","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuRename","note":"菜单内容是另一个界面 ForgeSampleMenu（在弹出窗口里）"},
-        {"id":"renamed","action":"assert","expr":"contains(text($status), '菜单：重命名')"},
+        {
+          "id": "pickRename",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "part": "MenuRename"
+          },
+          "note": "菜单内容是另一个界面 ForgeSampleMenu（在弹出窗口里）"
+        },
+        {
+          "id": "renamed",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '菜单：重命名')"
+        },
         {
           "id": "menuClosed",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
-          "stateKey": "open",
-          "equals": false
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Controls.ActionAnchor:open",
+            "op": "is",
+            "value": false
+          }
         },
         {
           "id": "setOpen",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.ActionAnchor"
+          },
           "open": true
         },
-        {"id":"menuShown","action":"wait","until":"widget","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuCopy"},
+        {
+          "id": "menuShown",
+          "action": "wait",
+          "until": "cond",
+          "cond": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "prop": "@MenuCopy:exists",
+            "op": "is",
+            "value": true
+          }
+        },
         {
           "id": "setClosed",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Controls>ControlsRoot/ControlsScroll/ControlsBody/ControlsRight/MenuCard/MenuCardCol/MenuRow/ActionAnchor",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Controls.ActionAnchor"
+          },
           "open": false
         },
-        {"id":"menuGone","action":"wait","until":"widgetGone","target":"ForgeSampleMenu:MenuBg/MenuCol/MenuCopy"}
+        {
+          "id": "menuGone",
+          "action": "wait",
+          "until": "cond",
+          "cond": {
+            "obj": {
+              "class": "ForgeSampleMenu"
+            },
+            "prop": "@MenuCopy:exists",
+            "op": "is",
+            "value": false
+          }
+        }
       ]
     },
-    {"id":"close","action":"group","name":"截图收尾","do":[{"id":"stop","action":"pie.stop"},{"id":"stopped","action":"wait","until":"pieStopped"}]}
+    {
+      "id": "close",
+      "action": "group",
+      "name": "截图收尾",
+      "do": [
+        {
+          "id": "stop",
+          "action": "pie.stop"
+        },
+        {
+          "id": "stopped",
+          "action": "wait",
+          "until": "pieStopped"
+        }
+      ]
+    }
   ]
 }

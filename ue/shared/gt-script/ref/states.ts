@@ -36,6 +36,14 @@ export const GT_STATES: GtStateDef[] = [
   s('distance', 'float', 'actor', true),
   s('hiddenInGame', 'bool', 'actor', true),
   s('class', 'object', 'any'),
+  // 控件自己的运行时状态（只有 getter、没有属性可读的几种），v3 的 stateKey 迁移到这里
+  s('selectedIndex', 'int', 'widget', true),
+  s('selectedCount', 'int', 'container', true),
+  s('scrollOffset', 'float', 'widget', true),
+  s('open', 'bool', 'widget', true),
+  s('selectedKey', 'string', 'widget', true),
+  s('activeIndex', 'int', 'widget', true),
+  s('expanded', 'bool', 'widget', true),
 ]
 
 const byName = new Map(GT_STATES.map((x) => [x.name.toLowerCase(), x]))
