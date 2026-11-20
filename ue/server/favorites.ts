@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { ueDocFile } from './doc-root.ts'
 import { patchLocal, readLocal } from './store.ts'
 import type { UeProject } from './types.ts'
 import { readJson, t, writeJson } from './util.ts'
@@ -15,21 +16,20 @@ export interface FavFile {
 /** 最多收藏多少个：再多收藏夹就失去意义了 */
 const MAX = 100
 
+type P = Pick<UeProject, 'id' | 'root' | 'favStore'>
+
 /**
- * 项目的文档根：项目外层同级有 ProjectDoc/docs 就用它（P4 / SVN 项目的文档放在那，和 AssetForge、GameTest 一致），
- * 否则是项目里的 docs
+ * 收藏文件的位置：项目文档根（面板给的，见 doc-root.ts）的 AgentPanel/UE/favorites.json，
+ * 或 .agent-panel/ue/favorites.json（和 GM 预设 gm.json 放一起）。read 是读的位置：升级前存在旧文档根的照样读得到
  */
-export function docsRoot(root: string) {
-  const pd = path.join(path.dirname(root), 'ProjectDoc', 'docs')
-  return existsSync(pd) ? pd : path.join(root, 'docs')
+export function favPaths(p: P) {
+  if (p.favStore !== 'project') return ueDocFile(p, 'favorites.json')
+  const f = path.join(p.root, '.agent-panel', 'ue', 'favorites.json')
+  return { read: f, write: f }
 }
 
-/** 收藏文件的位置：docs/AgentPanel/UE/favorites.json，或 .agent-panel/ue/favorites.json（和 GM 预设 gm.json 放一起） */
-export function favFile(p: Pick<UeProject, 'root' | 'favStore'>) {
-  return p.favStore === 'project'
-    ? path.join(p.root, '.agent-panel', 'ue', 'favorites.json')
-    : path.join(docsRoot(p.root), 'AgentPanel', 'UE', 'favorites.json')
-}
+/** 收藏文件写在哪（设置页显示的位置） */
+export const favFile = (p: P) => favPaths(p).write
 
 const clean = (list: unknown) =>
   Array.isArray(list)
@@ -37,8 +37,8 @@ const clean = (list: unknown) =>
     : []
 
 export async function readFavs(p: UeProject): Promise<{ folders: string[]; file: string }> {
-  const file = favFile(p)
-  if (existsSync(file)) return { folders: clean((await readJson<Partial<FavFile>>(file, {})).folders), file }
+  const { read, write: file } = favPaths(p)
+  if (existsSync(read)) return { folders: clean((await readJson<Partial<FavFile>>(read, {})).folders), file }
   // 一次性搬家：以前存在插件数据目录里的收藏写进项目，旧的清掉
   const old = (await readLocal(p.id)).folders ?? []
   if (old.length) {

@@ -30,11 +30,15 @@ export default function scan(files) {
 \`\`\``
 
 function common(p: UeProject, files: string[]) {
-  const rel = (f: string) => path.relative(p.root, f).replaceAll('\\', '/')
+  // 文档根可能在项目外（P4 / SVN 各分支共用的 ProjectDoc/docs）：项目外的给绝对路径，别让 Agent 拼 ../..
+  const rel = (f: string) => {
+    const r = path.relative(p.root, f)
+    return (r.startsWith('..') || path.isAbsolute(r) ? f : r).replaceAll('\\', '/')
+  }
   return `GM 文件（相对项目根 ${p.root}）：
 ${files.map((f) => `- ${f}`).join('\n')}
 
-扫描脚本的位置：${rel(path.join(storeDir(p), SCRIPT_NAME))}
+扫描脚本的位置：${rel(path.join(storeDir(p), SCRIPT_NAME))}（项目文档根下，团队共用，写一次以后直接复用）
 
 ${CONTRACT}
 
@@ -59,7 +63,7 @@ ${common(p, files)}`
     .join('\n')
   return `面板的 Lua GM 扫描脚本扫得不对，请改一下。${note ? `\n\n哪里不对：${note}` : ''}
 
-现在的脚本：${path.relative(p.root, scriptFile(p)).replaceAll('\\', '/')}
+现在的脚本：${scriptFile(p).replaceAll('\\', '/')}
 现在的扫描结果：${scan.error ? `出错：${scan.error}` : `${scan.items.length} 条${scan.warnings.length ? `，有 ${scan.warnings.length} 条警告：${scan.warnings.slice(0, 5).join('；')}` : ''}`}
 ${sample ? `前几条：\n${sample}\n` : ''}
 ${common(p, files)}`

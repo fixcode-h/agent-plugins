@@ -4320,5 +4320,7 @@
   "子界面：它自己的属性在它自己的配置里（{a}），这里只有插槽和通用属性": "Sub-widget: its own properties live in its own config ({a}); only slot and common properties are shown here",
   "知道了": "Got it",
   "「{v}」不是数字": "\"{v}\" is not a number",
-  "一个数是四边一样，两个数是「左右, 上下」，四个数是「左, 上, 右, 下」": "One number for all sides, two for \"horizontal, vertical\", four for \"left, top, right, bottom\""
+  "一个数是四边一样，两个数是「左右, 上下」，四个数是「左, 上, 右, 下」": "One number for all sides, two for \"horizontal, vertical\", four for \"left, top, right, bottom\"",
+  "已有扫描脚本，还没选 GM 文件：在设置里选好就能列出": "A scan script exists but no GM files are selected yet: pick them in the settings to list GMs",
+  "扫描脚本位置：{p}": "Scan script: {p}"
 }

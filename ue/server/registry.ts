@@ -1,5 +1,6 @@
 import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { refreshDocsRoot } from './doc-root.ts'
 import type { UeProject } from './types.ts'
 import { c, now, readJson, writeJson } from './util.ts'
 
@@ -36,12 +37,16 @@ export async function listProjects(): Promise<UeProject[]> {
     const p = await readJson<UeProject | null>(path.join(dir(), n), null)
     if (p?.id) out.push(norm(p))
   }
+  await Promise.all(out.map((p) => refreshDocsRoot(p)))
   return out.sort((a, b) => a.addedAt.localeCompare(b.addedAt))
 }
 
 export async function getProject(id: string): Promise<UeProject | undefined> {
   const p = await readJson<UeProject | null>(file(id), null)
-  return p ? norm(p) : undefined
+  if (!p) return undefined
+  // 文档根问面板（doc-root.ts）：项目存放的脚本、收藏都按它找，取项目时顺手取好，后面同步用
+  await refreshDocsRoot(p)
+  return norm(p)
 }
 
 export async function saveProject(p: UeProject) {

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { docsRoot } from '../favorites.ts'
+import { ueDocFile } from '../doc-root.ts'
 import type { UeProject } from '../types.ts'
 import { readJson } from '../util.ts'
 
@@ -100,8 +100,8 @@ const compile = (list: Culprit[]): Compiled[] =>
 
 const builtin = compile(BUILTIN_CULPRITS)
 
-export async function culpritRules(p: Pick<UeProject, 'root'>): Promise<Compiled[]> {
-  const file = path.join(docsRoot(p.root), 'AgentPanel', 'UE', 'perf-culprits.json')
+export async function culpritRules(p: Pick<UeProject, 'id' | 'root'>): Promise<Compiled[]> {
+  const file = ueDocFile(p, 'perf-culprits.json').read
   const own = await readJson<{ rules?: Culprit[] }>(file, {})
   const rules = Array.isArray(own.rules)
     ? own.rules.filter((x) => x && typeof x.name === 'string' && typeof x.match === 'string')

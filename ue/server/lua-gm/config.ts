@@ -1,22 +1,30 @@
 import { existsSync } from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import { copyFile, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { docsRoot } from '../favorites.ts'
+import { docsRoot, legacyDocsRoot } from '../doc-root.ts'
 import type { UeProject } from '../types.ts'
 import { readJson, writeJson } from '../util.ts'
 import type { LuaGmBinding, LuaGmConfig } from './types.ts'
 
-type P = Pick<UeProject, 'root' | 'favStore'>
+type P = Pick<UeProject, 'id' | 'root' | 'favStore'>
 
 /**
  * 存放位置和资源页收藏一样（用户 2026-11-16：扫描脚本存到和收藏夹同一个存储位置设置下）：
- * docs/AgentPanel/UE（文档根见 favorites.ts）或项目的 .agent-panel/ue。两处都在项目里，可以提交、团队共用
+ * 项目文档根的 AgentPanel/UE 或项目的 .agent-panel/ue，可以提交、团队共用。
+ * 文档根用面板算好的（doc-root.ts）：P4 / SVN 项目是各分支共用的那份 ProjectDoc/docs，扫描脚本写一次，
+ * 换分支、换电脑都直接复用，不再提示「还没设置」（用户 2026-11-20）
  */
 export const storeDir = (p: P) =>
-  p.favStore === 'project' ? path.join(p.root, '.agent-panel', 'ue') : path.join(docsRoot(p.root), 'AgentPanel', 'UE')
+  p.favStore === 'project' ? path.join(p.root, '.agent-panel', 'ue') : path.join(docsRoot(p), 'AgentPanel', 'UE')
 
-/** 另一个位置：换了存放位置后，脚本和设置还在旧位置时照样读得到（写进当前位置） */
-const otherDir = (p: P) => storeDir({ ...p, favStore: p.favStore === 'project' ? 'docs' : 'project' })
+/**
+ * 读的时候还看哪些位置（按顺序）：换了存放位置后脚本和设置还在另一个位置；升级前插件按旧规则猜的文档根
+ * （.uproject 上一级的 ProjectDoc/docs 或项目里的 docs）。都照样读得到，写进当前位置
+ */
+const oldDirs = (p: P) => [
+  storeDir({ ...p, favStore: p.favStore === 'project' ? 'docs' : 'project' }),
+  path.join(legacyDocsRoot(p.root), 'AgentPanel', 'UE'),
+]
 
 export const SCRIPT_NAME = 'lua-gm-scan.mjs'
 const CONFIG_NAME = 'lua-gm.json'
@@ -25,8 +33,29 @@ const CONFIG_NAME = 'lua-gm.json'
 function located(p: P, name: string) {
   const cur = path.join(storeDir(p), name)
   if (existsSync(cur)) return cur
-  const old = path.join(otherDir(p), name)
-  return existsSync(old) ? old : cur
+  return (
+    oldDirs(p)
+      .map((d) => path.join(d, name))
+      .find((f) => existsSync(f)) ?? cur
+  )
+}
+
+/**
+ * 升级前按旧规则存的脚本和设置（例如分支自己目录下的 ProjectDoc/docs）复制一份到面板的文档根：
+ * 各分支共用的那份有了，别的分支打开 GM 页直接复用，不用再让 AI 写一遍。旧文件不删（可能已经提交进版本管理）
+ */
+export async function adoptOld(p: P) {
+  if (p.favStore === 'project') return
+  const dir = storeDir(p)
+  const old = path.join(legacyDocsRoot(p.root), 'AgentPanel', 'UE')
+  if (path.resolve(old) === path.resolve(dir)) return
+  for (const name of [SCRIPT_NAME, CONFIG_NAME]) {
+    const from = path.join(old, name)
+    const to = path.join(dir, name)
+    if (existsSync(to) || !existsSync(from)) continue
+    await mkdir(dir, { recursive: true })
+    await copyFile(from, to)
+  }
 }
 
 export const scriptFile = (p: P) => located(p, SCRIPT_NAME)
