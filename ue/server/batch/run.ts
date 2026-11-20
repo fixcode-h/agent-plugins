@@ -7,7 +7,8 @@ import './actions/asset.ts'
 import './actions/call.ts'
 import './actions/blueprint.ts'
 import './actions/props.ts'
-import { batchEntry, type BatchEntry } from './registry.ts'
+import { noBatchMessage } from './no-batch.ts'
+import { batchEntry, batchKeys, type BatchEntry } from './registry.ts'
 import { resolveTargets } from './targets.ts'
 import { readReport, type ReportStep } from './undo.ts'
 
@@ -141,11 +142,25 @@ function opOf(e: BatchEntry, a: Record<string, unknown>) {
   return typeof e.op === 'function' ? e.op(a) : e.op
 }
 
-/** 工具处理函数里调：参数里有批量写法时接手；这个动作不支持批量时回一句报错 */
-export async function runBatch(tool: string, a: Record<string, unknown>, ctx: OpCtx): Promise<McpResult> {
+/** 这个工具登记了能批量的 action（「工具.动作」的动作部分） */
+function batchableActions(tool: string) {
+  return batchKeys()
+    .filter((k) => k.startsWith(`${tool}.`))
+    .map((k) => k.slice(tool.length + 1))
+}
+
+/**
+ * 工具处理函数里调：参数里有批量写法时接手；这个动作批量不了时回一句报错，写清能批量的 action 和找资源该用哪个工具。
+ * actions 是工具定义里 action 的全部取值：给了就能把「没有这个 action」（如 Agent 把 select 当成动作）和「这个动作批量不了」分开说
+ */
+export async function runBatch(
+  tool: string,
+  a: Record<string, unknown>,
+  ctx: OpCtx,
+  actions?: string[],
+): Promise<McpResult> {
   const e = batchEntry(tool, a.action)
-  if (!e)
-    return mcpText(`${tool}${a.action ? ` action=${a.action}` : ''} 不支持批量（paths / items / select），逐个调`, true)
+  if (!e) return mcpText(noBatchMessage(tool, a.action, batchableActions(tool), actions), true)
   if (a.retry) return retryBatch(str(a.retry), e, a, ctx)
   const targets = await resolveTargets(a, ctx)
   const args = {

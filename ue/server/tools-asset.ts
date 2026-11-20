@@ -36,6 +36,8 @@ export const ASSET_ACTIONS = [
   'help',
 ]
 
+const BP_ACTIONS = ['outline', 'graph', 'node_search', 'edit', 'help']
+
 /** 蓝图的几种资源类：它们的专用动作都在 ue_blueprint */
 const BLUEPRINT_CLASSES = ['blueprint', 'widgetblueprint', 'animblueprint', 'blueprintgeneratedclass']
 
@@ -108,7 +110,7 @@ export async function assetAction(a: Record<string, unknown>, ctx: OpCtx): Promi
   // 带 job：接着等之前没做完的作业（改名、删除、批量校验……），不管 action
   if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_asset', a.action)
   // 批量（paths / items / select）；validate 的 paths 是它自己的老用法，照旧
-  if (isBatch(a) && a.action !== 'validate') return runBatch('ue_asset', a, ctx)
+  if (isBatch(a) && a.action !== 'validate') return runBatch('ue_asset', a, ctx, ASSET_ACTIONS)
   switch (a.action) {
     case 'help':
       return out(help(str(a.class)))
@@ -232,7 +234,7 @@ export const ASSET_TOOLS = [
       '\nedit 的 ops 是 [{op, ...}]，op 有：add_variable / set_variable / remove_variable、add_function / remove_function、add_interface / remove_interface、reparent、set_default、add_component / set_component / remove_component、add_node / remove_node / set_pin / connect / disconnect / move / comment。' +
       '一条可以改多个：name 给数组或通配符（组件可按 componentClass 选），set_component / set_default 用 props 一次改多个属性，where 只改当前值对得上的，add_* 加 ifMissing 已有就跳过。每个 op 的参数和类型写法先 action=help 看一次。',
     {
-      action: { type: 'string', enum: ['outline', 'graph', 'node_search', 'edit', 'help'] },
+      action: { type: 'string', enum: BP_ACTIONS },
       path: { type: 'string' },
       graph: { type: 'string' },
       node: { type: 'string' },
@@ -255,7 +257,7 @@ export const ASSET_TOOLS = [
       const path = a.path
       if (a.job) return jobResult(await resumeJob(ctx.project.id, str(a.job)), 'ue_blueprint', a.action)
       if (a.action === 'help') return out(EDIT_HELP)
-      if (isBatch(a)) return runBatch('ue_blueprint', a, ctx)
+      if (isBatch(a)) return runBatch('ue_blueprint', a, ctx, BP_ACTIONS)
       if (!path) return mcpText('要给 path（蓝图资源路径），多个用 paths / select', true)
       switch (a.action) {
         case 'outline':

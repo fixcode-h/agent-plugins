@@ -2,7 +2,7 @@ import { BridgeError } from '../instances.ts'
 import { runOp, type OpCtx } from '../ops.ts'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { itemsFromJson, keep, list, tooMany } from './select-filter.ts'
+import { isBatch, itemsFromJson, keep, list, tooMany } from './select-filter.ts'
 import { c } from '../util.ts'
 
 /** 关卡 Actor 的 select 一次最多（UELink 的 actors 操作上限） */
@@ -12,13 +12,8 @@ const NO_LIMIT = 0
 /** UELink 2.14 及以前 assets 一次最多给的个数 */
 const OLD_LIMIT = 2000
 
-/** 工具参数里有没有批量写法：paths、items 或 select */
-export const isBatch = (a: Record<string, unknown>) =>
-  Array.isArray(a.paths) ||
-  Array.isArray(a.items) ||
-  typeof a.itemsFile === 'string' ||
-  !!a.retry ||
-  (!!a.select && typeof a.select === 'object')
+/** 工具参数里有没有批量写法：在 select-filter.ts（纯函数，单测直接跑），这里转出去给各工具用 */
+export { isBatch }
 
 export type Targets = { paths: string[] } | { items: Record<string, unknown>[] }
 
@@ -31,7 +26,21 @@ export async function resolveTargets(a: Record<string, unknown>, ctx: OpCtx): Pr
   if (typeof a.itemsFile === 'string') return { items: await readItemsFile(a.itemsFile, ctx.project.root) }
   if (Array.isArray(a.items)) return check({ items: a.items as Record<string, unknown>[] }, a.items.length, 'items')
   if (Array.isArray(a.paths)) return check({ paths: a.paths.map(String) }, a.paths.length, 'paths')
-  const s = a.select as Record<string, unknown>
+  const paths = await selectPaths(a.select as Record<string, unknown>, ctx)
+  if (!paths.length)
+    throw new BridgeError(
+      (a.select as Record<string, unknown>).kind === 'actor'
+        ? 'select 没有选中任何 Actor：检查 class、tag、prefix 和 world'
+        : 'select 没有选中任何资源：检查 path、class、parent、name、exclude',
+    )
+  return { paths }
+}
+
+/**
+ * 按 select 选出的路径（资源或 kind="actor" 的关卡 Actor），没选中时是空数组：
+ * 批量（resolveTargets）和只列出不操作的 ue_find kind=asset select 共用一套
+ */
+export async function selectPaths(s: Record<string, unknown>, ctx: OpCtx): Promise<string[]> {
   // 关卡里的 Actor：按类、标签、名字前缀在世界里找（UELink 2.14 的 actors 筛选）
   if (s.kind === 'actor') {
     const res = await runOp(ctx, 'actors', {
@@ -42,9 +51,7 @@ export async function resolveTargets(a: Record<string, unknown>, ctx: OpCtx): Pr
       limit: MAX_ACTORS,
     })
     if (res.more) throw new BridgeError(`select 选中的 Actor 超过 ${MAX_ACTORS} 个：加 class / tag / prefix 缩小范围`)
-    const actors = ((res.items as { path?: string }[]) ?? []).map((x) => String(x.path ?? '')).filter(Boolean)
-    if (!actors.length) throw new BridgeError('select 没有选中任何 Actor：检查 class、tag、prefix 和 world')
-    return { paths: actors }
+    return ((res.items as { path?: string }[]) ?? []).map((x) => String(x.path ?? '')).filter(Boolean)
   }
   // path 也可以直接给目录数组（等同 paths）
   const dirs = list(Array.isArray(s.path) ? s.path : s.paths)
@@ -78,9 +85,7 @@ export async function resolveTargets(a: Record<string, unknown>, ctx: OpCtx): Pr
   const items = ((res.items as { path?: string; name?: string; package?: string }[]) ?? []).filter((x) =>
     keep(x, dirs, name, exclude),
   )
-  const paths = items.map((x) => String(x.path ?? '')).filter(Boolean)
-  if (!paths.length) throw new BridgeError('select 没有选中任何资源：检查 path、class、parent、name、exclude')
-  return { paths }
+  return items.map((x) => String(x.path ?? '')).filter(Boolean)
 }
 
 function check(t: Targets, n: number, key: string) {

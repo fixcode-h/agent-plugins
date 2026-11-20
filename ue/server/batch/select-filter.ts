@@ -67,3 +67,32 @@ export function itemsFromJson(text: string): Record<string, unknown>[] | string 
   if (bad >= 0) return `第 ${bad + 1} 项没有 path（每项写成 {"path": "/Game/...", ...这一项的参数}）`
   return arr as Record<string, unknown>[]
 }
+
+/** 工具参数里有没有批量写法：paths、items 或 select */
+export const isBatch = (a: Record<string, unknown>) =>
+  Array.isArray(a.paths) ||
+  Array.isArray(a.items) ||
+  typeof a.itemsFile === 'string' ||
+  !!a.retry ||
+  // 空的 select（{}）不算：有的客户端把没填的对象参数补成 {}，当成批量会把整个 /Game 选进来
+  (!!a.select && typeof a.select === 'object' && Object.keys(a.select).length > 0)
+
+/** ue_find kind=asset select 一页默认几条：资源路径一条约 60~80 字，50 条在 4000 字内；最多 150 条，不超过读结构的 12000 字 */
+const PAGE = 50
+const PAGE_MAX = 150
+
+/** ue_find kind=asset select 的分页（find-select.ts）：选中多少都先取全，回包分页 */
+
+export function pageOf(paths: string[], offset: unknown, limit: unknown) {
+  const off = Math.max(0, Math.floor(Number(offset) || 0))
+  const lim = Math.min(PAGE_MAX, Math.max(1, Math.floor(Number(limit) || PAGE)))
+  const items = paths.slice(off, off + lim)
+  const hasMore = off + items.length < paths.length
+  return {
+    total: paths.length,
+    count: items.length,
+    ...(off ? { offset: off } : {}),
+    ...(hasMore ? { hasMore, nextOffset: off + items.length } : {}),
+    items,
+  }
+}
