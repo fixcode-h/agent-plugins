@@ -7,7 +7,7 @@ import { selectorLabel } from '../gt-selector-label.ts'
 import { wholeScreenOf } from '../gt-selector-tree.ts'
 import type { GtCloseHow, GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import { closeHowText } from '../gt-ref/CloseHowList.tsx'
-import { describeRef, identText, targetText } from '../gt-ref/describe.ts'
+import { describeRef, identText, targetShort, targetText } from '../gt-ref/describe.ts'
 
 /**
  * 流程图节点上一步「长什么样」：图标、标题、标题下的一行小字（定稿效果图 1、6）。
@@ -83,7 +83,8 @@ registerFace('loop', {
   title: (s) => {
     const mode = loopModeOf(s)
     if (mode === 'times') return t('重复 {n} 次', { n: String(s.times) })
-    if (mode === 'each') return t('对 {w} 的每个条目', { w: lastSeg(str(s.each)) })
+    if (mode === 'each')
+      return t('对 {w} 的每个条目', { w: typeof s.each === 'string' ? lastSeg(s.each) : targetShort(s.each) })
     if (mode === 'in') return t('对每个值')
     if (mode === 'while') return t('当 {c} 时', { c: condText(s.while) })
     return t('直到 {c}', { c: condText(s.until) })

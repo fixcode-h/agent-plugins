@@ -172,7 +172,9 @@ export function CloseHowList({
             <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1.5">
               <div className="ue:flex ue:items-center ue:gap-1.5">
                 <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-muted" />
-                <span className="ue:text-footnote ue:font-medium ue:text-fg">{b?.label() ?? x.by}</span>
+                <span className="ue:shrink-0 ue:whitespace-nowrap ue:text-footnote ue:font-medium ue:text-fg">
+                  {b?.label() ?? x.by}
+                </span>
                 <span className={cn('ue:min-w-0 ue:truncate ue:text-caption', i ? 'ue:text-subtle' : 'ue:text-muted')}>
                   {i ? t('上一种核对没过才试') : b?.hint()}
                 </span>

@@ -2,7 +2,7 @@ import type { GtIdentItem, GtPropKind } from '../../../../shared/gt-script/ref/t
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { ValueInput } from '../gt-cond/ValueInput.tsx'
-import { COUNT_CMPS, KIND_OPS, NO_VALUE_OPS, opLabel } from './compare-table.ts'
+import { COUNT_CMPS, KIND_OPS, KNOWN_ENUMS, NO_VALUE_OPS, opLabel } from './compare-table.ts'
 
 /** kind 不知道时（编辑器没开、Lua 字段没声明类型）给的比较：数字和文字的都给 */
 const LOOSE_OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'matches', 'in', 'is']
@@ -23,7 +23,7 @@ export function CompareEditor({
   value,
   onChange,
   kind,
-  members = [],
+  members: given = [],
   textKey,
 }: {
   value: GtIdentItem
@@ -35,6 +35,8 @@ export function CompareEditor({
   textKey?: string
 }) {
   const { ui, cn } = h()
+  // 可见性的成员是固定的：调用方没给（按类读、没连游戏）也能点选
+  const members = given.length ? given : kind === 'visibility' ? KNOWN_ENUMS.ESlateVisibility : given
   const ops = kind ? KIND_OPS[kind] : LOOSE_OPS
   const op = value.op ?? (kind === 'bool' ? 'is' : 'eq')
   const set = (patch: Partial<GtIdentItem>) => {
@@ -121,9 +123,23 @@ export function CompareEditor({
               : t('隐藏 = Collapsed / Hidden')}
           </span>
         ) : (
-          <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+          <div className="ue:flex ue:min-w-0 ue:flex-wrap ue:items-center ue:gap-1.5">
             {opSelect(['is', 'isNot', 'in'], 'ue:w-24')}
-            {op === 'in' ? (
+            {op === 'in' && !members.length ? (
+              <ValueInput
+                className="ue:min-w-0 ue:flex-1"
+                placeholder={t('用逗号隔开')}
+                value={scalarText(value.value)}
+                onChange={(s) =>
+                  set({
+                    value: s
+                      .split(',')
+                      .map((x) => x.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            ) : op === 'in' ? (
               <div className="ue:flex ue:flex-wrap ue:gap-1">
                 {members.map((m) => {
                   const list = Array.isArray(value.value) ? (value.value as string[]) : []

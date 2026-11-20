@@ -12,9 +12,13 @@ import { ScriptSettings } from './ScriptSettings.tsx'
  */
 const DOC: GtScript = {
   kind: 'gametest-scenario',
-  schemaVersion: 3,
+  schemaVersion: 4,
   name: '每日福利',
   vars: { claimed: 0 },
+  objects: {
+    main: { class: 'WBP_Main_C', in: 'screen' },
+    welfare: { class: 'WBP_Welfare_C', in: 'screen' },
+  },
   steps: [
     { id: 's1', action: 'call', script: 'common/登录并进主城' },
     {
@@ -22,14 +26,14 @@ const DOC: GtScript = {
       action: 'group',
       name: '打开福利',
       do: [
-        { id: 's2', action: 'click', target: 'WBP_Main:Root/BtnWelfare' },
-        { id: 's3', action: 'wait', until: 'cond', cond: { target: 'WBP_Welfare:.', onScreen: true } },
+        { id: 's2', action: 'click', target: { obj: 'main', part: 'BtnWelfare' } },
+        { id: 's3', action: 'wait', until: 'cond', cond: { obj: 'welfare', prop: ':onScreen', op: 'is', value: true } },
       ],
     },
     {
       id: 'loop1',
       action: 'loop',
-      each: 'WBP_Welfare:Root/List',
+      each: { obj: 'welfare', part: 'List' },
       as: 'item',
       max: 30,
       do: [
@@ -37,12 +41,17 @@ const DOC: GtScript = {
           id: 'if1',
           action: 'if',
           branch: 'state',
-          cond: { target: '@item:BtnClaim', enabled: true },
+          cond: { obj: '$item', prop: '@BtnClaim:enabled', op: 'is', value: true },
           then: [
-            { id: 's4', action: 'click', target: '@item:BtnClaim' },
+            { id: 's4', action: 'click', target: { obj: '$item', part: 'BtnClaim' } },
             { id: 'set1', action: 'set', var: 'claimed', value: '=$claimed + 1' },
           ],
-          elif: [{ cond: { target: '@item:TxtState', text: '已领取' }, then: [{ id: 's5', action: 'continue' }] }],
+          elif: [
+            {
+              cond: { obj: '$item', prop: '@TxtState:text', op: 'eq', value: '已领取' },
+              then: [{ id: 's5', action: 'continue' }],
+            },
+          ],
           else: [],
         },
       ],
@@ -50,8 +59,14 @@ const DOC: GtScript = {
     {
       id: 's6',
       action: 'assert',
-      cond: { all: [{ value: '$claimed', gte: 1 }, { not: { target: 'WBP_Welfare:Root/RedDot', visible: true } }] },
+      cond: {
+        all: [
+          { value: '$claimed', gte: 1 },
+          { obj: 'welfare', prop: '@RedDot:visible', op: 'is', value: false },
+        ],
+      },
     },
+    { id: 's7', action: 'obj.close', obj: 'welfare', how: [{ by: 'click', part: 'BtnClose' }] },
   ],
 }
 
@@ -87,7 +102,12 @@ export function EditSpecimen() {
           </aside>
         </div>
         <CondEditor
-          value={{ any: [{ target: 'WBP_Notice:.', onScreen: true }, { expr: '@ps.Gold >= $gold0 + 500' }] }}
+          value={{
+            any: [
+              { obj: { class: 'WBP_Notice_C' }, prop: ':onScreen', op: 'is', value: true },
+              { expr: '@ps.Gold >= $gold0 + 500' },
+            ],
+          }}
           onChange={() => undefined}
         />
       </div>

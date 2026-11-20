@@ -84,7 +84,7 @@ export function PropTree({
   const [q, setQ] = useState('')
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [parts, setParts] = useState<Record<string, PartState>>({})
-  const cols = useColWidths('gt-proptree', { name: 220, type: 130, value: 150, sib: 84 })
+  const cols = useColWidths('gt-proptree', { name: 220, type: 130, sib: 84 })
   const live = !!data?.groups.some((g) => g.items.some((i) => i.value !== undefined))
   const showSib = live && prefs.siblings && data?.siblings !== undefined
   const sel = new Set(selected)
@@ -94,11 +94,12 @@ export function PropTree({
     (!prefs.onlyIdent || usable(it)) &&
     (!k || it.name.toLowerCase().includes(k) || it.prop.toLowerCase().includes(k) || it.type.toLowerCase().includes(k))
 
+  // 名字、类型列按拖出来的宽度，窄的时候（检查器、示例）先压它们，准星列和值列总在
   const template = [
-    `${cols.w.name}px`,
-    `${cols.w.type}px`,
-    ...(live ? [`minmax(${cols.w.value}px,1fr)`] : ['minmax(0,1fr)']),
-    ...(showSib ? [`${cols.w.sib}px`] : []),
+    `minmax(96px,${cols.w.name}px)`,
+    `minmax(56px,${cols.w.type}px)`,
+    ...(live ? [`minmax(48px,1fr)`] : ['minmax(0,1fr)']),
+    ...(showSib ? [`minmax(48px,${cols.w.sib}px)`] : []),
     '32px',
   ].join(' ')
   const gridStyle: CSSProperties = { gridTemplateColumns: template, height: prefs.rowH }
@@ -318,7 +319,7 @@ function Head({
   const heads: [string | undefined, string][] = [
     ['name', t('属性')],
     ['type', t('类型')],
-    [live ? 'value' : undefined, live ? t('此刻的值') : ''],
+    [undefined, live ? t('此刻的值') : ''],
     ...(showSib ? ([['sib', t('同类 {n} 个里', { n: siblings ?? 0 })]] as [string, string][]) : []),
     [undefined, ''],
   ]

@@ -23,7 +23,7 @@ import { ForgeMarkupSpecimen } from './sections/uekit/forge-markup/ForgeMarkupSp
 import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { EditSpecimen } from './sections/uekit/gt-edit/EditSpecimen.tsx'
 import { DebugSpecimen } from './sections/uekit/gt-debug/DebugSpecimen.tsx'
-import { PickSpecimen } from './sections/uekit/gt-live/PickSpecimen.tsx'
+import { RefSpecimen } from './sections/uekit/gt-ref/RefSpecimen.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { GtTidyReport } from './sections/uekit/GtTidyReport.tsx'
 import { TIDY_LANG } from '../server/uekit/gt-tidy-plan.ts'
@@ -97,7 +97,7 @@ const activate: ActivateWeb = (host) => {
       // GameTest 调试和运行面板（定稿 9.2、效果图 6）：停在断点上的运行横条、运行记录和此刻的变量
       { id: 'gt-debug', label: t('GameTest · 调试和运行面板'), tune: ['row', 'input'], Specimen: DebugSpecimen },
       // GameTest 从游戏里抓（定稿 9.3）：实时画面、控件状态、分组字段和「变了闪一下」，跟面板「行」的调节项
-      { id: 'gt-pick', label: t('GameTest · 从游戏里抓'), tune: ['row'], Specimen: PickSpecimen },
+      { id: 'gt-ref', label: t('GameTest · 对象和判断'), tune: ['row', 'input', 'menu'], Specimen: RefSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项

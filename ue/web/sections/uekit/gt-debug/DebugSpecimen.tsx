@@ -11,25 +11,32 @@ import type { DebugApi } from './use-debug.ts'
  * 假数据、不连 UE，按钮点了没反应
  */
 const DOC: GtScript = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   name: '每日福利',
   params: { account: { default: 'qa_01', type: 'string' } },
   vars: { skipped: 0 },
-  guards: [{ id: 'g1', name: '新手引导出现', when: { target: 'WBP_Guide:.', onScreen: true }, do: [] }],
+  guards: [
+    {
+      id: 'g1',
+      name: '新手引导出现',
+      when: { obj: { class: 'WBP_Guide_C' }, prop: ':onScreen', op: 'is', value: true },
+      do: [],
+    },
+  ],
   steps: [
     { id: 's1', action: 'call', script: 'common/登录并进主城' },
     {
       id: 'loop1',
       action: 'loop',
-      each: 'WBP_Welfare:Root/DailyList',
+      each: { obj: { class: 'WBP_Welfare_C' }, part: 'DailyList' },
       as: 'item',
       do: [
-        { id: 's2', action: 'click', target: '$item>BtnClaim', note: '点 领取' },
+        { id: 's2', action: 'click', target: { obj: '$item', part: 'BtnClaim' }, note: '点 领取' },
         {
           id: 's3',
           action: 'wait',
           until: 'cond',
-          cond: { target: 'WBP_RewardPopup:.', onScreen: true },
+          cond: { obj: { class: 'WBP_RewardPopup_C' }, prop: ':onScreen', op: 'is', value: true },
           note: '等到 奖励弹窗',
         },
       ],

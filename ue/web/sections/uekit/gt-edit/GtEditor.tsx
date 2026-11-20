@@ -29,6 +29,7 @@ import { GtStepHistory } from '../GtStepHistory.tsx'
 import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
+import { useRefGate } from '../gt-ref/MigrateBanner.tsx'
 import { useScript } from './use-script.ts'
 import { allViews } from './views.ts'
 
@@ -122,6 +123,14 @@ export function GtEditor({
 }) {
   const { ui } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
+  // GameTest 2.0（对象引用）：旧格式脚本、旧版 GameTest 时只读，顶上给「升级脚本」（协议 game-test-ref 第 12 节）
+  const gate = useRefGate({ project, scenario: scenario.relativePath, base: s.base, gtVersion, reload: s.reload })
+  const apply: typeof s.apply = gate.locked
+    ? () => {
+        h().toast.error(gate.reason)
+        return false
+      }
+    : s.apply
   const scope = useScope(s.doc, s.selected, s.select)
   const apis = useApis(project, root, live)
   const [aliases, setAliases] = useState<string[]>([])
@@ -283,7 +292,7 @@ export function GtEditor({
   const cmdCtx: CmdCtx | undefined = s.doc && {
     doc: s.doc,
     selected: s.selected,
-    apply: s.apply,
+    apply,
     select: s.select,
     onTry,
     onRecordHere: onRecordHereAt,
@@ -373,6 +382,7 @@ export function GtEditor({
             })}
           </p>
         )}
+        {gate.banner}
         {check.banner}
         {s.error ? (
           <div className="ue:p-4">
@@ -387,7 +397,7 @@ export function GtEditor({
             <section className="ue:relative ue:flex ue:min-h-[50vh] ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">
               <View
                 doc={s.doc}
-                onChange={s.apply}
+                onChange={apply}
                 selected={s.selected}
                 onSelect={s.select}
                 onTry={onTry}
@@ -450,13 +460,13 @@ export function GtEditor({
                   <Inspector
                     doc={s.doc}
                     selected={s.selected}
-                    onChange={s.apply}
+                    onChange={apply}
                     ctx={cmdCtx}
                     onTry={onTry}
                     history={historyOf}
                   />
                 ) : (
-                  <ScriptSettings doc={s.doc} onChange={(d) => s.apply(d)} />
+                  <ScriptSettings doc={s.doc} onChange={(d) => apply(d)} />
                 )}
               </div>
             </aside>
@@ -466,7 +476,7 @@ export function GtEditor({
       {paletteHost &&
         s.doc &&
         createPortal(
-          <PaletteGrid doc={s.doc} selected={s.selected} onChange={s.apply} onSelect={s.select} q={paletteQuery} />,
+          <PaletteGrid doc={s.doc} selected={s.selected} onChange={apply} onSelect={s.select} q={paletteQuery} />,
           paletteHost,
         )}
       {debug.pending && s.doc && (

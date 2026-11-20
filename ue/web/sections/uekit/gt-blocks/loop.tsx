@@ -4,6 +4,7 @@ import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { condSummary } from '../gt-cond/summary.ts'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
+import { targetText } from '../gt-ref/describe.ts'
 import { ValueInput } from '../gt-cond/ValueInput.tsx'
 import { NumberField, Row, TextField, patch } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
@@ -125,7 +126,7 @@ function loopSummary(s: GtStep) {
     case 'times':
       return t('重复 {n} 次', { n: String(s.times) })
     case 'each':
-      return t('对 {c} 的每个条目 {a}', { c: String(s.each), a: String(s.as ?? 'item') }) + max
+      return t('对 {c} 的每个条目 {a}', { c: targetText(s.each), a: String(s.as ?? 'item') }) + max
     case 'in':
       return (
         t('对 {c} 里的每个 {a}', {
