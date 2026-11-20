@@ -8,6 +8,7 @@ import { useEditCtx } from '../gt-edit/ctx.ts'
 import { defaultIdent, testIdent } from './compare-table.ts'
 import { classShort, inText } from './describe.ts'
 import { IdentList } from './IdentList.tsx'
+import { ClassInput } from './ClassInput.tsx'
 import { classOnly, useProps, useRefHits, type PropsArgs, type RefHits } from './live.ts'
 import { PropTree } from './PropTree.tsx'
 import { MANY_OPTIONS } from './RefCard.tsx'
@@ -59,6 +60,8 @@ export function RefDialog({
   const [busy, setBusy] = useState(false)
   const pane = usePane('gt-ref-dialog', '58%', 360)
   const paneRef = useRef<HTMLDivElement>(null)
+  const hitPane = usePane('gt-ref-dialog-hits', '22%', 200)
+  const hitRef = useRef<HTMLDivElement>(null)
   const ident = ref.ident ?? []
 
   // 属性从哪读：刚从树里抓的节点 > 游戏开着时按引用找此刻的对象 > 只按类（找不到实例时也退回这个）
@@ -166,15 +169,14 @@ export function RefDialog({
           </ui.Field>
         )}
         <ui.Field label={t('类')} hint={t('按继承认，子类也算；_C 后缀、U/A 前缀可省')}>
-          <ui.Input
-            size="sm"
-            className="ue:w-64 ue:font-mono"
+          <ClassInput
+            project={project}
+            className="ue:w-64"
             value={ref.class}
-            placeholder="WBP_Shop"
-            onChange={(e: { target: { value: string } }) => setRef({ ...ref, class: e.target.value })}
-            onBlur={() => {
-              if (ref.class.trim() === cls) return
-              setCls(ref.class.trim())
+            onChange={(v) => setRef((r) => ({ ...r, class: v }))}
+            onCommit={(v) => {
+              if (v.trim() === cls) return
+              setCls(v.trim())
               setNode(undefined)
               setByClass(!ctx.live)
             }}
@@ -204,6 +206,20 @@ export function RefDialog({
         </ui.Field>
       </div>
       <div className="ue:flex ue:min-h-[56vh] ue:flex-1 ue:flex-col ue:overflow-auto ue:rounded-(--c-row-radius) ue:border ue:border-line ue:lg:flex-row ue:lg:overflow-hidden">
+        {/* 此刻同类的实例放最左边（用户 2026-11-20：命中的应该在左边），先看命中几个、哪个是它，再看属性挑标识 */}
+        {ctx.live && ref.class && (
+          <section
+            ref={hitRef}
+            style={hitPane.style('30%')}
+            className={cn(
+              PANE_FIXED,
+              'ue:relative ue:flex ue:min-h-48 ue:flex-col ue:overflow-auto ue:p-3 ue:lg:min-h-0',
+            )}
+          >
+            <Siblings cls={ref.class} ident={ident} me={hits.hits.me} all={hits.hits.all} error={hits.error} />
+            <SplitHandle pane={hitPane} paneRef={hitRef} reserve={() => 680} />
+          </section>
+        )}
         <section
           ref={paneRef}
           style={pane.style('75%')}
@@ -227,7 +243,7 @@ export function RefDialog({
               )
             }
           />
-          <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 320} />
+          <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 320 + (hitRef.current?.offsetWidth ?? 0)} />
         </section>
         <section className={cn(PANE_FILL, 'ue:flex ue:min-h-0 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-3')}>
           <div className="ue:flex ue:flex-col ue:gap-1.5">
@@ -237,9 +253,6 @@ export function RefDialog({
             </span>
             <IdentList value={ident} onChange={(v) => setRef({ ...ref, ident: v })} groups={groups} />
           </div>
-          {ctx.live && ref.class && (
-            <Siblings cls={ref.class} ident={ident} me={hits.hits.me} all={hits.hits.all} error={hits.error} />
-          )}
           <div className="ue:flex ue:flex-col ue:gap-1.5">
             <span className="ue:text-footnote ue:font-medium ue:text-fg">{t('命中多个时')}</span>
             <ui.Segmented
