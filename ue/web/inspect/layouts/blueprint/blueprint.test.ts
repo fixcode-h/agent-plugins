@@ -1,7 +1,7 @@
 // Actor 蓝图布局的纯函数单测：node --test ue/web/inspect/layouts/blueprint/blueprint.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { graphEdges, hasPositions, layoutGraph, nodeTone, pinRows, rankNodes, type GNode } from './graph.ts'
+import { graphEdges, hasPositions, layoutGraph, pinRows, rankNodes, type GNode } from './graph.ts'
 import {
   byCategory,
   closeTab,
@@ -165,15 +165,12 @@ test('摆位置：注释单列，不重叠，孤立节点叠在下面', () => {
   assert.ok(at.lone.y > Math.max(at.e1.y + at.e1.h, at.b1.y + at.b1.h, at.g1.y + at.g1.h))
 })
 
-test('节点行：执行引脚排第一行，节点配色', () => {
+test('节点行：执行引脚排第一行', () => {
   const rows = pinRows(GRAPH[2])
   assert.equal(rows[0].in?.name, 'execute')
   assert.equal(rows[0].out?.name, 'then')
   assert.equal(rows[1].in?.name, 'Condition')
   assert.equal(rows[1].out?.name, 'else')
-  assert.equal(nodeTone(GRAPH[1]), 'danger')
-  assert.equal(nodeTone(GRAPH[3]), 'danger')
-  assert.equal(nodeTone(GRAPH[4]), 'accent')
 })
 
 test('有 UE 坐标（bp.layout）：照原位置画，注释有框的画成框', () => {

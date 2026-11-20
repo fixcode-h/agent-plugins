@@ -4385,5 +4385,7 @@
   "编辑器里重新读磁盘上的文件，这些改动收不回": "The editor reloads the files from disk; these changes cannot be recovered",
   "写回磁盘上的文件": "Writes them back to the files on disk",
   "资源 · 当前修改": "Assets · Current changes",
-  "类默认值显示在右侧细节面板里；在左边组件树选组件看组件属性": "Class defaults are shown in the details panel on the right; pick a component in the tree on the left to see its properties"
+  "类默认值显示在右侧细节面板里；在左边组件树选组件看组件属性": "Class defaults are shown in the details panel on the right; pick a component in the tree on the left to see its properties",
+  "自定义事件": "Custom Event",
+  "目标是 {name}": "Target is {name}"
 }
