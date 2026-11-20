@@ -1,4 +1,4 @@
-import { Box, Info, PersonStanding, SlidersHorizontal, Workflow } from 'lucide-react'
+import { Info, PersonStanding, SlidersHorizontal, Workflow } from 'lucide-react'
 import { h, t } from '../../../host.ts'
 import { Badge } from '../../../ui.tsx'
 import { assetName, CommonActions } from '../common.tsx'
@@ -8,7 +8,7 @@ const short = (p: string) => p.split(/[./]/).pop() ?? p
 
 /**
  * 蓝图布局的页头（效果图 A1 顶上一行）：名字、Blueprint · 父类、UE 连没连上、路径；
- * 右边通用按钮（版本差异、导出到配置）和视图切换。不是 Actor 蓝图时没有「视口」「类默认值」
+ * 右边通用按钮（版本差异、导出到配置）和视图切换。不是 Actor 蓝图时没有「类默认值」
  */
 export function BpHead({
   path,
@@ -27,7 +27,6 @@ export function BpHead({
 }) {
   const { ui } = h()
   const options = [
-    ...(actor ? [{ id: 'viewport' as const, label: t('视口'), icon: Box }] : []),
     { id: 'graph' as const, label: t('图表'), icon: Workflow },
     ...(actor ? [{ id: 'defaults' as const, label: t('类默认值'), icon: SlidersHorizontal }] : []),
     { id: 'info' as const, label: t('摘要与引用'), icon: Info },

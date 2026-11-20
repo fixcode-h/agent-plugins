@@ -4164,8 +4164,7 @@
   "UE 没连上：变量、函数和图表要 UE 导出，打开编辑器后自动刷新": "UE isn't connected: variables, functions and graphs come from UE and refresh once the editor is open",
   "实例可编辑": "Instance editable",
   "实例不可编辑": "Not instance editable",
-  "已选": "Selected",
-  "蓝图：组件树 + 我的蓝图 + 视口 / 图表 + 细节": "Blueprint: components + My Blueprint + viewport / graph + details",
+  "蓝图：组件树 + 我的蓝图 + 图表 + 细节": "Blueprint: components + My Blueprint + graph + details",
   "曲线": "Curves",
   "曲线编辑器": "Curve editor",
   "这个资源的属性里没有曲线。CurveTable 的行不是属性，UELink 还读不出来（要新接口 curvetable），先在 UE 里看": "No curves in this asset's properties. CurveTable rows aren't properties and UELink can't read them yet (needs a new curvetable op) — view them in UE for now",
@@ -4356,5 +4355,6 @@
   "{f} 里没有 root 控件树": "{f} has no root widget tree",
   "{f} 解析失败：{m}": "Failed to parse {f}: {m}",
   "{f} 不是 UMG 配置（顶层不是对象）": "{f} is not a UMG config (top level is not an object)",
-  "{f} 展开 include 失败": "Failed to expand includes in {f}"
+  "{f} 展开 include 失败": "Failed to expand includes in {f}",
+  "类默认值显示在右侧细节面板里；在左边组件树选组件看组件属性": "Class defaults are shown in the details panel on the right; pick a component in the tree on the left to see its properties"
 }

@@ -82,6 +82,10 @@ export function GraphCanvasView({
       minimap={12}
       // 面板画布的自动适配为了放下整张图会缩到字看不清；和 GameTest 流程图一样不小于 0.75，放不下从左上角看起
       autoFit={false}
+      // 照 UE 蓝图编辑器：右键（或中键）拖画布，左键点选节点 / 连线、空白处拉框选（用户 2026-11-20）。
+      // 共用画布只读时默认左键也拖画布，这里覆盖回来；节点仍不能拖、不能连线（只读）
+      panOnDrag={[1, 2]}
+      selectionOnDrag
     >
       <TopLeftFit />
       {laid.comments.length > 0 && (
@@ -116,12 +120,14 @@ function TopLeftFit() {
   const rf = useReactFlow()
   const ready = useNodesInitialized()
   const dom = useStore((s) => s.domNode)
+  // 画布尺寸也作依赖：页签刚打开时容器可能还是 0 高（布局没排完），那次量不到就跳过，
+  // 等尺寸出来再做；以前只看 ready/dom，第一次量到 0 就再也不做，节点按 UE 坐标落在视口外，看着是空白（用户 2026-11-20 报）
+  const W = useStore((s) => s.width)
+  const H = useStore((s) => s.height)
   const done = useRef(false)
   useEffect(() => {
     if (!ready || done.current || !dom) return
     const nodes = rf.getNodes()
-    const W = dom.clientWidth
-    const H = dom.clientHeight
     if (!nodes.length || !W || !H) return
     done.current = true
     const b = getNodesBounds(nodes)
@@ -130,6 +136,6 @@ function TopLeftFit() {
     if (zoom <= fit)
       void rf.setViewport({ x: (W - b.width * zoom) / 2 - b.x * zoom, y: (H - b.height * zoom) / 2 - b.y * zoom, zoom })
     else void rf.setViewport({ x: PAD - b.x * zoom, y: PAD + 56 - b.y * zoom, zoom })
-  }, [ready, dom, rf])
+  }, [ready, dom, rf, W, H])
   return null
 }
