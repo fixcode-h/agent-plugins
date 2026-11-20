@@ -30,7 +30,7 @@ export function SelectionBar({
   const { busy, run } = useAction()
   const first = page === 'objects' ? sel.data?.actors[0] : sel.data?.assets[0]
   const count = page === 'objects' ? (sel.data?.actorCount ?? 0) : (sel.data?.assets.length ?? 0)
-  useFollowEffect(first?.path, follow, onOpen)
+  useFollowEffect(first?.path, follow, current, onOpen)
   if (!sel.supported || !sel.inst) return null
   if (hideEmpty && !first) return null
 
@@ -82,8 +82,12 @@ export function SelectionBar({
         size="xs"
         variant={follow ? 'secondary' : 'ghost'}
         aria-pressed={follow}
-        title={t('开着时编辑器里点哪个，这里跟到哪个')}
-        onClick={() => setFollow(!follow)}
+        title={t('开着时编辑器里点哪个，这里跟到哪个（打开时先跳到现在选中的）')}
+        onClick={() => {
+          // 打开时重读一次选中：推送断过（编辑器重启、通道重连）时手里的选中可能是旧的
+          if (!follow) void sel.reload()
+          setFollow(!follow)
+        }}
       >
         <Radio className={cn('ue:h-3 ue:w-3', follow && 'ue:text-accent-text')} /> {t('跟随')}
       </ui.Button>

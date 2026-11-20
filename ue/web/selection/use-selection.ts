@@ -51,14 +51,28 @@ export function useFollow(page: 'objects' | 'assets') {
 }
 
 /**
- * 跟随：开着时选中的第一个变了就调 onChange。只在「变了」时跳（刚打开开关不跳，免得把用户正在看的换掉）
+ * 跟随：开着时选中的第一个变了就调 onChange。
+ * 打开开关的那一下也跳到编辑器里正选中的那个（和面板里正看着的不一样时）：以前刚打开不跳，
+ * 用户点了「跟随」看不到任何变化，以为按钮坏了（用户 2026-11-20 报「点了跟随无用」）
  */
-export function useFollowEffect(first: string | undefined, on: boolean, onChange: (path: string) => void) {
+export function useFollowEffect(
+  first: string | undefined,
+  on: boolean,
+  current: string,
+  onChange: (path: string) => void,
+) {
   const last = useRef(first)
+  const wasOn = useRef(on)
   const fn = useRef(onChange)
   fn.current = onChange
   useEffect(() => {
-    if (first && first !== last.current && on) fn.current(first)
+    const turnedOn = on && !wasOn.current
+    wasOn.current = on
+    const changed = first !== last.current
     last.current = first
+    if (!on || !first) return
+    if (changed || (turnedOn && first !== current)) fn.current(first)
+    // current 只在打开开关那一下用来比较，它自己变了（用户在面板里点了别的）不该触发跳转
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [first, on])
 }
