@@ -34,6 +34,7 @@ import { ConfigKeySpecimen } from './sections/config/parts.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
 import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { LuaDebugSpecimen } from './sections/lua/DebugSpecimen.tsx'
+import { LuaObjectsSpecimen } from './sections/lua/objects-tree/Specimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { VsDebugSpecimen } from './vs-debug/Specimen.tsx'
 import { TreeSearchSpecimen } from './tree-search.tsx'
@@ -184,12 +185,14 @@ const activate: ActivateWeb = (host) => {
       { id: 'link-diagnose', label: t('UE · 连接诊断'), tune: ['row', 'button'], Specimen: DiagSpecimen },
       // 配置页一个键的各层写法：跟面板「徽标」「行」的调节项
       { id: 'config-key', label: t('UE · 配置的分层'), tune: ['badge', 'row'], Specimen: ConfigKeySpecimen },
-      // Lua 页「调试」页签：快照记录、持有的已销毁对象，跟面板「行」「徽标」的调节项
+      // Lua 页「调试」页签：快照记录，跟面板「行」「徽标」的调节项
+      { id: 'lua-debug', label: t('Lua · 快照'), tune: ['row', 'badge'], Specimen: LuaDebugSpecimen },
+      // Lua 页「对象」页签：树的行、对象卡、继承链、对象状态、已销毁对象，跟面板「行」「徽标」「按钮」的调节项
       {
-        id: 'lua-debug',
-        label: t('Lua · 快照 · 已销毁对象'),
-        tune: ['row', 'badge'],
-        Specimen: LuaDebugSpecimen,
+        id: 'lua-objects',
+        label: t('Lua · 对象树 · 对象卡 · 继承链'),
+        tune: ['row', 'badge', 'button'],
+        Specimen: LuaObjectsSpecimen,
       },
       // 概览的「VS 调试」卡片（UEToVS 0.8.0 调试控制）：没开 VS、运行中、停在断点三种状态，跟面板「按钮」「图标按钮」「小标签」「输入框」的调节项
       {
