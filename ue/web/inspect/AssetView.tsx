@@ -28,8 +28,9 @@ export interface AssetViewProps {
 }
 
 /** 资源还没生成时，这份配置有没有能按配置画的布局（AssetForge「资源」页签用它决定用布局还是旧的按配置预览） */
-export function canOffline(configText?: string) {
-  const cls = classOfKind(configKind(configText))
+export function canOffline(configText?: string, kind?: string) {
+  // 原文还没读到时用列表里的 kind（AssetForge 左栏有），布局框架先摆出来
+  const cls = classOfKind(configKind(configText) ?? kind)
   return !!cls && layoutFor({ cls, path: '' }).offline === true
 }
 
@@ -54,7 +55,7 @@ export function AssetView(props: AssetViewProps) {
     `${project.id}/assetview/cls/${path}`,
   )
   const got = desc.data?.path === path ? desc.data : undefined
-  const kindCls = offline ? classOfKind(configKind(config?.text)) : undefined
+  const kindCls = offline ? classOfKind(configKind(config?.text) ?? config?.kind) : undefined
   const info: LayoutInfo = useMemo(
     () => ({ path, cls: got?.cls ?? kindCls ?? guessClass(path), classChain: got?.chain }),
     [path, got, kindCls],

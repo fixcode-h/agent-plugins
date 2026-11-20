@@ -26,7 +26,7 @@ export type FlowOp =
 
 export const FLOW_OPS = new Set(['wrap', 'guard', 'param'])
 
-/** 能包的块和放子步骤的槽；其余块（call、invoke…）没有子步骤，不能包 */
+/** 能包的块和放子步骤的槽；其余块（call、obj.call…）没有子步骤，不能包 */
 const WRAP_SLOT: Record<string, string> = { loop: 'do', group: 'do', if: 'then' }
 
 const isObj = (v: unknown): v is Step => !!v && typeof v === 'object' && !Array.isArray(v)

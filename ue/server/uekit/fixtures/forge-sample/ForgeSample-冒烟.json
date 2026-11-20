@@ -1,19 +1,36 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "AssetForge 示例界面：跳页、弹窗、返回",
   "_note": "配套 AssetForge 示例测试界面（先在 AssetForge 页导入 Test/umg/WBP_ForgeSample.json，会连带导入 pages/ 下的子页面；再导入 map/）。每页一段 group、参数和变量、表达式断言、loop until 连按返回、块里的守护。",
   "revision": 3,
-  "tags": ["sample","assetforge","smoke"],
+  "tags": [
+    "sample",
+    "assetforge",
+    "smoke"
+  ],
   "stepDelayMs": 200,
-  "params": {"playerName":{"default":"Tester01","type":"string","note":"资料页填的名字"},"quality":{"default":"极高","type":"string","note":"设置页视频画质选哪一档"}},
-  "vars": {
-    "crumb": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Crumb",
-    "status": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/StatusChip/Status",
-    "back": "WBP_ForgeSample:Root/Shell/Main/TopBar/TopRow/Back"
+  "params": {
+    "playerName": {
+      "default": "Tester01",
+      "type": "string",
+      "note": "资料页填的名字"
+    },
+    "quality": {
+      "default": "极高",
+      "type": "string",
+      "note": "设置页视频画质选哪一档"
+    }
   },
   "steps": [
-    {"id":"open","action":"call","script":"AssetForgeSample/common/打开示例界面","with":{},"saveAs":"opened","note":"进图、重置示例界面"},
+    {
+      "id": "open",
+      "action": "call",
+      "script": "AssetForgeSample/common/打开示例界面",
+      "with": {},
+      "saveAs": "opened",
+      "note": "进图、重置示例界面"
+    },
     {
       "id": "shop",
       "action": "group",
@@ -22,14 +39,35 @@
         {
           "id": "goShop",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Home>HomeRoot/Hero/HeroCol/HeroBtns/Go_Page_Shop__Hero",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Home.Go_Page_Shop__Hero"
+          },
           "note": "首页大图上的「去商店」"
         },
-        {"id":"atShop","action":"assert","target":"$crumb","text":"商店"},
+        {
+          "id": "atShop",
+          "action": "assert",
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Crumb:text",
+            "op": "eq",
+            "value": "商店"
+          }
+        },
         {
           "id": "buyGem",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Shop>ShopRoot/ShopList/ShopRow_Gem/ShopRowBox_Gem/Open_Popup_Buy__Gem",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Shop.Open_Popup_Buy__Gem"
+          },
           "note": "买红宝石"
         },
         {
@@ -38,22 +76,86 @@
           "note": "购买弹窗出来了，而且买的是红宝石",
           "cond": {
             "all": [
-              {"target":"WBP_ForgeSample:Root/Popup_Buy","visible":true},
-              {"target":"WBP_ForgeSample:Root/Popup_Buy/CardSize_Buy/Card_Buy/CardCol_Buy/Popup_Buy_Subject","textContains":"红宝石"}
+              {
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Popup_Buy:shown",
+                "op": "is",
+                "value": true
+              },
+              {
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Popup_Buy_Subject:text",
+                "op": "contains",
+                "value": "红宝石"
+              }
             ]
           }
         },
         {
           "id": "openHelp",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Popup_Buy/CardSize_Buy/Card_Buy/CardCol_Buy/CardBtns_Buy/Open_Popup_Help__Buy",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Open_Popup_Help__Buy"
+          },
           "note": "弹窗上再弹一层说明"
         },
-        {"id":"helpShown","action":"assert","target":"WBP_ForgeSample:Root/Popup_Help","visible":true},
-        {"id":"backHelp","action":"click","target":"$back","note":"返回先关最上面的弹窗"},
-        {"id":"buyStill","action":"assert","target":"WBP_ForgeSample:Root/Popup_Buy","visible":true},
-        {"id":"buyOk","action":"click","target":"WBP_ForgeSample:Root/Popup_Buy/CardSize_Buy/Card_Buy/CardCol_Buy/CardBtns_Buy/Close_Popup_Buy__Ok"},
-        {"id":"buyClosed","action":"assert","expr":"contains(text($status), '关闭')"}
+        {
+          "id": "helpShown",
+          "action": "assert",
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Popup_Help:shown",
+            "op": "is",
+            "value": true
+          }
+        },
+        {
+          "id": "backHelp",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Back"
+          },
+          "note": "返回先关最上面的弹窗"
+        },
+        {
+          "id": "buyStill",
+          "action": "assert",
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Popup_Buy:shown",
+            "op": "is",
+            "value": true
+          }
+        },
+        {
+          "id": "buyOk",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Close_Popup_Buy__Ok"
+          }
+        },
+        {
+          "id": "buyClosed",
+          "action": "assert",
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '关闭')"
+        }
       ]
     },
     {
@@ -61,19 +163,48 @@
       "action": "group",
       "name": "设置：视频画质",
       "do": [
-        {"id":"goSettings","action":"click","target":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Settings__Nav"},
-        {"id":"goVideo","action":"click","target":"WBP_ForgeSample:Root/Shell/Main/Pages/Page_Settings>SettingsRoot/SetHead/Go_Tab_Video"},
+        {
+          "id": "goSettings",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Go_Page_Settings__Nav"
+          }
+        },
+        {
+          "id": "goVideo",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Settings.Go_Tab_Video"
+          }
+        },
         {
           "id": "setQuality",
           "action": "set",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Settings>SettingsRoot/SetCard/SettingsTabs/Tab_Video/Row_Quality/Ctl_Quality/Quality",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Settings.Quality"
+          },
           "option": "$quality"
         },
         {
           "id": "qualityEcho",
           "action": "assert",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Settings>SettingsRoot/SetCard/SettingsTabs/Tab_Video/Row_Quality/Quality_Value",
-          "text": "$quality"
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Page_Settings.Quality_Value:text",
+            "op": "eq",
+            "value": "$quality"
+          }
         }
       ]
     },
@@ -82,31 +213,71 @@
       "action": "group",
       "name": "资料：改名后返回",
       "do": [
-        {"id":"goProfile","action":"click","target":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Profile__Nav"},
+        {
+          "id": "goProfile",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Go_Page_Profile__Nav"
+          }
+        },
         {
           "id": "typeName",
           "action": "type",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Profile>ProfileRoot/ProfileForm/ProfileFormCol/Field_PlayerName/FieldRow_PlayerName/PlayerName",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Profile.PlayerName"
+          },
           "text": "$playerName"
         },
         {
           "id": "submitName",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Profile>ProfileRoot/ProfileForm/ProfileFormCol/Field_PlayerName/FieldRow_PlayerName/Submit_PlayerName"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Profile.Submit_PlayerName"
+          }
         },
         {
           "id": "readEcho",
           "action": "set",
           "var": "echo",
-          "from": {
-            "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Profile>ProfileRoot/ProfileForm/ProfileFormCol/Field_PlayerName/EchoRow_PlayerName/PlayerName_Echo",
-            "read": "text"
-          },
-          "note": "把回显的名字读进变量，下一步拿它和参数比"
+          "note": "把回显的名字读进变量，下一步拿它和参数比",
+          "value": "=prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Profile.PlayerName_Echo:text\")"
         },
-        {"id":"echoOk","action":"assert","expr":"$echo == $playerName"},
-        {"id":"backToSettings","action":"click","target":"$back"},
-        {"id":"atSettings","action":"assert","target":"$crumb","text":"设置"}
+        {
+          "id": "echoOk",
+          "action": "assert",
+          "expr": "$echo == $playerName"
+        },
+        {
+          "id": "backToSettings",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Back"
+          }
+        },
+        {
+          "id": "atSettings",
+          "action": "assert",
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Crumb:text",
+            "op": "eq",
+            "value": "设置"
+          }
+        }
       ]
     },
     {
@@ -117,20 +288,60 @@
         {
           "id": "strayBuy",
           "name": "购买弹窗残留",
-          "when": {"target":"WBP_ForgeSample:Root/Popup_Buy","visible":true},
-          "do": [{"action":"click","target":"WBP_ForgeSample:Root/Popup_Buy/CardSize_Buy/Card_Buy/CardCol_Buy/CardBtns_Buy/Close_Popup_Buy__Ok"}],
+          "when": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Popup_Buy:shown",
+            "op": "is",
+            "value": true
+          },
+          "do": [
+            {
+              "action": "click",
+              "target": {
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "part": "Close_Popup_Buy__Ok"
+              }
+            }
+          ],
           "unlessStepTargets": false,
           "max": 3,
           "note": "这一段不该有购买弹窗：万一残留挡住了导航，先关掉再接着做"
         }
       ],
       "do": [
-        {"id":"goTasks","action":"click","target":"WBP_ForgeSample:Root/Shell/SideWidth/SideBg/SideCol/Go_Page_Tasks__Nav"},
-        {"id":"goWeekly","action":"click","target":"WBP_ForgeSample:Root/Shell/Main/Pages/Page_Tasks>TasksRoot/TaskHead/Go_Tab_Weekly"},
+        {
+          "id": "goTasks",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Go_Page_Tasks__Nav"
+          }
+        },
+        {
+          "id": "goWeekly",
+          "action": "click",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Tasks.Go_Tab_Weekly"
+          }
+        },
         {
           "id": "openDetail",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_Tasks>TasksRoot/TaskTabs/Tab_Weekly/TaskRow_Weekly1/TaskBox_Weekly1/Go_Page_TaskDetail__Weekly1",
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_Tasks.Go_Page_TaskDetail__Weekly1"
+          },
           "note": "从任务列表进详情页（侧栏里没有这一页）"
         },
         {
@@ -138,10 +349,21 @@
           "action": "assert",
           "cond": {
             "all": [
-              {"target":"$crumb","text":"任务详情"},
               {
-                "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_TaskDetail>TaskDetailRoot/TaskDetailCard/TaskDetailCol/Page_TaskDetail_Subject",
-                "textContains": "熔火之心"
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Crumb:text",
+                "op": "eq",
+                "value": "任务详情"
+              },
+              {
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "prop": "@Page_TaskDetail.Page_TaskDetail_Subject:text",
+                "op": "contains",
+                "value": "熔火之心"
               }
             ]
           }
@@ -149,16 +371,50 @@
         {
           "id": "detailToShop",
           "action": "click",
-          "target": "WBP_ForgeSample:Root/Shell/Main/Pages/Page_TaskDetail>TaskDetailRoot/TaskDetailCard/TaskDetailCol/TaskDetailBtns/Go_Page_Shop__Task"
+          "target": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "part": "Page_TaskDetail.Go_Page_Shop__Task"
+          }
         },
-        {"id":"atShop2","action":"assert","target":"$crumb","text":"商店"},
+        {
+          "id": "atShop2",
+          "action": "assert",
+          "cond": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Crumb:text",
+            "op": "eq",
+            "value": "商店"
+          }
+        },
         {
           "id": "backHome",
           "action": "loop",
-          "until": {"target":"$crumb","text":"任务"},
+          "until": {
+            "obj": {
+              "class": "WBP_ForgeSample"
+            },
+            "prop": "@Crumb:text",
+            "op": "eq",
+            "value": "任务"
+          },
           "max": 4,
           "note": "返回历史：商店 → 任务详情 → 任务，按到回到任务页为止",
-          "do": [{"id":"pressBack","action":"click","target":"$back"}]
+          "do": [
+            {
+              "id": "pressBack",
+              "action": "click",
+              "target": {
+                "obj": {
+                  "class": "WBP_ForgeSample"
+                },
+                "part": "Back"
+              }
+            }
+          ]
         }
       ]
     },
@@ -167,9 +423,20 @@
       "action": "group",
       "name": "截图收尾",
       "do": [
-        {"id":"shot","action":"screenshot","name":"forge-sample-tasks"},
-        {"id":"stop","action":"pie.stop"},
-        {"id":"stopped","action":"wait","until":"pieStopped"}
+        {
+          "id": "shot",
+          "action": "screenshot",
+          "name": "forge-sample-tasks"
+        },
+        {
+          "id": "stop",
+          "action": "pie.stop"
+        },
+        {
+          "id": "stopped",
+          "action": "wait",
+          "until": "pieStopped"
+        }
       ]
     }
   ]

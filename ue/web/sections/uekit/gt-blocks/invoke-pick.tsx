@@ -4,23 +4,25 @@ import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { FieldGroups, itemKey } from '../gt-vars/FieldGroups.tsx'
+import { inlineRef, isRefObj } from '../gt-ref/describe.ts'
 import { useVars, type VarGroup, type VarItem, type VarScope } from '../gt-vars/model.ts'
 
 const PLAYERS = new Set(['gi', 'gs', 'gm', 'ps', 'pc', 'pawn', 'hud'])
 
 /**
- * 调函数的「对象」→ gt.vars 的范围（协议第 10 节）：子系统、玩家几件套、Lua 模块、抓取的对象、静态函数的类。
- * $变量、控件选择器这类编写时不知道是什么类的，列不出来（返回 why）
+ * obj.call 的「对象」→ gt.vars 的范围（协议 game-test-ref 5.3、7.6）：命名对象 / 内联引用按引用列，
+ * 取值来源 `@sub.X`、玩家几件套、`@luaMod.路径` 照旧；`$变量` 编写时不知道是什么类，列不出来（返回 why）。
+ * 静态函数省略 obj，function 写「类名.函数」
  */
 export function scopeOfInvoke(step: GtStep, objects: Record<string, unknown> | undefined): VarScope | { why: string } {
-  const obj = step.object
-  if (obj && typeof obj === 'object') {
-    const name = (obj as { $obj?: unknown }).$obj
-    const loc = typeof name === 'string' ? objects?.[name] : undefined
-    if (loc && typeof loc === 'object') return { scope: 'object', locator: loc as Record<string, unknown> }
-    return { why: t('这个对象没在「脚本设置 → 对象」里配，列不出它的函数') }
-  }
+  const obj = step.obj
+  if (isRefObj(obj)) return { scope: 'object', ref: inlineRef(obj, objects) }
   const s = typeof obj === 'string' ? obj.trim() : ''
+  if (s && !s.startsWith('@') && !s.startsWith('$')) {
+    const o = objects?.[s]
+    if (isRefObj(o)) return { scope: 'object', ref: inlineRef(s, objects) }
+    return { why: t('脚本里没有叫 {n} 的对象：先在「脚本设置 → 对象」里加', { n: s }) }
+  }
   if (!s) {
     const fn = typeof step.function === 'string' ? step.function : ''
     const cls = fn.includes('.') ? fn.slice(0, fn.lastIndexOf('.')) : ''
@@ -39,7 +41,7 @@ function applyFn(step: GtStep, g: VarGroup, it: VarItem): GtStep {
   const args: Record<string, unknown> = {}
   for (const a of it.args ?? []) if (!a.out && !a.auto) args[a.name] = a.name in old ? old[a.name] : ''
   // 静态函数（没有对象）写成「类名.函数」，有对象的只写函数名
-  const fn = step.object
+  const fn = step.obj
     ? it.name
     : `${g.class ?? (typeof step.function === 'string' ? step.function.split('.')[0] : '')}.${it.name}`
   return { ...step, function: fn, args }

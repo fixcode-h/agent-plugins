@@ -5,13 +5,16 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { SettingGroup, SettingRow, useSettingsPage } from '../../SettingRows.tsx'
 import { ErrorText } from '../../ui.tsx'
-import type { GtGuard } from '../../../shared/gt-script/index.ts'
+import { migrateSettings, type GtGuard } from '../../../shared/gt-script/index.ts'
 import { blockersToGuards, guardsSupported, tidyGuards, type BlockerRule } from './gt-guards/model.ts'
 import { GtGuardsGroup } from './gt-guards/GtGuardsGroup.tsx'
 import { GtBlockersGroup } from './GtBlockersGroup.tsx'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
 import { type GtSkipConfig, GtSkipSettings, readSkip, tidySkip } from './GtSkipSettings.tsx'
 import { tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
+import { refSupported, REF_MIN_VERSION } from './gt-ref/MigrateBanner.tsx'
+import { REF_KEYS, RefSettings, tidyRefConfig } from './gt-ref/RefSettings.tsx'
+import type { RefConfig } from './gt-ref/rules-io.ts'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
 
 /**
@@ -54,7 +57,7 @@ interface ConfigReply {
 }
 
 /** 运行设置在分页设置页里占的几页（GtMoveSettings 是 move、GtSkipSettings 是 skip）：保存栏只在这几页出现 */
-export const GT_RUN_PAGES = ['playback', 'script', 'setup', 'move', 'skip', 'keys', 'guards'] as const
+export const GT_RUN_PAGES = ['playback', 'script', 'setup', 'move', 'skip', 'refs', 'guards'] as const
 
 /** 这份表单自己管的字段：保存时以表单为准，其余字段从文件里现取原样写回 */
 const FORM_KEYS = new Set([
@@ -70,6 +73,7 @@ const FORM_KEYS = new Set([
   'itemKeys',
   'allowLuaInvoke',
   'allowLuaInCond',
+  ...REF_KEYS,
 ])
 
 /** 等待上限的显示：0 是不限 */
@@ -98,6 +102,8 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const [keyRules, setKeyRules] = useState<GtKeyRule[]>([])
   const [luaInvoke, setLuaInvoke] = useState(true)
   const [luaInCond, setLuaInCond] = useState(false)
+  // 对象与标识（GameTest 2.0）：identRules、closeRules、refDefaults、allowDestroy
+  const [refCfg, setRefCfg] = useState<RefConfig>({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [guards, setGuards] = useState<GtGuard[]>([])
@@ -106,6 +112,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const gtVersion = state?.extensions?.find((x) => x.name === 'GameTest')?.version
   const live = (state?.instances ?? []).some((i) => i.kind === 'editor' && i.online)
   const guardsOn = guardsSupported(gtVersion)
+  const refOn = refSupported(gtVersion)
 
   useEffect(() => {
     op<ConfigReply>(project.id, 'gt.config')
@@ -125,6 +132,13 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         setKeyRules(r.config.itemKeys ?? [])
         setLuaInvoke(r.config.allowLuaInvoke !== false)
         setLuaInCond(r.config.allowLuaInCond === true)
+        const c = r.config as RefConfig
+        setRefCfg({
+          identRules: c.identRules,
+          closeRules: c.closeRules,
+          refDefaults: c.refDefaults,
+          allowDestroy: c.allowDestroy,
+        })
       })
       .catch((e: Error) => setError(e.message))
   }, [project.id])
@@ -169,11 +183,39 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       }
       // 条目规则也在这份文件里、由规则面板和录制弹窗改：表单整份重写，保存前现取一遍最新的带上，不然就丢了
       const latest = (await op<ConfigReply>(project.id, 'gt.config')).config as GtRunConfig & Record<string, unknown>
-      const fresh = latest.itemKeys ?? keyRules
-      if (tidyKeyRules(fresh).length) config.itemKeys = tidyKeyRules(fresh)
+      if (refOn) {
+        // GameTest 2.0 起 itemKeys / objectKeys 并进 identRules（旧字段读到会报 settings_old，不再写回）
+        // 「以后都按这个认」「这个类以后都这样关」也写这份文件：表单里没有的规则从最新文件里补上
+        // 文件里还有旧的 itemKeys / objectKeys（没跑过「升级脚本」）：先按迁移规则转成 identRules 再合并，不然整份重写时就丢了
+        const disk = (
+          'itemKeys' in latest || 'objectKeys' in latest ? migrateSettings(latest).doc : latest
+        ) as RefConfig
+        const mine = tidyRefConfig(refCfg)
+        const merged: RefConfig = {
+          ...mine,
+          identRules: [
+            ...(mine.identRules ?? []),
+            ...(disk.identRules ?? []).filter((x) => !(refCfg.identRules ?? []).some((y) => y.class === x.class)),
+          ],
+          closeRules: [
+            ...(mine.closeRules ?? []),
+            ...(disk.closeRules ?? []).filter((x) => !(refCfg.closeRules ?? []).some((y) => y.class === x.class)),
+          ],
+        }
+        Object.assign(config, tidyRefConfig(merged))
+      } else {
+        const fresh = latest.itemKeys ?? keyRules
+        if (tidyKeyRules(fresh).length) config.itemKeys = tidyKeyRules(fresh)
+      }
       // 这份表单不管的字段（接口库文件夹 api、守护 guards、objectKeys 这些脚本化以后加的）原样带回去，整份重写时不丢
       for (const [k, v] of Object.entries(latest))
-        if ((!FORM_KEYS.has(k) || (k === 'guards' && !guardsOn)) && !(k in config))
+        // 旧版 GameTest（2.0 以前）不显示对象与标识页：文件里的 objectKeys、identRules 这些原样带回去
+        if (
+          (!FORM_KEYS.has(k) ||
+            (k === 'guards' && !guardsOn) ||
+            (!refOn && k !== 'itemKeys' && (REF_KEYS as readonly string[]).includes(k))) &&
+          !(k in config)
+        )
           (config as unknown as Record<string, unknown>)[k] = v
       await op(project.id, 'gt.config', { config })
       h().toast.success(t('已保存，下次运行生效'))
@@ -322,25 +364,31 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
 
       <GtSkipSettings value={skip} onChange={setSkip} />
 
-      <SettingGroup
-        page="keys"
-        title={t('条目怎么认')}
-        action={
-          onOpenRules ? (
-            <ui.Button size="sm" variant="ghost" onClick={onOpenRules}>
-              <ListTree className="ue:h-3.5 ue:w-3.5" /> {t('管理规则')}
-            </ui.Button>
-          ) : undefined
-        }
-        hint={t(
-          '录制时点到列表、格子里有规则的条目直接按规则认，不再暂停问。规则在 GameTest 页右上角的「条目规则」里按树形看、搜、改。',
-        )}
-      >
-        <SettingRow
-          title={t('{n} 条规则', { n: keyRules.length })}
-          desc={t('录制时点到有规则的条目直接按规则认，不再暂停问')}
-        />
-      </SettingGroup>
+      {refOn ? (
+        <RefSettings value={refCfg} onChange={setRefCfg} />
+      ) : (
+        <SettingGroup
+          page="refs"
+          title={t('条目怎么认')}
+          action={
+            onOpenRules ? (
+              <ui.Button size="sm" variant="ghost" onClick={onOpenRules}>
+                <ListTree className="ue:h-3.5 ue:w-3.5" /> {t('管理规则')}
+              </ui.Button>
+            ) : undefined
+          }
+          hint={t(
+            '录制时点到列表、格子里有规则的条目直接按规则认，不再暂停问。规则在 GameTest 页右上角的「条目规则」里按树形看、搜、改。',
+          )}
+        >
+          <SettingRow
+            title={t('{n} 条规则', { n: keyRules.length })}
+            desc={t('GameTest {m} 起换成「按类记住的标识」，升级 GameTest 后这里换成对象与标识', {
+              m: REF_MIN_VERSION,
+            })}
+          />
+        </SettingGroup>
+      )}
 
       {guardsOn ? (
         <GtGuardsGroup

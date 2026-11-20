@@ -16,13 +16,21 @@ async function setup() {
   await mkdir(path.join(lua, 'Game', 'Guide'), { recursive: true })
   await writeFile(
     path.join(scen, 'common', '翻完引导.json'),
-    JSON.stringify({ kind: 'gametest-scenario', schemaVersion: 3, params: { max: { default: 30 } }, steps: [{ action: 'key', key: 'E' }] }),
+    JSON.stringify({
+      kind: 'gametest-scenario',
+      schemaVersion: 3,
+      params: { max: { default: 30 } },
+      steps: [{ action: 'key', key: 'E' }],
+    }),
   )
   await writeFile(path.join(scen, 'a.json'), JSON.stringify({ steps: [{ action: 'call', script: 'b' }] }))
   await writeFile(path.join(scen, 'b.json'), JSON.stringify({ steps: [{ action: 'call', script: 'a' }] }))
   await writeFile(
     path.join(scen, '_api.json'),
-    JSON.stringify({ lua: { items: [{ name: '项目.QuestApi.Accept' }] }, renamed: { '项目.QuestApi.Old': '项目.QuestApi.Accept' } }),
+    JSON.stringify({
+      lua: { items: [{ name: '项目.QuestApi.Accept' }] },
+      renamed: { '项目.QuestApi.Old': '项目.QuestApi.Accept' },
+    }),
   )
   await writeFile(path.join(lua, 'Game', 'Guide', 'GuideMgr.lua'), 'local M = {}\nM.curStep = 1\nreturn M\n')
   return { scen, lua }
@@ -33,13 +41,19 @@ const codes = (r: { errors: { code: string }[]; warnings: { code: string }[] }) 
   warnings: r.warnings.map((x) => x.code).sort(),
 })
 
-test('一份写对了的 v3 脚本没有错误', async () => {
+test('一份写对了的 v4 脚本没有错误', async () => {
   const { scen, lua } = await setup()
   const doc = {
     kind: 'gametest-scenario',
-    schemaVersion: 3,
+    schemaVersion: 4,
     vars: { gold0: 0 },
-    guards: [{ id: 'g1', when: { target: 'WBP_Guide:.', onScreen: true }, do: [{ action: 'call', script: 'common/翻完引导' }] }],
+    guards: [
+      {
+        id: 'g1',
+        when: { obj: { class: 'WBP_Guide' }, prop: ':onScreen', op: 'is', value: true },
+        do: [{ action: 'call', script: 'common/翻完引导' }],
+      },
+    ],
     steps: [
       { id: 's1', action: 'api', api: '项目.QuestApi.Accept', args: { questId: 1203 }, saveAs: 'ok' },
       { id: 's2', action: 'set', var: 'gold0', value: '=@ps.Gold' },
@@ -60,7 +74,7 @@ test('一份写对了的 v3 脚本没有错误', async () => {
 test('常见写错的地方都按错误码报出来', async () => {
   const { scen, lua } = await setup()
   const doc = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     blockers: [],
     steps: [
       { id: 's1', action: 'loop', until: { visible: true }, max: -1, do: [{ id: 's1', action: 'key', key: 'E' }] },
@@ -71,7 +85,7 @@ test('常见写错的地方都按错误码报出来', async () => {
       { action: 'assert', expr: 'foo(1) > 0' },
       { action: 'api', api: '项目.QuestApi.Old' },
       { action: 'api', api: '项目.QuestApi.Nope' },
-      { action: 'clik', target: 'WBP:Btn' },
+      { action: 'clik', target: { obj: { class: 'WBP' }, part: 'Btn' } },
       { action: 'assert', expr: '@luaMod.Game.Guide.GuideMgr.nope == 1' },
     ],
   }

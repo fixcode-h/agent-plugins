@@ -58,7 +58,10 @@ test('同一个 skipIf → 如果，edit 和 wrap 可以叠在同一步', () => 
   const iff = out.steps[0] as Record<string, unknown>
   assert.equal(iff.action, 'if')
   assert.deepEqual(iff.cond, { not: cond })
-  assert.equal((iff.then as Record<string, unknown>[]).every((s) => !('skipIf' in s)), true)
+  assert.equal(
+    (iff.then as Record<string, unknown>[]).every((s) => !('skipIf' in s)),
+    true,
+  )
 })
 
 test('和现成脚本一样的一段 → call；输入的值 → 参数', () => {
@@ -67,7 +70,11 @@ test('和现成脚本一样的一段 → call；输入的值 → 参数', () => 
     { action: 'type', target: 'WBP_Login:Input_Account', text: 'qa_01' },
     { action: 'click', target: 'WBP_Login:Btn_Login' },
   ]
-  const steps = [...login, { action: 'type', target: 'WBP_Chat:Input_Msg', text: 'hello' }, { action: 'key', key: 'Enter' }]
+  const steps = [
+    ...login,
+    { action: 'type', target: 'WBP_Chat:Input_Msg', text: 'hello' },
+    { action: 'key', key: 'Enter' },
+  ]
   const hints = runFlowRules(steps, [{ rel: 'common/登录', steps: login }])
   const call = hints.find((h) => h.rule === 'same-script')!
   assert.deepEqual(call.steps, [1, 2, 3])
@@ -96,4 +103,29 @@ test('两条改动都要搬走同一步时整份退回', () => {
       ),
     /都改了原第 2 步/,
   )
+})
+
+test('v4 录制（部件写法）：循环的 until、弹窗守护的 when 写成对象判断', () => {
+  const next = { obj: { class: 'WBP_Shop' }, part: 'Btn_Next' }
+  const steps = [
+    { action: 'click', target: next },
+    { action: 'click', target: next },
+    { action: 'click', target: next },
+    { action: 'click', target: { obj: { class: 'WBP_Shop' }, part: 'Btn_Buy' } },
+  ]
+  const rep = runFlowRules(steps)
+  const p = plan(rep[0].changes, 4)
+  const loop = applyTidyDoc(steps, p, all(p.changes.length), false).steps[0] as Record<string, unknown>
+  assert.deepEqual(loop.until, { obj: { class: 'WBP_Shop' }, prop: '@Btn_Buy:shown', op: 'is', value: true })
+
+  const notice = { obj: { class: 'WBP_Notice' }, part: 'Btn_Close' }
+  const hints = runFlowRules([
+    { action: 'click', target: { obj: 'main', part: 'Btn_Bag' } },
+    { action: 'click', target: notice },
+    { action: 'click', target: { obj: 'bag', part: 'Btn_Sell' } },
+    { action: 'click', target: { obj: 'bag', part: 'Btn_Ok' } },
+  ])
+  const g = hints.find((h) => h.rule === 'popup-guard')!
+  const guard = (g.changes[0] as { guard: { when: unknown } }).guard
+  assert.deepEqual(guard.when, { obj: { class: 'WBP_Notice' }, prop: ':onScreen', op: 'is', value: true })
 })

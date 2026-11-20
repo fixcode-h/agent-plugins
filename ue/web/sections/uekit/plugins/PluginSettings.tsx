@@ -119,7 +119,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
           { id: 'setup', label: t('前置步骤'), icon: ListStart },
           { id: 'move', label: t('移动'), icon: Footprints },
           { id: 'skip', label: t('已达成就跳过'), icon: SkipForward },
-          { id: 'keys', label: t('条目怎么认'), icon: KeyRound },
+          { id: 'refs', label: t('对象与标识'), icon: KeyRound },
           { id: 'guards', label: t('全局守护'), icon: ShieldX },
         ],
       },

@@ -10,26 +10,26 @@ import { FlowEditView } from './FlowEditView.tsx'
  */
 const DOC: GtScript = {
   kind: 'gametest-scenario',
-  schemaVersion: 3,
+  schemaVersion: 4,
   name: '每日福利',
   guards: [
     {
       id: 'g1',
       name: '新手引导出现',
-      when: { target: 'WBP_Guide:.', onScreen: true },
+      when: { obj: { class: 'WBP_Guide_C' }, prop: ':onScreen', op: 'is', value: true },
       do: [{ action: 'call', script: 'common/翻完引导' }],
     },
     {
       id: 'g2',
       name: '断线重连弹出',
-      when: { target: 'WBP_Reconnect:.', onScreen: true },
+      when: { obj: { class: 'WBP_Reconnect_C' }, prop: ':onScreen', op: 'is', value: true },
       do: [{ action: 'console', command: 'gm.Reconnect' }],
     },
     {
       id: 'g3',
       name: '登录公告出现',
-      when: { target: 'WBP_Notice:.', onScreen: true },
-      do: [{ action: 'widget.close', target: 'WBP_Notice:.' }],
+      when: { obj: { class: 'WBP_Notice_C' }, prop: ':onScreen', op: 'is', value: true },
+      do: [{ action: 'obj.close', obj: { class: 'WBP_Notice_C' } }],
     },
   ],
   steps: [
@@ -39,15 +39,22 @@ const DOC: GtScript = {
       action: 'group',
       name: '打开福利',
       do: [
-        { id: 's2', action: 'click', target: 'WBP_Main:Root/BtnWelfare' },
-        { id: 's3', action: 'click', target: 'WBP_Welfare:Root/TabDaily' },
-        { id: 's4', action: 'wait', target: 'WBP_Welfare:Root/DailyList', visible: true },
+        { id: 's2', action: 'click', target: { obj: { class: 'WBP_Main_C' }, part: 'BtnWelfare' } },
+        { id: 's3', action: 'click', target: { obj: { class: 'WBP_Welfare_C' }, part: 'TabDaily' } },
+        {
+          id: 's4',
+          action: 'obj.wait',
+          obj: { class: 'WBP_Welfare_C' },
+          prop: '@DailyList:visible',
+          op: 'is',
+          value: true,
+        },
       ],
     },
     {
       id: 'loop1',
       action: 'loop',
-      each: 'WBP_Welfare:Root/DailyList',
+      each: { obj: { class: 'WBP_Welfare_C' }, part: 'DailyList' },
       as: 'item',
       max: 10,
       do: [
@@ -57,20 +64,31 @@ const DOC: GtScript = {
           // 两项条件：蓝图画布的节点里一行一项列出来（「且」写在行首）
           cond: {
             all: [
-              { target: '$item>BtnClaim', textLike: '领取' },
-              { target: '$item>BtnClaim', enabled: true },
+              { obj: '$item', prop: '@BtnClaim:text', op: 'contains', value: '领取' },
+              { obj: '$item', prop: '@BtnClaim:enabled', op: 'is', value: true },
             ],
           },
           then: [
-            { id: 's5', action: 'click', target: '$item>BtnClaim' },
-            { id: 's6', action: 'wait', target: 'WBP_RewardPopup:.', visible: true },
-            { id: 's7', action: 'click', target: 'WBP_RewardPopup:Root/BtnOk' },
+            { id: 's5', action: 'click', target: { obj: '$item', part: 'BtnClaim' } },
+            {
+              id: 's6',
+              action: 'obj.wait',
+              obj: { class: 'WBP_RewardPopup_C' },
+              prop: ':onScreen',
+              op: 'is',
+              value: true,
+            },
+            { id: 's7', action: 'click', target: { obj: { class: 'WBP_RewardPopup_C' }, part: 'BtnOk' } },
           ],
           else: [{ id: 's8', action: 'set', var: 'skipped', value: '=$skipped + 1' }],
         },
       ],
     },
-    { id: 's9', action: 'assert', target: 'WBP_Main:Root/BtnWelfare>Dot', visible: false },
+    {
+      id: 's9',
+      action: 'assert',
+      cond: { obj: { class: 'WBP_Main_C' }, prop: '@Dot:visible', op: 'is', value: false },
+    },
   ],
 }
 

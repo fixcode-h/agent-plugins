@@ -80,7 +80,12 @@ export const TONE_SOFT: Record<BlockTone, string> = {
 
 // ---------- 内置的格子（效果图 1 的顺序：两列，从左到右、从上到下） ----------
 
-registerPaletteCell({ id: 'step', label: () => t('一步操作'), groups: () => [t('一步操作'), t('界面')], order: 10 })
+registerPaletteCell({
+  id: 'step',
+  label: () => t('一步操作'),
+  groups: () => [t('一步操作'), t('界面'), t('对象')],
+  order: 10,
+})
 // 子图：不挂脚本的段和挂了脚本的调用合成一格（用户 2026-11-19），挂哪个脚本在检查器里选，也可以从脚本库直接拖进来
 registerPaletteCell({ id: 'group', label: () => t('子图'), ids: ['group'], order: 20 })
 registerPaletteCell({ id: 'if', label: () => t('如果'), groups: () => [t('分支')], order: 40 })
@@ -88,7 +93,7 @@ registerPaletteCell({ id: 'loop', label: () => t('循环'), groups: () => [t('�
 registerPaletteCell({ id: 'wait', label: () => t('等到'), ids: ['wait-cond', 'wait-ms'], order: 60 })
 registerPaletteCell({ id: 'assert', label: () => t('检查'), ids: ['assert'], order: 70 })
 registerPaletteCell({ id: 'set', label: () => t('设变量'), groups: () => [t('数据')], order: 80 })
-registerPaletteCell({ id: 'invoke', label: () => t('调函数'), ids: ['invoke'], groups: () => [t('调用')], order: 90 })
+registerPaletteCell({ id: 'invoke', label: () => t('调函数'), ids: ['obj.call'], groups: () => [t('调用')], order: 90 })
 registerPaletteCell({
   id: 'guard',
   label: () => t('守护'),

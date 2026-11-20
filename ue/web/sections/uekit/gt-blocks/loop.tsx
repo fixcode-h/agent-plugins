@@ -4,6 +4,7 @@ import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { condSummary } from '../gt-cond/summary.ts'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
+import { targetText } from '../gt-ref/describe.ts'
 import { ValueInput } from '../gt-cond/ValueInput.tsx'
 import { NumberField, Row, TextField, patch } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
@@ -55,8 +56,8 @@ function LoopInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
       )}
       {m === 'each' && (
         <>
-          <Row label={t('容器')} hint={t('列表、格子；没滚到的条目会自动滚出来')}>
-            <TargetInput value={String(step.each ?? '')} onChange={(v) => onChange({ ...step, each: v })} />
+          <Row label={t('容器')} hint={t('对象里的列表、格子部件；条目在 $item（引用），没滚到的会自动滚出来')}>
+            <TargetInput value={step.each} onChange={(v) => onChange({ ...step, each: v })} />
           </Row>
           <Row label={t('条目叫')}>
             <TextField step={step} k="as" mono onChange={onChange} placeholder="item" />
@@ -125,7 +126,7 @@ function loopSummary(s: GtStep) {
     case 'times':
       return t('重复 {n} 次', { n: String(s.times) })
     case 'each':
-      return t('对 {c} 的每个条目 {a}', { c: String(s.each), a: String(s.as ?? 'item') }) + max
+      return t('对 {c} 的每个条目 {a}', { c: targetText(s.each), a: String(s.as ?? 'item') }) + max
     case 'in':
       return (
         t('对 {c} 里的每个 {a}', {

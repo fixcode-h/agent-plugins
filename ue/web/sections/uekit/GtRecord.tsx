@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
+import { targetText } from './gt-ref/describe.ts'
 import { Note } from '../../ui.tsx'
 import { humanStep } from './gt-steps.ts'
 import { moveLine } from './gt-move.ts'
@@ -58,12 +59,12 @@ function describe(s: Record<string, unknown>) {
   if (s.action === 'wait' && s.until === 'cond')
     return [t('等到'), condTarget(s.cond), s.note].filter(Boolean).join(' · ')
   const human = humanStep(s)
-  if (human) return [human, s.target as string | undefined].filter(Boolean).join(' · ')
+  if (human) return [human, targetText(s.target)].filter(Boolean).join(' · ')
   const rest = Object.entries(s)
     .filter(([k]) => k !== 'action' && k !== 'note' && k !== 'hint')
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
     .join(' ')
-  return [s.target as string | undefined, s.note as string | undefined, rest].filter(Boolean).join(' · ')
+  return [targetText(s.target), s.note as string | undefined, rest].filter(Boolean).join(' · ')
 }
 
 /** onDone：停止了；保存了时带上场景路径（相对场景根），父组件接着认截图里的字 */

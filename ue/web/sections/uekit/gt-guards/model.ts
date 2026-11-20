@@ -42,11 +42,16 @@ export function blockersToGuards(list: BlockerRule[]): GtGuard[] {
     })
 }
 
-/** 新加一条：最常见的「某个界面出现就关掉」 */
+/** 新加一条：最常见的「某个界面出现就关掉」。GameTest 2.0 起按对象引用写（判断 obj + :onScreen，动作 obj.close） */
 export const blankGuard = (used: Set<string>): GtGuard => {
   let n = 1
   while (used.has(`g${n}`)) n++
-  return { id: `g${n}`, name: '', when: { target: '', onScreen: true }, do: [{ action: 'widget.close', target: '' }] }
+  return {
+    id: `g${n}`,
+    name: '',
+    when: { obj: '', prop: ':onScreen', op: 'is', value: true },
+    do: [{ action: 'obj.close', obj: '' }],
+  }
 }
 
 /**

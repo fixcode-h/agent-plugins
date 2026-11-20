@@ -21,6 +21,7 @@ import { commandMenuItems, runKey, type CmdCtx } from './commands.ts'
 import { insertPlace, insertStep, openInsertAt, insertMenuItems } from './insert-menu.ts'
 import { foldableKeys, ListHead } from './ListHead.tsx'
 import type { ViewProps } from './views.ts'
+import { TodoBadge } from '../gt-ref/MigrateBanner.tsx'
 
 const INDENT = 18
 const keyOf = (s: GtStep, p: GtPath) => (typeof s.id === 'string' && s.id ? s.id : pathStr(p))
@@ -243,6 +244,7 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
           <span className="ue:min-w-0 ue:shrink ue:truncate ue:text-caption ue:text-subtle">· {r.step.note}</span>
         )}
         <span className="ue:ml-auto ue:flex ue:shrink-0 ue:items-center ue:gap-1.5">
+          <TodoBadge step={r.step} />
           {st && (
             <span
               className={cn(

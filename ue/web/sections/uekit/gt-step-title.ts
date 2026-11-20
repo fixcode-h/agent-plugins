@@ -1,4 +1,5 @@
 import { t } from '../../host.ts'
+import { targetShort } from './gt-ref/describe.ts'
 import { wholeScreenOf } from './gt-selector-tree.ts'
 import { hintOf, type GtHint } from './gt-steps.ts'
 import { moveTitle } from './gt-move.ts'
@@ -20,7 +21,13 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
     return fallbackTarget
       ? t('{a} {w}', { a: fallbackAction ?? '?', w: nameOfTarget(fallbackTarget) })
       : (fallbackAction ?? '?')
-  const s = (k: string) => (typeof def[k] === 'string' ? (def[k] as string).trim() : '')
+  // v4 的落点是 {obj, part}（协议 game-test-ref 第 2 节）：标题里说部件名
+  const s = (k: string) =>
+    typeof def[k] === 'string'
+      ? (def[k] as string).trim()
+      : k === 'target' || k === 'toTarget'
+        ? targetShort(def[k])
+        : ''
   const n = (k: string) => (typeof def[k] === 'number' ? (def[k] as number) : Number.NaN)
   const w = widgetLabel(hintOf(def), s('target'))
   const a = String(def.action ?? '')

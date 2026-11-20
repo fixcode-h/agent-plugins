@@ -10,6 +10,7 @@ import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
 import { MenuSpecimen } from './menu.tsx'
 import { PathTextSpecimen } from './path-text.tsx'
+import { LoadingMaskSpecimen } from './loading-mask/LoadingMask.tsx'
 import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
@@ -23,7 +24,7 @@ import { ForgeMarkupSpecimen } from './sections/uekit/forge-markup/ForgeMarkupSp
 import { FlowSpecimen } from './sections/uekit/gt-flow/FlowSpecimen.tsx'
 import { EditSpecimen } from './sections/uekit/gt-edit/EditSpecimen.tsx'
 import { DebugSpecimen } from './sections/uekit/gt-debug/DebugSpecimen.tsx'
-import { PickSpecimen } from './sections/uekit/gt-live/PickSpecimen.tsx'
+import { RefSpecimen } from './sections/uekit/gt-ref/RefSpecimen.tsx'
 import { GtSpecimen } from './sections/uekit/GtSpecimen.tsx'
 import { GtTidyReport } from './sections/uekit/GtTidyReport.tsx'
 import { TIDY_LANG } from '../server/uekit/gt-tidy-plan.ts'
@@ -97,13 +98,15 @@ const activate: ActivateWeb = (host) => {
       // GameTest 调试和运行面板（定稿 9.2、效果图 6）：停在断点上的运行横条、运行记录和此刻的变量
       { id: 'gt-debug', label: t('GameTest · 调试和运行面板'), tune: ['row', 'input'], Specimen: DebugSpecimen },
       // GameTest 从游戏里抓（定稿 9.3）：实时画面、控件状态、分组字段和「变了闪一下」，跟面板「行」的调节项
-      { id: 'gt-pick', label: t('GameTest · 从游戏里抓'), tune: ['row'], Specimen: PickSpecimen },
+      { id: 'gt-ref', label: t('GameTest · 对象和判断'), tune: ['row', 'input', 'menu'], Specimen: RefSpecimen },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
       { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项
       { id: 'suggest-input', label: 'UE · SuggestInput', tune: ['input', 'menu'], Specimen: SuggestInputSpecimen },
       // 一行放不下的长路径（AssetForge 配置根、新建配置弹窗）：省略前面的目录，悬停看全、点一下复制
       { id: 'path-text', label: 'UE · PathText', Specimen: PathTextSpecimen },
+      // 切换内容时盖住还没画完的区域（AssetForge 切配置），画完才揭开
+      { id: 'loading-mask', label: 'UE · LoadingMask', Specimen: LoadingMaskSpecimen },
       // 对象页、资源页的检视区（设计稿 designs/对象页合并与资源导航-设计稿.md 第 9 节）：「最近看过」「更多」下拉跟面板「菜单」走
       { id: 'inspect-bar', label: t('检视 · 导航条'), tune: ['menu'], Specimen: InspectorBarSpecimen },
       { id: 'inspect-ref', label: t('检视 · 引用'), Specimen: RefChipSpecimen },

@@ -5,6 +5,9 @@ import { blockUi, TONE_TEXT } from '../gt-blocks/index.ts'
 import { stepTitle } from '../gt-step-title.ts'
 import { selectorLabel } from '../gt-selector-label.ts'
 import { wholeScreenOf } from '../gt-selector-tree.ts'
+import type { GtCloseHow, GtRef } from '../../../../shared/gt-script/ref/types.ts'
+import { closeHowText } from '../gt-ref/CloseHowList.tsx'
+import { describeRef, identText, targetShort, targetText } from '../gt-ref/describe.ts'
 
 /**
  * 流程图节点上一步「长什么样」：图标、标题、标题下的一行小字（定稿效果图 1、6）。
@@ -24,10 +27,14 @@ export const registerFace = (action: string, face: StepFace) => void table.set(a
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const lastSeg = (sel: string) => wholeScreenOf(sel) ?? sel.split(/[/>]/).filter(Boolean).pop() ?? sel
-const sel = (v: unknown) => selectorLabel(str(v))
+// v4 的落点是 {obj, part}：节点上写「对象 › 部件」；旧选择器照旧
+const sel = (v: unknown) => (typeof v === 'string' ? selectorLabel(v) : targetText(v))
 
 /** 一项检查的一句话：目标和判断（取反的前面写「不是」） */
 function checkText(c: Record<string, unknown>, neg: boolean) {
+  // 对象的属性（v4）：对象 › 属性 比较
+  if ('obj' in c)
+    return `${neg ? t('不是') + ' ' : ''}${typeof c.obj === 'string' ? c.obj : describeRef(c.obj as GtRef)} ${identText(c as { prop?: string })}`
   const target = str(c.target) || str(c.value) || str(c.api) || str(c.expr)
   const what = Object.keys(c).find((k) => k !== 'target' && k !== 'settleMs') ?? ''
   return `${neg ? t('不是') + ' ' : ''}${lastSeg(target)}${what ? ` · ${what}` : ''}`
@@ -76,7 +83,8 @@ registerFace('loop', {
   title: (s) => {
     const mode = loopModeOf(s)
     if (mode === 'times') return t('重复 {n} 次', { n: String(s.times) })
-    if (mode === 'each') return t('对 {w} 的每个条目', { w: lastSeg(str(s.each)) })
+    if (mode === 'each')
+      return t('对 {w} 的每个条目', { w: typeof s.each === 'string' ? lastSeg(s.each) : targetShort(s.each) })
     if (mode === 'in') return t('对每个值')
     if (mode === 'while') return t('当 {c} 时', { c: condText(s.while) })
     return t('直到 {c}', { c: condText(s.until) })
@@ -100,21 +108,18 @@ registerFace('set', {
   title: (s) => t('设变量 {v}', { v: str(s.var) }),
   sub: (s) => (s.value === undefined ? '' : JSON.stringify(s.value)),
 })
-registerFace('invoke', {
+registerFace('obj.call', {
   title: (s) => t('调函数 {f}', { f: str(s.function) }),
-  sub: (s) => (typeof s.object === 'string' ? s.object : ''),
+  sub: (s) => (s.obj ? targetText({ obj: s.obj, part: s.part }) : ''),
 })
 registerFace('api', { title: (s) => t('调接口 {a}', { a: str(s.api) }) })
 registerFace('break', { title: () => t('跳出循环') })
 registerFace('continue', { title: () => t('进下一轮') })
 registerFace('return', { title: () => t('结束脚本') })
 registerFace('fail', { title: (s) => str(s.message) || t('主动失败') })
-registerFace('widget.close', {
-  title: (s) => t('关掉 {w}', { w: lastSeg(str(s.target)) }),
-})
-registerFace('widget.call', {
-  title: (s) => t('调界面函数 {f}', { f: str(s.function) }),
-  sub: (s) => sel(s.target),
+registerFace('obj.close', {
+  title: (s) => t('关闭 {w}', { w: targetText({ obj: s.obj }) }),
+  sub: (s) => closeHowText(s.how as GtCloseHow[] | undefined),
 })
 
 export function faceOf(s: GtStep): {

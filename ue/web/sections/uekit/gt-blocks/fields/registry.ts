@@ -18,8 +18,14 @@ export type FieldKind =
   | 'tri'
   /** 下拉：options 里 value 为 '' 的是「不写，用默认」 */
   | 'select'
-  /** 控件选择器（带界面名提示） */
+  /** 动作落点：对象 + 部件（协议 game-test-ref 第 2 节） */
   | 'target'
+  /** 对象引用：命名对象、$变量、内联的类 + 标识 */
+  | 'obj'
+  /** 对象上的属性路径（@self.X、@部件:状态、@lua.X），下拉来自 step.obj 的属性树 */
+  | 'prop'
+  /** 值：常量、$变量、= 表达式 */
+  | 'value'
   /** 几个数字一组：[x, y] / [x, y, z]，dims 是个数 */
   | 'vec'
 
