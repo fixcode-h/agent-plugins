@@ -10,6 +10,7 @@ import { setCtx } from '../../util.ts'
 import { compactMigrate, gtMigrate } from './migrate.ts'
 import { gameTestTooOld, gtRefOp } from './ops.ts'
 import { luaKind, mergeLuaProps } from './lua-props.ts'
+import { gtMigrateTool, gtProps, slimProps } from './tool.ts'
 
 let proj = ''
 let scen = ''
@@ -184,4 +185,29 @@ test('gt.props：UE 太旧时只要知道 luaModule 照样返回 Lua 声明字�
   assert.equal(sent.luaModule, undefined)
   assert.equal(ok.unavailable, undefined)
   assert.equal((ok.groups as { items: unknown[] }[])[0].items.length, 1)
+})
+
+test('ue_gametest props / migrate：参数整理，逐项的 ops 收成 opsByKind', async () => {
+  const slim = slimProps({
+    groups: [
+      {
+        id: 'self',
+        title: '',
+        items: [{ prop: '@self.Id', name: 'Id', src: 'cpp', type: 'int32', kind: 'int', ops: ['eq'] }],
+      },
+    ],
+  })
+  const g = (slim.groups as { items: Record<string, unknown>[] }[])[0]
+  assert.equal(g.items[0].ops, undefined)
+  assert.ok((slim.opsByKind as Record<string, string[]>).int.includes('between'))
+  const calls: [string, Record<string, unknown>][] = []
+  const op = async (name: string, args: Record<string, unknown> = {}) => {
+    calls.push([name, args])
+    return name === 'gt.migrate' ? { changed: [], skipped: [], errors: [] } : { groups: [] }
+  }
+  assert.ok((await gtProps(op, {})).error)
+  await gtProps(op, { object: 'shop', module: 'UI.Shop', limit: 999 })
+  assert.deepEqual(calls[0], ['gt.props', { target: { obj: 'shop' }, luaModule: 'UI.Shop', offset: 0, limit: 400 }])
+  await gtMigrateTool(op, { all: true, dryRun: true, scenario: 'x.json' })
+  assert.deepEqual(calls[1], ['gt.migrate', { all: true, dryRun: true }])
 })
