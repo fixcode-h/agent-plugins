@@ -54,6 +54,8 @@ export interface AssetConfig {
   truncated?: boolean
   loading?: boolean
   error?: string
+  /** 配置的 kind（AssetForge 左栏列表里有）：原文还没读到时先按它挑布局 */
+  kind?: string
   /** 配置根和这份配置的路径（相对配置根，AssetForge 页给）：UMG 按它找 ref 的子界面配置 */
   root?: string
   file?: string

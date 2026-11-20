@@ -80,6 +80,9 @@ export function ForgeDetail({
   const desc = useLoad(
     () => op<Describe>(project.id, 'forge.describe', entry.config ? { config: entry.config } : { asset: entry.asset }),
     [entry.key, entry.state, fileRev],
+    0,
+    // 切回看过的配置时先用上次的（状态说明那行不晚到一下把下面整块往下推），读到新的再换
+    `${project.id}/forge/describe/${entry.key}`,
   )
   // 配置原文直接读本机文件（用户 2026-11-16「看个 json 原文为什么要等编辑器」）：编辑器没开、卡住或崩了也能看；
   // 读不到（配置根还不知道、文件太大）才退回 forge.describe 回的那份
@@ -90,6 +93,9 @@ export function ForgeDetail({
         ? ppost<{ text: string }>(project.id, 'ext/forge/read', { root: configRoot, path: cfgPath }).then((r) => r.text)
         : Promise.resolve(undefined),
     [entry.key, configRoot, fileRev],
+    0,
+    // 切回看过的配置时第一帧就有原文：中间的预览直接画出来，不先空一下（用户 2026-11-20「切换预览一闪一闪」）
+    `${project.id}/forge/text/${entry.key}`,
   )
   const configText = local.data ?? desc.data?.configText
   // include 展开（片段文件逐个从磁盘读）；片段列表交给页面一起盯（一个页面连接只登记一份，登记在 Forge.tsx）
@@ -176,8 +182,14 @@ export function ForgeDetail({
           importedAt={desc.data?.entry?.importedAtUtc || undefined}
           onOpenAsset={actions.openAsset}
         />
-        {(entry.message || (entry.state !== 'synced' && desc.data?.stateDescription)) && (
-          <p className="ue:mt-1.5 ue:text-footnote ue:text-muted">{entry.message || desc.data?.stateDescription}</p>
+        {/* 没同步的状态先把这一行占住：说明是 forge.describe 晚到的，不占位的话它一到下面整块被往下推一下 */}
+        {(entry.message || entry.state !== 'synced') && (
+          <p
+            className="ue:mt-1.5 ue:min-h-[1lh] ue:truncate ue:text-footnote ue:text-muted"
+            title={entry.message || desc.data?.stateDescription}
+          >
+            {entry.message || desc.data?.stateDescription}
+          </p>
         )}
       </div>
       <div className="ue:flex ue:items-center ue:gap-3 ue:border-b ue:border-line ue:px-5 ue:py-2">

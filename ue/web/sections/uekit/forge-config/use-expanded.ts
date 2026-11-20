@@ -16,6 +16,9 @@ export interface ForgeExpanded extends Expanded {
   fragmentAt: (path: PathSeg[]) => string | undefined
 }
 
+/** 每份配置上次展开的结果（模块级，整页刷新才清）：键是「项目 + 主文件」 */
+const lastExpanded = new Map<string, { text: string; exp: ForgeExpanded }>()
+
 export function useForgeExpanded(
   project: string,
   configRoot: string,
@@ -23,7 +26,11 @@ export function useForgeExpanded(
   mainText: string | undefined,
   rev: number,
 ) {
-  const [state, setState] = useState<ForgeExpanded>()
+  // 切回看过的配置：主文件原文没变就先用上次展开的结果（片段改了由 rev 触发重新展开），预览第一帧就是完整的树
+  const hit = main ? lastExpanded.get(`${project}\n${main}`) : undefined
+  const [state, setState] = useState<ForgeExpanded | undefined>(() =>
+    hit && hit.text === mainText ? hit.exp : undefined,
+  )
   useEffect(() => {
     if (!main || mainText === undefined) {
       setState(undefined)
@@ -41,7 +48,9 @@ export function useForgeExpanded(
     void expandConfig(main, read).then((e) => {
       if (!live) return
       const fragments = [...new Set(e.origins.map((o) => o.file))]
-      setState({ ...e, texts, fragments, fragmentAt: (p) => originAt(e, p)?.file })
+      const exp: ForgeExpanded = { ...e, texts, fragments, fragmentAt: (p) => originAt(e, p)?.file }
+      lastExpanded.set(`${project}\n${main}`, { text: mainText, exp })
+      setState(exp)
     })
     return () => {
       live = false

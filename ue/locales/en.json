@@ -4558,5 +4558,8 @@
   "选中": "Selected",
   "不用升级": "No upgrade needed",
   "升级后有 {n} 处要你再定": "After upgrading, {n} places need your decision",
-  "只列出了 Lua 源码里声明的字段：{why}": "Only fields declared in Lua source are listed: {why}"
+  "只列出了 Lua 源码里声明的字段：{why}": "Only fields declared in Lua source are listed: {why}",
+  "揭开": "Reveal",
+  "盖上": "Cover",
+  "内容画完后才揭开遮罩": "The mask is removed only after the content has finished drawing"
 }

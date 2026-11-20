@@ -10,6 +10,14 @@ import { assetObjectPath } from './ForgeLink.tsx'
 import { Hint } from './forge-parts.tsx'
 import { useFragmentAt, type ForgeExpanded } from './forge-config/use-expanded.ts'
 import { ConfigEditCtx, type ConfigEdit } from '../../inspect/layouts/umg/edit/ctx.ts'
+import type { AssetConfig } from '../../inspect/layouts/types.ts'
+import { LoadingMask } from '../../loading-mask/LoadingMask.tsx'
+
+/** 上一份画完的离线预览：切到还没读完的配置时先接着显示它（模块级，整页刷新才清） */
+let lastOffline: { path: string; config: AssetConfig } | undefined
+
+/** 主文件 include 了片段：要等展开完再揭开遮罩，不然先画没展开的树、再长出片段里的节点 */
+const hasInclude = (text: string) => /"include"\s*:/.test(text)
 
 /**
  * 「资源」页签（默认页签，设计稿 §2.2 第 3、4 条，用户原话「这个 json 也可以认为是一个蓝图资源」）：
@@ -63,10 +71,11 @@ export function ForgeAssetTab({
 
   if (['parse-error', 'foreign'].includes(entry.state))
     return <Hint>{t('配置读不出来，先看「配置原文」把它修好')}</Hint>
-  const config = {
+  const config: AssetConfig = {
     text: configText,
     doc: expanded?.doc,
     truncated: configTruncated,
+    kind: entry.kind,
     loading: configLoading,
     error: configError,
     // 子界面（ref）按配置根读子配置；双击控件树里的子界面打开它自己的配置（和左栏点配置一样）
@@ -74,23 +83,32 @@ export function ForgeAssetTab({
     file: edit?.main,
     openConfig: (file: string) => go('assetforge', file),
   }
-  // 有离线布局的类型（UMG）：资源还没生成也用和真实资源同一套布局，按配置画（资源查看页按 UE 编辑器布局，U4）
-  if (path && absent && canOffline(configText))
+  // 有离线布局的类型（UMG）：资源还没生成也用和真实资源同一套布局，按配置画（资源查看页按 UE 编辑器布局，U4）。
+  // 原文还在读时按左栏列表里的 kind 先认出布局，框架先摆好，不先闪一下「读取中」再换成整套布局
+  if (path && absent && canOffline(configText, entry.kind)) {
+    const ready = configText !== undefined && !(edit && !expanded && hasInclude(configText))
+    if (ready) lastOffline = { path, config }
+    // 第一次点开这份配置、原文还没到：先接着画上一份（盖着半透明遮罩），到了一次换掉，中间的布局不空一下
+    const waiting = !ready && !configError
+    const shown = waiting && lastOffline ? lastOffline : { path, config }
     return (
-      <ConfigEditCtx.Provider value={editCtx}>
+      <ConfigEditCtx.Provider value={ready ? editCtx : null}>
         <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:p-2">
-          <AssetView
-            key={path}
-            path={path}
-            comp={comp}
-            onComp={setComp}
-            onOpen={(p) => go('assets', p)}
-            config={config}
-            offline
-          />
+          <LoadingMask show={waiting}>
+            <AssetView
+              key={shown.path}
+              path={shown.path}
+              comp={comp}
+              onComp={setComp}
+              onOpen={(p) => go('assets', p)}
+              config={shown.config}
+              offline
+            />
+          </LoadingMask>
         </div>
       </ConfigEditCtx.Provider>
     )
+  }
   if (!path || absent)
     return (
       <ForgeConfigPreview

@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
 import { actualSize, clampPan, fitView, stepZoom, wheelSteps, zoomAt, type View } from './view.ts'
 
 /** 存盘的视图：适应屏幕（随画布大小重算），或者固定的缩放和位置 */
@@ -46,9 +54,11 @@ export function useDesignerView(
     setSaved(load(storeKey))
   }
 
-  useEffect(() => {
+  // 先在绘制前量一次：不然第一帧按默认的 800×450 适应屏幕，量到真尺寸后画面再跳一下（切配置时一闪一闪）
+  useLayoutEffect(() => {
     const el = stage.current
     if (!el) return
+    setRoom({ w: el.clientWidth, h: el.clientHeight })
     const ro = new ResizeObserver(() => setRoom({ w: el.clientWidth, h: el.clientHeight }))
     ro.observe(el)
     return () => ro.disconnect()
