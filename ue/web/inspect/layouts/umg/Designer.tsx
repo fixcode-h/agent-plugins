@@ -10,6 +10,7 @@ import { ApproxCanvas } from './ApproxCanvas.tsx'
 import { indexTree, resolveTarget, type WNode } from './model.ts'
 import { gridStyle, Overlays } from './Overlays.tsx'
 import { SCREENS, type Screen } from './screens.ts'
+import { previewPages, rectOrAncestor } from './subref/preview.ts'
 import { useUmgRender } from './use-render.ts'
 import { useDesignerView } from './use-view.ts'
 import { toDesign, zoomLabel } from './view.ts'
@@ -21,6 +22,8 @@ import { ZoomControls } from './ZoomControls.tsx'
  * - 没有：按控件树和属性在网页里画近似预览（approx.ts），页头标「近似预览」。
  * 两种都按矩形画布局框、悬停框、选中框和尺寸标签；点预览选控件（矩形命中取最小的），和左边的控件树双向联动。
  * 画布操作照 UE 控件蓝图设计器（use-view.ts）：滚轮以光标为中心缩放，右键或中键拖动平移，Home / 双击空白处缩放到适合。
+ * 子界面（ref）和 UE 一样整棵画出来（subref/）；WidgetSwitcher 只画当前页，在控件树里选中另一页就切到那一页看（previewPages）。
+ * UE 渲染图只有 ActiveWidgetIndex 那一页：看别的页时改按配置近似画，并写明原因。
  */
 export function Designer({
   path,
@@ -30,6 +33,8 @@ export function Designer({
   onSelect,
   anim,
   time,
+  notes,
+  onOpenConfig,
 }: {
   path: string
   tree?: WNode
@@ -39,6 +44,10 @@ export function Designer({
   onSelect: (key: string) => void
   anim?: Anim
   time: number
+  /** 子界面在 UE 那边对不上的原因（use-umg.ts 的 refNotes） */
+  notes?: string[]
+  /** 双击子界面（或子界面里的控件）打开它自己的配置（AssetForge 页才有） */
+  onOpenConfig?: (file: string) => void
 }) {
   const { project } = useUe()
   const { ui, cn } = h()
@@ -65,16 +74,20 @@ export function Designer({
     }
     return out
   }, [anim, time, idx])
-  const approx = !render.shot
-  const shown = useMemo(() => (tree && approx ? withSlotAnims(tree, values) : tree), [tree, approx, values])
+  // 选中了 Switcher 的另一页：设计器切到那一页（只是预览）；UE 渲染图画的是当前页，这时改按配置近似画
+  const paged = useMemo(() => (tree ? previewPages(tree, selected) : tree), [tree, selected])
+  const otherPage = paged !== tree
+  const shot = otherPage ? undefined : render.shot
+  const approx = !shot
+  const shown = useMemo(() => (paged && approx ? withSlotAnims(paged, values) : paged), [paged, approx, values])
   const rects: Rect[] = useMemo(() => {
-    if (render.shot)
-      return render.shot.widgets.flatMap((w) => {
+    if (shot)
+      return shot.widgets.flatMap((w) => {
         const n = resolveTarget(idx, w.name)
         return n ? [{ key: n.key, x: w.x, y: w.y, w: w.w, h: w.h }] : []
       })
     return shown ? layoutTree(shown, screen.w, screen.h) : []
-  }, [render.shot, shown, idx, screen.w, screen.h])
+  }, [shot, shown, idx, screen.w, screen.h])
   const rectMap = useMemo(() => new Map(rects.map((r) => [r.key, r])), [rects])
 
   const k = view.k
@@ -85,7 +98,12 @@ export function Designer({
     if (d.x < 0 || d.y < 0 || d.x > screen.w || d.y > screen.h) return undefined
     return hitTest(rects, d.x, d.y)?.key
   }
-  const sel = selected ? rectMap.get(selected) : undefined
+  // UE 渲染图没有子界面内部控件的矩形（UELink 只列父 WBP 自己 WidgetTree 里的）：选中内部控件时框住它所在的子界面
+  const sel = shot ? rectOrAncestor(selected, rectMap, idx.parent) : selected ? rectMap.get(selected) : undefined
+  const warn = [
+    ...(otherPage && render.shot ? [t('UE 渲染图只画 ActiveWidgetIndex 那一页，这一页按配置近似画')] : []),
+    ...(notes ?? []),
+  ].join('；')
   const hov = hover && hover !== selected ? rectMap.get(hover) : undefined
   const preset = SCREENS().find((s) => s.id === screen.id) ? screen.id : 'custom'
 
@@ -140,16 +158,21 @@ export function Designer({
               {render.error}
             </span>
           )}
-          {render.shot?.note && (
-            // UE 渲染时的提醒（有没编译的改动、这段动画不支持按时刻求值…）：直接写出来，不藏在悬停里
-            <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-warning" title={render.shot.note}>
-              {render.shot.note}
+          {warn && (
+            <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-warning" title={warn}>
+              {warn}
             </span>
           )}
-          {render.shot ? (
+          {shot?.note && (
+            // UE 渲染时的提醒（有没编译的改动、这段动画不支持按时刻求值…）：直接写出来，不藏在悬停里
+            <span className="ue:min-w-0 ue:truncate ue:text-footnote ue:text-warning" title={shot.note}>
+              {shot.note}
+            </span>
+          )}
+          {shot ? (
             <Badge tone="ok">
               <Zap className="ue:mr-0.5 ue:inline ue:h-3 ue:w-3" />
-              {t('UE 实时渲染 · {s} 秒', { s: (render.shot.ms / 1000).toFixed(1) })}
+              {t('UE 实时渲染 · {s} 秒', { s: (shot.ms / 1000).toFixed(1) })}
             </Badge>
           ) : (
             <Badge
@@ -194,8 +217,12 @@ export function Designer({
           if (key) onSelect(key)
         }}
         onDoubleClick={(e) => {
-          // 双击空白处（设计稿外面）缩放到适合；双击控件只当选中
-          if (!pick(e)) vw.fit()
+          // 双击空白处（设计稿外面）缩放到适合；双击子界面（或它里面的控件）打开它自己的配置（UE 里双击子 WBP 也是打开它），其它控件只当选中
+          const key = pick(e)
+          if (!key) return vw.fit()
+          const n = idx.byKey.get(key)
+          const file = n?.src ?? n?.subFile
+          if (file && onOpenConfig) onOpenConfig(file)
         }}
       >
         {!tree ? (
@@ -208,9 +235,9 @@ export function Designer({
               className="ue:absolute ue:overflow-hidden ue:shadow-canvas ue:outline ue:outline-canvas-line"
               style={{ left: view.x, top: view.y, width: screen.w * k, height: screen.h * k }}
             >
-              {render.shot ? (
+              {shot ? (
                 <img
-                  src={render.shot.url}
+                  src={shot.url}
                   alt={t('UE 渲染的预览')}
                   draggable={false}
                   // 放大时按像素放（UE 设计器放大也是看得到像素的），不让浏览器插值糊掉细节

@@ -7,6 +7,9 @@ import type { AssetConfig } from '../types.ts'
 import { resolveStyles } from '../../../../shared/forge-doc/styles.ts'
 import { fromConfig, parseUmgConfig, type UmgConfig } from './config.ts'
 import { fromDesign, type UmgDesign, type WNode } from './model.ts'
+import { liveRefIssues } from './subref/preview.ts'
+import { graftRefs } from './subref/refs.ts'
+import { useSubConfigs } from './subref/use-subrefs.ts'
 
 /**
  * UMG 布局的数据：能问 UE 时用 UELink 的 umg.design / umg.anims（另一路在 C++ 里加，2026-11-19），
@@ -34,6 +37,10 @@ export interface UmgData {
   configText?: string
   parent?: string
   loading: boolean
+  /** 子界面在 UE 那边对不上（子 WBP 没生成、父 WBP 没按新配置导入）：画布上写明，UE 渲染图里那块为什么是空的 */
+  refNotes: string[]
+  /** 打开另一份配置（AssetForge 页才有）：双击子界面 */
+  openConfig?: (file: string) => void
   /** 真出错（不是「不支持」）：显示给用户 */
   error: string
   reload: () => void
@@ -50,7 +57,15 @@ function withConfigProps(live: WNode, cfg?: WNode): WNode {
   walk(cfg)
   const visit = (n: WNode): WNode => {
     const c = idx.get(n.key)
-    return { ...n, props: n.props ?? c?.props, slot: n.slot ?? c?.slot, at: c?.at, children: n.children.map(visit) }
+    // ref 也挂上：UE 回的子界面节点没有子控件，按配置的 ref 读子配置嫁接（subref/）
+    return {
+      ...n,
+      props: n.props ?? c?.props,
+      slot: n.slot ?? c?.slot,
+      at: c?.at,
+      ref: c?.ref,
+      children: n.children.map(visit),
+    }
   }
   return visit(live)
 }
@@ -95,9 +110,13 @@ export function useUmgData(path: string, config: AssetConfig | undefined, offlin
   const designErr = design.error && !unsupported(design.error) ? design.error : ''
   const animsErr = anims.error && !unsupported(anims.error) ? anims.error : ''
   const live = design.data?.root ? design.data : undefined
+  // 子界面的配置（ref）：知道配置根时读出来嫁接进树；cfg 换了（存盘重读）跟着重读
+  const subs = useSubConfigs(project.id, config?.root, config?.file, cfg, cfg)
 
   return useMemo(() => {
-    const tree = live ? withConfigProps(fromDesign(live.root), cfgTree) : cfgTree
+    const liveTree = live ? withConfigProps(fromDesign(live.root), cfgTree) : undefined
+    const base = liveTree ?? cfgTree
+    const tree = base && graftRefs(base, config?.file, config?.file ? subs : undefined)
     const ueAnims = anims.data ? parseAnims(anims.data.animations) : undefined
     const cfgAnims = parseAnims(cfg?.animations)
     return {
@@ -110,6 +129,8 @@ export function useUmgData(path: string, config: AssetConfig | undefined, offlin
       configDoc: cfg,
       configText,
       parent: live?.parent ?? cfg?.parent,
+      refNotes: liveRefIssues(cfgTree, liveTree),
+      openConfig: config?.openConfig,
       loading: design.loading || anims.loading || desc.loading || !!config?.loading,
       error: designErr || animsErr || config?.error || '',
       reload: () => {
@@ -124,6 +145,7 @@ export function useUmgData(path: string, config: AssetConfig | undefined, offlin
     live,
     cfgTree,
     cfg,
+    subs,
     anims.data,
     configText,
     design.loading,

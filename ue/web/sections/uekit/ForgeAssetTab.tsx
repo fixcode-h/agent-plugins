@@ -69,6 +69,10 @@ export function ForgeAssetTab({
     truncated: configTruncated,
     loading: configLoading,
     error: configError,
+    // 子界面（ref）按配置根读子配置；双击控件树里的子界面打开它自己的配置（和左栏点配置一样）
+    root: edit?.configRoot,
+    file: edit?.main,
+    openConfig: (file: string) => go('assetforge', file),
   }
   // 有离线布局的类型（UMG）：资源还没生成也用和真实资源同一套布局，按配置画（资源查看页按 UE 编辑器布局，U4）
   if (path && absent && canOffline(configText))

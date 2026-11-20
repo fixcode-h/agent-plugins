@@ -70,6 +70,14 @@ export interface WNode {
   at?: (string | number)[]
   children: WNode[]
   truncated?: boolean
+  /** 配置里写的子界面引用（AssetForge 的 ref，原样的相对路径）：subref/ 按它读子配置嫁接进来 */
+  ref?: string
+  /** 子界面节点：读到的子配置文件（相对配置根），双击打开它；读不到时是 undefined、看 refError */
+  subFile?: string
+  /** 子界面画不出来的原因（文件不存在、解析失败、引用成环、嵌套太深）：画在占位框里、控件树标警告 */
+  refError?: string
+  /** 来自子界面配置的节点（只读）：是哪份文件（相对配置根） */
+  src?: string
 }
 
 /** /Script/UMG.TextBlock、TextBlock_C 这类写法都取短类名 */

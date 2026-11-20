@@ -10,7 +10,7 @@ export interface CfgNode {
   props?: Record<string, unknown>
   slot?: Record<string, unknown>
   children?: CfgNode[]
-  /** 子界面引用（另一份配置）：近似预览画成占位块 */
+  /** 子界面引用（另一份配置）：subref/ 读出子配置嫁接到这个节点下面画；读不到画占位框写原因 */
   ref?: string
   isVariable?: boolean
   variable?: boolean
@@ -80,6 +80,7 @@ export function fromConfig(n: CfgNode, parentKey = '', index = 0, at: (string | 
     active: typeof props.ActiveWidgetIndex === 'number' ? props.ActiveWidgetIndex : undefined,
     user: !!n.ref || undefined,
     asset: n.ref,
+    ref: n.ref,
     props,
     slot: n.slot,
     at,
@@ -87,5 +88,6 @@ export function fromConfig(n: CfgNode, parentKey = '', index = 0, at: (string | 
   }
 }
 
-/** 树里的控件个数（页头「控件树 96 个控件」） */
-export const countNodes = (n?: WNode): number => (n ? 1 + n.children.reduce((s, c) => s + countNodes(c), 0) : 0)
+/** 树里的控件个数（页头「控件树 96 个控件」）：只数这份配置自己的，嫁接进来的子界面内部不算（UE 的层级面板也不列它们） */
+export const countNodes = (n?: WNode): number =>
+  n && !n.src ? 1 + n.children.reduce((s, c) => s + countNodes(c), 0) : 0
