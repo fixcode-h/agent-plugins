@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
 import { Badge } from '../../ui.tsx'
 import type { LuaFn, LuaRoot } from './inspect-data.ts'
+import type { SelfChoice } from './CallForm.tsx'
 import { FnRow } from './InspectRows.tsx'
 import type { ChainLayer } from './objects-tree/ObjectHead.tsx'
 import { baseName, parseSrc } from './objects-tree/tree-model.ts'
@@ -15,12 +16,15 @@ export function FnLayers({
   root,
   fns,
   chain,
+  choice,
   onChanged,
   onOpen,
 }: {
   root: LuaRoot
   fns: LuaFn[]
-  chain: ChainLayer[]
+  /** tidyChain 过的（名字可读、下标和函数的 from 对得上） */
+  chain: (ChainLayer & { dup?: boolean })[]
+  choice?: SelfChoice
   onChanged: () => void
   onOpen: (file: string, line?: number) => void
 }) {
@@ -40,7 +44,9 @@ export function FnLayers({
           title = (
             <>
               <Badge tone={ue ? 'run' : 'accent'}>{ue ? 'UE' : 'Lua'}</Badge>
-              <span className="ue:font-mono">{layer.name || t('（匿名元表）')}</span>
+              <span className="ue:font-mono" title={layer.path}>
+                {layer.name || t('（没认出的元表）')}
+              </span>
             </>
           )
         return (
@@ -59,7 +65,7 @@ export function FnLayers({
             </button>
             {open &&
               list.map((fn) => (
-                <FnRow key={`${fn.from}\u0001${fn.name}`} root={root} fn={fn} onChanged={onChanged} onOpen={onOpen} />
+                <FnRow key={`${fn.from}\u0001${fn.name}`} root={root} fn={fn} choice={choice} onChanged={onChanged} onOpen={onOpen} />
               ))}
           </section>
         )

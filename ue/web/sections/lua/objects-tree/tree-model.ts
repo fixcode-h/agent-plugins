@@ -17,6 +17,8 @@ export interface BoundObj {
   classChain?: string[]
   owner?: string
   ownerName?: string
+  /** 2.19.1 起：这一项是类（UClass）不是实例 */
+  isClass?: boolean
 }
 
 export type Grouping = 'module' | 'class' | 'owner'
@@ -233,3 +235,67 @@ export function parseSrc(src: string): { file: string; line?: number } {
 
 /** 只留文件名（BP_PlayerController_C.lua），完整路径放悬停提示 */
 export const baseName = (f: string) => f.replace(/\\/g, '/').split('/').pop() ?? f
+
+/**
+ * 对象表里也有类（UClass）：Lua 里 UE.UClass.Load、拿蓝图类做参数时 UnLua 也会给类建实例表。
+ * 它们不是「运行中的对象」，拿它当 self 调实例函数会报「需要 UserWidget，拿到的是 WidgetBlueprintGeneratedClass」
+ */
+export const isClassObj = (o: BoundObj) => !!o.isClass || o.class === 'Class' || /GeneratedClass$/.test(o.class)
+
+/**
+ * 调带 self 的函数时，该拿谁当 self：看的是模块表（package.loaded.X）时是绑这个模块的对象，
+ * 看的是类对象时是这个类的实例。看的本来就是实例时返回 undefined（就用它自己）
+ */
+export function selfCandidates(
+  root: { path: string; keys: (string | number)[] },
+  objs: BoundObj[],
+  obj?: BoundObj,
+): { why: 'module' | 'class'; cands: BoundObj[] } | undefined {
+  const live = objs.filter((o) => stateOf(o) === 'alive' && !isClassObj(o))
+  if (!root.path && root.keys.length === 3 && root.keys[0] === 'package' && root.keys[1] === 'loaded') {
+    const m = String(root.keys[2])
+    return { why: 'module', cands: live.filter((o) => o.module === m) }
+  }
+  if (root.path && !root.keys.length && obj && isClassObj(obj)) {
+    return { why: 'class', cands: live.filter((o) => isA(o, obj.name)) }
+  }
+  return undefined
+}
+
+export interface ChainItem {
+  name: string
+  kind?: 'lua' | 'ue'
+  src?: string
+  path?: string
+  /** UELink 2.19.1 起：按反射补上的父类，没有函数 */
+  reflected?: boolean
+}
+
+/**
+ * 继承链给人看的样子，下标和原数组一一对应（函数分组按下标对层）：
+ * 资源路径只留类名（完整路径放 path）；同一个名字第二次出现起标 dup（UELink 2.19.0 遇到「元表是自己」会把同一层重复十几次）；
+ * 没认出名字、但函数定义在「模块名最后一段.lua」里的那层就是这个模块
+ */
+export function tidyChain<T extends ChainItem>(chain: T[], module?: string): (T & { dup?: boolean })[] {
+  const seen = new Set<string>()
+  const tail = module?.split('.').pop()?.toLowerCase()
+  return chain.map((c) => {
+    let x: T & { dup?: boolean } = c
+    if (!x.name && tail && x.src && baseName(parseSrc(x.src).file).toLowerCase() === `${tail}.lua`)
+      x = { ...x, name: module!, kind: 'lua' }
+    if (x.name.startsWith('/') && x.name.includes('.')) x = { ...x, path: x.path ?? x.name, name: x.name.split('.').pop()! }
+    if (x.name && seen.has(x.name)) return { ...x, dup: true }
+    if (x.name) seen.add(x.name)
+    return x
+  })
+}
+
+/**
+ * 实例表自己身上的 C 函数是 UnLua 第一次调 UE 函数时缓存的包装（UELink 2.19.1 起服务端已经归好），
+ * 旧版这边补一下：归到第一层 UE 类，免得调一次就从 UE 那组跳到「自己的」
+ */
+export function regroupFns<F extends { from: number; src?: string }>(fns: F[], chain: ChainItem[]): F[] {
+  const ue = chain.findIndex((c) => c.kind === 'ue' || (!!c.name && c.name.startsWith('/')))
+  if (ue < 0) return fns
+  return fns.map((f) => (f.from === 0 && !f.src ? { ...f, from: ue + 1 } : f))
+}

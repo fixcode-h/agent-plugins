@@ -141,6 +141,7 @@ function Inspect() {
             <LuaInspector
               root={root}
               obj={root.path ? objs.find((o) => o.path === root.path) : undefined}
+              objs={objs}
               tick={tick}
               onNav={(keys: LuaKey[]) => pick({ ...root, keys })}
               onPick={pick}

@@ -6,7 +6,8 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { luaText, type LuaField } from '../../Lua.tsx'
 import { ErrorText } from '../../ui.tsx'
-import { parseArg, signature, type CallRes, type LuaFn, type LuaRoot } from './inspect-data.ts'
+import { CallForm, type SelfChoice } from './CallForm.tsx'
+import { parseArg, signature, type LuaFn, type LuaRoot } from './inspect-data.ts'
 import { parseSrc } from './objects-tree/tree-model.ts'
 
 const SCALAR = new Set(['nil', 'boolean', 'number', 'string'])
@@ -149,11 +150,14 @@ export function FieldRow({
 export function FnRow({
   root,
   fn,
+  choice,
   onChanged,
   onOpen,
 }: {
   root: LuaRoot
   fn: LuaFn
+  /** 在模块表 / 类对象上调带 self 的函数时能挑的实例 */
+  choice?: SelfChoice
   onChanged: () => void
   onOpen?: (file: string, line?: number) => void
 }) {
@@ -189,112 +193,7 @@ export function FnRow({
           <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{fn.src ? fn.src : t('C 函数')}</span>
         )}
       </div>
-      {open && <CallForm root={root} fn={fn} onChanged={onChanged} />}
-    </div>
-  )
-}
-
-function CallForm({ root, fn, onChanged }: { root: LuaRoot; fn: LuaFn; onChanged: () => void }) {
-  const { project, target } = useUe()
-  const { ui } = h()
-  const { busy, run } = useAction()
-  const hasSelf = fn.params[0] === 'self'
-  const [self, setSelf] = useState(hasSelf || !root.path)
-  const params = self && hasSelf ? fn.params.slice(1) : fn.params
-  const [args, setArgs] = useState<Record<string, string>>({})
-  const [rest, setRest] = useState('')
-  const [res, setRes] = useState<CallRes>()
-  const [error, setError] = useState('')
-  const call = () =>
-    run('call', async () => {
-      setError('')
-      try {
-        const extra = rest.trim() ? parseArg(rest) : []
-        const list = [...params.map((p) => parseArg(args[p] ?? '')), ...(Array.isArray(extra) ? extra : [extra])]
-        const r = await op<CallRes>(
-          project.id,
-          'lua.call',
-          { path: root.path, keys: [...root.keys, fn.name], self, args: list },
-          target,
-          20000,
-        )
-        setRes(r)
-        onChanged()
-      } catch (e) {
-        setRes(undefined)
-        setError((e as Error).message)
-      }
-    })
-  return (
-    <div className="ue:flex ue:flex-col ue:gap-2 ue:bg-panel ue:px-4 ue:py-3 ue:pl-10">
-      <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-1.5 ue:text-footnote ue:text-muted">
-        <input
-          type="checkbox"
-          checked={self}
-          onChange={(e) => setSelf(e.target.checked)}
-          className="ue:accent-accent"
-        />
-        {t('把这张表当 self 传入（obj:{fn}()）', { fn: fn.name })}
-      </label>
-      {params.map((p) => (
-        <div key={p} className="ue:flex ue:items-center ue:gap-2">
-          <span className="ue:w-28 ue:shrink-0 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{p}</span>
-          <ui.Input
-            size="sm"
-            className="ue:flex-1 ue:font-mono"
-            placeholder={t('JSON 或字面量，空为 nil')}
-            value={args[p] ?? ''}
-            onChange={(e: { target: { value: string } }) => setArgs({ ...args, [p]: e.target.value })}
-          />
-        </div>
-      ))}
-      {fn.vararg && (
-        <div className="ue:flex ue:items-center ue:gap-2">
-          <span className="ue:w-28 ue:shrink-0 ue:font-mono ue:text-footnote ue:text-fg">...</span>
-          <ui.Input
-            size="sm"
-            className="ue:flex-1 ue:font-mono"
-            placeholder={t('其余参数，JSON 数组')}
-            value={rest}
-            onChange={(e: { target: { value: string } }) => setRest(e.target.value)}
-          />
-        </div>
-      )}
-      <div className="ue:flex ue:items-center ue:gap-2">
-        <ui.Button size="sm" disabled={busy === 'call'} onClick={call}>
-          <Play className="ue:h-3.5 ue:w-3.5" /> {t('调用')}
-        </ui.Button>
-        {res && <span className="ue:text-caption ue:text-subtle">{t('{ms} 毫秒', { ms: res.ms.toFixed(1) })}</span>}
-      </div>
-      <ErrorText>{error}</ErrorText>
-      {res && (
-        <div className="ue:flex ue:flex-col ue:gap-1 ue:font-mono ue:text-footnote">
-          {res.results.length ? (
-            res.results.map((r, i) => (
-              <span key={i} className="ue:text-fg">
-                ← {luaText(r)}
-              </span>
-            ))
-          ) : (
-            <span className="ue:text-subtle">{t('没有返回值')}</span>
-          )}
-          {res.output.map((l, i) => (
-            <span key={`o${i}`} className="ue:text-muted">
-              {l}
-            </span>
-          ))}
-          {!!res.changes?.length && (
-            <div className="ue:mt-1 ue:flex ue:flex-col">
-              <span className="ue:font-sans ue:text-caption ue:text-subtle">{t('self 上变了的字段')}</span>
-              {res.changes.map((c) => (
-                <span key={c.k} className="ue:text-fg">
-                  {c.k}: {JSON.stringify(c.before)} → {JSON.stringify(c.after)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {open && <CallForm root={root} fn={fn} choice={choice} onChanged={onChanged} onOpen={onOpen} />}
     </div>
   )
 }

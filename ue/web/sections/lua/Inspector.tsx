@@ -11,7 +11,7 @@ import { FnLayers } from './FnLayers.tsx'
 import { rootText, type InspectRes, type LuaRoot } from './inspect-data.ts'
 import { FieldRow } from './InspectRows.tsx'
 import { ChainChips, ObjectHead, type ChainLayer } from './objects-tree/ObjectHead.tsx'
-import type { BoundObj } from './objects-tree/tree-model.ts'
+import { regroupFns, selfCandidates, tidyChain, type BoundObj } from './objects-tree/tree-model.ts'
 import { useOpenLua } from './open-file.ts'
 
 type Filter = 'all' | 'fields' | 'functions' | 'upvalues'
@@ -24,6 +24,7 @@ type Filter = 'all' | 'fields' | 'functions' | 'upvalues'
 export function LuaInspector({
   root,
   obj,
+  objs,
   tick,
   onNav,
   onPick,
@@ -34,6 +35,8 @@ export function LuaInspector({
   root: LuaRoot
   /** 树里这个对象的一项（状态、世界、类）；看的不是绑定对象时没有 */
   obj?: BoundObj
+  /** 树里全部绑定对象：在模块表 / 类对象上调带 self 的函数时从里面挑实例 */
+  objs?: BoundObj[]
   tick: number
   onNav: (keys: LuaKey[]) => void
   /** 换一个起点看（点继承链上的模块） */
@@ -57,10 +60,12 @@ export function LuaInspector({
   )
   const d = data.data
   const hit = (s: string) => !q || s.toLowerCase().includes(q.toLowerCase())
-  const fns = (d?.functions ?? []).filter((f) => (!own || f.from === 0) && hit(f.name))
+  const modOfRoot = !root.path && root.keys[0] === 'package' && root.keys[1] === 'loaded' ? String(root.keys[2]) : undefined
+  const chain = tidyChain((d?.chain ?? []) as ChainLayer[], obj?.module || modOfRoot)
+  const fns = regroupFns(d?.functions ?? [], chain).filter((f) => (!own || f.from === 0) && hit(f.name))
   const fields = (d?.fields ?? []).filter((f) => hit(f.k))
   const ups = (d?.upvalues ?? []).filter((u) => hit(u.name))
-  const chain = (d?.chain ?? []) as ChainLayer[]
+  const choice = selfCandidates(root, objs ?? [], obj)
   const show = (f: Filter) => filter === 'all' || filter === f
   const top = root.label ?? (root.path ? t('实例表') : '_G')
   const isObj = !!root.path
@@ -175,7 +180,7 @@ export function LuaInspector({
           </Group>
         )}
         {show('functions') && !!fns.length && (
-          <FnLayers root={root} fns={fns} chain={chain} onChanged={onChanged} onOpen={openLua} />
+          <FnLayers root={root} fns={fns} chain={chain} choice={choice} onChanged={onChanged} onOpen={openLua} />
         )}
         {show('upvalues') && !!ups.length && (
           <Group title={t('模块里的 local（upvalue，只读）')}>
