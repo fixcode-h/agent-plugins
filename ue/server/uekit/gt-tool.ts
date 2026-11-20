@@ -1,13 +1,15 @@
 import type { McpResult } from '../../../sdk/server.ts'
 import { runOp } from '../ops.ts'
 import { out, str, tool } from '../toolkit.ts'
-import { gtApi, gtValidate, gtVars, gtWidgets } from './gt-author/tool-actions.ts'
+import { gtApi, gtValidate, gtVars, gtWidgets, STRUCT_MAX } from './gt-author/tool-actions.ts'
+import { gtMigrateTool, gtProps } from './gt-ref/tool.ts'
 import { gtVerdict } from './gt-verdict.ts'
 
 /**
  * ue_gametest（面板 ADR 0067：GameTest 一个工具，同一对象的操作用 action 区分）。从 tools-ext.ts 分出来：
  * 脚本化（GameTest 1.9.0）加了 vars / widgets / api / validate 四个查和校验的 action（定稿 11 节），
- * 实现在 gt-author/，这里只做分发。怎么写 v3 脚本放在技能 ue-gametest-authoring 里，说明只写各 action 做什么，免得超长。
+ * 对象引用（GameTest 2.0.0，协议 game-test-ref）加了 props（属性树和推荐标识）、migrate（旧脚本升到 v4），
+ * 实现在 gt-author/、gt-ref/，这里只做分发。怎么写 v4 脚本放在技能 ue-gametest-authoring 里，说明只写各 action 做什么，免得超长。
  */
 const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : d)
 
@@ -39,9 +41,9 @@ async function gtHistory(op: Op, a: Record<string, unknown>) {
 
 export const GT_TOOL = tool(
   'ue_gametest',
-  'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，status 返回位置；v3 脚本有 if / loop / call / set / invoke / api / 守护 / 表达式，写法按技能 ue-gametest-authoring）。' +
-    '不录制、从代码写测试：vars 列能读的变量和函数签名（按 C++ / 蓝图 / Lua 分组，scope=widget|class|subsystem|player|object|lua，values=true 带此刻的值）→ widgets 读 WBP 资产的控件树、直接给选择器（不用开游戏）→ api 列接口库（自带接口 + 项目 C++ / Lua 接口，query 筛）→ 写脚本 → validate 校验（scenario 或 script；编辑器没开时只做结构检查，返回 offline）→ run → job / report。' +
-    'run：scenario（可带 params、from / to 步骤 id）、steps + name（临时步骤）或批量 tag / scenarios，马上返回编号；step 立即执行一步探路；resolve 核对选择器和 skipIf（要开着 PIE）；inspect 看视口某点是哪个控件；actions 列动作和参数；scenarios 列场景；job 看进度；report 取报告，失败步骤的 payload.evidence 有截图、控件快照、日志路径；history 看最近结果；stop 取消。' +
+  'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，status 返回位置；v4 脚本用对象引用 {class, ident} 指对象、{obj, part} 指部件，有 if / loop / call / set / obj.* / api / 守护 / 表达式，写法按技能 ue-gametest-authoring）。' +
+    '从代码写测试：props 看对象的属性树和推荐标识（给 class 不用开游戏，给 target / object 要开着）→ widgets 读 WBP 控件树拿部件名 → vars 列变量和函数签名（scope=widget|class|subsystem|player|object|lua）→ api 列接口库 → 写脚本 → validate 校验（编辑器没开时只查结构，offline）→ run → job / report。v1–v3 的旧脚本先 migrate（dryRun 先看；写回前备份 .v3.bak，迁不准的写进 todo）。' +
+    'run：scenario（可带 params、from / to 步骤 id）、steps + name 或批量 tag / scenarios，马上返回编号；step 执行一步；resolve 核对引用命中几个和 skipIf（要开着 PIE）；inspect 看视口某点是什么、给出引用；actions 列动作；scenarios 列场景；job 看进度；report 取报告，失败步骤的 payload.evidence 有截图、控件快照、日志路径；history 看最近结果；stop 取消。' +
     '编辑器没开时 scenarios / report / history 读磁盘（offline: true）。跑场景文件通过的 report / job 算进完成依据。',
   {
     action: {
@@ -53,6 +55,8 @@ export const GT_TOOL = tool(
         'widgets',
         'api',
         'validate',
+        'props',
+        'migrate',
         'scenarios',
         'run',
         'step',
@@ -64,7 +68,9 @@ export const GT_TOOL = tool(
         'stop',
       ],
     },
-    scenario: { type: 'string', description: '场景文件，相对场景根（smoke/main-menu.json）' },
+    scenario: { type: 'string', description: '场景文件，相对场景根' },
+    all: { type: 'boolean', description: 'migrate：全部场景和 _settings' },
+    dryRun: { type: 'boolean', description: 'migrate：只看不写' },
     script: { type: 'object', description: 'validate：整份脚本 JSON（还没存文件时）' },
     steps: { type: 'array', items: { type: 'object' }, description: 'run：临时步骤' },
     params: { type: 'object', description: 'run：脚本参数' },
@@ -72,29 +78,30 @@ export const GT_TOOL = tool(
     to: { type: 'string', description: 'run：跑到这个步骤 id 停下' },
     tag: { type: 'string' },
     scenarios: { type: 'array', items: { type: 'string' } },
-    targets: { type: 'array', items: { type: 'string' }, description: 'resolve：选择器' },
+    refs: { type: 'array', items: { type: 'object' }, description: 'resolve：[{id?, ref}] 看命中几个' },
     checks: { type: 'array', items: { type: 'object' }, description: 'resolve：带 skipIf 的步骤' },
     ignoreSkipIf: { type: 'boolean' },
     name: { type: 'string' },
     step: { type: 'object', description: 'step：{action, target?, …}' },
     stepDelayMs: { type: 'number' },
     scope: { type: 'string', description: 'vars：widget / class / subsystem / player / object / lua' },
-    target: { type: 'string', description: 'vars scope=widget：界面选择器 WBP_X:.' },
-    class: { type: 'string', description: 'vars / widgets：类名' },
-    module: { type: 'string', description: 'vars scope=lua：require 路径' },
+    target: { type: 'object', description: 'vars / props：{obj: 引用, part?}' },
+    object: { description: 'vars / props：对象引用' },
+    class: { type: 'string', description: 'vars / widgets / props' },
+    part: { type: 'string', description: 'props：只看这个部件' },
+    module: { type: 'string', description: 'vars scope=lua / props：Lua require 路径' },
     which: { type: 'string', description: 'vars scope=player：gi gs gm ps pc pawn hud' },
-    object: { type: 'object', description: 'vars scope=object：定位器 {class, key?, in?}' },
     asset: { type: 'string', description: 'widgets：WBP 资产路径 /Game/UI/WBP_Bag' },
     values: { type: 'boolean' },
     filter: { type: 'string' },
     query: { type: 'string' },
     src: { type: 'string', description: 'api：builtin / cpp / lua' },
-    readOnly: { type: 'boolean', description: 'api：只列只读（能当条件）的' },
-    rescan: { type: 'boolean', description: 'api：编辑器重扫 C++ 项目接口' },
+    readOnly: { type: 'boolean', description: 'api：只列只读的' },
+    rescan: { type: 'boolean', description: 'api：重扫 C++ 接口' },
     offset: { type: 'number' },
     limit: { type: 'number' },
     runId: { type: 'string' },
-    last: { type: 'number', description: 'job：只回最后几步（默认 20）' },
+    last: { type: 'number', description: 'job：只回最后几步' },
     x: { type: 'number', description: 'inspect：视口归一化坐标 0–1' },
     y: { type: 'number' },
   },
@@ -114,6 +121,10 @@ export const GT_TOOL = tool(
         return out(await gtApi(op, a, ctx))
       case 'validate':
         return out(await gtValidate(op, a, ctx))
+      case 'props':
+        return out(await gtProps(op, a), STRUCT_MAX)
+      case 'migrate':
+        return out(await gtMigrateTool(op, a))
       case 'scenarios':
         return out(await op('gt.scenarios', { query: a.query, limit: 100 }))
       case 'run':
@@ -124,7 +135,7 @@ export const GT_TOOL = tool(
         return out(
           await op('gt.resolve', {
             ...(a.scenario ? { scenario: a.scenario } : {}),
-            ...(Array.isArray(a.targets) ? { targets: a.targets } : {}),
+            ...(Array.isArray(a.refs) ? { refs: a.refs } : {}),
             ...(Array.isArray(a.checks) ? { checks: a.checks } : {}),
           }),
         )

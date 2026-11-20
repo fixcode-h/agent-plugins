@@ -8,7 +8,7 @@ import path from 'node:path'
 import { before, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import type { PluginServerContext } from '../../../sdk/server.ts'
-import { parseScript } from '../../shared/gt-script/script.ts'
+import { parseScript, toV4WithTodos } from '../../shared/gt-script/script.ts'
 import { setCtx } from '../util.ts'
 import { offlineChecks } from './gt-author/checks/index.ts'
 import { makeEnv, runChecks } from './gt-author/validate.ts'
@@ -46,12 +46,14 @@ test('自带用例都在', async () => {
   assert.deepEqual(files, [...FILES].sort())
 })
 
-test('脚本格式解析得了、离线校验没有错误', async () => {
+// 用例还是 v3（UEKit 那边没重新生成）：先按「升级脚本」迁到 v4 再校验，迁移后的脚本要能过离线校验（迁不准的只是 migrate_todo 警告）
+test('脚本格式解析得了、迁到 v4 后离线校验没有错误', async () => {
   const scen = await sampleRoot('gt-samples-')
   for (const f of FILES) {
     const r = parseScript(await readFile(path.join(SAMPLES, f), 'utf8'))
     assert.ok('doc' in r, `${f}：${'error' in r ? r.error : ''}`)
-    const checked = await runChecks(offlineChecks(), makeEnv(r.doc as never, `AssetForgeSample/${f}`, scen, scen))
+    const v4 = toV4WithTodos(r.doc).doc
+    const checked = await runChecks(offlineChecks(), makeEnv(v4 as never, `AssetForgeSample/${f}`, scen, scen))
     assert.deepEqual(
       checked.errors.map((e) => `${e.code} ${JSON.stringify(e)}`),
       [],

@@ -5,12 +5,12 @@
  */
 export interface ExprFunction {
   name: string
-  /** 参数写法，补全时显示：sel 选择器、x 值、n 小数位 */
+  /** 参数写法，补全时显示：ref 对象引用、path 属性路径、x 值、n 小数位 */
   sig: string
   min: number
   /** -1 = 不限 */
   max: number
-  group: 'widget' | 'convert' | 'math' | 'text' | 'vector' | 'time'
+  group: 'object' | 'convert' | 'math' | 'text' | 'vector' | 'time'
 }
 
 const f = (name: string, sig: string, min: number, max: number, group: ExprFunction['group']): ExprFunction => ({
@@ -22,9 +22,8 @@ const f = (name: string, sig: string, min: number, max: number, group: ExprFunct
 })
 
 export const EXPR_FUNCTIONS: ExprFunction[] = [
-  ...['text', 'number', 'visible', 'enabled', 'exists', 'onScreen', 'checked', 'count'].map((n) =>
-    f(n, 'sel', 1, 1, 'widget'),
-  ),
+  // v4（协议 game-test-ref 第 4 节）：对象上的属性和算出状态都用 prop 读，引用写命名引用、$var 或内联对象
+  f('prop', 'ref, path', 2, 2, 'object'),
   ...['len', 'str', 'num', 'int', 'bool'].map((n) => f(n, 'x', 1, 1, 'convert')),
   f('round', 'x, n?', 1, 2, 'math'),
   f('floor', 'x', 1, 1, 'math'),
@@ -50,6 +49,21 @@ export const EXPR_FUNCTIONS: ExprFunction[] = [
 
 const byName = new Map(EXPR_FUNCTIONS.map((x) => [x.name, x]))
 
+/**
+ * v3 按选择器读控件的内置函数：v4 删掉了（校验报 expr_removed），迁移改写成 prop(引用, ":状态")。
+ * 值是对应的属性路径（number 还要包一层 num，checked 要和 "Checked" 比）
+ */
+export const REMOVED_EXPR_FUNCTIONS: Record<string, string> = {
+  text: ':text',
+  number: ':text',
+  visible: ':shown',
+  enabled: ':enabled',
+  exists: ':exists',
+  onScreen: ':onScreen',
+  checked: ':checked',
+  count: ':count',
+}
+
 export const exprFunction = (name: string) => byName.get(name)
 
 /** 取值来源（协议 4.3）：@ 后面能写的名字。sub、actor、obj、luaMod、luaG、cvar 后面要接名字或方括号 */
@@ -68,5 +82,5 @@ export const VALUE_SOURCES = [
   'luaG',
   'cvar',
 ] as const
-/** 控件 / 条目上的字段（条件 field 用）：@self 反射、@lua 绑的 Lua 实例、@item 条目数据对象、@itemLua */
+/** 对象上的属性路径的根（协议 3.1）：@self 反射、@lua 绑的 Lua 实例、@item 条目数据对象、@itemLua；其余第一段是部件名 */
 export const FIELD_SOURCES = ['self', 'lua', 'item', 'itemLua'] as const

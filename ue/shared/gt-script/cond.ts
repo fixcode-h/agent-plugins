@@ -2,7 +2,7 @@ import type { GtPath } from './types.ts'
 
 /**
  * 统一条件（协议第 4 节）：all（全部满足）/ any（任一满足）/ not（不成立）任意嵌套，叶子是一条判断。
- * if、loop until/while、wait、守护 when、skipIf、assert、invoke expect 都用它。
+ * if、loop until/while、wait、守护 when、skipIf、assert、obj.call expect 都用它。
  * 条件编辑器总是把根当成一个组来编辑（toEditable），存回去时只有一条判断就不包（simplify），和手写的一样短。
  * 路径相对条件根：['all', 0, 'any', 1]、['not']
  */

@@ -6,7 +6,7 @@ import type { TidyResult } from './gt-tidy-plan.ts'
  * 「整理成流程」写回时，步骤之外要动的地方（脚本协议第 1、5 节）：
  * - 场景顶层的 guards（本脚本守护）和 params（参数），和原有的合并，同名参数以这次为准；
  * - 勾了 global 的守护写进场景根 _settings.json 的 guards（全局守护），别的运行配置原样保留；
- * - 用到块、守护、参数时 schemaVersion 升到 3（mergeScenario 只升不降）。
+ * - 用到块、守护、参数时 schemaVersion 至少是 3（mergeScenario 只升不降：GameTest 2.0 录的 v4 保持 4，规则按录制的格式出条件）。
  * 守护缺 id 时按 g1、g2… 补一个没用过的：报告和推送按 id 记守护触发次数。
  */
 type Obj = Record<string, unknown>

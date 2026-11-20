@@ -2,7 +2,7 @@ import { pathStr, walk, type GtScript } from '../../../shared/gt-script/index.ts
 import type { StepRef } from './checks/types.ts'
 
 /**
- * 把 v3 脚本里的每一步（含块里、守护里的）按深度优先摊平，带上路径（steps.3.do.0）。
+ * 把脚本里的每一步（含块里、守护里的）按深度优先摊平，带上路径（steps.3.do.0）。
  * 结构操作（插入、移动、包块）在 shared/gt-script，这里只读。
  */
 type Obj = Record<string, unknown>

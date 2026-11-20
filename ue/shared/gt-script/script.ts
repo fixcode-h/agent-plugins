@@ -1,16 +1,20 @@
 import { blockOf, idPrefixOf, isBlock, slotsOf } from './blocks/index.ts'
 import { comparePath, ensureSlot, getAt, isPrefix, placeOf, samePath } from './path.ts'
+import { migrateScript, type MigrateTodo } from './ref/migrate/index.ts'
 import type { GtGuard, GtPath, GtScript, GtStep } from './types.ts'
 import { hasBlocks, idMaker, usedIds, walk } from './walk.ts'
 
 /**
- * GameTest 脚本 v3 的读写和结构操作：插入、删除、移动、放进 / 移出块、包成块、展开、复制、补 id、v1/v2 → v3、转回平铺。
+ * GameTest 脚本的读写和结构操作：插入、删除、移动、放进 / 移出块、包成块、展开、复制、补 id、旧版本 → v4。
  * 全部是纯函数：传入场景，返回新场景（不改传入的对象），撤销就是留着旧对象。界面、流程图、Agent 离线校验共用。
  * 失败（路径不对、操作不适用）返回 undefined，调用方按「做不了」处理，不抛异常。
  */
 
-/** 支持的最高 schemaVersion（比它高的文件只读，提示升级面板） */
-export const SCHEMA_VERSION = 3
+/**
+ * 支持的最高 schemaVersion（比它高的文件只读，提示升级面板）。v4（GameTest 2.0，对象引用）起只认 v4：
+ * v1–v3 不再按旧写法编辑，打开时提示「升级脚本」（ref/migrate，先备份）
+ */
+export const SCHEMA_VERSION = 4
 
 const clone = <T>(v: T): T => structuredClone(v)
 
@@ -240,19 +244,27 @@ export function duplicate(doc: GtScript, path: GtPath): EditResult | undefined {
 // ---------- 版本 ----------
 
 /**
- * 存盘前整理成 v3：补 kind、schemaVersion、id；v1 的 click / type 没写 via 时补 via:"code"（和 GameTest 读 v1 时做的一样，行为不变）。
- * wrapFlat：旧的平铺场景把主流程包成一个「录制」段（定稿第 14 节，也可以选「保持平铺」）
+ * 存盘前整理成 v4：旧版本先迁移（ref/migrate，迁不准的写 todo），再补 kind、schemaVersion、id。
+ * wrapFlat：旧的平铺场景把主流程包成一个「录制」段（定稿第 14 节，也可以选「保持平铺」）。
+ * todos：这次迁移留下的待定（已经是 v4 的为空）
  */
-export function toV3(doc: GtScript, o: { wrapFlat?: boolean; groupName?: string } = {}): GtScript {
-  const out = clone(doc)
-  const version = versionOf(out)
-  if (version < 2)
-    walk(out, (e) => {
-      if ((e.step.action === 'click' || e.step.action === 'type') && !('via' in e.step)) e.step.via = 'code'
-    })
+export function toV4(doc: GtScript, o: { wrapFlat?: boolean; groupName?: string } = {}): GtScript {
+  return toV4WithTodos(doc, o).doc
+}
+
+export function toV4WithTodos(
+  doc: GtScript,
+  o: { wrapFlat?: boolean; groupName?: string } = {},
+): { doc: GtScript; todos: MigrateTodo[] } {
+  const version = versionOf(doc)
+  const m = migrateScript(doc)
+  const out = m.changed ? m.doc : clone(doc)
   if (o.wrapFlat && version < 3 && !hasBlocks(out) && Array.isArray(out.steps) && out.steps.length)
     out.steps = [{ action: 'group', name: o.groupName ?? '', recorded: true, do: out.steps }]
   out.kind = out.kind ?? 'gametest-scenario'
   out.schemaVersion = SCHEMA_VERSION
-  return fillIds(out)
+  return { doc: fillIds(out), todos: m.todos }
 }
+
+/** @deprecated 改用 toV4（v3 不再单独存在：旧版本存盘时一律迁移到 v4）。留着给还没换名的调用方 */
+export const toV3 = toV4

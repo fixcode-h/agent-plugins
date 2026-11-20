@@ -1,10 +1,14 @@
-import { range, screenOf, stepSig } from '../sig.ts'
+import { isRefTarget, range, screenOf, shownCond, stepSig } from '../sig.ts'
 import type { FlowHint, FlowRule } from '../types.ts'
 
 /**
  * 连着做了 3 次以上一模一样的操作（连点「下一页」、连按 E 跳对话）：录到的次数只是那一次碰巧的次数，
  * 改成循环更稳。下一步有界面目标时「做到下一步要点的东西出现为止」，max 给录到次数的 3 倍；没有就按次数循环。
  */
+/** 说明里显示的目标：v4 写「界面.部件」 */
+const labelOf = (t: unknown) =>
+  isRefTarget(t) ? [screenOf(t), t.part].filter(Boolean).join('.') : t === undefined ? '' : String(t)
+
 const SKIP = new Set(['wait', 'mark', 'snapshot', 'screenshot', 'ping', 'probe'])
 const MIN = 3
 
@@ -23,15 +27,15 @@ export const repeat: FlowRule = {
       const action = String(steps[i].action ?? '')
       if (n >= MIN && !SKIP.has(action) && !nums.some((x) => claimed.has(x))) {
         const next = steps[j]
-        const until = next && screenOf(next.target) ? { target: next.target, visible: true } : undefined
+        const until = next && screenOf(next.target) ? shownCond(next.target, 'shown') : undefined
         const block = until
           ? { action: 'loop', until, max: Math.max(n * 3, 10), note: `重复到下一步的目标出现为止（录制时是 ${n} 次）` }
           : { action: 'loop', times: n, note: `录制时重复了 ${n} 次` }
-        const label = String(steps[i].target ?? steps[i].key ?? action)
+        const label = labelOf(steps[i].target) || String(steps[i].key ?? action)
         out.push({
           rule: 'repeat',
           what: until
-            ? `第 ${i + 1}–${j} 步连着 ${n} 次 ${label}，改成循环：做到下一步的 ${String(next.target)} 出现为止（最多 ${block.max} 轮）`
+            ? `第 ${i + 1}–${j} 步连着 ${n} 次 ${label}，改成循环：做到下一步的 ${labelOf(next.target)} 出现为止（最多 ${block.max} 轮）`
             : `第 ${i + 1}–${j} 步连着 ${n} 次 ${label}，改成循环 ${n} 次`,
           steps: nums,
           changes: [

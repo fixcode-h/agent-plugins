@@ -1,4 +1,4 @@
-import { screenOf, widgetOf } from '../sig.ts'
+import { isRefTarget, screenOf, shownCond, widgetOf } from '../sig.ts'
 import type { FlowHint, FlowRule, Step } from '../types.ts'
 
 /**
@@ -7,8 +7,13 @@ import type { FlowHint, FlowRule, Step } from '../types.ts'
  * 第一次出现的那几步改成守护（出现就做），后面再出现的同一弹窗直接删掉；在别的脚本里也会弹的，Agent 可以改成全局守护。
  */
 const CLOSE = /close|cancel|confirm|ok\b|okay|skip|got_?it|know|back|exit|关闭|确定|跳过|知道|返回|取消/i
-const POPUP = /notice|popup|pop_|tips?\b|dialog|guide|announce|reward|toast|confirm|alert|msgbox|message_?box|公告|弹窗|引导/i
+const POPUP =
+  /notice|popup|pop_|tips?\b|dialog|guide|announce|reward|toast|confirm|alert|msgbox|message_?box|公告|弹窗|引导/i
 const MAX_RUN = 2
+
+/** 守护的触发条件：v4 录制按那一步目标的对象（不带部件），v3 按屏名 */
+const whenShown = (target: unknown, scr: string) =>
+  isRefTarget(target) ? shownCond({ obj: target.obj }, 'onScreen') : shownCond(`${scr}:.`, 'onScreen')
 
 const isAct = (s: Step) => ['click', 'key'].includes(String(s.action ?? ''))
 
@@ -27,7 +32,15 @@ export const popupGuard: FlowRule = {
       const seg = steps.slice(i, j)
       const looks = POPUP.test(scr) || seg.some((s) => CLOSE.test(widgetOf(s.target)))
       // 前后至少一边落在别的界面上（开头、结尾弹的也算），并且这段不是整份脚本的主界面
-      if (scr && j - i <= MAX_RUN && looks && seg.every(isAct) && (before || after) && before !== scr && after !== scr) {
+      if (
+        scr &&
+        j - i <= MAX_RUN &&
+        looks &&
+        seg.every(isAct) &&
+        (before || after) &&
+        before !== scr &&
+        after !== scr
+      ) {
         const nums = Array.from({ length: j - i }, (_, k) => i + k + 1)
         if (!nums.some((n) => claimed.has(n))) runs.set(scr, [...(runs.get(scr) ?? []), nums])
       }
@@ -52,7 +65,7 @@ export const popupGuard: FlowRule = {
             what: `${scr} 出现就关`,
             op: 'guard',
             steps: first,
-            guard: { name: `关闭 ${scr}`, when: { target: `${scr}:.`, onScreen: true } },
+            guard: { name: `关闭 ${scr}`, when: whenShown(steps[first[0] - 1].target, scr) },
           },
           ...(restNums.length ? [{ what: `同一个弹窗再次出现的步骤，守护会处理`, op: 'delete', steps: restNums }] : []),
         ],

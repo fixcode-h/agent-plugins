@@ -4,6 +4,7 @@ import { calls } from './calls.ts'
 import { exprs } from './exprs.ts'
 import { ids } from './ids.ts'
 import { lua } from './lua.ts'
+import { refs } from './refs.ts'
 import { shape } from './shape.ts'
 import type { Check } from './types.ts'
 import { vars } from './vars.ts'
@@ -15,6 +16,7 @@ import { vars } from './vars.ts'
 const table: { check: Check; panelOnly?: boolean }[] = [
   { check: shape },
   { check: ids },
+  { check: refs },
   { check: actions },
   { check: calls },
   { check: vars },

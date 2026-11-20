@@ -1,9 +1,10 @@
-import { allBlocks } from '../../../../shared/gt-script/index.ts'
+import { allBlocks, REMOVED_ACTIONS } from '../../../../shared/gt-script/index.ts'
 import { issue, type Check, type Issue } from './types.ts'
 
 /**
  * 动作名和块的必填字段。编辑器没开时拿不到 gt.actions，按协议文档列的动作认（game-test.md 动作表 + 脚本协议第 2 节的块），
- * 不认识的只给警告：可选模块（CommonUI、GAS、EnhancedInput）和以后的版本会加动作，开着编辑器校验才算准
+ * 不认识的只给警告：可选模块（CommonUI、GAS、EnhancedInput）和以后的版本会加动作，开着编辑器校验才算准。
+ * v4 删掉的动作（invoke、find、widget.close、widget.call）由 refs 检查报 action_removed，这里不再重复报
  */
 const V1 = [
   'ping',
@@ -14,7 +15,6 @@ const V1 = [
   'level.load',
   'widget.add',
   'widget.remove',
-  'find',
   'snapshot',
   'wait',
   'click',
@@ -58,7 +58,7 @@ const has = (o: Record<string, unknown>, k: string) => o[k] !== undefined && o[k
 
 export const actions: Check = {
   name: 'actions',
-  summary: '动作名、if / loop / call / invoke / api / set 的必填字段',
+  summary: '动作名、if / loop / call / api / set 的必填字段',
   run({ steps }) {
     const out: Issue[] = []
     const known = knownActions()
@@ -68,7 +68,7 @@ export const actions: Check = {
         out.push(issue(s, 'unknown_action', '缺 action'))
         continue
       }
-      if (!known.has(a))
+      if (!known.has(a) && !(a in REMOVED_ACTIONS))
         out.push(
           issue(
             s,
@@ -96,11 +96,7 @@ export const actions: Check = {
       const setVar = a === 'set' && (has(o, 'var') || !has(o, 'target'))
       if (setVar && !has(o, 'var')) need('var', '变量名')
       if (setVar && !has(o, 'value') && !has(o, 'from')) out.push(issue(s, 'param_missing', 'set 要写 value 或 from'))
-      if (a === 'invoke') need('function', '函数名')
       if (a === 'api') need('api', '接口名，如 Object.Find、项目.QuestTest.AcceptQuest')
-      if ((a === 'widget.close' || a === 'widget.call') && !has(o, 'target'))
-        need('target', '界面选择器，如 WBP_Guide:.')
-      if (a === 'widget.call') need('function', '界面上的无参函数名')
       if (a === 'editor.open' && !has(o, 'asset') && !has(o, 'map'))
         out.push(issue(s, 'param_missing', 'editor.open 要写 asset（资源路径）或 map（关卡）'))
       if (a === 'editor.prop')
