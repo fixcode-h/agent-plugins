@@ -13,7 +13,6 @@ import { GraphPane } from './GraphPane.tsx'
 import { closeTab, defaultGraph, openTab, resolveView, type BpView } from './model.ts'
 import { MyBlueprint } from './MyBlueprint.tsx'
 import { useBpData } from './use-bp.ts'
-import { Viewport } from './Viewport.tsx'
 
 /** 图表页签：按资源记（切资源就换一套） */
 interface Tabs {
@@ -24,17 +23,17 @@ interface Tabs {
 
 /**
  * 蓝图的查看页（设计稿第 3 节 Actor 行、效果图 A1–A4）：
- * 左上组件树、左下「我的蓝图」、中间切视口 / 图表 / 类默认值 / 摘要与引用、右边细节。
- * - 组件树选组件 → 右栏组件细节；点「自身」或页头「类默认值」→ 右栏类默认值（两处联动），中间留着视口；
+ * 左上组件树、左下「我的蓝图」、中间切图表 / 类默认值 / 摘要与引用、右边细节。
+ * - 组件树选组件 → 右栏组件细节；点「自身」或页头「类默认值」→ 右栏类默认值（两处联动），中间的图表不动；
  * - 「我的蓝图」点图 / 函数 / 宏 → 中间图表页签里打开；图表里点节点 → 右栏看节点引脚；
- * - 动画蓝图、函数库没有组件：不显示组件树和视口，直接看图表；UE 没连上时各块说明原因（A4）。
- * 视口用 UELink 2.18 的 asset.preview（UE 缩略图渲染）；旧桥接说明要更新，不画假画面
+ * - 动画蓝图、函数库没有组件：不显示组件树，直接看图表；UE 没连上时各块说明原因（A4）。
+ * 不放视口（用户 2026-11-20：「Actor不显示视口，直接显示图表就行」），默认进图表
  */
 export function BlueprintLayout(p: LayoutProps) {
   const { path, comp, onComp, onOpen, onChanged, hint, marks, layout } = p
   const { project } = useUe()
   const data = useBpData(path)
-  const [want, setView] = useKept<BpView>(`${project.id}/bp/view`, 'viewport')
+  const [want, setView] = useKept<string>(`${project.id}/bp/view`, 'graph')
   const [tabs, setTabs] = useState<Tabs>({ path, list: [], active: '' })
   const [node, setNode] = useState('')
   const cur: Tabs = tabs.path === path ? tabs : { path, list: [], active: '' }
@@ -62,9 +61,7 @@ export function BlueprintLayout(p: LayoutProps) {
   const pickComp = (c: string) => {
     onComp(c)
     setNode('')
-    // 「自身」= 类默认值，选了组件回到视口（页头分段按钮跟着变）
-    if (view === 'viewport' && !c) setView('defaults')
-    else if (view === 'defaults' && c) setView('viewport')
+    // 选组件只换右栏（组件属性 / 「自身」= 类默认值），中间的图表不动（视口已去掉，用户 2026-11-20）
   }
   const openGraph = (name: string) => {
     setTabs({ path, list: openTab(list, name), active: name })
@@ -105,7 +102,9 @@ export function BlueprintLayout(p: LayoutProps) {
         <InfoView path={path} onOpen={onOpen} />
       </Card>
     ) : (
-      <Viewport path={path} online={data.online} picked={picked} />
+      <Card className="ue:min-h-0 ue:flex-1" title={t('类默认值')} bodyClass="ue:p-4 ue:text-caption ue:text-subtle">
+        {t('类默认值显示在右侧细节面板里；在左边组件树选组件看组件属性')}
+      </Card>
     )
 
   return (
