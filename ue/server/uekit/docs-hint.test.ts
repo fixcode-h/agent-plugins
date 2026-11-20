@@ -2,7 +2,7 @@
 // 用法：node --test ue/server/uekit/docs-hint.test.ts（不需要 UE、不需要面板）
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -63,4 +63,24 @@ test('新位置还没有、旧位置有时先用旧的；项目设置里指定�
   assert.deepEqual(await syncDocsHint(root, shared), [])
   assert.ok(!existsSync(path.join(shared, 'GameTest')))
   assert.equal(await scenarioRoot(root), path.join(root, 'Tests', 'GT'))
+})
+
+test('别的分支先搬过、新位置已有目录：这个分支旧位置的文件也并进去，同名不覆盖，只并一次', async () => {
+  const base = await mkdtemp(path.join(tmpdir(), 'ue-docs-hint-'))
+  const root = path.join(base, 'Dev', 'Game')
+  const old = path.join(base, 'Dev', 'ProjectDoc', 'docs', 'GameTest')
+  const shared = path.join(base, 'Main', 'ProjectDoc', 'docs')
+  await mkdir(old, { recursive: true })
+  await writeFile(path.join(old, 'dev-only.json'), '{"from":"dev"}')
+  await writeFile(path.join(old, 'same.json'), '{"from":"dev"}')
+  await mkdir(path.join(shared, 'GameTest'), { recursive: true })
+  await writeFile(path.join(shared, 'GameTest', 'same.json'), '{"from":"main"}')
+  await mkdir(root, { recursive: true })
+  assert.equal((await syncDocsHint(root, shared)).length, 1)
+  assert.ok(existsSync(path.join(shared, 'GameTest', 'dev-only.json')))
+  assert.equal(await readFile(path.join(shared, 'GameTest', 'same.json'), 'utf8'), '{"from":"main"}')
+  // 用户在新位置删掉的文件不会被再补回来
+  await rm(path.join(shared, 'GameTest', 'dev-only.json'))
+  assert.deepEqual(await syncDocsHint(root, shared), [])
+  assert.ok(!existsSync(path.join(shared, 'GameTest', 'dev-only.json')))
 })
