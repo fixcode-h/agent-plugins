@@ -1,9 +1,14 @@
 import { ChevronRight, Crosshair, Loader2, Search } from 'lucide-react'
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import type { GtPropGroup, GtPropItem, GtPropsResult } from '../../../../shared/gt-script/ref/types.ts'
+import {
+  comparable,
+  type GtPropGroup,
+  type GtPropItem,
+  type GtPropsResult,
+} from '../../../../shared/gt-script/index.ts'
 import { show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
-import { stateHint, splitProp } from './compare-table.ts'
+import { stateHint, stateOfProp } from './compare-table.ts'
 import { classShort } from './describe.ts'
 import { useColWidths, usePrefs } from './prefs.ts'
 
@@ -46,7 +51,7 @@ function siblingText(it: GtPropItem, siblings: number | undefined): { text: stri
 }
 
 /** 能不能当标识 / 被判断：委托、指针、结构体本身不行（灰掉，悬停看原因） */
-const usable = (it: GtPropItem) => it.comparable !== false && it.kind !== 'struct' && it.kind !== 'none'
+const usable = (it: GtPropItem) => it.comparable !== false && comparable(it.kind)
 
 type PartState = GtPropGroup[] | 'loading' | { error: string }
 
@@ -66,7 +71,8 @@ export function PropTree({
   toolbar,
   className,
 }: {
-  data?: GtPropsResult
+  /** unavailable：UE 读不到（旧 GameTest、编辑器没开）时服务端只给 Lua 声明字段，这里写原因 */
+  data?: GtPropsResult & { unavailable?: string; luaFile?: string }
   mode: PropTreeMode
   /** 已选的属性路径（标识组里的、判断选中的那个） */
   selected: string[]
@@ -129,7 +135,7 @@ export function PropTree({
     const ok = usable(it)
     const rec = ok && (suggest.has(it.prop) || (it.score ?? 0) >= 7)
     const sib = siblingText(it, data?.siblings)
-    const state = splitProp(it.prop).state
+    const state = stateOfProp(it.prop)
     return (
       <div
         key={key}
@@ -275,10 +281,17 @@ export function PropTree({
           </div>
         )}
         {error && <p className="ue:px-3 ue:py-2 ue:text-footnote ue:text-danger">{error}</p>}
-        {data && !live && (
-          <p className="ue:border-b ue:border-line/40 ue:px-3 ue:py-1.5 ue:text-caption ue:text-subtle">
-            {t('游戏没开：按类读资产列出属性，没有此刻的值和「同类里」')}
+        {data?.unavailable ? (
+          <p className="ue:border-b ue:border-line/40 ue:px-3 ue:py-1.5 ue:text-caption ue:text-warning">
+            {t('只列出了 Lua 源码里声明的字段：{why}', { why: data.unavailable })}
           </p>
+        ) : (
+          data &&
+          !live && (
+            <p className="ue:border-b ue:border-line/40 ue:px-3 ue:py-1.5 ue:text-caption ue:text-subtle">
+              {t('游戏没开：按类读资产列出属性，没有此刻的值和「同类里」')}
+            </p>
+          )
         )}
         {data?.groups.map((g) => group(g, 0, ''))}
         {data?.truncated && (

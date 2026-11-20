@@ -27,15 +27,22 @@ export const RefRpcProvider = RpcCtx.Provider
 export const useRefRpc = () => useContext(RpcCtx)
 
 /** gt.props 的参数：三选一（node / target / class），可选 part */
-export type PropsArgs =
+export type PropsArgs = (
   | { node: string; part?: string }
   | { target: GtTarget; part?: string }
   | { class: string; part?: string }
+) & {
+  /** 知道对象绑的 Lua 模块时传：UE 读不到也能列出 ---@field 声明的字段 */
+  luaModule?: string
+}
+
+/** gt.props 的返回：UE 读不到时服务端只给 Lua 声明字段（self 组），unavailable 写原因 */
+export type PropsData = GtPropsResult & { unavailable?: string; luaFile?: string }
 
 /** 读一个对象的属性树；嵌套界面展开时再按 part 读一次（loadPart） */
 export function useProps(project: string, args: PropsArgs | undefined) {
   const rpc = useRefRpc()
-  const [data, setData] = useState<GtPropsResult>()
+  const [data, setData] = useState<PropsData>()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const key = args ? JSON.stringify(args) : ''
@@ -45,7 +52,7 @@ export function useProps(project: string, args: PropsArgs | undefined) {
     if (!key) return
     let off = false
     setLoading(true)
-    rpc<GtPropsResult>(project, 'gt.props', JSON.parse(key) as Record<string, unknown>)
+    rpc<PropsData>(project, 'gt.props', JSON.parse(key) as Record<string, unknown>)
       .then((r) => !off && setData(r))
       .catch((e: Error) => !off && setError(e.message))
       .finally(() => !off && setLoading(false))

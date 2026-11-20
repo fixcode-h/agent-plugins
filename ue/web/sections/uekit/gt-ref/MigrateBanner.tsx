@@ -21,12 +21,12 @@ export function rawSchemaVersion(text: string): number {
   }
 }
 
-/** gt.migrate 的返回（对方实现，字段按协议第 9 节：备份在哪、几处待定） */
+/** gt.migrate 的返回（面板服务端做，不经过 UE）：改了的文件各自的待定和备份，跳过的、出错的 */
 interface MigrateReply {
-  backup?: string
-  todos?: number
-  changed?: number
-  settings?: boolean
+  changed?: { path: string; todos?: { at: string; message: string }[]; backup?: string }[]
+  skipped?: { path: string; reason: string }[]
+  errors?: { path: string; message: string }[]
+  dryRun?: boolean
 }
 
 /**
@@ -61,13 +61,18 @@ export function useRefGate(o: {
         scenario: o.scenario,
         ...(dryRun ? { dryRun: true } : {}),
       })
+      if (r.errors?.length) throw new Error(r.errors.map((x) => x.message).join('；'))
       if (dryRun) setPreview(r)
       else {
-        h().toast.success(
-          r.todos
-            ? t('已升级，{n} 处标了「待定」，原文件备份在 {b}', { n: r.todos, b: r.backup ?? '' })
-            : t('已升级，原文件备份在 {b}', { b: r.backup ?? '' }),
-        )
+        const c = r.changed?.[0]
+        const n = c?.todos?.length ?? 0
+        if (!c) h().toast.success(r.skipped?.[0]?.reason ?? t('不用升级'))
+        else
+          h().toast.success(
+            n
+              ? t('已升级，{n} 处标了「待定」，原文件备份在 {b}', { n, b: c.backup ?? '' })
+              : t('已升级，原文件备份在 {b}', { b: c.backup ?? '' }),
+          )
         setPreview(undefined)
         await o.reload()
       }
@@ -85,8 +90,13 @@ export function useRefGate(o: {
       {oldDoc && !oldGt && (
         <>
           {preview && (
-            <span className="ue:text-subtle">
-              {t('会改 {c} 处，其中 {n} 处要你再定', { c: preview.changed ?? 0, n: preview.todos ?? 0 })}
+            <span
+              className="ue:text-subtle"
+              title={(preview.changed?.[0]?.todos ?? []).map((x) => `${x.at}：${x.message}`).join('\n')}
+            >
+              {preview.changed?.length
+                ? t('升级后有 {n} 处要你再定', { n: preview.changed[0].todos?.length ?? 0 })
+                : (preview.skipped?.[0]?.reason ?? t('不用升级'))}
             </span>
           )}
           <span className="ue:ml-auto ue:flex ue:items-center ue:gap-1">

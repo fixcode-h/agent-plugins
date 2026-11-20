@@ -4374,7 +4374,6 @@
   "旧格式脚本，升级后才能编辑": "Old script format: upgrade it to edit",
   "已升级，{n} 处标了「待定」，原文件备份在 {b}": "Upgraded; {n} places are marked To decide; original backed up at {b}",
   "已升级，原文件备份在 {b}": "Upgraded; original backed up at {b}",
-  "会改 {c} 处，其中 {n} 处要你再定": "{c} changes, {n} of them need your decision",
   "看会改什么": "Preview changes",
   "升级脚本（先备份）": "Upgrade script (backs up first)",
   "待定（升级脚本时没迁准，先按第一个找着跑）：{w}": "To decide (the upgrade couldn't convert this exactly; runs with the first match for now): {w}",
@@ -4556,5 +4555,8 @@
   "自己": "Self",
   "存在": "Exists",
   "在屏上": "On screen",
-  "选中": "Selected"
+  "选中": "Selected",
+  "不用升级": "No upgrade needed",
+  "升级后有 {n} 处要你再定": "After upgrading, {n} places need your decision",
+  "只列出了 Lua 源码里声明的字段：{why}": "Only fields declared in Lua source are listed: {why}"
 }

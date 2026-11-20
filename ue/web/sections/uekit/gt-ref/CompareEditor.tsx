@@ -2,7 +2,8 @@ import type { GtIdentItem, GtPropKind } from '../../../../shared/gt-script/ref/t
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { ValueInput } from '../gt-cond/ValueInput.tsx'
-import { COUNT_CMPS, KIND_OPS, KNOWN_ENUMS, NO_VALUE_OPS, opLabel } from './compare-table.ts'
+import { COUNT_CMPS, opsFor } from '../../../../shared/gt-script/index.ts'
+import { KNOWN_ENUMS, noValue, opLabel } from './compare-table.ts'
 
 /** kind 不知道时（编辑器没开、Lua 字段没声明类型）给的比较：数字和文字的都给 */
 const LOOSE_OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'matches', 'in', 'is']
@@ -37,7 +38,7 @@ export function CompareEditor({
   const { ui, cn } = h()
   // 可见性的成员是固定的：调用方没给（按类读、没连游戏）也能点选
   const members = given.length ? given : kind === 'visibility' ? KNOWN_ENUMS.ESlateVisibility : given
-  const ops = kind ? KIND_OPS[kind] : LOOSE_OPS
+  const ops = kind ? opsFor(kind) : LOOSE_OPS
   const op = value.op ?? (kind === 'bool' ? 'is' : 'eq')
   const set = (patch: Partial<GtIdentItem>) => {
     const next: GtIdentItem = { ...value, ...patch }
@@ -47,7 +48,7 @@ export function CompareEditor({
   const setOp = (o: string) =>
     set({
       op: o,
-      value: NO_VALUE_OPS.has(o) ? undefined : o === 'between' ? [0, 0] : o === 'in' ? [] : (value.value ?? ''),
+      value: noValue(o, kind) ? undefined : o === 'between' ? [0, 0] : o === 'in' ? [] : (value.value ?? ''),
       ...(o === 'count'
         ? { cmp: value.cmp ?? 'gte', value: typeof value.value === 'number' ? value.value : 1 }
         : { cmp: undefined }),
@@ -224,7 +225,7 @@ export function CompareEditor({
             options={COUNT_CMPS.map((c) => ({ value: c, label: opLabel(c) }))}
           />
         )}
-        {!NO_VALUE_OPS.has(op) && text(op === 'count' ? t('数字') : undefined)}
+        {!noValue(op, kind) && text(op === 'count' ? t('数字') : undefined)}
       </div>
     )
 
@@ -267,7 +268,7 @@ export function CompareEditor({
     <div className="ue:flex ue:flex-col ue:gap-1.5">
       <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
         {opSelect()}
-        {!NO_VALUE_OPS.has(op) &&
+        {!noValue(op, kind) &&
           (op === 'in' ? (
             <ValueInput
               className="ue:min-w-0 ue:flex-1"
@@ -282,7 +283,7 @@ export function CompareEditor({
               op !== 'eq' || kind !== 'text',
             )
           ))}
-        {textLike && !NO_VALUE_OPS.has(op) && op !== 'key' && (
+        {textLike && !noValue(op, kind) && op !== 'key' && (
           <label className="ue:flex ue:shrink-0 ue:cursor-pointer ue:items-center ue:gap-1 ue:text-caption ue:text-muted">
             <input
               type="checkbox"

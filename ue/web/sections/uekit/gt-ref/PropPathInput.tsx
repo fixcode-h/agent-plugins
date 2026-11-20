@@ -2,7 +2,8 @@ import { Braces, Calculator, Code2, FileCode2, Puzzle } from 'lucide-react'
 import type { GtPropGroup, GtPropItem } from '../../../../shared/gt-script/ref/types.ts'
 import { t } from '../../../host.ts'
 import { SuggestInput, type SuggestRow } from '../../../SuggestInput.tsx'
-import { stateHint, STATE_KINDS } from './compare-table.ts'
+import { GT_STATES } from '../../../../shared/gt-script/index.ts'
+import { stateHint } from './compare-table.ts'
 
 const ICON = { cpp: Code2, bp: Puzzle, lua: FileCode2, state: Calculator }
 
@@ -47,7 +48,7 @@ export function PropPathInput({
     const k = q.trim().toLowerCase()
     const all: SuggestRow[] = items.map((i) => row(i, i.prop, i.prop))
     // 属性树里没列的算出状态也给（编辑器没开时属性树可能是空的）
-    for (const s of Object.keys(STATE_KINDS))
+    for (const s of GT_STATES.map((x) => x.name))
       if (!items.some((i) => i.prop === `:${s}`))
         all.push({ key: `:${s}`, value: `:${s}`, label: `:${s}`, detail: stateHint(s), icon: Calculator })
     const rows = all.filter((r) => !k || r.value.toLowerCase().includes(k))

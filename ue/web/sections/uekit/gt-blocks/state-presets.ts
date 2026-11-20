@@ -1,7 +1,6 @@
-import type { CondNode, GtStep } from '../../../../shared/gt-script/index.ts'
+import { propOnPart, type CondNode, type GtStep } from '../../../../shared/gt-script/index.ts'
 import type { GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { t } from '../../../host.ts'
-import { propOn } from '../gt-ref/compare-table.ts'
 
 /** 一条路：条件 + 步骤。最后的「其余情况」没有条件 */
 export interface Way {
@@ -50,7 +49,7 @@ export interface StatePreset {
 export const statePresets = (target: GtTarget): StatePreset[] => {
   const on = (state: string, op: string, value?: unknown): CondNode => ({
     obj: target.obj,
-    prop: propOn(target.part, state),
+    prop: propOnPart(target.part, `:${state}`),
     op,
     ...(value === undefined ? {} : { value }),
   })

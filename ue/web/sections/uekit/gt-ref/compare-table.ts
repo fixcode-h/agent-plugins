@@ -1,40 +1,28 @@
-import type { GtIdentItem, GtPropItem, GtPropKind } from '../../../../shared/gt-script/ref/types.ts'
+import {
+  defaultOpFor,
+  implicitOp,
+  opDef,
+  parsePropPath,
+  stateOf,
+  type GtIdentItem,
+  type GtPropItem,
+  type GtPropKind,
+} from '../../../../shared/gt-script/index.ts'
 import { t } from '../../../host.ts'
 
 /**
- * 【临时本地适配】按属性类型的比较表（协议 game-test-ref.md 3.4）和算出状态表（3.2）。
- * 数据层的那一份在 shared/gt-script/ref/compare.ts（对方在写，单测核对协议表格）；合并时这里只留界面用的
- * 文案（opLabel），表本身换成 import shared 的同名导出。名字、适用 kind 和协议逐字一致，不要在这里自己加 op
+ * 比较和算出状态在界面上的说法。表本身（每种 kind 能用哪些 op、op 要不要值、状态的 kind）都在
+ * shared/gt-script/ref 的注册表里（opsFor / opDef / stateOf），这里只放文案、点准星时的默认比较和本地粗判
  */
 
-const NUM_OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between', 'in']
-const STR_OPS = ['eq', 'ne', 'contains', 'startsWith', 'endsWith', 'matches', 'in']
-const ENUM_OPS = ['is', 'isNot', 'in']
+/** 不知道 kind 时（手写的属性、属性树里查不到）按名字认的「不要值」的 op */
+const NO_VALUE_ANY = new Set(['isNull', 'notNull', 'empty', 'notEmpty', 'visible', 'hidden'])
 
-export const KIND_OPS: Record<GtPropKind, string[]> = {
-  bool: ['is'],
-  int: NUM_OPS,
-  float: NUM_OPS,
-  string: STR_OPS,
-  text: [...STR_OPS, 'key'],
-  enum: ENUM_OPS,
-  visibility: [...ENUM_OPS, 'visible', 'hidden'],
-  object: ['isNull', 'notNull', 'classIs', 'nameIs'],
-  asset: ['eq', 'contains', 'isNull', 'notNull'],
-  vector: ['near', 'eq'],
-  rotator: ['near', 'eq'],
-  vector2: ['near', 'eq'],
-  color: ['near'],
-  array: ['count', 'has', 'empty', 'notEmpty'],
-  struct: [],
-  none: [],
+/** 这个 op 不要 value（isNull、visible…） */
+export function noValue(op: string, kind?: GtPropKind): boolean {
+  const d = kind ? opDef(kind, op) : undefined
+  return d ? d.value === 'none' : NO_VALUE_ANY.has(op)
 }
-
-/** 不要 value 的比较 */
-export const NO_VALUE_OPS = new Set(['visible', 'hidden', 'isNull', 'notNull', 'empty', 'notEmpty'])
-
-/** array 的 count 配的数字比较（cmp） */
-export const COUNT_CMPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte']
 
 /** 比较的中文名（下拉里左边中文、右边 op 原名，效果图 3） */
 export function opLabel(op: string): string {
@@ -69,29 +57,6 @@ export function opLabel(op: string): string {
   return m[op]?.() ?? op
 }
 
-/** 算出状态（协议 3.2）的 kind：编辑器没开、属性树里查不到时按它给比较 */
-export const STATE_KINDS: Record<string, GtPropKind> = {
-  exists: 'bool',
-  onScreen: 'bool',
-  shown: 'bool',
-  enabled: 'bool',
-  text: 'text',
-  textKey: 'string',
-  count: 'int',
-  index: 'int',
-  selected: 'bool',
-  checked: 'enum',
-  image: 'asset',
-  hovered: 'bool',
-  focused: 'bool',
-  pos: 'vector2',
-  size: 'vector2',
-  location: 'vector',
-  distance: 'float',
-  hiddenInGame: 'bool',
-  class: 'object',
-}
-
 /** 算出状态的一句话（判断种类的下拉、属性树「算出状态」行的悬停说明） */
 export function stateHint(state: string): string {
   const m: Record<string, () => string> = {
@@ -124,38 +89,18 @@ export const KNOWN_ENUMS: Record<string, string[]> = {
   ECheckBoxState: ['Checked', 'Unchecked', 'Undetermined'],
 }
 
-/** `---@field` 写的 Lua 类型 → kind（协议 7.5）；认不出返回 undefined（按运行时值） */
-export function luaKindOf(type: string | undefined): GtPropKind | undefined {
-  const s = (type ?? '').trim().replace(/\?$/, '')
-  if (!s) return undefined
-  if (s === 'number') return 'float'
-  if (s === 'integer') return 'int'
-  if (s === 'string') return 'string'
-  if (s === 'boolean') return 'bool'
-  if (s === 'table' || s.endsWith('[]') || /^table</.test(s)) return 'array'
-  return undefined
-}
-
-/** 属性路径拆开：部件（可能多段）、是不是算出状态、末段名 */
-export function splitProp(prop: string): { part?: string; state?: string; field?: string } {
-  const p = prop.trim().replace(/^@/, '')
-  const colon = p.indexOf(':')
-  if (colon >= 0) return { part: p.slice(0, colon) || undefined, state: p.slice(colon + 1) }
-  const segs = p.split('.')
-  if (segs[0] === 'self' || segs[0] === 'lua' || segs[0] === 'item' || segs[0] === 'itemLua')
-    return { field: segs.slice(1).join('.') }
-  return { part: segs[0], field: segs.slice(1).join('.') }
-}
-
-/** 部件上的算出状态的写法：没有部件就是对象本身（`:onScreen`） */
-export const propOn = (part: string | undefined, state: string) => (part ? `@${part}:${state}` : `:${state}`)
-
-/** 某个属性的 kind：属性树里有就按它，算出状态查表，其余不知道 */
+/** 某个属性的 kind：属性树里有就按它，算出状态查注册表，其余不知道 */
 export function kindOfProp(prop: string, items?: GtPropItem[]): GtPropKind | undefined {
   const hit = items?.find((i) => i.prop === prop)
   if (hit) return hit.kind
-  const { state } = splitProp(prop)
-  return state ? STATE_KINDS[state] : undefined
+  const st = stateOfProp(prop)
+  return st ? stateOf(st)?.kind : undefined
+}
+
+/** 属性路径里的算出状态名（`@Btn:enabled` → enabled）；不是状态返回 undefined */
+export function stateOfProp(prop: string): string | undefined {
+  const r = parsePropPath(prop)
+  return 'path' in r ? r.path.state : undefined
 }
 
 /** 枚举成员：属性树给了就用（members 是协议外的可选字段），否则按引擎类型名查常见的 */
@@ -165,27 +110,21 @@ export function membersOf(item?: Pick<GtPropItem, 'type' | 'kind'> & { members?:
   return KNOWN_ENUMS[item?.type ?? ''] ?? []
 }
 
-/** 点准星加进来时的默认比较（设计稿第 4 节「默认」列）：一般是「等于此刻的值」 */
+/** 点准星加进来时的默认比较：op 用注册表里这类的默认，值是「此刻的值」 */
 export function defaultIdent(item: Pick<GtPropItem, 'prop' | 'kind' | 'value'>): GtIdentItem {
   const v = item.value
-  switch (item.kind) {
-    case 'bool':
-      return { prop: item.prop, op: 'is', value: v === undefined ? true : !!v }
-    case 'visibility':
-      return { prop: item.prop, op: 'visible' }
-    case 'enum':
-      return { prop: item.prop, op: 'is', value: v ?? '' }
-    case 'object':
-      return { prop: item.prop, op: 'notNull' }
-    case 'vector':
-    case 'rotator':
-    case 'vector2':
-    case 'color':
-      return { prop: item.prop, op: 'near', value: v ?? [] }
-    case 'array':
-      return { prop: item.prop, op: 'count', cmp: 'gte', value: 1 }
+  const op = defaultOpFor(item.kind) ?? implicitOp(item.kind)
+  switch (opDef(item.kind, op)?.value) {
+    case 'none':
+      return { prop: item.prop, op }
+    case 'count':
+      return { prop: item.prop, op, cmp: 'gte', value: 1 }
+    case 'list':
+      return { prop: item.prop, op, value: v === undefined ? [] : [v] }
+    case 'pair':
+      return { prop: item.prop, op, value: [v ?? 0, v ?? 0] }
     default:
-      return { prop: item.prop, op: 'eq', value: v ?? '' }
+      return { prop: item.prop, op, value: item.kind === 'bool' ? (v === undefined ? true : !!v) : (v ?? '') }
   }
 }
 

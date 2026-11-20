@@ -1,5 +1,5 @@
 import { PanelTopClose, Search, SquareFunction, Timer, Wrench } from 'lucide-react'
-import type { CondNode, GtStep } from '../../../../shared/gt-script/index.ts'
+import { blockOf, type CondNode, type GtStep } from '../../../../shared/gt-script/index.ts'
 import type { GtCloseHow, GtCloseVerify, GtRefLike } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
 import { ArgsEdit } from '../gt-api/ApiPick.tsx'
@@ -195,7 +195,7 @@ registerBlockUi(
       hint: () => t('关掉界面或对象：调函数、点关闭按钮、CommonUI 弹出、移除…依次试，关完核对'),
       slash: 'close',
       action: 'obj.close',
-      make: () => ({ action: 'obj.close', obj: '' }),
+      make: () => blockOf('obj.close')!.make(),
     },
   ],
 )
@@ -220,7 +220,7 @@ registerBlockUi(
       hint: () => t('C++、蓝图可调用、Exec、Lua 函数：准备状态、直接接任务'),
       slash: 'call',
       action: 'obj.call',
-      make: () => ({ action: 'obj.call', obj: '', function: '', args: {} }),
+      make: () => blockOf('obj.call')!.make(),
     },
   ],
 )
@@ -245,7 +245,7 @@ registerBlockUi(
       hint: () => t('等界面出现、按钮能点、文字变成…（一条对象判断的简写）'),
       slash: 'owait',
       action: 'obj.wait',
-      make: () => ({ action: 'obj.wait', obj: '' }),
+      make: () => blockOf('obj.wait')!.make(),
     },
   ],
 )
@@ -267,7 +267,7 @@ registerBlockUi(
       hint: () => t('找到后存进变量，后面的步骤写 $名字'),
       slash: 'find',
       action: 'obj.find',
-      make: () => ({ action: 'obj.find', obj: '', saveAs: '' }),
+      make: () => blockOf('obj.find')!.make(),
     },
   ],
 )
@@ -289,7 +289,7 @@ registerBlockUi(
       hint: () => t('勾上勾选框、设可见性、改字段（走控件自己的 Set 函数）'),
       slash: 'oset',
       action: 'obj.set',
-      make: () => ({ action: 'obj.set', obj: '', prop: '', value: '' }),
+      make: () => blockOf('obj.set')!.make(),
     },
   ],
 )
