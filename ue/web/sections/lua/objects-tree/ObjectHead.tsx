@@ -1,10 +1,10 @@
 import { Box, ChevronRight, ExternalLink, Eye, FileText } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { h, t } from '../../../host.ts'
 import { Badge } from '../../../ui.tsx'
 import type { InspectRes } from '../inspect-data.ts'
 import { StateBadge, worldName } from './parts.tsx'
-import { baseName, parseSrc, stateOf, type BoundObj } from './tree-model.ts'
+import { baseName, isClassObj, parseSrc, stateOf, type BoundObj } from './tree-model.ts'
 
 /** 元表链的一层：UELink 2.19 起带 kind（lua = 模块，ue = UnLua 给 UE 类建的元表） */
 export type ChainLayer = NonNullable<InspectRes['chain']>[number] & { kind?: 'lua' | 'ue' }
@@ -46,6 +46,11 @@ export function ObjectHead({
         <Box className="ue:h-4 ue:w-4 ue:text-subtle" />
         <span className="ue:font-mono ue:text-body ue:font-medium ue:text-fg">{name}</span>
         {obj && <StateBadge state={stateOf(obj)} />}
+        {obj && isClassObj(obj) && (
+          <Badge tone="run" title={t('这是类（UClass）不是实例：没开始玩时 UnLua 只给类建了表。调 UE 函数时 self 要选一个实例')}>
+            {t('类对象')}
+          </Badge>
+        )}
         <span className="ue:ml-auto" />
         <ui.Button size="sm" variant="secondary" onClick={() => onOpenObj(path)}>
           <ExternalLink className="ue:h-3.5 ue:w-3.5" /> {t('在对象页打开')}
@@ -79,7 +84,7 @@ export function ObjectHead({
 
 /**
  * 继承链（元表 __index 往上）：「实例表 › [Lua] 模块 › [UE] 类 › …」。点 Lua 那几层在检视区打开那个模块表；
- * UE 那几层是 UnLua 建的元表，只显示名字。认不出的写「匿名元表」
+ * UE 那几层只显示类名（资源路径在悬停提示里）。chain 要先过 tidyChain：重复的层不显示，超过 6 层折起中间的
  */
 export function ChainChips({
   top,
@@ -87,23 +92,43 @@ export function ChainChips({
   onModule,
 }: {
   top: string
-  chain: ChainLayer[]
+  chain: (ChainLayer & { dup?: boolean })[]
   onModule: (name: string) => void
 }) {
   const { cn } = h()
+  const [all, setAll] = useState(false)
+  const list = chain.filter((c) => !c.dup)
+  const hidden = !all && list.length > 6 ? list.length - 4 : 0
+  const shown = hidden ? [...list.slice(0, 3), undefined, list[list.length - 1]] : list
   const chip = 'ue:inline-flex ue:h-6 ue:items-center ue:gap-1.5 ue:rounded-md ue:border ue:border-line ue:px-2 ue:font-mono ue:text-caption'
   return (
     <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-1">
       <span className="ue:mr-1 ue:text-caption ue:text-subtle">{t('继承')}</span>
       <span className={cn(chip, 'ue:bg-sel ue:text-fg')}>{top}</span>
-      {chain.map((c, i) => {
-        const lua = c.kind === 'lua' || (!c.kind && !!c.name)
+      {shown.map((c, i) => {
+        if (!c)
+          return (
+            <span key="more" className="ue:flex ue:items-center ue:gap-1">
+              <ChevronRight className="ue:h-3 ue:w-3 ue:text-subtle" />
+              <button
+                type="button"
+                onClick={() => setAll(true)}
+                className={cn(chip, 'ue:cursor-pointer ue:border-dashed ue:text-muted ue:hover:bg-hover')}
+              >
+                {t('还有 {n} 层', { n: hidden })}
+              </button>
+            </span>
+          )
+        const lua = c.kind === 'lua' || (!c.kind && !!c.name && !c.name.startsWith('/'))
         const body = (
           <>
             {c.name && <Badge tone={lua ? 'accent' : 'run'}>{lua ? 'Lua' : 'UE'}</Badge>}
-            <span className={c.name ? 'ue:text-fg' : 'ue:text-subtle'}>{c.name || t('（匿名元表）')}</span>
+            <span className={c.name ? (c.reflected ? 'ue:text-muted' : 'ue:text-fg') : 'ue:text-subtle'}>
+              {c.name || t('（没认出的元表）')}
+            </span>
           </>
         )
+        const tip = [c.path, c.reflected ? t('按反射补上的父类，没有 Lua 这边的函数') : ''].filter(Boolean).join('\n')
         return (
           <span key={i} className="ue:flex ue:items-center ue:gap-1">
             <ChevronRight className="ue:h-3 ue:w-3 ue:text-subtle" />
@@ -117,7 +142,7 @@ export function ChainChips({
                 {body}
               </button>
             ) : (
-              <span className={cn(chip, 'ue:bg-card')} title={c.src}>
+              <span className={cn(chip, 'ue:bg-card')} title={tip || c.src}>
                 {body}
               </span>
             )}

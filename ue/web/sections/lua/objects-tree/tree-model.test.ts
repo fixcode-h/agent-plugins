@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { byClass, byModule, byOwner, isA, isPathQuery, parseSrc, search, type BoundObj, type TNode } from './tree-model.ts'
+import { byClass, byModule, byOwner, isA, isClassObj, isPathQuery, parseSrc, regroupFns, search, selfCandidates, tidyChain, type BoundObj, type TNode } from './tree-model.ts'
 
 const base = ['Character', 'Pawn', 'Actor', 'Object']
 const O: BoundObj[] = [
@@ -53,4 +53,47 @@ test('Lua 路径和源码位置', () => {
   assert.deepEqual(parseSrc('[string "C:/P/Script/A.lua"]:26'), { file: 'C:/P/Script/A.lua', line: 26 })
   assert.deepEqual(parseSrc('@D:\\P\\B.lua:3'), { file: 'D:/P/B.lua', line: 3 })
   assert.deepEqual(parseSrc('=[C]'), { file: '=[C]' })
+})
+
+test('tidyChain：路径只留类名，重复的层标 dup，匿名层按文件认出模块', () => {
+  const raw = [
+    { name: '', src: 'C:/P/Content/Script/AI/BP_AICharacter_C.lua:12' },
+    { name: '/Game/Core/ABP_AICharacter.ABP_AICharacter_C', kind: 'ue' as const },
+    { name: '/Game/Core/ABP_AICharacter.ABP_AICharacter_C', kind: 'ue' as const },
+  ]
+  const c = tidyChain<{ name: string; src?: string; kind?: 'lua' | 'ue'; path?: string }>(raw, 'AI.BP_AICharacter_C')
+  assert.equal(c.length, 3)
+  assert.equal(c[0].name, 'AI.BP_AICharacter_C')
+  assert.equal(c[0].kind, 'lua')
+  assert.equal(c[1].name, 'ABP_AICharacter_C')
+  assert.equal(c[1].path, '/Game/Core/ABP_AICharacter.ABP_AICharacter_C')
+  assert.equal(c[2].dup, true)
+})
+
+test('regroupFns：自己表上的 C 函数归第一层 UE 类', () => {
+  const fns = [
+    { name: 'GetName', from: 0 },
+    { name: 'Spawn', from: 0, src: 'a.lua:3' },
+    { name: 'IsA', from: 2 },
+  ]
+  const r = regroupFns(fns, [{ name: 'M', kind: 'lua' }, { name: 'AActor', kind: 'ue' }])
+  assert.deepEqual(
+    r.map((f) => f.from),
+    [2, 0, 2],
+  )
+})
+
+test('selfCandidates：模块表给绑这个模块的实例，类对象给这个类的实例，类本身不算', () => {
+  const objs: BoundObj[] = [
+    { path: '/G.BP_A_C', name: 'BP_A_C', class: 'BlueprintGeneratedClass', module: 'AI.A' },
+    { path: 'L.BP_A_C_0', name: 'BP_A_C_0', class: 'BP_A_C', module: 'AI.A' },
+    { path: 'L.BP_A_C_1', name: 'BP_A_C_1', class: 'BP_A_C', module: 'AI.A', state: 'garbage' },
+  ]
+  assert.ok(isClassObj(objs[0]))
+  const m = selfCandidates({ path: '', keys: ['package', 'loaded', 'AI.A'] }, objs)
+  assert.deepEqual(m?.cands.map((o) => o.name), ['BP_A_C_0'])
+  const c = selfCandidates({ path: objs[0].path, keys: [] }, objs, objs[0])
+  assert.equal(c?.why, 'class')
+  assert.deepEqual(c?.cands.map((o) => o.name), ['BP_A_C_0'])
+  assert.equal(selfCandidates({ path: objs[1].path, keys: [] }, objs, objs[1]), undefined)
 })
