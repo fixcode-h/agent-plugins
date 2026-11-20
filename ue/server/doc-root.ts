@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { UeProject } from './types.ts'
+import { syncDocsHint } from './uekit/docs-hint.ts'
+import { legacyDocsRoot } from './uekit/docs-sub.ts'
 import { c } from './util.ts'
 
 /**
@@ -15,12 +17,11 @@ import { c } from './util.ts'
 const cache = new Map<string, { root: string; at: number }>() // 模块状态：缓存，丢了重取
 /** 项目设置里改了文档根，一分钟内跟上；每次读项目都问面板太勤（面板那边要读角色列表、判断版本管理） */
 const TTL = 60_000
+/** 这次进程里已经把哪个文档根写给 UE 了：不必每分钟都读写一遍提示文件 */
+const hinted = new Map<string, string>() // 模块状态：缓存，丢了重写
 
-/** 旧规则：项目外层同级有 ProjectDoc/docs 就用它，否则是项目里的 docs。面板给不出时用，也是旧数据可能在的地方 */
-export function legacyDocsRoot(root: string) {
-  const pd = path.join(path.dirname(root), 'ProjectDoc', 'docs')
-  return existsSync(pd) ? pd : path.join(root, 'docs')
-}
+/** 旧规则（项目外层同级的 ProjectDoc/docs 或项目里的 docs）：面板给不出时用，也是旧数据可能在的地方 */
+export { legacyDocsRoot }
 
 type P = Pick<UeProject, 'id' | 'root'>
 
@@ -33,8 +34,16 @@ export async function refreshDocsRoot(p: P, force = false) {
   const hit = cache.get(p.id)
   if (!force && hit && Date.now() - hit.at < TTL) return
   try {
-    const root = await c().projects?.docRoot?.(p.id)
-    if (root) cache.set(p.id, { root: path.resolve(root), at: Date.now() })
+    const got = await c().projects?.docRoot?.(p.id)
+    if (!got) return
+    const root = path.resolve(got)
+    cache.set(p.id, { root, at: Date.now() })
+    // 告诉 UE 里的 AssetForge、GameTest（它们读 Saved/AgentPanel/docs-root.txt），文档根变了才重做
+    if (hinted.get(p.id) !== root) {
+      const moved = await syncDocsHint(p.root, root)
+      hinted.set(p.id, root)
+      if (moved.length) c().log?.info('UE：AssetForge / GameTest 旧目录已复制到项目文档根', { project: p.id, moved })
+    }
   } catch (e) {
     c().log?.warn('UE：取不到面板的项目文档根，先按旧规则', { project: p.id, error: (e as Error).message })
   }

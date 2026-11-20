@@ -1994,7 +1994,6 @@
   "不等了": "Stop waiting",
   "已新建 {p}": "Created {p}",
   "配置根建不出来": "Couldn't create the config root",
-  "配置根默认跟项目文档根走（项目外层有 ProjectDoc/docs 时是 ProjectDoc/docs/AssetForge，否则是项目里的 docs/AssetForge），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目和 ProjectDoc 里建目录；在资源页导出到 JSON 时 UE 也会建出来。": "The config root follows the project's docs root by default (ProjectDoc/docs/AssetForge when a ProjectDoc/docs folder sits next to the project, otherwise docs/AssetForge inside the project); change it in UE under Project Settings → Plugins → Asset Forge. The panel can only create folders inside the project and ProjectDoc; UE also creates it when you export to JSON from the Assets page.",
   "从模板新建一份，让 AI 按需求写一份，或者在资源页把已有资产「导出到 JSON」纳管。": "Create one from a template, have AI write one from your description, or bring existing assets under management with \"Export to JSON\" on the Assets page.",
   "从模板新建": "New from template",
   "让 AI 写": "Write with AI",
@@ -2607,9 +2606,7 @@
   "编辑器没开时": "When the editor is closed",
   "去权限与设置": "Go to permissions & settings",
   "这个项目": "This project",
-  "在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge": "Change it in UE under \"Project Settings → Plugins → Asset Forge → Config root\" (saved to Config/DefaultEditor.ini); when empty, ProjectDoc/docs/AssetForge is used if ProjectDoc/docs sits next to the project, otherwise docs/AssetForge",
   "这个项目 · 存在场景根的 _settings.json，全组共用": "This project · stored in _settings.json under the scenario root, shared with the team",
-  "在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest": "Change it in UE under \"Project Settings → Plugins → Game Test → Scenario root\" (saved to Config/DefaultGame.ini); when empty, ProjectDoc/docs/GameTest is used if ProjectDoc/docs sits next to the project, otherwise docs/GameTest",
   "报告和截图": "Reports and screenshots",
   "在 UE 的「项目设置 → 插件 → Game Test → 产物根目录」改，相对 Saved/；默认 Saved/GameTest": "Change it in UE under \"Project Settings → Plugins → Game Test → Output root\", relative to Saved/; defaults to Saved/GameTest",
   "已读 {a} / {b} MB": "{a} / {b} MB read",
@@ -4322,5 +4319,8 @@
   "「{v}」不是数字": "\"{v}\" is not a number",
   "一个数是四边一样，两个数是「左右, 上下」，四个数是「左, 上, 右, 下」": "One number for all sides, two for \"horizontal, vertical\", four for \"left, top, right, bottom\"",
   "已有扫描脚本，还没选 GM 文件：在设置里选好就能列出": "A scan script exists but no GM files are selected yet: pick them in the settings to list GMs",
-  "扫描脚本位置：{p}": "Scan script: {p}"
+  "扫描脚本位置：{p}": "Scan script: {p}",
+  "在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时用项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）": "Change it in UE under \"Project Settings → Plugins → Asset Forge → Config Root\" (saved to Config/DefaultEditor.ini); when empty, AssetForge under the project doc root is used (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches)",
+  "在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时用项目文档根下的 GameTest（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）": "Change it in UE under \"Project Settings → Plugins → Game Test → Scenario Root\" (saved to Config/DefaultGame.ini); when empty, GameTest under the project doc root is used (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches)",
+  "配置根默认是项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs），在 UE 的项目设置 → 插件 → Asset Forge 里可以改。面板只能在项目、ProjectDoc 和项目文档根里建目录；在资源页导出到 JSON 时 UE 也会建出来。": "The config root defaults to AssetForge under the project doc root (the same doc root as the panel's Docs role; for P4 projects the ProjectDoc/docs shared by all branches); change it in UE under Project Settings → Plugins → Asset Forge. The panel can only create folders inside the project, ProjectDoc and the project doc root; UE also creates it when you export to JSON from the Assets page."
 }

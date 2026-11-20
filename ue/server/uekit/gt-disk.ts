@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { readIni } from '../editor-tools/config-layers.ts'
+import { docsSubDir } from './docs-sub.ts'
 import { t } from '../util.ts'
 import { SCHEMA_VERSION } from '../../shared/gt-script/script.ts'
 
@@ -34,19 +35,13 @@ export async function gtRootsFromSetting(root: string) {
   return { scenarioRootDir: get('ScenarioRootDir'), outputDir: get('OutputDir') }
 }
 
-const exists = (p: string) =>
-  stat(p).then(
-    (s) => s.isDirectory(),
-    () => false,
-  )
 const slash = (p: string) => p.replace(/\\/g, '/')
 
-/** 场景根：设置了按设置（相对项目根），没设置时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest */
+/** 场景根：设置了按设置（相对项目根），没设置时是项目文档根下的 GameTest（docs-sub.ts） */
 export async function scenarioRoot(root: string) {
   const { scenarioRootDir } = await gtRootsFromSetting(root)
   if (scenarioRootDir) return path.resolve(root, scenarioRootDir)
-  const sibling = path.resolve(root, '..', 'ProjectDoc', 'docs')
-  return path.join((await exists(sibling)) ? sibling : path.join(root, 'docs'), 'GameTest')
+  return docsSubDir(root, 'GameTest')
 }
 
 /** 产物根：Saved/<OutputDir>（默认 Saved/GameTest），报告、截图、history.json 都在这 */

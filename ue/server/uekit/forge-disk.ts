@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { readIni } from '../editor-tools/config-layers.ts'
+import { docsSubDir } from './docs-sub.ts'
 
 /**
  * AssetForge 页的快速清单：配置根和配置根下的 JSON 直接从磁盘读，不经 UE。
@@ -35,12 +36,11 @@ export async function forgeRootFromSetting(root: string) {
   return (m ? m[1] : raw.replace(/^\(|\)$/g, '')).trim()
 }
 
-/** 配置根：设置了按设置（相对项目根，也接受绝对路径），没设置时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge */
+/** 配置根：设置了按设置（相对项目根，也接受绝对路径），没设置时是项目文档根下的 AssetForge（docs-sub.ts） */
 export async function forgeConfigRoot(root: string) {
   const set = await forgeRootFromSetting(root)
   if (set) return path.resolve(root, set)
-  const sibling = path.resolve(root, '..', 'ProjectDoc', 'docs')
-  return path.join((await isDir(sibling)) ? sibling : path.join(root, 'docs'), 'AssetForge')
+  return docsSubDir(root, 'AssetForge')
 }
 
 /** 去掉 // 和 /* *\/ 注释（配置允许写注释），字符串里的不动 */

@@ -203,7 +203,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
               label={t('配置根')}
               entry={p?.forgeRoot}
               where={t(
-                '在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/AssetForge，否则 docs/AssetForge',
+                '在 UE 的「项目设置 → 插件 → Asset Forge → 配置根目录」改（写进 Config/DefaultEditor.ini）；空着时用项目文档根下的 AssetForge（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）',
               )}
             />
           </SettingGroup>
@@ -228,7 +228,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
                 label={t('场景根')}
                 entry={p?.gtScenarioRoot}
                 where={t(
-                  '在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时项目外层有 ProjectDoc/docs 用 ProjectDoc/docs/GameTest，否则 docs/GameTest',
+                  '在 UE 的「项目设置 → 插件 → Game Test → 场景根目录」改（写进 Config/DefaultGame.ini）；空着时用项目文档根下的 GameTest（和面板「文档」角色同一个文档根，P4 项目是各分支共用的 ProjectDoc/docs）',
                 )}
               />
               <PathRow
