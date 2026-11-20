@@ -58,7 +58,10 @@ export function NodeDetails({
     [byConfig, node, doc],
   )
   const canEdit = !!edit && !!node?.at && byConfig
-  const why = t('按配置预览，只读：要改就在 AssetForge 页改，或导入后在真实资源上改')
+  // 子界面里的控件来自另一份配置（subref/），这里不改它，免得改到父配置里去
+  const why = node?.src
+    ? t('来自子界面配置 {f}，只读：双击控件树里的子界面打开它自己的配置改', { f: node.src })
+    : t('按配置预览，只读：要改就在 AssetForge 页改，或导入后在真实资源上改')
   const np = useMemo(
     () =>
       nodeProps({
@@ -104,9 +107,13 @@ export function NodeDetails({
     >
       {node.user && (
         <p className="ue:border-b ue:border-line ue:px-4 ue:py-1.5 ue:text-caption ue:text-subtle">
-          {t('子界面：它自己的属性在它自己的配置里（{a}），这里只有插槽和通用属性', { a: node.asset ?? '' })}
+          {t('子界面：它自己的属性在它自己的配置里（{a}），这里只有插槽和通用属性', {
+            a: node.subFile ?? node.asset ?? '',
+          })}
+          {node.refError && <span className="ue:mt-0.5 ue:block ue:text-warning">{node.refError}</span>}
         </p>
       )}
+      {node.src && <p className="ue:border-b ue:border-line ue:px-4 ue:py-1.5 ue:text-caption ue:text-subtle">{why}</p>}
       {error && (
         <div className="ue:flex ue:flex-col ue:gap-1.5 ue:border-b ue:border-line ue:px-3 ue:py-2">
           <ErrorText>{error}</ErrorText>

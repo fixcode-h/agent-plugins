@@ -4339,5 +4339,22 @@
   "直接结束进程（连同它起的 Live Coding 控制台），没保存的改动会丢。": "Kills the process right away (along with its Live Coding console). Unsaved changes are lost.",
   "和点窗口右上角的关闭一样：有没保存的改动，UE 会弹窗问你要不要保存。10 秒内没退出会再问你要不要强制结束。": "Same as clicking the window's close button: if there are unsaved changes, UE asks whether to save. If it hasn't exited within 10 seconds you'll be asked whether to force kill it.",
   "它现在没有回应（{e}），正常关闭可能没反应。": "It isn't responding right now ({e}); a normal close may do nothing.",
-  "没有回应": "Not responding"
+  "没有回应": "Not responding",
+  "UE 渲染图只画 ActiveWidgetIndex 那一页，这一页按配置近似画": "The UE render only shows the ActiveWidgetIndex page; this page is approximated from the config",
+  "来自子界面配置 {f}，只读：双击控件树里的子界面打开它自己的配置改": "From child widget config {f}, read-only: double-click the child widget in the hierarchy to open and edit its own config",
+  "来自子界面配置 {f}（只读）": "From child widget config {f} (read-only)",
+  "子界面配置 {f}：展开看内部控件，双击打开": "Child widget config {f}: expand to see its widgets, double-click to open",
+  "子界面": "Child widget",
+  "{n} 在 UE 的控件树里没有：父 WBP 还没按这份配置重新导入": "{n} is not in the UE widget tree: the parent WBP has not been re-imported from this config",
+  "{n} 在 UE 里不是子界面（是 {c}）：子 WBP 可能还没生成，先导入 {r}": "{n} is not a child widget in UE (it is {c}): the child WBP may not be generated yet, import {r} first",
+  "ref \"{r}\" 要是配置根里的 .json 文件": "ref \"{r}\" must be a .json file inside the config root",
+  "子配置太多（超过 {n} 份），后面的没读": "Too many child configs (over {n}); the rest were not read",
+  "读不到 {r}": "Cannot read {r}",
+  "子界面嵌套超过 {n} 层，不再展开": "Child widgets nested deeper than {n} levels; not expanded further",
+  "不知道配置根，读不到子界面：在 AssetForge 页打开这份配置看": "Config root unknown, cannot read child widgets: open this config on the AssetForge page",
+  "引用成环：{c}": "Circular reference: {c}",
+  "{f} 里没有 root 控件树": "{f} has no root widget tree",
+  "{f} 解析失败：{m}": "Failed to parse {f}: {m}",
+  "{f} 不是 UMG 配置（顶层不是对象）": "{f} is not a UMG config (top level is not an object)",
+  "{f} 展开 include 失败": "Failed to expand includes in {f}"
 }
