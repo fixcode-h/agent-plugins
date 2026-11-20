@@ -1,5 +1,5 @@
 import { Crosshair, LayoutDashboard, Loader2, RefreshCw, TriangleAlert, Zap } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useMemo, useRef, useState, type PointerEvent } from 'react'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { useKept } from '../../../keep.ts'
@@ -8,14 +8,19 @@ import { Badge } from '../../../ui.tsx'
 import { hitTest, layoutTree, withSlotAnims, type Rect } from './approx.ts'
 import { ApproxCanvas } from './ApproxCanvas.tsx'
 import { indexTree, resolveTarget, type WNode } from './model.ts'
-import { SCREENS, ZOOMS, type Screen, type Zoom } from './screens.ts'
+import { gridStyle, Overlays } from './Overlays.tsx'
+import { SCREENS, type Screen } from './screens.ts'
 import { useUmgRender } from './use-render.ts'
+import { useDesignerView } from './use-view.ts'
+import { toDesign, zoomLabel } from './view.ts'
+import { ZoomControls } from './ZoomControls.tsx'
 
 /**
  * 设计器（设计稿第 4 节、效果图 U1 / U4）：中间的预览台。
  * - 桥接有 umg.render：UE 离屏渲染的截图 + UE 回的控件矩形；拖播放头时按动画时刻重渲（use-render.ts 只留最新一次）。
  * - 没有：按控件树和属性在网页里画近似预览（approx.ts），页头标「近似预览」。
  * 两种都按矩形画布局框、悬停框、选中框和尺寸标签；点预览选控件（矩形命中取最小的），和左边的控件树双向联动。
+ * 画布操作照 UE 控件蓝图设计器（use-view.ts）：滚轮以光标为中心缩放，右键或中键拖动平移，Home / 双击空白处缩放到适合。
  */
 export function Designer({
   path,
@@ -38,18 +43,11 @@ export function Designer({
   const { project } = useUe()
   const { ui, cn } = h()
   const [screen, setScreen] = useKept<Screen>(`${project.id}/umg/screen`, { id: '1920x1080', w: 1920, h: 1080 })
-  const [zoom, setZoom] = useKept<Zoom>(`${project.id}/umg/zoom`, 'fit')
   const [boxes, setBoxes] = useKept(`${project.id}/umg/boxes`, true)
   const [hover, setHover] = useState<string>()
   const stage = useRef<HTMLDivElement>(null)
-  const [room, setRoom] = useState({ w: 800, h: 450 })
-  useEffect(() => {
-    const el = stage.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setRoom({ w: el.clientWidth, h: el.clientHeight }))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+  const vw = useDesignerView(stage, `ue:umg-view:${project.id}:${path}`, screen)
+  const { view } = vw
 
   // 播放头的时刻量化到帧（60fps），拖动时少发重复的渲染请求
   const frameTime = Math.round(time * 60) / 60
@@ -79,11 +77,13 @@ export function Designer({
   }, [render.shot, shown, idx, screen.w, screen.h])
   const rectMap = useMemo(() => new Map(rects.map((r) => [r.key, r])), [rects])
 
-  const fit = Math.max(0.05, Math.min((room.w - 48) / screen.w, (room.h - 56) / screen.h))
-  const k = zoom === 'fit' ? fit : Number(zoom)
-  const pick = (e: PointerEvent<HTMLDivElement>) => {
+  const k = view.k
+  /** 光标下的控件：舞台像素按视图换回设计坐标再命中，缩放、平移后照样准；落在设计稿外面算空白 */
+  const pick = (e: { clientX: number; clientY: number; currentTarget: HTMLElement }) => {
     const r = e.currentTarget.getBoundingClientRect()
-    return hitTest(rects, (e.clientX - r.left) / k, (e.clientY - r.top) / k)?.key
+    const d = toDesign(view, e.clientX - r.left, e.clientY - r.top)
+    if (d.x < 0 || d.y < 0 || d.x > screen.w || d.y > screen.h) return undefined
+    return hitTest(rects, d.x, d.y)?.key
   }
   const sel = selected ? rectMap.get(selected) : undefined
   const hov = hover && hover !== selected ? rectMap.get(hover) : undefined
@@ -125,14 +125,7 @@ export function Designer({
             ))}
           </span>
         )}
-        <ui.Select
-          size="sm"
-          aria-label={t('缩放')}
-          className="ue:w-24"
-          value={zoom}
-          onChange={(e: { target: { value: string } }) => setZoom(e.target.value as Zoom)}
-          options={ZOOMS.map((z) => ({ value: z, label: z === 'fit' ? t('适应') : `${Number(z) * 100}%` }))}
-        />
+        <ZoomControls k={k} fitted={vw.fitted} onFit={vw.fit} onOne={vw.oneToOne} onZoom={vw.setZoom} />
         <ui.IconButton
           icon={LayoutDashboard}
           label={boxes ? t('隐藏布局框') : t('显示布局框')}
@@ -181,75 +174,76 @@ export function Designer({
           )}
         </span>
       </div>
-      <div ref={stage} className="ue:relative ue:min-h-0 ue:flex-1 ue:overflow-auto ue:bg-canvas">
+      <div
+        ref={stage}
+        tabIndex={0}
+        aria-label={t('设计器画布')}
+        className={cn(
+          'ue:relative ue:min-h-0 ue:flex-1 ue:overflow-hidden ue:bg-canvas ue:outline-none',
+          vw.panning ? 'ue:cursor-grabbing' : 'ue:cursor-crosshair',
+        )}
+        style={gridStyle(view)}
+        {...vw.handlers}
+        onPointerMove={(e) => {
+          if (!vw.onPointerMove(e)) setHover(pick(e))
+        }}
+        onPointerLeave={() => setHover(undefined)}
+        onClick={(e) => {
+          if (e.button !== 0) return
+          const key = pick(e)
+          if (key) onSelect(key)
+        }}
+        onDoubleClick={(e) => {
+          // 双击空白处（设计稿外面）缩放到适合；双击控件只当选中
+          if (!pick(e)) vw.fit()
+        }}
+      >
         {!tree ? (
           <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-canvas-subtle">
             {t('没有控件树：UE 没开或 UELink 版本旧，又没有 AssetForge 配置可以照着画')}
           </p>
         ) : (
-          <div
-            className="ue:flex ue:min-h-full ue:min-w-full ue:items-center ue:justify-center ue:p-6"
-            style={{ width: 'max-content' }}
-          >
-            <div className="ue:flex ue:flex-col ue:gap-1">
-              <div
-                className="ue:relative ue:cursor-crosshair ue:overflow-hidden ue:shadow-canvas ue:outline ue:outline-canvas-line"
-                style={{ width: screen.w * k, height: screen.h * k }}
-                onPointerMove={(e) => setHover(pick(e))}
-                onPointerLeave={() => setHover(undefined)}
-                onClick={(e) => {
-                  const key = pick(e as unknown as PointerEvent<HTMLDivElement>)
-                  if (key) onSelect(key)
-                }}
-              >
-                {render.shot ? (
-                  <img
-                    src={render.shot.url}
-                    alt={t('UE 渲染的预览')}
-                    draggable={false}
-                    className="ue:absolute ue:inset-0 ue:h-full ue:w-full ue:select-none"
-                  />
-                ) : (
-                  <div
-                    className="ue:absolute ue:top-0 ue:left-0 ue:origin-top-left ue:bg-canvas-board"
-                    style={{ width: screen.w, height: screen.h, transform: `scale(${k})` }}
-                  >
-                    {shown && <ApproxCanvas tree={shown} rects={rectMap} anims={values} />}
-                  </div>
-                )}
-                {boxes &&
-                  rects.map((r) => (
-                    <span
-                      key={r.key}
-                      className="ue:pointer-events-none ue:absolute ue:border ue:border-dashed ue:border-canvas-guide/50"
-                      style={{ left: r.x * k, top: r.y * k, width: r.w * k, height: r.h * k }}
-                    />
-                  ))}
-                {hov && (
-                  <span
-                    className="ue:pointer-events-none ue:absolute ue:border ue:border-accent/70 ue:bg-accent/8"
-                    style={{ left: hov.x * k, top: hov.y * k, width: hov.w * k, height: hov.h * k }}
-                  />
-                )}
-                {sel && (
-                  <span
-                    className="ue:pointer-events-none ue:absolute ue:border-2 ue:border-accent"
-                    style={{ left: sel.x * k - 1, top: sel.y * k - 1, width: sel.w * k + 2, height: sel.h * k + 2 }}
-                  >
-                    <span className="ue:absolute ue:-top-5 ue:left-[-2px] ue:rounded-t-[3px] ue:bg-accent ue:px-1.5 ue:font-mono ue:text-caption ue:whitespace-nowrap ue:text-on-accent">
-                      {idx.byKey.get(sel.key)?.name} · {Math.round(sel.w)}×{Math.round(sel.h)}
-                    </span>
-                  </span>
-                )}
-              </div>
-              <span className="ue:flex ue:items-center ue:gap-1.5 ue:font-mono ue:text-caption ue:text-canvas-subtle">
-                <Crosshair className="ue:h-3 ue:w-3" />
-                {t('{w} × {h} · 缩放 {k}%', { w: screen.w, h: screen.h, k: Math.round(k * 100) })}
-                {' · '}
-                {t('点预览选控件，悬停高亮')}
-              </span>
+          <>
+            <div
+              className="ue:absolute ue:overflow-hidden ue:shadow-canvas ue:outline ue:outline-canvas-line"
+              style={{ left: view.x, top: view.y, width: screen.w * k, height: screen.h * k }}
+            >
+              {render.shot ? (
+                <img
+                  src={render.shot.url}
+                  alt={t('UE 渲染的预览')}
+                  draggable={false}
+                  // 放大时按像素放（UE 设计器放大也是看得到像素的），不让浏览器插值糊掉细节
+                  style={{ imageRendering: k > 1 ? 'pixelated' : undefined }}
+                  className="ue:absolute ue:inset-0 ue:h-full ue:w-full ue:select-none"
+                />
+              ) : (
+                <div
+                  className="ue:absolute ue:top-0 ue:left-0 ue:origin-top-left ue:bg-canvas-board"
+                  style={{ width: screen.w, height: screen.h, transform: `scale(${k})` }}
+                >
+                  {shown && <ApproxCanvas tree={shown} rects={rectMap} anims={values} />}
+                </div>
+              )}
             </div>
-          </div>
+            <Overlays
+              view={view}
+              rects={rects}
+              boxes={boxes}
+              hover={hov}
+              sel={sel}
+              selName={sel ? idx.byKey.get(sel.key)?.name : undefined}
+            />
+            {/* 左上角的缩放文字和 UE 设计器一样写成「缩放 1:2」 */}
+            <span className="ue:pointer-events-none ue:absolute ue:top-2 ue:left-3 ue:rounded-[3px] ue:bg-canvas/80 ue:px-1.5 ue:font-mono ue:text-footnote ue:text-canvas-fg">
+              {t('缩放 {z}', { z: zoomLabel(k) })}
+            </span>
+            <span className="ue:pointer-events-none ue:absolute ue:bottom-2 ue:left-3 ue:flex ue:rounded-[3px] ue:bg-canvas/80 ue:px-1.5 ue:items-center ue:gap-1.5 ue:font-mono ue:text-caption ue:text-canvas-subtle">
+              <Crosshair className="ue:h-3 ue:w-3" />
+              {screen.w} × {screen.h} · {Math.round(k * 100)}%{' · '}
+              {t('滚轮缩放，右键拖动平移，Home 适合屏幕')}
+            </span>
+          </>
         )}
       </div>
     </div>
