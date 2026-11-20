@@ -55,14 +55,15 @@ export interface VarsReply {
   truncated?: boolean
 }
 
-/** 范围：界面、玩家对象、子系统、Lua 模块、类、对象定位器 */
+/** 范围：界面、玩家对象、子系统、Lua 模块、类、对象引用 */
 export type VarScope =
   | { scope: 'widget'; class: string }
   | { scope: 'player'; which: 'gi' | 'gs' | 'gm' | 'ps' | 'pc' | 'pawn' | 'hud' }
   | { scope: 'subsystem'; name?: string }
   | { scope: 'lua'; module: string }
   | { scope: 'class'; name: string }
-  | { scope: 'object'; locator: Record<string, unknown> }
+  /** GameTest 2.0：参数从定位器改成引用（协议 game-test-ref 7.6），名字引用由调用方先展开 */
+  | { scope: 'object'; ref: unknown }
 
 export const SRC_ORDER: VarSrc[] = ['cpp', 'bp', 'lua']
 

@@ -1,3 +1,4 @@
+import type { GtRef, GtTarget } from '../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../host.ts'
 
 /**
@@ -32,16 +33,19 @@ export interface StepKey {
   cands?: KeyCand[]
 }
 
-/** 录制状态里的 ask：正在暂停问的那一步 */
+/** 录制状态里的 ask：正在暂停问的那一步。GameTest 2.0 起 target 是 {obj, part}，另给推荐的引用 ref 和 Widget 树节点 node */
 export interface KeyAsk {
   step: number
-  target: string
+  target: string | GtTarget
+  ref?: GtRef
+  node?: string
   pausedSec?: number
   gamePaused?: boolean
   container?: string
   containerClass?: string
   entryName?: string
   index?: number
+  /** v3 的条目标识快照；GameTest 2.0 起可能没有 */
   key: StepKey
   shot?: string
   screen?: string

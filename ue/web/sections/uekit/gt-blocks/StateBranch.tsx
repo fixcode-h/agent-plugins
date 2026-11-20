@@ -1,26 +1,23 @@
-import { ArrowDown, ArrowUp, Crosshair, Loader2, Plus, ScanEye, Trash2, Wand2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Loader2, Plus, ScanEye, Trash2, Wand2 } from 'lucide-react'
 import { useState } from 'react'
 import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
-import { useEditCtx } from '../gt-edit/ctx.ts'
 import { NowBadge } from '../gt-live/NowBar.tsx'
-import { PickDialog } from '../gt-live/PickDialog.tsx'
+import type { GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { useCondNow } from '../gt-live/use-cond-now.ts'
 import { applyPreset, statePresets, waysOf as ways, withWays, type Way } from './state-presets.ts'
 
 /**
  * 按状态分支（效果图 11）：同一个控件不同状态走不同的路。从上往下判断，走第一条成立的；都不成立走「其余情况」。
  * 每条路一张卡片：条件 + 这条路有几步（步骤在列表 / 流程图里往这条路里放）。连着游戏时一直标出「此刻走这条」
- * （gt.watch 推送；GameTest 1.10.0 以前点「此刻走哪条」问一次）。看哪个控件可以从游戏里抓
+ * （gt.watch 推送；GameTest 1.10.0 以前点「此刻走哪条」问一次）。看哪个控件（对象 + 部件）可以从 Widget 树里抓
  */
 export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui, cn } = h()
-  const ctx = useEditCtx()
-  const [target, setTarget] = useState('')
-  const [picking, setPicking] = useState(false)
+  const [target, setTarget] = useState<GtTarget>()
   const list = ways(step)
   const hasElse = Array.isArray(step.else)
   const conds = list.map((w, i) => ({ id: String(i), cond: w.cond ?? { all: [] } }))
@@ -65,21 +62,16 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
       </p>
       <div className="ue:flex ue:items-start ue:gap-1.5">
         <div className="ue:min-w-0 ue:flex-1">
-          <TargetInput value={target} onChange={setTarget} placeholder={t('看哪个控件：WBP_Guide:Root/BtnFinish')} />
+          <TargetInput value={target} onChange={setTarget} />
         </div>
-        {ctx.live && (
-          <ui.IconButton size="sm" label={t('从游戏里抓')} onClick={() => setPicking(true)}>
-            <Crosshair className="ue:h-3.5 ue:w-3.5" />
-          </ui.IconButton>
-        )}
         <ui.Button
           size="sm"
           variant="secondary"
-          disabled={!target.trim()}
+          disabled={!target}
           onClick={(e: React.MouseEvent) =>
             openMenu(
               e,
-              statePresets(target.trim()).map((p) => ({
+              statePresets(target!).map((p) => ({
                 label: p.label,
                 onClick: () => onChange(applyPreset(step, p)),
               })),
@@ -163,16 +155,6 @@ export function StateBranch({ step, onChange }: { step: GtStep; onChange: (s: Gt
       </div>
       {now === -1 && (
         <p className="ue:text-footnote ue:text-warning">{t('此刻哪条路都不成立，也没有「其余情况」：会直接往下走')}</p>
-      )}
-      {picking && (
-        <PickDialog
-          mode="target"
-          onClose={() => setPicking(false)}
-          onTarget={(tg) => {
-            setTarget(tg)
-            setPicking(false)
-          }}
-        />
       )}
     </div>
   )

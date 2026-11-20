@@ -1,7 +1,12 @@
 import { Switch } from '@panel/web/src/components/ui/switch'
 import type { GtStep } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
+import type { GtRefLike } from '../../../../../shared/gt-script/ref/types.ts'
+import { parseScalar, scalarText } from '../../gt-cond/compare.tsx'
 import { TargetInput } from '../../gt-cond/TargetInput.tsx'
+import { ValueInput } from '../../gt-cond/ValueInput.tsx'
+import { ObjInput, useRefGroups } from '../../gt-ref/ObjInput.tsx'
+import { PropPathInput } from '../../gt-ref/PropPathInput.tsx'
 import { NumberField, patch, Row, TextField } from '../parts.tsx'
 import { NOT_FIELDS, type FieldDef } from './registry.ts'
 
@@ -59,8 +64,18 @@ function Control({ def, step, onChange }: { def: FieldDef; step: GtStep; onChang
       )
     }
     case 'target':
+      return <TargetInput value={v} onChange={(x) => set(x)} />
+    case 'obj':
+      return <ObjInput value={v as GtRefLike | undefined} onChange={(x) => set(x)} />
+    case 'prop':
+      return <PropField step={step} k={def.k} onChange={onChange} />
+    case 'value':
       return (
-        <TargetInput value={typeof v === 'string' ? v : ''} onChange={(x) => set(x || undefined)} placeholder={ph} />
+        <ValueInput
+          value={scalarText(v)}
+          placeholder={ph ?? t('值，或 $变量、= 表达式')}
+          onChange={(s) => set(s.startsWith('=') || s.startsWith('$') ? s : parseScalar(s))}
+        />
       )
     case 'vec': {
       const n = def.dims ?? 2
@@ -91,6 +106,18 @@ function Control({ def, step, onChange }: { def: FieldDef; step: GtStep; onChang
         <TextField step={step} k={def.k} onChange={onChange} placeholder={ph} mono={def.kind === 'mono'} />,
       )
   }
+}
+
+/** 属性路径：下拉来自这一步的对象（step.obj）的属性树，Lua 字段名可搜索，也能直接填 */
+function PropField({ step, k, onChange }: { step: GtStep; k: string; onChange: (s: GtStep) => void }) {
+  const { groups } = useRefGroups(step.obj as GtRefLike | undefined)
+  return (
+    <PropPathInput
+      value={typeof step[k] === 'string' ? (step[k] as string) : ''}
+      groups={groups}
+      onChange={(x) => onChange(patch(step, k, x))}
+    />
+  )
 }
 
 /** 按字段表画表单：每个字段一行（Row），when 不成立的不画 */

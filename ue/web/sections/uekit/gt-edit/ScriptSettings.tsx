@@ -1,11 +1,15 @@
-import { Crosshair, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { GtGuard, GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { GuardList } from '../gt-guards/GuardList.tsx'
 import { blankGuard } from '../gt-guards/model.ts'
-import { ObjectKeyDialog, type Locator } from '../gt-vars/ObjectKeyDialog.tsx'
+import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
+import { useRefHits } from '../gt-ref/live.ts'
+import { RefCard } from '../gt-ref/RefCard.tsx'
+import { RefDialog } from '../gt-ref/RefDialog.tsx'
+import { useEditCtx } from './ctx.ts'
 
 type Params = NonNullable<GtScript['params']>
 const PARAM_TYPES = ['', 'string', 'int', 'float', 'bool', 'vector', 'object', 'any']
@@ -17,7 +21,8 @@ const NAME = /^[A-Za-z_]\w*$/
  */
 export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d: GtScript) => void }) {
   const { ui } = h()
-  const [obj, setObj] = useState<{ name?: string; value?: Locator }>()
+  const ctx = useEditCtx()
+  const [obj, setObj] = useState<{ name?: string; value?: GtRef }>()
   const set = (k: keyof GtScript, v: unknown) => {
     const out = { ...doc }
     if (v === undefined || (typeof v === 'object' && v && !Object.keys(v).length)) delete out[k]
@@ -26,7 +31,14 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
   }
   const params: Params = doc.params ?? {}
   const vars = doc.vars ?? {}
-  const objects = (doc.objects ?? {}) as Record<string, Locator>
+  const objects = (doc.objects ?? {}) as Record<string, GtRef>
+  // 每个对象此刻命中几个：连着游戏时挂在 gt.watch 上收推送
+  const hits = useRefHits(
+    ctx.project,
+    ctx.live,
+    Object.keys(objects).map((k) => ({ id: k, ref: k })),
+    objects,
+  )
   const guards = doc.guards ?? []
 
   /** 改名：保持原来的顺序 */
@@ -118,25 +130,22 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
 
       <Section
         title={t('对象')}
-        hint={t('只存类和唯一标识，运行时按它重新找；条件和调函数里写 @obj.名字')}
+        hint={t('只存类和唯一标识，运行时按它重新找；步骤和条件里写对象名')}
         onAdd={() => setObj({})}
       >
         {Object.entries(objects).map(([k, o]) => (
-          <div key={k} className="ue:flex ue:items-center ue:gap-1.5 ue:text-footnote">
-            <Crosshair className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-            <button
-              type="button"
-              className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-2 ue:text-left"
-              onClick={() => setObj({ name: k, value: o })}
-            >
-              <span className="ue:font-mono ue:text-fg">{k}</span>
-              <span className="ue:truncate ue:font-mono ue:text-subtle">
-                {o.class}
-                {o.key ? ` · ${Object.keys(o.key).join(', ')}` : ` · ${t('按第一个找')}`}
-              </span>
-            </button>
-            <ui.IconButton icon={Trash2} size="xs" label={t('删掉')} onClick={() => set('objects', omit(objects, k))} />
-          </div>
+          <RefCard
+            key={k}
+            compact
+            name={k}
+            value={o}
+            hit={hits.hits[k]}
+            onEdit={() => setObj({ name: k, value: o })}
+            menu={[
+              { label: t('改标识…'), onClick: () => setObj({ name: k, value: o }) },
+              { label: t('删掉'), danger: true, onClick: () => set('objects', omit(objects, k)) },
+            ]}
+          />
         ))}
       </Section>
 
@@ -151,9 +160,12 @@ export function ScriptSettings({ doc, onChange }: { doc: GtScript; onChange: (d:
       </Section>
 
       {obj && (
-        <ObjectKeyDialog
+        <RefDialog
+          project={ctx.project}
+          withName
           name={obj.name}
           value={obj.value}
+          objects={objects}
           onClose={() => setObj(undefined)}
           onSave={(name, loc) => {
             const base = obj.name && obj.name !== name ? rename(objects, obj.name, name) : objects

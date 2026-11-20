@@ -55,8 +55,8 @@ function LoopInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
       )}
       {m === 'each' && (
         <>
-          <Row label={t('容器')} hint={t('列表、格子；没滚到的条目会自动滚出来')}>
-            <TargetInput value={String(step.each ?? '')} onChange={(v) => onChange({ ...step, each: v })} />
+          <Row label={t('容器')} hint={t('对象里的列表、格子部件；条目在 $item（引用），没滚到的会自动滚出来')}>
+            <TargetInput value={step.each} onChange={(v) => onChange({ ...step, each: v })} />
           </Row>
           <Row label={t('条目叫')}>
             <TextField step={step} k="as" mono onChange={onChange} placeholder="item" />

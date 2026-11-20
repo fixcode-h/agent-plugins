@@ -19,10 +19,9 @@ const opts =
     o.map(([value, label]) => ({ value, label: label() }))
 const DEFAULT = () => t('默认')
 
+/** 动作落点：对象 + 部件（GameTest 2.0 起不再写选择器字符串） */
 const target = (optional = false) =>
-  f('target', () => t('控件'), 'target', {
-    placeholder: () => (optional ? t('可不填') : t('界面:路径，例如 WBP_Shop:Root/BtnBuy')),
-  })
+  f('target', () => t('控件'), 'target', { hint: optional ? () => t('可不填') : undefined })
 const at = (k = 'at', label = () => t('点在哪')) =>
   f(k, label, 'vec', { dims: 2, hint: () => t('控件内的位置，0–1，默认中心 [0.5, 0.5]') })
 const client = f('client', () => t('哪一端'), 'mono', {
@@ -53,7 +52,7 @@ registerFields('click', [
 
 registerFields('drag', [
   target(),
-  f('toTarget', () => t('拖到控件'), 'target', { placeholder: () => t('和「位移」二选一') }),
+  f('toTarget', () => t('拖到控件'), 'target', { hint: () => t('和「位移」二选一') }),
   f('by', () => t('位移'), 'vec', {
     dims: 2,
     hint: () => t('按视口比例的 [dx, dy]，可以是负数；和「拖到控件」二选一'),
@@ -137,9 +136,18 @@ registerFields('probe', [
   f('expect', () => t('应该点到'), 'mono'),
 ])
 
-registerFields('find', [
-  target(),
-  f('into', () => t('记成'), 'mono', { placeholder: () => t('句柄名，默认用路径末段') }),
+// ---------- 对象（协议 game-test-ref 5.3；obj.close、obj.call 有自己的检查器） ----------
+
+registerFields('obj.find', [
+  f('obj', () => t('对象'), 'obj'),
+  f('saveAs', () => t('存到变量'), 'mono', { placeholder: () => t('变量名，之后写 $名字') }),
+])
+registerFields('obj.set', [
+  f('obj', () => t('对象'), 'obj'),
+  f('prop', () => t('属性'), 'prop', {
+    hint: () => t('控件状态（Visibility、IsChecked、Text…）走控件自己的 Set 函数，委托照常触发'),
+  }),
+  f('value', () => t('设成'), 'value'),
 ])
 registerFields('snapshot', [
   target(true),
@@ -241,8 +249,6 @@ registerFields('input.stop', [f('asset', () => t('输入资产'), 'mono'), clien
 export const WAIT_MODES = () => [
   { value: 'seconds', label: t('等几秒') },
   { value: 'cond', label: t('等到条件成立') },
-  { value: 'widget', label: t('等控件出现') },
-  { value: 'widgetGone', label: t('等控件消失') },
   { value: 'pieReady', label: t('等 PIE 跑起来') },
   { value: 'pieStopped', label: t('等 PIE 退出') },
   { value: 'actorNear', label: t('等角色走到附近') },
@@ -254,24 +260,14 @@ const until =
 
 registerFields('wait', [
   f('seconds', () => t('等多久'), 'number', { unit: () => t('秒'), when: until('seconds'), placeholder: () => '1' }),
-  { ...target(), when: until('widget', 'widgetGone') },
   f('actor', () => t('角色类'), 'mono', { when: until('actorNear') }),
   f('tag', () => t('或按标签'), 'mono', { when: until('actorNear') }),
   f('point', () => t('附近哪'), 'vec', { dims: 3, unit: () => t('厘米'), when: until('actorNear') }),
   f('radius', () => t('半径'), 'number', { unit: () => t('厘米'), when: until('actorNear') }),
 ])
 
-registerFields('assert', [
-  target(),
-  f('exists', () => t('存在'), 'tri'),
-  f('visible', () => t('可见'), 'tri'),
-  f('enabled', () => t('能点'), 'tri'),
-  f('checked', () => t('勾上'), 'tri'),
-  f('text', () => t('文字是'), 'text'),
-  f('textContains', () => t('文字包含'), 'text'),
-  f('textLike', () => t('文字差不多是'), 'text', { hint: () => t('忽略数字和标点后一样') }),
-  f('count', () => t('子项个数'), 'number'),
-])
+// 检查只用条件组（cond-leaves.tsx）：v3 按控件写的 exists / visible / text… GameTest 2.0 不认，升级脚本时改写
+registerFields('assert', [])
 
 registerActionTitles({
   click: () => t('点击'),
@@ -283,7 +279,11 @@ registerActionTitles({
   key: () => t('按键'),
   'input.cursor': () => t('移动鼠标'),
   probe: () => t('点测'),
-  find: () => t('找控件'),
+  'obj.find': () => t('找对象'),
+  'obj.set': () => t('设属性'),
+  'obj.call': () => t('调函数'),
+  'obj.close': () => t('关闭'),
+  'obj.wait': () => t('等对象'),
   snapshot: () => t('控件树快照'),
   screenshot: () => t('截图'),
   'widget.add': () => t('打开界面'),

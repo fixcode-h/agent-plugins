@@ -1,5 +1,7 @@
 import type { CondNode, GtStep } from '../../../../shared/gt-script/index.ts'
+import type { GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { t } from '../../../host.ts'
+import { propOn } from '../gt-ref/compare-table.ts'
 
 /** 一条路：条件 + 步骤。最后的「其余情况」没有条件 */
 export interface Way {
@@ -21,8 +23,17 @@ export function withWays(s: GtStep, list: Way[]): GtStep {
   return out
 }
 
-/** 抓到的控件种类（gt.inspect 的 kind）：一键分路先给最常用的那种分法 */
+/** 抓到的控件种类：一键分路先给最常用的那种分法 */
 export type WidgetKind = 'button' | 'check' | 'text' | 'other'
+
+/** 按控件类名猜种类（Widget 树里选中的那个控件） */
+export function widgetKindOf(cls: string | undefined): WidgetKind {
+  const c = cls ?? ''
+  if (/CheckBox/i.test(c)) return 'check'
+  if (/Button/i.test(c)) return 'button'
+  if (/Text/i.test(c)) return 'text'
+  return 'other'
+}
 
 export interface StatePreset {
   id: 'click' | 'shown' | 'text' | 'checked'
@@ -33,30 +44,31 @@ export interface StatePreset {
 
 /**
  * 一键分路的几种分法（定稿 9.4A）：按控件给出常用的几条路，每条路的条件都是完整的条件组，之后可以随便改。
+ * v4 起每条判断是「对象 + 属性」（协议 game-test-ref 第 4 节）：落点的部件拼进属性路径（`@BtnFinish:enabled`）。
  * 反面的路（不显示、其余情况）由执行器按 elseSettleMs 稳住再走
  */
-export const statePresets = (target: string): StatePreset[] => [
-  {
-    id: 'click',
-    label: t('能点 / 显示但不能点 / 其余'),
-    ways: [
-      { target, enabled: true },
-      {
-        all: [
-          { target, visible: true },
-          { target, enabled: false },
-        ],
-      },
-    ],
-    rest: true,
-  },
-  { id: 'shown', label: t('显示 / 不显示'), ways: [{ target, visible: true }], rest: true },
-  { id: 'text', label: t('文字是 … / 其余'), ways: [{ target, text: '' }], rest: true },
-  { id: 'checked', label: t('勾上 / 没勾'), ways: [{ target, checked: true }], rest: true },
-]
+export const statePresets = (target: GtTarget): StatePreset[] => {
+  const on = (state: string, op: string, value?: unknown): CondNode => ({
+    obj: target.obj,
+    prop: propOn(target.part, state),
+    op,
+    ...(value === undefined ? {} : { value }),
+  })
+  return [
+    {
+      id: 'click',
+      label: t('能点 / 显示但不能点 / 其余'),
+      ways: [on('enabled', 'is', true), { all: [on('shown', 'is', true), on('enabled', 'is', false)] }],
+      rest: true,
+    },
+    { id: 'shown', label: t('显示 / 不显示'), ways: [on('shown', 'is', true)], rest: true },
+    { id: 'text', label: t('文字是 … / 其余'), ways: [on('text', 'eq', '')], rest: true },
+    { id: 'checked', label: t('勾上 / 没勾'), ways: [on('checked', 'is', 'Checked')], rest: true },
+  ]
+}
 
 /** 按控件种类挑默认分法：按钮 → 能点…，勾选框 → 勾上 / 没勾，文字 → 文字是…，其余 → 显示 / 不显示 */
-export function presetFor(target: string, kind?: WidgetKind): StatePreset {
+export function presetFor(target: GtTarget, kind?: WidgetKind): StatePreset {
   const id = kind === 'button' ? 'click' : kind === 'check' ? 'checked' : kind === 'text' ? 'text' : 'shown'
   return statePresets(target).find((p) => p.id === id)!
 }
