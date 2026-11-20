@@ -5,6 +5,7 @@ import { get, post, useAction, useLoad } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { Term } from '../../../ui.tsx'
 import { BuildHint } from '../../BuildHint.tsx'
+import { StaleBuildHint } from '../../StaleBuildHint.tsx'
 
 /**
  * UE 插件页底下的作业条：平时一行（最近的安装 / 升级 / 编译、结果、用时），点开看输出；
@@ -34,12 +35,15 @@ export function JobBar({
   job,
   onDone,
   onBuild,
+  onJob,
 }: {
   job: { data?: Job; reload: () => void }
   /** 作业从跑着变成结束：刷新卡片和项目状态 */
   onDone: () => void
   /** 编译（mode：被编辑器挡住时的处理方式） */
-  onBuild: (mode?: 'force' | 'kill') => void
+  onBuild: (mode?: 'force' | 'kill' | 'killStale') => void
+  /** 换成看另一个作业（「接着看」之前的编译） */
+  onJob: (id: string) => void
 }) {
   const { ui, cn } = h()
   const { busy, run } = useAction()
@@ -109,8 +113,20 @@ export function JobBar({
       </div>
       {expanded && (
         <div className="ue:flex ue:flex-col ue:gap-2 ue:px-4 ue:pb-3">
-          {j.hint && (
+          {j.hint?.kind === 'live-coding' && (
             <BuildHint hint={j.hint} busy={!!busy} onBuild={(mode) => onBuild(mode === 'normal' ? undefined : mode)} />
+          )}
+          {/* 排队等别的编译：跑着的作业带 waiting，结束了的是这次没开始 */}
+          {j.hint?.kind === 'stale-build' && (j.status === 'running') === !!j.hint.waiting && (
+            <StaleBuildHint
+              procs={j.hint.procs}
+              mode={j.hint.waiting ? 'waiting' : 'blocked'}
+              jobId={j.id}
+              busy={!!busy}
+              onBuild={onBuild}
+              onJob={onJob}
+              onChanged={job.reload}
+            />
           )}
           {/* 换了作业就重新挂载，跟随状态回到「跟到底」；还没有输出时不画空的黑框 */}
           {j.log.length > 0 && (

@@ -10,6 +10,7 @@ import { Confirm, ErrorText, PageHead } from '../../ui.tsx'
 import { DiagPanel } from './LinkDiagnose.tsx'
 import { CardsSection } from './plugins/CardsSection.tsx'
 import { JobBar, useJob } from './plugins/JobBar.tsx'
+import { StrayBuilds } from './plugins/StrayBuilds.tsx'
 import { extView, isStale, upgradePlan, uelinkView, type PluginView } from './plugins/model.ts'
 import { NotesModal } from './plugins/NotesModal.tsx'
 import { isSettingsPlugin, PluginSettings } from './plugins/PluginSettings.tsx'
@@ -90,7 +91,7 @@ function PluginList() {
     notes: setNotesOf,
     settings: (v) => go('plugins', v.name),
   }
-  const build = (opts?: 'force' | 'kill') =>
+  const build = (opts?: 'force' | 'kill' | 'killStale') =>
     run('build', async () => {
       const r = await ppost<{ job: string }>(project.id, 'build', opts ? { [opts]: true } : undefined)
       started(r.job)
@@ -202,8 +203,10 @@ function PluginList() {
               reload()
             }}
             onBuild={(m) => void build(m)}
+            onJob={started}
           />
         )}
+        <StrayBuilds job={job.data} onJob={started} />
       </div>
       <MenuHost />
       {notesOf && <NotesModal view={notesOf} onClose={() => setNotesOf(undefined)} />}

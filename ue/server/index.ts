@@ -1,5 +1,6 @@
 import type { ActivateServer } from '../../sdk/server.ts'
 import { projectState } from './actions.ts'
+import { buildProcs } from './build/procs.ts'
 import { availableVersion } from './uelink.ts'
 import { bridgeVersionIn, olderVersion } from './instances.ts'
 import { handle } from './api.ts'
@@ -119,19 +120,32 @@ const activate: ActivateServer = async (ctx) => {
     async status() {
       const projects = await listProjects()
       const states = await Promise.all(projects.map((p) => projectState(p).catch(() => undefined)))
+      // 编译进程（面板跟踪的和残留的）也列出来：插件升级、面板重启后还在跑的编译在这里看得到
+      const builds = await Promise.all(projects.map((p) => buildProcs(p).catch(() => undefined)))
       return {
         projects: projects.length,
         running: states.reduce((n, s) => n + (s?.instances.filter((i) => i.online).length ?? 0), 0),
-        items: states.filter(Boolean).map((s) => ({
-          name: s!.project.name,
-          engine: s!.project.engine.version,
-          bridge: s!.bridge,
-          bundled: s!.bundled,
-          instances: s!.instances.length,
-        })),
+        builds: builds.reduce((n, b) => n + (b?.procs.length ?? 0), 0),
+        items: states.flatMap((s, i) =>
+          s
+            ? [
+                {
+                  name: s.project.name,
+                  engine: s.project.engine.version,
+                  bridge: s.bridge,
+                  bundled: s.bundled,
+                  instances: s.instances.length,
+                  builds: (builds[i]?.procs ?? []).map(
+                    (x) => `${x.kind} PID ${x.pid}${x.job ? '' : ` (${t('残留')})`}`,
+                  ),
+                },
+              ]
+            : [],
+        ),
       }
     },
 
+    // 正在跑的编译不在这里结束：作业表挂在 globalThis 上（jobs.ts），升级后新加载的插件接着跟踪它，网页刷新后照样看得到
     stop() {
       stopAllBackground()
       stopAllStreams()

@@ -245,11 +245,34 @@ export interface Job {
   endedAt?: string
   code?: number
   /** 编译被开着的编辑器挡住（Live Coding）：网页按它给出处理方式，不只显示失败 */
-  hint?: { kind: 'live-coding'; blockers: BuildBlocker[] }
+  hint?:
+    | { kind: 'live-coding'; blockers: BuildBlocker[] }
+    /**
+     * 这个引擎还有别的编译在跑（面板升级插件、刷新前起的，或者在命令行、VS 里起的），新的 Build.bat 会排队一直等它：
+     * waiting=true 是这次已经开始、正排在它后面；否则这次没开始编（server/build/stale.ts）
+     */
+    | { kind: 'stale-build'; procs: BuildProc[]; waiting?: boolean }
   /** 用户在网页上取消的 */
   canceled?: boolean
   /** 分几步做的作业（UE 插件页「全部升级」）：每一步的插件名和状态，卡片按它显示升级中 / 排队中 */
   steps?: { name: string; status: 'wait' | 'run' | 'done' | 'failed' }[]
+}
+
+/** 这台机器上和这个引擎有关的编译进程（server/build/procs.ts）：Build.bat、UnrealBuildTool */
+export interface BuildProc {
+  pid: number
+  /** 父进程 PID：从这里认出整棵进程树，结束时只结束树根 */
+  ppid: number
+  /** script：Build.bat / Build.sh；ubt：UnrealBuildTool */
+  kind: 'script' | 'ubt'
+  /** 命令行里的 .uproject 或 -Project=，看不出来为空 */
+  project: string
+  /** 编的就是这个项目 */
+  same: boolean
+  /** 面板这次运行里起的、还在跟踪的作业 id；没有就是残留（面板升级、重启前起的，或在外面起的） */
+  job?: string
+  /** 命令行（截短），给人认是哪一次编译 */
+  cmd: string
 }
 
 /** 挡住编译的编辑器进程（server/procs.ts） */
