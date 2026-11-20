@@ -1,4 +1,4 @@
-import { ArrowDown, Package, Search, type LucideIcon } from 'lucide-react'
+import { ArrowDown, Package, Search, X, type LucideIcon } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import type { Instance, World } from '../server/types.ts'
 import { busyOf, EditorBusy } from './busy/busy.tsx'
@@ -328,7 +328,15 @@ export function SearchBox({
   onFocusChange?: (focused: boolean) => void
 }) {
   const [q, setQ] = useState(initial)
-  const { Button } = h().ui
+  const { Button, IconButton } = h().ui
+  const input = useRef<HTMLInputElement>(null)
+  // 清空（用户 2026-11-20 要）：边打字边筛的、空的也能搜的，清掉就等于搜空，马上把列表放回原样；
+  // 要点「搜索」才搜的只清输入框，结果留着，免得误点一下把刚搜到的东西丢了
+  const clear = () => {
+    setQ('')
+    if (live || allowEmpty) onSearch('')
+    input.current?.focus()
+  }
   const go = () => {
     if (live && onEnter) return onEnter(q.trim())
     if (q.trim() || allowEmpty) onSearch(q.trim())
@@ -345,7 +353,17 @@ export function SearchBox({
         <label className="ue:flex ue:h-full ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:pr-1.5">
           <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
           <input
+            ref={input}
             value={q}
+            onKeyDown={(e) => {
+              // Esc 也清空（有字时）：和清空按钮一样
+              if (e.key === 'Escape' && q) {
+                e.preventDefault()
+                // 别让外层弹窗把 Esc 当成关闭：这一下只清搜索框
+                e.stopPropagation()
+                clear()
+              }
+            }}
             onChange={(e) => {
               setQ(e.target.value)
               if (live) onSearch(e.target.value.trim())
@@ -358,6 +376,8 @@ export function SearchBox({
           />
           {hint && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{hint}</span>}
         </label>
+        {/* 放在 label 外面：点它不会先把焦点给输入框再清，清完自己把焦点放回去 */}
+        {q && <IconButton icon={X} size="xs" label={t('清空')} onClick={clear} />}
         {addon}
       </div>
       {!live && (
