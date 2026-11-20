@@ -26,6 +26,7 @@ import {
   filterState,
   groupObjects,
   idleModules,
+  isClassObj,
   isPathQuery,
   search,
   stateOf,
@@ -115,7 +116,7 @@ export function ObjectsTree({
       const st = stateOf(x)
       lines.push({
         ...base,
-        icon: Box,
+        icon: isClassObj(x) ? Component : Box,
         label: (
           <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:font-mono">
             <StateDot state={st} />
@@ -215,10 +216,17 @@ export function ObjectsTree({
     })
   } else if (data) {
     const groupLabel = { module: t('按 Lua 类'), class: t('按 UE 类'), owner: t('按归属') }[grouping]
-    if (section('s:objects', Box, t('运行中的对象（{g}）', { g: groupLabel }), objs.length)) {
-      const tree = groupObjects(objs, grouping)
+    // 类（UClass）单独一组：没开始玩时 UnLua 只给类建了表，混在「运行中的对象」里会被当成实例去调 UE 函数
+    const insts = objs.filter((o) => !isClassObj(o))
+    const classObjs = objs.filter(isClassObj)
+    if ((insts.length || !classObjs.length) && section('s:objects', Box, t('运行中的对象（{g}）', { g: groupLabel }), insts.length)) {
+      const tree = groupObjects(insts, grouping)
       // 对象不多时全展开；多了只展开第一层分组，免得一打开就是几百行
-      for (const n of tree) node(n, 1, objs.length <= 40)
+      for (const n of tree) node(n, 1, insts.length <= 40)
+    }
+    if (classObjs.length && section('s:classobjs', Component, insts.length ? t('绑了 Lua 的类') : t('绑了 Lua 的类（还没开始玩，没有实例）'), classObjs.length, !insts.length)) {
+      const tree = groupObjects(classObjs, grouping === 'owner' ? 'module' : grouping)
+      for (const n of tree) node(n, 1, classObjs.length <= 40)
     }
     if (data.globals.length && section('s:globals', Globe, t('全局（项目自己的）'), data.globals.length))
       for (const g of data.globals) leaf(`g:${g}`, Globe, g, { path: '', keys: [g] })

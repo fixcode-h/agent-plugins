@@ -12,7 +12,8 @@ export interface LuaFn {
 }
 export interface InspectRes {
   value: LuaDesc
-  chain?: { name: string; src?: string }[]
+  /** path、reflected 是 UELink 2.19.1 起才有的 */
+  chain?: { name: string; src?: string; path?: string; reflected?: boolean }[]
   src?: string
   fields?: LuaField[]
   functions?: LuaFn[]
