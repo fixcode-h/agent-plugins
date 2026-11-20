@@ -1,10 +1,12 @@
 import { Bug } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { busyLine } from '../busy/busy.tsx'
 import { connLine, useBackgroundCtl } from '../Side.tsx'
 import { kindLabel, useTargetInfo, WorldBadge, worldLabel } from '../ui.tsx'
 import { phaseLine, phaseOf } from '../vs-debug/model.ts'
+import { useCloseEditor } from './close-editor.tsx'
 
 /**
  * 二级面板顶上的目标卡（设计稿方案 C 的样子，用户 2026-11-18 定用在方案 B 里）：一行世界下拉，
@@ -23,17 +25,27 @@ export function TargetChips({ bar = false }: { bar?: boolean } = {}) {
   const phase = phaseOf(vs)
   const vsLine = phaseLine(vs)
   const bg = useBackgroundCtl()
+  const close = useCloseEditor()
+  // 组名带上连不上 / 在忙：一眼看出哪个编辑器是不回应的那个（用户 2026-11-20：怎么有两个编辑器）
+  const groupOf = (i: (typeof list)[number]) =>
+    `${kindLabel(i.kind)} ${i.pid}${i.online ? '' : ` · ${i.busy ? t('没有回应') : t('连不上')}`}`
   const options = list.flatMap((i) => [
-    { value: `${i.pid}|`, label: `${kindLabel(i.kind)} · ${t('默认世界')}`, group: `${kindLabel(i.kind)} ${i.pid}` },
+    { value: `${i.pid}|`, label: `${kindLabel(i.kind)} · ${t('默认世界')}`, group: groupOf(i) },
     ...i.worlds.map((x) => ({
       value: `${i.pid}|${x.id}`,
       label: worldLabel(x),
-      group: `${kindLabel(i.kind)} ${i.pid}`,
+      group: groupOf(i),
     })),
   ])
+  // 下拉里的进程（组名或它下面的世界）右键：关闭编辑器（面板的 Select 支持 onOptionContextMenu 才有，旧面板没有）
+  const optionMenu = (o: { value: string }, e: MouseEvent) => {
+    const i = list.find((x) => x.pid === Number(o.value.split('|')[0]))
+    if (i) close.menu(e, i)
+  }
   // 目标进程小块：PIE 世界写 PIE，其余写进程类型；连不上、在忙时圆点换色，原因放悬停提示
   const instChip = inst ? (
     <Chip
+      onContextMenu={(e: MouseEvent) => close.menu(e, inst)}
       tone={inst.online ? (conn.tone === 'ok' ? 'ok' : conn.tone) : inst.busy ? 'run' : 'danger'}
       busy={!inst.online && !!inst.busy}
       title={
@@ -68,6 +80,7 @@ export function TargetChips({ bar = false }: { bar?: boolean } = {}) {
           aria-label={t('目标')}
           value={inst ? `${inst.pid}|${world?.id ?? ''}` : ''}
           options={options}
+          onOptionContextMenu={optionMenu}
           onChange={(e: { target: { value: string } }) => {
             const [pid, wid] = e.target.value.split('|')
             const i = list.find((x) => x.pid === Number(pid))
@@ -110,6 +123,7 @@ export function TargetChips({ bar = false }: { bar?: boolean } = {}) {
           </Chip>
         )}
       </div>
+      {close.dialog}
     </section>
   )
 }

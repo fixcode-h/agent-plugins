@@ -1,7 +1,8 @@
 import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { markBusy, markDown, markOnline } from './busy/state.ts'
-import type { Instance, Target } from './types.ts'
+import { checkReused, knownReused } from './editor-close/proc-start.ts'
+import type { Instance, Target, World } from './types.ts'
 import { bundledVersion, cmpVersion, pluginVersion } from './uelink.ts'
 import { alive, readJson, t } from './util.ts'
 import { rootOfCard, vsBreakNote } from './vs-debug/break-note.ts'
@@ -53,6 +54,13 @@ export async function liveCards(root: string): Promise<Card[]> {
         await rm(path.join(dir, n), { force: true })
         continue
       }
+      // PID 被别的进程顶替了（UE 崩了没删名片、Windows 又把 PID 给了别人）：名片作废。
+      // 第一次见到的名片在后台查，不拖慢这次读，查出来是顶替的下一次就清掉（editor-close/proc-start.ts）
+      if (knownReused(card.pid, card.startedAt)) {
+        await rm(path.join(dir, n), { force: true })
+        continue
+      }
+      void checkReused(card.pid, card.startedAt)
       if (seen.has(card.pid)) continue
       seen.add(card.pid)
       out.push(card)
@@ -158,7 +166,7 @@ export async function info(card: Card): Promise<Instance> {
       online: true,
       ready: (body as { ready?: boolean }).ready ?? card.ready,
       log: body.log,
-      worlds: body.worlds ?? [],
+      worlds: (body.worlds ?? []).map(normWorld),
       lua: body.lua,
       extensions: body.extensions ?? card.extensions,
       ops: Array.isArray(body.ops) ? body.ops : undefined,
@@ -179,6 +187,29 @@ export async function info(card: Card): Promise<Instance> {
       }
     markDown(card.pid)
     return { ...base, error: err.message }
+  }
+}
+
+/**
+ * 世界类型、网络模式统一成网页认的写法（Editor / PIE / Game，Standalone / ListenServer / Client / DedicatedServer）。
+ * UELink 的 /info 一直回小写（editor / pie / game，standalone / listen / client / dedicated，UEKit docs/protocol.md），
+ * 网页却按大写比，结果编辑器世界、PIE 世界在目标下拉里全显示成「游戏世界」，PIE 也认不出来（用户 2026-11-20 截图）。
+ * 在这一处转，网页和假桥接（scripts/fake-bridge.mjs，本来就是大写）都不用改
+ */
+const WORLD_TYPES: Record<string, string> = { editor: 'Editor', pie: 'PIE', game: 'Game' }
+const NET_MODES: Record<string, string> = {
+  standalone: 'Standalone',
+  listen: 'ListenServer',
+  listenserver: 'ListenServer',
+  client: 'Client',
+  dedicated: 'DedicatedServer',
+  dedicatedserver: 'DedicatedServer',
+}
+export function normWorld(w: World): World {
+  return {
+    ...w,
+    type: WORLD_TYPES[String(w.type).toLowerCase()] ?? w.type,
+    netMode: NET_MODES[String(w.netMode).toLowerCase()] ?? w.netMode,
   }
 }
 

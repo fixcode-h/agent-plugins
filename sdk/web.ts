@@ -106,6 +106,7 @@ export interface WebHost {
     EmptyPanel: Loose
     Field: Loose
     Input: Loose
+    /** 下拉框 { options, value, onChange, … }；onOptionContextMenu(option, e) 选项右键（2026-11-20 加的，旧面板忽略） */
     Select: Loose
     Textarea: Loose
     Modal: Loose
@@ -131,7 +132,7 @@ export interface WebHost {
     /**
      * 分区导航（2026-11-18 加的，旧面板没有：用之前先判断有没有）：图标轨 SectionRail { items, current, onPick, top?, bottom? }、
      * 轨上的按钮 RailAction { icon, label, onClick, on?, dot? }、二级面板 SidePanel { title, onCollapse?, children }、
-     * 面板里的分组标题 SidePanelLabel、一行 SidePanelRow { icon?, label, on?, onClick, meta?, tone? }、状态小块 StatusChip { tone?, icon?, onClick?, title?, busy? }。
+     * 面板里的分组标题 SidePanelLabel、一行 SidePanelRow { icon?, label, on?, onClick, meta?, tone? }、状态小块 StatusChip { tone?, icon?, onClick?, title?, busy?, onContextMenu? }（onContextMenu 2026-11-20 加的）。
      * 设置 → 组件 →「分区导航」里能调
      */
     SectionRail?: Loose
