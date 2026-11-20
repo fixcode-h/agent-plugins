@@ -4087,8 +4087,6 @@
   "回到控件细节": "Back to widget details",
   "被动画 {a} 驱动：{c}": "Driven by animation {a}: {c}",
   "父：{p}": "parent: {p}",
-  "子界面：属性在它自己的配置里（{a}）": "Sub-widget: its properties are in its own config ({a})",
-  "这个控件在配置里没写属性，导入后用默认值": "This widget has no properties in the config; defaults are used after import",
   "父类 {p}": "parent class {p}",
   "关键帧太多，只读到了一部分": "Too many keyframes; only part was read",
   "有轨道读不出来，没显示：{s}": "Some tracks couldn't be read and aren't shown: {s}",
@@ -4308,5 +4306,14 @@
   "格式": "Format",
   "压缩": "Compression",
   "贴图：大图 + 细节": "Texture: image + details",
-  "UE 没画出预览": "UE didn't render a preview"
+  "UE 没画出预览": "UE didn't render a preview",
+  "点开取色": "Click to pick a color",
+  "{l} 取色": "Pick color for {l}",
+  "重置为默认 {v}": "Reset to default {v}",
+  "按配置预览，只读：要改就在 AssetForge 页改，或导入后在真实资源上改": "Previewed from the config, read-only: edit it on the AssetForge page, or on the real asset after importing",
+  "来自样式 {s}": "From style {s}",
+  "子界面：它自己的属性在它自己的配置里（{a}），这里只有插槽和通用属性": "Sub-widget: its own properties live in its own config ({a}); only slot and common properties are shown here",
+  "知道了": "Got it",
+  "「{v}」不是数字": "\"{v}\" is not a number",
+  "一个数是四边一样，两个数是「左右, 上下」，四个数是「左, 上, 右, 下」": "One number for all sides, two for \"horizontal, vertical\", four for \"left, top, right, bottom\""
 }

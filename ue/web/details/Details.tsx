@@ -27,7 +27,9 @@ function useOpen() {
 function useNameWidth() {
   const [w, setW] = useState(() => remember<number>('nameW', 0))
   return {
-    css: w ? `${w}px` : '38%',
+    // 记下的宽度是在别的（更宽的）面板里拖出来的：窄面板里不能让名字列把值列挤没（右栏 380px 时值列只剩一条边），
+    // 名字列最多占一半
+    css: w ? `min(${w}px, 50%)` : '38%',
     set: setW,
     save: (n: number) => keep('nameW', n),
     reset: () => {

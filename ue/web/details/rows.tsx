@@ -1,4 +1,4 @@
-import { Copy, CopyPlus, ListPlus, Pin, Trash2, Undo2 } from 'lucide-react'
+import { Copy, CopyPlus, ListPlus, Pin, RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { usePropAnim, usePropMark } from './marks.ts'
 import { show } from '../api.ts'
@@ -14,7 +14,7 @@ import {
   VecField,
   vecKeys,
 } from './controls.tsx'
-import { isNumberType, looksLikePath, toDisplay, type Prop } from './model.ts'
+import { isNumberType, looksLikePath, toDisplay, type MemberMeta, type Prop } from './model.ts'
 import { RefChip, type OpenHow } from './RefChip.tsx'
 
 /** 一行（顶层属性，或展开后的结构体成员、数组元素）：path 是交给桥接的属性路径（Stats.MaxHP、Triggers[0]、Tags["Fire"]） */
@@ -37,6 +37,10 @@ export interface Node {
   fixedSize?: boolean
   /** 数组元素：在父数组里的下标（行尾给插入、复制、删除） */
   element?: { array: string; index: number }
+  /** 结构体成员的说明（展开时子行按它挑控件、取显示名） */
+  members?: MemberMeta[]
+  /** 值下面的一行小字（「来自样式 X」） */
+  note?: string
 }
 
 export function nodeOf(p: Prop): Node {
@@ -57,6 +61,8 @@ export function nodeOf(p: Prop): Node {
     count: p.count,
     fixedSize: p.fixedSize,
     inner: p.inner,
+    members: p.members,
+    note: p.note,
   }
 }
 
@@ -76,6 +82,10 @@ export interface DetailsApi {
   /** 点对象引用：via 是属性的显示名（导航条面包屑上写「经 Static Mesh」）；返回 undefined 表示这个引用不能点 */
   openRef: (p: string, via?: string) => ((how: OpenHow) => void) | undefined
   loadFull: (path: string) => Promise<unknown>
+  /** 值是 UE 默认值（配置里没写）：名字压灰，和 UE 细节面板一样一眼看出哪些是改过的 */
+  isDefault?: (path: string) => boolean
+  /** 重置箭头的意思是「重置为默认」（按配置改时）：照 UE 画成黄色的转圈箭头；不给是「恢复这次改之前的值」 */
+  resetToDefault?: boolean
 }
 export const DetailsCtx = createContext<DetailsApi | null>(null)
 const useDetails = () => useContext(DetailsCtx)!
@@ -99,7 +109,10 @@ function expandable(n: Node) {
   const v = n.value as Record<string, unknown> | null
   if (n.container) return (n.count ?? 1) > 0 || !!v?._truncated
   if (Array.isArray(v)) return v.length > 0
-  return typeof v === 'object' && v !== null && !vecKeys(v)
+  // 颜色、边距照 UE 能展开成一个分量一行（颜色那一行只有色块，窄面板里四个框也挤不下）；向量、旋转按分量直接改
+  const vec = vecKeys(v)
+  if (vec) return /^(r|left)$/i.test(vec[0])
+  return typeof v === 'object' && v !== null
 }
 
 /**
@@ -131,15 +144,20 @@ function childrenOf(n: Node, full: unknown): Node[] {
       ...(n.container === 'array' ? { element: { array: n.path, index: i } } : {}),
     }))
   if (full && typeof full === 'object')
-    return Object.entries(full as Record<string, unknown>).map(([k, v]) => ({
-      ...base,
-      key: `${n.key}.${k}`,
-      label: n.container === 'map' ? k : toDisplay(k),
-      path: n.container === 'map' ? `${n.path}[${JSON.stringify(k)}]` : `${n.path}.${k}`,
-      value: v,
-      container: Array.isArray(v) ? ('array' as const) : undefined,
-      count: Array.isArray(v) ? v.length : undefined,
-    }))
+    return Object.entries(full as Record<string, unknown>).map(([k, v]) => {
+      // 有成员说明（按配置画的 Font、Brush）：显示名、类型、枚举照说明，Font Family 这类就是下拉
+      const m = n.members?.find((x) => x.name === k)
+      return {
+        ...base,
+        key: `${n.key}.${k}`,
+        label: n.container === 'map' ? k : (m?.displayName ?? toDisplay(k, typeof v === 'boolean')),
+        path: n.container === 'map' ? `${n.path}[${JSON.stringify(k)}]` : `${n.path}.${k}`,
+        value: v,
+        ...(m ? { type: m.type, enum: m.enum, enumLabels: m.enumLabels, members: m.members } : {}),
+        container: Array.isArray(v) ? ('array' as const) : undefined,
+        count: Array.isArray(v) ? v.length : undefined,
+      }
+    })
   return []
 }
 
@@ -159,6 +177,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
   const anim = usePropAnim(n.path, depth)
   const ro = n.readOnly
   const why = ro ? n.readOnlyWhy || t('这个属性不能改') : undefined
+  const dim = !!d.isDefault?.(n.path)
 
   const toggle = async () => {
     if (open) return setOpen(false)
@@ -218,7 +237,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
             <span className="ue:w-4 ue:shrink-0" />
           )}
           {/* 只读的名字也压暗一档（UE 一样），和能改的一眼分开 */}
-          <span className={cn('ue:truncate ue:text-footnote', ro ? 'ue:text-muted' : 'ue:text-fg')}>
+          <span className={cn('ue:truncate ue:text-footnote', ro || dim ? 'ue:text-muted' : 'ue:text-fg')}>
             <Hl text={n.label} q={depth ? '' : d.q} />
           </span>
           {anim && (
@@ -246,6 +265,11 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
               title={t('导入后：{v}', { v: show(mark.after) })}
             >
               {t('导入后 → {v}', { v: show(mark.after) })}
+            </span>
+          )}
+          {n.note && (
+            <span className="ue:truncate ue:text-caption ue:text-subtle" title={n.note}>
+              {n.note}
             </span>
           )}
           {err && <span className="ue:text-caption ue:text-danger">{err}</span>}
@@ -289,10 +313,19 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
             </span>
           )}
           {/* 改过的值：UE 那个重置箭头，点了恢复成这次改之前的值 */}
-          {changed && !ro && (
+          {changed && !ro && !d.resetToDefault && (
             <ui.IconButton
               icon={Undo2}
               label={t('恢复原值 {v}', { v: show(d.changed(n.path)) })}
+              size="xs"
+              onClick={() => d.reset(n)}
+            />
+          )}
+          {/* 按配置改：和默认值不一样的行照 UE 给黄色「重置为默认」箭头，点了从配置里删掉这个字段 */}
+          {changed && !ro && d.resetToDefault && (
+            <ui.IconButton
+              icon={ResetIcon}
+              label={t('重置为默认 {v}', { v: show(d.changed(n.path)) })}
               size="xs"
               onClick={() => d.reset(n)}
             />
@@ -401,6 +434,11 @@ function Value({ n, why, changed }: { n: Node; why?: string; changed: boolean })
 }
 
 const noop = () => {}
+
+/** UE 的「重置为默认」箭头是黄色的：图标自己带警示色，不跟按钮的灰字 */
+function ResetIcon({ className, strokeWidth }: { className?: string; strokeWidth?: number }) {
+  return <RotateCcw strokeWidth={strokeWidth} className={`${className ?? ''} ue:text-warning`} />
+}
 
 /** 面包屑上「经哪个属性」：顶层属性用显示名，数组元素、结构体成员用属性路径（Static Materials[0] 比「索引 [0]」看得懂） */
 const viaOf = (n: Node) => (n.path.includes('.') || n.path.includes('[') ? n.path : n.label)

@@ -24,6 +24,20 @@ export interface Prop {
   count?: number
   inner?: string
   fixedSize?: boolean
+  /** 结构体成员的说明（显示名、类型、枚举）：按配置画的细节面板展开 Font、Brush 时子行照它挑控件；桥接给的属性没有 */
+  members?: MemberMeta[]
+  /** 值下面的一行小字（「来自样式 X」） */
+  note?: string
+}
+
+/** 结构体成员的说明，和 Prop 同一套字段 */
+export interface MemberMeta {
+  name: string
+  displayName?: string
+  type?: string
+  enum?: string[]
+  enumLabels?: string[]
+  members?: MemberMeta[]
 }
 
 /**

@@ -49,6 +49,8 @@ export interface LayoutDef {
 /** AssetForge 的配置原文（AssetForge 页「资源」页签传进来；资源页自己按资产问 forge.describe） */
 export interface AssetConfig {
   text?: string
+  /** 展开 include 之后的配置（AssetForge 页给）：有就按它画，节点路径和改配置时查的 sources 对得上 */
+  doc?: unknown
   truncated?: boolean
   loading?: boolean
   error?: string

@@ -1,5 +1,5 @@
 import { Check, CirclePlus, Trash2 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
 
 /**
@@ -157,6 +157,8 @@ const VEC_KEYS = [
   ['x', 'y'],
   ['pitch', 'yaw', 'roll'],
   ['r', 'g', 'b', 'a'],
+  // FMargin（Padding）：UE 细节面板一行四个数字框
+  ['left', 'top', 'right', 'bottom'],
 ]
 /** X / Pitch / R 红，Y / Yaw / G 绿，Z / Roll / B 蓝，和 UE 细节面板一样 */
 const AXIS = ['var(--danger)', 'var(--success)', 'var(--run)', 'var(--subtle)']
@@ -194,8 +196,23 @@ export function VecField({
   const { cn } = h()
   const rot = keys[0]?.toLowerCase() === 'pitch'
   const color = keys[0]?.toLowerCase() === 'r'
+  const margin = keys[0]?.toLowerCase() === 'left'
   // 旋转在 UE 里按 Roll、Pitch、Yaw 的顺序显示（X、Y、Z 轴），值的键不变
   const order = rot ? [keys[2], keys[0], keys[1]] : keys
+  if (margin)
+    return (
+      <TextField
+        value={marginText(value, keys)}
+        disabled={disabled}
+        changed={changed}
+        title={title ?? t('一个数是四边一样，两个数是「左右, 上下」，四个数是「左, 上, 右, 下」')}
+        label={label}
+        onSubmit={(raw) => {
+          const out = parseMargin(raw, keys)
+          if (out) onSubmit(JSON.stringify(out))
+        }}
+      />
+    )
   const swatch =
     color &&
     `rgba(${[0, 1, 2].map((i) => Math.round(Math.min(1, Math.max(0, value[keys[i]])) * (value[keys[i]] > 1 ? 1 : 255))).join(',')},${keys[3] ? Math.min(1, value[keys[3]]) : 1})`
@@ -215,34 +232,132 @@ export function VecField({
       }}
     >
       {swatch && (
-        <span
-          className="ue:h-7 ue:w-7 ue:shrink-0 ue:rounded-[3px] ue:border ue:border-line-strong"
-          style={{ background: swatch }}
-        />
+        <ColorSwatch swatch={swatch} value={value} keys={keys} disabled={disabled} label={label} onSubmit={onSubmit} />
       )}
-      {order.map((k, i) => (
-        <label
-          key={k}
-          className={cn(FIELD, fieldTone(disabled, changed), 'ue:flex-1 ue:overflow-hidden ue:pl-0')}
-          title={k}
-        >
-          <span className="ue:mr-1.5 ue:h-full ue:w-[3px] ue:shrink-0" style={{ background: AXIS[i] }} />
-          <input
-            name={k}
-            key={`${k}:${value[k]}`}
-            defaultValue={fmt(value[k])}
-            disabled={disabled}
-            aria-label={`${label}.${k}`}
-            inputMode="decimal"
-            className={INPUT}
-          />
-          {rot && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">°</span>}
-        </label>
-      ))}
+      {/* 颜色照 UE 只画色块（点开取色），分量在展开的子行里改；值摘要跟在后面 */}
+      {color && (
+        <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
+          {order.map((k) => fmt(value[k])).join(', ')}
+        </span>
+      )}
+      {!color &&
+        order.map((k, i) => (
+          <label
+            key={k}
+            className={cn(FIELD, fieldTone(disabled, changed), 'ue:flex-1 ue:overflow-hidden ue:pl-0')}
+            title={k}
+          >
+            <span className="ue:mr-1.5 ue:h-full ue:w-[3px] ue:shrink-0" style={{ background: AXIS[i] }} />
+            <input
+              name={k}
+              key={`${k}:${value[k]}`}
+              defaultValue={fmt(value[k])}
+              disabled={disabled}
+              aria-label={`${label}.${k}`}
+              inputMode="decimal"
+              className={INPUT}
+            />
+            {rot && <span className="ue:shrink-0 ue:text-caption ue:text-subtle">°</span>}
+          </label>
+        ))}
       {/* 回车提交要有一个提交按钮；不显示 */}
       <button type="submit" hidden />
     </form>
   )
+}
+
+/**
+ * 色块照 UE 点开取色：浏览器自带的取色器改 RGB，A 在旁边的框里改；只读时只是色块。
+ * 取色器拖动时每一下都会触发，停下来 400ms 再提交一次，免得一路写盘
+ */
+function ColorSwatch({
+  swatch,
+  value,
+  keys,
+  disabled,
+  label,
+  onSubmit,
+}: {
+  swatch: string
+  value: Record<string, number>
+  keys: string[]
+  disabled?: boolean
+  label: string
+  onSubmit: (v: string) => void
+}) {
+  const { cn } = h()
+  const [draft, setDraft] = useState<string>()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return (
+    <label
+      title={disabled ? undefined : t('点开取色')}
+      className={cn(
+        'ue:relative ue:h-7 ue:w-7 ue:shrink-0 ue:overflow-hidden ue:rounded-[3px] ue:border ue:border-line-strong',
+        !disabled && 'ue:cursor-pointer ue:hover:border-focus',
+      )}
+      style={{ background: draft ?? swatch }}
+    >
+      {!disabled && (
+        <input
+          type="color"
+          aria-label={t('{l} 取色', { l: label })}
+          value={draft ?? toHex(value, keys)}
+          onChange={(e) => {
+            const hex = e.target.value
+            setDraft(hex)
+            clearTimeout(timer.current)
+            timer.current = setTimeout(() => {
+              setDraft(undefined)
+              onSubmit(JSON.stringify(fromHex(hex, value, keys)))
+            }, 400)
+          }}
+          className="ue:absolute ue:inset-0 ue:h-full ue:w-full ue:cursor-pointer ue:opacity-0"
+        />
+      )}
+    </label>
+  )
+}
+
+/**
+ * 边距照 UE 的 FMargin 细节：一个框写完，四边一样写一个数，左右 / 上下各一样写两个，否则四个；展开后一边一行。
+ * 写不成 1、2、4 个数的不提交（框里留着用户写的，回车没反应）
+ */
+export function marginText(v: Record<string, number>, keys: string[]) {
+  const [l, tp, r, b] = keys.map((k) => v[k])
+  if (l === r && tp === b) return l === tp ? fmt(l) : `${fmt(l)}, ${fmt(tp)}`
+  return [l, tp, r, b].map(fmt).join(', ')
+}
+export function parseMargin(raw: string, keys: string[]): Record<string, number> | undefined {
+  const n = raw
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map(Number)
+  if (!n.length || n.some((x) => !Number.isFinite(x))) return undefined
+  const four =
+    n.length === 1
+      ? [n[0], n[0], n[0], n[0]]
+      : n.length === 2
+        ? [n[0], n[1], n[0], n[1]]
+        : n.length === 4
+          ? n
+          : undefined
+  return four && Object.fromEntries(keys.map((k, i) => [k, four[i]]))
+}
+
+/** 颜色（0–1 的线性值）和取色器的 #rrggbb 互换：只换 RGB，A 原样留着 */
+function toHex(v: Record<string, number>, keys: string[]) {
+  const c = (i: number) =>
+    Math.round(Math.min(1, Math.max(0, Number(v[keys[i]]) || 0)) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${c(0)}${c(1)}${c(2)}`
+}
+function fromHex(hex: string, v: Record<string, number>, keys: string[]) {
+  const out: Record<string, number> = { ...v }
+  for (let i = 0; i < 3; i++)
+    out[keys[i]] = Math.round((parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255) * 1e4) / 1e4
+  return out
 }
 
 /** 数组、集合、映射的一行：「N 个元素」+ 加一个 + 清空（集合、映射只给清空） */

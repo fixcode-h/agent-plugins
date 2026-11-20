@@ -9,13 +9,15 @@ import type { ForgeDiffData } from './ForgeDiff.tsx'
 import { assetObjectPath } from './ForgeLink.tsx'
 import { Hint } from './forge-parts.tsx'
 import { useFragmentAt, type ForgeExpanded } from './forge-config/use-expanded.ts'
+import { ConfigEditCtx, type ConfigEdit } from '../../inspect/layouts/umg/edit/ctx.ts'
 
 /**
  * 「资源」页签（默认页签，设计稿 §2.2 第 3、4 条，用户原话「这个 json 也可以认为是一个蓝图资源」）：
  * - 资源已经生成：原样复用资源页的检视 AssetView（组件树 + 类默认值 / 属性 / 表格、蓝图、摘要与引用），
  *   并把 forge.diff 里导入会改的顶层属性标在属性面板上（marks）；
  * - 资源还没生成：按配置本身的节点树画一份只读预览（ForgeConfigPreview），导入后换成真实资源。
- * 这里只读：配置是真源，要改就用编辑器打开配置，或在资源页改完「导出到配置」。
+ * 配置是真源：UMG 按配置画的控件在细节面板里直接改配置文件（ConfigEditCtx，用户 2026-11-20）；
+ * 其它类型要改就用编辑器打开配置，或在资源页改完「导出到配置」。
  */
 export function ForgeAssetTab({
   entry,
@@ -26,6 +28,7 @@ export function ForgeAssetTab({
   configLoading,
   configError,
   onShowDiff,
+  edit,
 }: {
   entry: ForgeEntry
   /** 「和资产比」的属性差异；和上次提交的配置比的那份不用来标注（那是配置之间的差别，不是导入会改资源的） */
@@ -37,6 +40,8 @@ export function ForgeAssetTab({
   configLoading?: boolean
   configError?: string
   onShowDiff: () => void
+  /** 能直接改配置文件时给（配置根、配置路径、存完刷新、跳配置原文）：UMG 细节面板改了写回配置 */
+  edit?: Omit<ConfigEdit, 'expanded'>
 }) {
   const { go } = useUe()
   const { cn } = h()
@@ -50,24 +55,37 @@ export function ForgeAssetTab({
   }, [diff])
   const absent = entry.state === 'never-imported' || entry.state === 'asset-missing'
   const fragmentAt = useFragmentAt(expanded)
+  // 展开 include 之后的配置在手、又知道配置在哪：细节面板能直接改配置（节点在片段里就改片段文件）
+  const editCtx = useMemo<ConfigEdit | null>(
+    () => (edit && expanded?.doc ? { ...edit, expanded } : null),
+    [edit, expanded],
+  )
 
   if (['parse-error', 'foreign'].includes(entry.state))
     return <Hint>{t('配置读不出来，先看「配置原文」把它修好')}</Hint>
-  const config = { text: configText, truncated: configTruncated, loading: configLoading, error: configError }
+  const config = {
+    text: configText,
+    doc: expanded?.doc,
+    truncated: configTruncated,
+    loading: configLoading,
+    error: configError,
+  }
   // 有离线布局的类型（UMG）：资源还没生成也用和真实资源同一套布局，按配置画（资源查看页按 UE 编辑器布局，U4）
   if (path && absent && canOffline(configText))
     return (
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:p-2">
-        <AssetView
-          key={path}
-          path={path}
-          comp={comp}
-          onComp={setComp}
-          onOpen={(p) => go('assets', p)}
-          config={config}
-          offline
-        />
-      </div>
+      <ConfigEditCtx.Provider value={editCtx}>
+        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:p-2">
+          <AssetView
+            key={path}
+            path={path}
+            comp={comp}
+            onComp={setComp}
+            onOpen={(p) => go('assets', p)}
+            config={config}
+            offline
+          />
+        </div>
+      </ConfigEditCtx.Provider>
     )
   if (!path || absent)
     return (
@@ -114,16 +132,19 @@ export function ForgeAssetTab({
         </div>
       )}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:p-2">
-        <AssetView
-          key={path}
-          path={path}
-          comp={comp}
-          onComp={setComp}
-          onOpen={(p) => go('assets', p)}
-          hint={t('这里改的是资源本身：配置是真源，改完记得「导出到配置」，否则下次导入会被配置盖回去')}
-          marks={showMarks ? marks : undefined}
-          config={config}
-        />
+        {/* 资源已经生成：编辑器开着时细节面板改 UE 里的真实资源（照旧）；编辑器没开、按配置画的控件改配置文件 */}
+        <ConfigEditCtx.Provider value={editCtx}>
+          <AssetView
+            key={path}
+            path={path}
+            comp={comp}
+            onComp={setComp}
+            onOpen={(p) => go('assets', p)}
+            hint={t('这里改的是资源本身：配置是真源，改完记得「导出到配置」，否则下次导入会被配置盖回去')}
+            marks={showMarks ? marks : undefined}
+            config={config}
+          />
+        </ConfigEditCtx.Provider>
       </div>
     </div>
   )

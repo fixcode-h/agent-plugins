@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { op, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
@@ -93,7 +93,9 @@ export function ForgeDetail({
   )
   const configText = local.data ?? desc.data?.configText
   // include 展开（片段文件逐个从磁盘读）；片段列表交给页面一起盯（一个页面连接只登记一份，登记在 Forge.tsx）
-  const expanded = useForgeExpanded(project.id, configRoot, cfgPath, local.data, fileRev)
+  // 细节面板改了配置（可能是 include 的片段文件）：主文件原文没变时也要重新展开，不等文件监视的推送
+  const [editRev, setEditRev] = useState(0)
+  const expanded = useForgeExpanded(project.id, configRoot, cfgPath, local.data, fileRev + editRev)
   const fragKey = expanded?.fragments.join('\n') ?? ''
   useEffect(() => {
     onFragments?.(fragKey ? fragKey.split('\n') : [])
@@ -137,6 +139,27 @@ export function ForgeDetail({
     if (next === 'plan') setPlanWanted(true)
     onTab(next)
   }
+  // 「资源」页签里的 UMG 细节面板直接改配置文件（用户 2026-11-20）：存完马上重读本机原文，预览、控件树跟着刷新，
+  // 文件监视的推送随后再让差异、计划重算
+  const reloadLocal = local.reload
+  const assetEdit = useMemo(
+    () =>
+      cfgPath && configRoot
+        ? {
+            project: project.id,
+            configRoot,
+            main: cfgPath,
+            onSaved: () => {
+              void reloadLocal()
+              setEditRev((n) => n + 1)
+            },
+            openConfig: () => onTab('config'),
+          }
+        : undefined,
+    // onTab 由页面给、每次渲染都是新的；切页签的意思不变
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [project.id, configRoot, cfgPath, reloadLocal],
+  )
   const nDiff = diff.data?.supported ? diff.data.total : undefined
   const nPlan = planCount(plan.data)
   const withCount = (label: string, n?: number) => (n ? `${label} ${n}` : label)
@@ -195,6 +218,7 @@ export function ForgeDetail({
             configLoading={configLoading}
             configError={configError}
             onShowDiff={() => pick('diff')}
+            edit={assetEdit}
           />
         )}
         {tab === 'diff' &&

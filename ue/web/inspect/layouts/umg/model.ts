@@ -66,6 +66,8 @@ export interface WNode {
   /** 配置里的属性和插槽属性（近似预览、只读细节用）；UE 回的树没有 */
   props?: Record<string, unknown>
   slot?: Record<string, unknown>
+  /** 配置里这个节点在（展开 include 后的）配置里的路径（['root','children',0]）：细节面板按它找原节点、改配置 */
+  at?: (string | number)[]
   children: WNode[]
   truncated?: boolean
 }

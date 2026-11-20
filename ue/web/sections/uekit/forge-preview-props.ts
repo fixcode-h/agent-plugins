@@ -1,3 +1,4 @@
+import { normalizeValue } from '../../../shared/umg-schema/values.ts'
 import { toDisplay, type Prop } from '../../details/model.ts'
 
 /**
@@ -35,6 +36,13 @@ const ORDER = [
   'Navigation',
   'Localization',
 ]
+
+/** 分类在 UE 细节面板里的先后（表外的排在最后）：UMG 细节面板按配置画时也按它排 */
+export function categoryRank(c: string) {
+  if (c.startsWith('Slot')) return -1
+  const i = ORDER.indexOf(c)
+  return i < 0 ? ORDER.length : i
+}
 
 /** 属性名 → UE 细节面板里的分类（UMG 常用控件：TextBlock、Image、Border、Button、SizeBox、Spacer、ScrollBox、ProgressBar…） */
 const CATS: Record<string, string> = {
@@ -144,32 +152,8 @@ export function categoryOf(cls: string | undefined, name: string) {
   return CLASS_CATS[c]?.[name] ?? CATS[name] ?? (/^Min|^Max/.test(name) ? 'Appearance' : 'Default')
 }
 
-/**
- * 值整理成 UE 细节面板的样子：
- * - UE 文本格式的结构体 "(R=1,G=0.5,B=0,A=1)" 拆成对象（颜色、向量就能出色块、分量框）；
- * - FSlateColor {SpecifiedColor: {R,G,B,A}, ColorUseRule?} 在 UE 里就是一个色块，直接取里面的颜色
- */
-export function normalizeValue(v: unknown): unknown {
-  if (typeof v === 'string') {
-    const m = /^\(\s*([A-Za-z_]\w*\s*=\s*-?[\d.eE+-]+\s*(?:,\s*[A-Za-z_]\w*\s*=\s*-?[\d.eE+-]+\s*)*)\)$/.exec(v.trim())
-    if (!m) return v
-    const out: Record<string, number> = {}
-    for (const part of m[1].split(',')) {
-      const [k, n] = part.split('=').map((x) => x.trim())
-      out[k] = Number(n)
-    }
-    return Object.values(out).every(Number.isFinite) ? out : v
-  }
-  if (Array.isArray(v)) return v.map(normalizeValue)
-  if (v && typeof v === 'object') {
-    const o = v as Record<string, unknown>
-    const keys = Object.keys(o)
-    if ('SpecifiedColor' in o && keys.every((k) => k === 'SpecifiedColor' || k === 'ColorUseRule'))
-      return normalizeValue(o.SpecifiedColor)
-    return Object.fromEntries(keys.map((k) => [k, normalizeValue(o[k])]))
-  }
-  return v
-}
+// 值整理（UE 文本格式的结构体、FSlateColor）挪到 shared，UMG 细节面板写回配置时也要用同一套
+export { normalizeValue }
 
 function typeOf(v: unknown) {
   if (typeof v === 'boolean') return 'bool'

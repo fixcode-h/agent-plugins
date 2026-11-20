@@ -139,6 +139,7 @@ export function UmgLayout(p: LayoutProps) {
               marks={marks}
               animated={animated}
               animName={anim?.name}
+              doc={data.configDoc}
             />
           ),
         timeline: (
