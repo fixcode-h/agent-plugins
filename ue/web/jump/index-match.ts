@@ -62,7 +62,7 @@ export function queryTerms(q: string): string[] {
  * 排序：名字完全一样 < 名字开头 < 名字里有 < 只有路径里有；同档名字短的在前。
  * 所有词都要出现（第一个词决定档位），这样「hero bp」「ui/bag」都能搜
  */
-function score(lname: string, lpath: string, terms: string[]) {
+export function score(lname: string, lpath: string, terms: string[]) {
   for (const t of terms) if (!lpath.includes(t) && !lname.includes(t)) return -1
   const t0 = terms[0]
   // 贴的是路径：整条对上最前，路径结尾对上（相对路径）其次

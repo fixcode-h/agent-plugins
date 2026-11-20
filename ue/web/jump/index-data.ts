@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SearchIndex } from '../../server/search-index/types.ts'
 import { pget } from '../api.ts'
+import { mapSliced } from './index-async.ts'
 import { toAsset, toLua, type LoadedIndex } from './index-match.ts'
 
 export { matchAssets, matchLua, queryTerms, type LoadedIndex } from './index-match.ts'
@@ -23,13 +24,14 @@ export function loadIndex(pid: string, refresh = false): Promise<LoadedIndex> {
   if (have) q.set('v', have.version)
   if (refresh) q.set('refresh', '1')
   const p = pget<SearchIndex | { version: string; same: true }>(pid, `search-index?${q}`)
-    .then((r) => {
+    .then(async (r) => {
       if ('same' in r && have) return have
       const idx = r as SearchIndex
+      // 几万个资源一次算完小写会卡一下界面：分片算，期间输入框照常能打字
       const next: LoadedIndex = {
         version: idx.version,
-        assets: idx.assets.map(toAsset),
-        lua: idx.lua.map(toLua),
+        assets: await mapSliced(idx.assets, toAsset),
+        lua: await mapSliced(idx.lua, toLua),
         source: idx.source,
       }
       cache.set(pid, next)
