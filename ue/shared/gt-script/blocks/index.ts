@@ -3,10 +3,12 @@ import { group } from './group.ts'
 import { ifBlock } from './if.ts'
 import { loop } from './loop.ts'
 import * as leaves from './leaves.ts'
+import * as objects from './objects.ts'
 
 /**
  * 块和动作的注册表（协议第 14 节）。数据层、列表视图、流程图都按 action 查这里，不按名字写分支；
- * 不在表里的动作（click、key、type、move…原有动作）当叶子，id 前缀 s
+ * 不在表里的动作（click、key、type、move…原有动作）当叶子，id 前缀 s。
+ * v4 去掉了 invoke、widget.close、widget.call（换成 objects.ts 的 obj.*），不在表里，旧脚本靠迁移改写
  */
 const table = new Map<string, BlockDef>()
 
@@ -14,7 +16,7 @@ export function registerBlock(def: BlockDef) {
   table.set(def.action, def)
 }
 
-for (const d of [group, ifBlock, loop, ...Object.values(leaves)]) registerBlock(d)
+for (const d of [group, ifBlock, loop, ...Object.values(leaves), ...Object.values(objects)]) registerBlock(d)
 
 export const blockOf = (action: unknown): BlockDef | undefined =>
   typeof action === 'string' ? table.get(action) : undefined

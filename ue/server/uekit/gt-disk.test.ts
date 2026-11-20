@@ -50,7 +50,7 @@ test('场景列表：按相对路径排序，坏场景带 parseError，tags / re
   const root = path.join(base, 'b')
   const sr = path.join(root, 'docs', 'GameTest')
   await json(path.join(sr, 'smoke', 'main.json'), scen('主菜单', { tags: ['smoke', ' ', 3], revision: 4 }))
-  await json(path.join(sr, 'a.json'), { kind: 'gametest-scenario', schemaVersion: 4, name: 'x', steps: [] })
+  await json(path.join(sr, 'a.json'), { kind: 'gametest-scenario', schemaVersion: 5, name: 'x' })
   await mkdir(sr, { recursive: true })
   await writeFile(path.join(sr, 'broken.json'), '{ nope')
   const r = (await gtFromDisk(root, 'gt.scenarios', { limit: 1000 })) as unknown as {
@@ -72,7 +72,7 @@ test('场景列表：按相对路径排序，坏场景带 parseError，tags / re
     ['a.json', 'broken.json', 'smoke/main.json'],
   )
   const [bad, broken, ok] = r.scenarios
-  assert.match(bad.parseError ?? '', /schemaVersion 4/)
+  assert.match(bad.parseError ?? '', /schemaVersion 5/)
   assert.match(bad.parseError ?? '', /steps/)
   assert.ok(broken.parseError)
   assert.equal(ok.name, '主菜单')

@@ -1,7 +1,7 @@
 import type { BlockDef, CondRef } from '../types.ts'
 
 /**
- * v3 新加的叶子动作（没有子步骤）：数据层只要知道 id 前缀、条件字段和新建骨架。
+ * v3 起新加的叶子动作（没有子步骤）：数据层只要知道 id 前缀、条件字段和新建骨架。
  * 一个动作一个对象，加新动作就在这里或新文件里加一项、在 index.ts 注册
  */
 const expectCond = (): CondRef[] => [{ key: ['expect'], role: 'expect' }]
@@ -20,13 +20,6 @@ export const set: BlockDef = {
   make: () => ({ action: 'set', var: '', value: '' }),
 }
 
-export const invoke: BlockDef = {
-  action: 'invoke',
-  idPrefix: 'fn',
-  conds: (s) => (s.expect ? expectCond() : []),
-  make: () => ({ action: 'invoke', object: '', function: '', args: {} }),
-}
-
 export const api: BlockDef = {
   action: 'api',
   idPrefix: 'api',
@@ -38,18 +31,6 @@ export const breakBlock: BlockDef = { action: 'break', idPrefix: 's', make: () =
 export const continueBlock: BlockDef = { action: 'continue', idPrefix: 's', make: () => ({ action: 'continue' }) }
 export const returnBlock: BlockDef = { action: 'return', idPrefix: 's', make: () => ({ action: 'return' }) }
 export const fail: BlockDef = { action: 'fail', idPrefix: 's', make: () => ({ action: 'fail', message: '' }) }
-
-export const widgetClose: BlockDef = {
-  action: 'widget.close',
-  idPrefix: 's',
-  make: () => ({ action: 'widget.close', target: '' }),
-}
-
-export const widgetCall: BlockDef = {
-  action: 'widget.call',
-  idPrefix: 's',
-  make: () => ({ action: 'widget.call', target: '', function: '' }),
-}
 
 /** 原有动作里带统一条件的：assert cond、wait until:"cond" */
 export const assertBlock: BlockDef = {

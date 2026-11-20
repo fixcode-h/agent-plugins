@@ -2,6 +2,7 @@ import {
   exprFunction,
   exprOfValue,
   parseExpr,
+  REMOVED_EXPR_FUNCTIONS,
   refsOf,
   VALUE_SOURCES,
   type ExprError,
@@ -60,6 +61,7 @@ function checkOne(s: StepRef, text: string, where: string, out: Issue[]) {
       out.push(issue(s, 'path_missing', `${where}：没有 @${src} 这种来源（能用 ${VALUE_SOURCES.map((x) => '@' + x).join(' ')}）`))
   for (const c of refs.calls) {
     if (c.onSource || c.name.includes('.')) continue // 对象上的只读函数、接口：要编辑器认
+    if (c.name in REMOVED_EXPR_FUNCTIONS) continue // v3 按选择器读控件的函数：refs 检查报 expr_removed
     const fn = exprFunction(c.name)
     if (!fn) out.push(issue(s, 'fn_missing', `${where}：没有内置函数 ${c.name}`))
   }

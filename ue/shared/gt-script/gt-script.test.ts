@@ -17,7 +17,7 @@ import {
   placeOf,
   remove,
   replace,
-  toV3,
+  toV4,
   unwrap,
   usedIds,
   walk,
@@ -206,10 +206,10 @@ test('复制一份：放在下面，里面的步骤都换新 id', () => {
   assert.equal((r.doc.steps![3].do as { id: string }[])[0].id, 's7')
 })
 
-test('v1 → v3：补 via:code、包成录制段、补 id', () => {
+test('v1 → v4：补 via:code、包成录制段、补 id、迁到 v4', () => {
   const v1: GtScript = { name: 'x', steps: [click(1), { action: 'type', text: 'a' }, { action: 'key', key: 'E' }] }
-  const out = toV3(v1, { wrapFlat: true, groupName: '录制' })
-  assert.equal(out.schemaVersion, 3)
+  const out = toV4(v1, { wrapFlat: true, groupName: '录制' })
+  assert.equal(out.schemaVersion, 4)
   assert.equal(out.kind, 'gametest-scenario')
   const g = out.steps![0]
   assert.equal(g.action, 'group')
@@ -222,7 +222,7 @@ test('v1 → v3：补 via:code、包成录制段、补 id', () => {
     inner.map((s) => s.id),
     ['s1', 's2', 's3'],
   )
-  assert.equal(toV3(v1).steps!.length, 3, '保持平铺')
+  assert.equal(toV4(v1).steps!.length, 3, '保持平铺')
 })
 
 test('列表行：否则如果 / 否则有分隔行、空槽有占位行、折叠后算出藏了几步', () => {
