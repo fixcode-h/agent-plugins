@@ -52,27 +52,19 @@ export function useFollow(page: 'objects' | 'assets') {
 
 /**
  * 跟随：开着时选中的第一个变了就调 onChange。
- * 打开开关的那一下也跳到编辑器里正选中的那个（和面板里正看着的不一样时）：以前刚打开不跳，
- * 用户点了「跟随」看不到任何变化，以为按钮坏了（用户 2026-11-20 报「点了跟随无用」）
+ * 打开开关那一下的跳转不在这里做：SelectionBar 先重读选中、拿到最新的再跳（缓存的选中可能是旧的，
+ * 直接跳会先跳旧的再跳新的，导航历史多一条，PR #207 评审指出）。返回的 sync 把「上一次看到的」对齐到重读结果，免得这里再跳一遍
  */
-export function useFollowEffect(
-  first: string | undefined,
-  on: boolean,
-  current: string,
-  onChange: (path: string) => void,
-) {
+export function useFollowEffect(first: string | undefined, on: boolean, onChange: (path: string) => void) {
   const last = useRef(first)
-  const wasOn = useRef(on)
   const fn = useRef(onChange)
   fn.current = onChange
   useEffect(() => {
-    const turnedOn = on && !wasOn.current
-    wasOn.current = on
     const changed = first !== last.current
     last.current = first
-    if (!on || !first) return
-    if (changed || (turnedOn && first !== current)) fn.current(first)
-    // current 只在打开开关那一下用来比较，它自己变了（用户在面板里点了别的）不该触发跳转
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    if (on && first && changed) fn.current(first)
   }, [first, on])
+  return (path: string | undefined) => {
+    last.current = path
+  }
 }
