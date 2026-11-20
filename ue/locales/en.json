@@ -3821,6 +3821,7 @@
   "还有更多，在上面的搜索框里搜": "More items — use the search box above",
   "搜资源和文件夹：名字、/Game 路径或磁盘路径": "Search assets and folders: name, /Game path or disk path",
   "只列前 {n} 个，多打几个字缩小范围": "Showing the first {n}; type more to narrow it down",
+  "只列前 {n} 个，按回车列出更多": "Showing the first {n}; press Enter to list more",
   "来自本地扫盘的索引": "From the local disk index",
   "来自 UE 的资源注册表（只搜名字开头）": "From the UE asset registry (name prefix only)",
   "搜索中…": "Searching…",

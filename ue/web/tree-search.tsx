@@ -82,6 +82,8 @@ export function TreeSearch({
   busy,
   extra,
   addon,
+  onEnter,
+  onFocusChange,
 }: {
   value: string
   onChange: (q: string) => void
@@ -96,11 +98,24 @@ export function TreeSearch({
   extra?: ReactNode
   /** 输入框里最右边的小控件（资源页的类型筛选） */
   addon?: ReactNode
+  /** 按回车：要问整个项目的搜索（资源页）回车立刻全力搜，不等停手 */
+  onEnter?: (q: string) => void
+  /** 输入框焦点变化：点进来就先准备数据 */
+  onFocusChange?: (focused: boolean) => void
 }) {
   const q = value.trim()
   return (
     <div className="ue:flex ue:flex-col ue:gap-1.5 ue:border-b ue:border-line ue:px-3 ue:py-2">
-      <SearchBox initial={value} placeholder={placeholder} onSearch={onChange} allowEmpty live addon={addon} />
+      <SearchBox
+        initial={value}
+        placeholder={placeholder}
+        onSearch={onChange}
+        allowEmpty
+        live
+        addon={addon}
+        onEnter={onEnter}
+        onFocusChange={onFocusChange}
+      />
       {q && (
         <span className="ue:text-caption ue:text-subtle">
           {busy ? t('搜索中…') : hits ? t('{n} 个匹配', { n: hits }) : t('没有匹配的')}
