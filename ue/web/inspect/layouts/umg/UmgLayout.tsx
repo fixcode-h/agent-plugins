@@ -110,6 +110,7 @@ export function UmgLayout(p: LayoutProps) {
             onSelect={(k) => select(k)}
             reveal={reveal}
             source={srcLabel(data.source)}
+            onOpenConfig={data.openConfig}
           />
         ),
         anims: (
@@ -192,6 +193,8 @@ export function UmgLayout(p: LayoutProps) {
           onSelect={(k) => select(k, true)}
           anim={anim}
           time={time}
+          notes={data.refNotes}
+          onOpenConfig={data.openConfig}
         />
       }
     />

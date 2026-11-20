@@ -23,6 +23,8 @@ export interface TreeLine {
   onSelect?: () => void
   /** 单击既选中又展开收起（文件夹这类「选中就是看里面」的行）；不给时有 onSelect 的行单击只选中、双击展开收起 */
   clickToggles?: boolean
+  /** 双击这一行（UMG 控件树里的子界面：打开它自己的配置）：给了就不再用双击展开收起 */
+  onDouble?: () => void
   /** 右键这一行（资源文件夹树的收藏、资源的「在 UE 编辑器打开」） */
   onMenu?: (e: MouseEvent) => void
   /** 行尾的小按钮（文件夹的收藏星标）：平时隐藏，悬停或键盘选中这一行才露出来；actionShown 时一直显示（已收藏） */
@@ -94,7 +96,9 @@ export function TreeList({
               title={l.title}
               onClick={() => activate(l)}
               // 单击只选中的行：双击整行展开收起，不必瞄准箭头（单击就展开的行不再接双击，免得点两下又收回去）
-              onDoubleClick={l.onSelect && l.expandable && !l.clickToggles ? () => l.onToggle?.() : undefined}
+              onDoubleClick={
+                l.onDouble ?? (l.onSelect && l.expandable && !l.clickToggles ? () => l.onToggle?.() : undefined)
+              }
               onContextMenu={l.onMenu}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') activate(l)

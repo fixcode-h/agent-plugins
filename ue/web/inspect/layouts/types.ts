@@ -54,6 +54,11 @@ export interface AssetConfig {
   truncated?: boolean
   loading?: boolean
   error?: string
+  /** 配置根和这份配置的路径（相对配置根，AssetForge 页给）：UMG 按它找 ref 的子界面配置 */
+  root?: string
+  file?: string
+  /** 打开另一份配置（AssetForge 页给）：双击控件树里的子界面打开它自己的配置 */
+  openConfig?: (file: string) => void
 }
 
 /** 每个布局组件拿到的参数：AssetView 的参数原样转过来，加上挑中的布局和资源信息 */

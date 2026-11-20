@@ -19,6 +19,8 @@ export interface Paint {
   /** 进度条的填充比例和颜色 */
   percent?: number
   barColor?: string
+  /** 子界面画不出来：虚线框 + 原因（主题的警告色，和面板其它告警一个颜色） */
+  missing?: boolean
 }
 
 const obj = (v: unknown) =>
@@ -94,7 +96,18 @@ export function paintOf(n: WNode): Paint {
         fontSize: 16,
       }
     default:
-      return n.user || n.cls === 'UserWidget' ? { image: true } : {}
+      if (!n.user && n.cls !== 'UserWidget') return {}
+      // 子界面：嫁接了子配置的控件树就由子控件自己画；读不到的画占位框写明原因，不静默空白
+      if (n.refError)
+        return {
+          image: true,
+          missing: true,
+          text: `${n.name}\n${n.refError}`,
+          fontSize: 14,
+          wrap: true,
+          color: 'var(--warning)',
+        }
+      return n.children.length ? {} : { image: true }
   }
 }
 

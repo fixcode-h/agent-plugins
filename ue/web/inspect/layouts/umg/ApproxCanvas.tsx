@@ -5,7 +5,8 @@ import { paintOf, transformOf } from './paint.ts'
 
 /**
  * 近似预览的画面（设计稿 U4）：按 approx.ts 排出的矩形，一个控件一个绝对定位的块，嵌套着画（父控件的渲染变换、不透明度带着子控件走，
- * 动画拖播放头时整块平移、淡入淡出和 UE 里一样）。底色、圆角、文字照属性画，贴图和子界面画斜线占位。
+ * 动画拖播放头时整块平移、淡入淡出和 UE 里一样）。底色、圆角、文字照属性画，贴图画斜线占位；
+ * 子界面（ref）嫁接了子配置的就照子控件画，读不到的画虚线占位框并写明原因（subref/refs.ts）。
  * 坐标是屏幕像素（外面整体缩放），颜色来自配置本身，不是面板主题色。
  */
 const HATCH = 'repeating-linear-gradient(135deg, rgba(128,128,128,0.18) 0 6px, rgba(128,128,128,0.06) 6px 12px)'
@@ -39,7 +40,11 @@ function Block({
     transformOrigin: 'center',
     opacity: tf.opacity,
     visibility: isHidden(n) ? 'hidden' : undefined,
-    overflow: n.cls === 'ScrollBox' ? 'hidden' : undefined,
+    overflow: n.cls === 'ScrollBox' || p.missing ? 'hidden' : undefined,
+    outline: p.missing ? '2px dashed var(--warning)' : undefined,
+    outlineOffset: p.missing ? -2 : undefined,
+    padding: p.missing ? 8 : undefined,
+    boxSizing: 'border-box',
   }
   return (
     <div style={style}>

@@ -14,6 +14,7 @@ import {
   SquareCheck,
   Space,
   TextCursorInput,
+  TriangleAlert,
   Type,
   type LucideIcon,
 } from 'lucide-react'
@@ -47,6 +48,7 @@ const iconOf = (n: WNode) => (n.user ? LayoutTemplate : (ICONS.find(([re]) => re
 /**
  * 控件树（效果图 U1 左上）：名字 + 类名，变量标「变量」，WidgetSwitcher 的子页标序号和「当前页」，Collapsed / Hidden 的变淡带眼睛图标。
  * 搜索按名字或类名筛（命中的连同父级留着）；选中由外面管（和预览双向联动），从预览选中时滚到那一行、展开它的父级。
+ * 子界面（ref）默认收起，展开能看它内部的控件（只读，悬停写明来自哪份配置）；读不到的标警告；双击子界面打开它自己的配置。
  */
 export function WidgetTree({
   tree,
@@ -54,6 +56,7 @@ export function WidgetTree({
   onSelect,
   reveal,
   source,
+  onOpenConfig,
 }: {
   tree?: WNode
   selected?: string
@@ -62,19 +65,28 @@ export function WidgetTree({
   reveal?: { key: string; seq: number }
   /** 数据来源的小字（UE / 配置） */
   source?: string
+  /** 双击子界面打开它自己的配置（AssetForge 页才有） */
+  onOpenConfig?: (file: string) => void
 }) {
   const [q, setQ] = useState('')
   const [closed, setClosed] = useState<Set<string>>(() => new Set())
-  // 从预览选中：把它的父级都展开
+  // 子界面默认收起（内部控件可能上百个，UE 的层级面板也不列它们）：展开过的记在这里
+  const [opened, setOpened] = useState<Set<string>>(() => new Set())
+  // 从预览选中：把它的父级都展开（选中的是子界面里的控件时，子界面也展开）
   useEffect(() => {
     if (!reveal) return
-    setClosed((s) => {
-      const parts = reveal.key.split('/')
-      const next = new Set(s)
-      for (let i = 1; i < parts.length; i++) next.delete(parts.slice(0, i).join('/'))
-      return next.size === s.size ? s : next
-    })
+    const parts = reveal.key.split('/')
+    const anc = parts.slice(1).map((_, i) => parts.slice(0, i + 1).join('/'))
+    setClosed((s) => (anc.some((k) => s.has(k)) ? new Set([...s].filter((k) => !anc.includes(k))) : s))
+    setOpened((s) => (anc.every((k) => s.has(k)) ? s : new Set([...s, ...anc])))
   }, [reveal])
+  const flip = (set: typeof setClosed, key: string) =>
+    set((s) => {
+      const next = new Set(s)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const lines = useMemo(() => {
     if (!tree) return []
@@ -87,7 +99,8 @@ export function WidgetTree({
     const out: TreeLine[] = []
     const walk = (n: WNode, depth: number, parent?: WNode, index = 0) => {
       if (q.trim() && !keep.has(n.key)) return
-      const open = !!q.trim() || !closed.has(n.key)
+      const sub = !!n.ref
+      const open = !!q.trim() || (sub ? opened.has(n.key) : !closed.has(n.key))
       const dim = isHidden(n)
       const page = parent?.cls === 'WidgetSwitcher'
       const current = page && (parent.active ?? 0) === index
@@ -97,7 +110,7 @@ export function WidgetTree({
         icon: iconOf(n),
         iconTone: dim ? 'ue:text-subtle/60' : n.isVar ? 'ue:text-accent-text' : undefined,
         label: (
-          <span className={dim ? 'ue:text-subtle' : undefined}>
+          <span className={dim ? 'ue:text-subtle' : n.src ? 'ue:text-muted' : undefined}>
             <Hit text={n.name} q={q} />
             <span className="ue:ml-1.5 ue:text-caption ue:text-subtle">
               {page ? `${index}${current ? ` · ${t('当前页')}` : ''}` : n.cls}
@@ -105,8 +118,22 @@ export function WidgetTree({
             </span>
           </span>
         ),
-        title: [n.name, n.cls, n.visibility, n.asset].filter(Boolean).join('\n'),
-        aside: dim ? (
+        title: [
+          n.name,
+          n.cls,
+          n.visibility,
+          n.asset,
+          n.src && t('来自子界面配置 {f}（只读）', { f: n.src }),
+          sub && n.subFile && t('子界面配置 {f}：展开看内部控件，双击打开', { f: n.subFile }),
+          n.refError,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        aside: n.refError ? (
+          <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" aria-label={n.refError} />
+        ) : sub ? (
+          <span className="ue:rounded-[3px] ue:bg-accent/12 ue:px-1 ue:text-accent-text">{t('子界面')}</span>
+        ) : dim ? (
           <EyeOff className="ue:h-3.5 ue:w-3.5" aria-label={t('不可见')} />
         ) : n.isVar ? (
           <span className="ue:rounded-[3px] ue:bg-warning/12 ue:px-1 ue:text-warning">{t('变量')}</span>
@@ -115,13 +142,8 @@ export function WidgetTree({
         open,
         selected: n.key === selected,
         onSelect: () => onSelect(n.key),
-        onToggle: () =>
-          setClosed((s) => {
-            const next = new Set(s)
-            if (next.has(n.key)) next.delete(n.key)
-            else next.add(n.key)
-            return next
-          }),
+        onToggle: () => flip(sub ? setOpened : setClosed, n.key),
+        onDouble: sub && n.subFile && onOpenConfig ? () => onOpenConfig(n.subFile!) : undefined,
       })
       if (open) n.children.forEach((c, i) => walk(c, depth + 1, n, i))
       if (n.truncated)
@@ -137,7 +159,9 @@ export function WidgetTree({
     }
     walk(tree, 0)
     return out
-  }, [tree, q, closed, selected, onSelect])
+    // flip 只包了 setState，每次渲染新建也不影响结果
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree, q, closed, opened, selected, onSelect, onOpenConfig])
 
   return (
     <Card
