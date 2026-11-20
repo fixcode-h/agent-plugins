@@ -4,7 +4,8 @@ import { useUe } from '../../../ctx.tsx'
 import { useTargetInfo } from '../../../ui.tsx'
 import { parseAnims, type Anim } from '../../../timeline/keys.ts'
 import type { AssetConfig } from '../types.ts'
-import { fromConfig, parseUmgConfig } from './config.ts'
+import { resolveStyles } from '../../../../shared/forge-doc/styles.ts'
+import { fromConfig, parseUmgConfig, type UmgConfig } from './config.ts'
 import { fromDesign, type UmgDesign, type WNode } from './model.ts'
 
 /**
@@ -27,6 +28,8 @@ export interface UmgData {
   animsTruncated: boolean
   /** 能让 UE 离屏渲染（umg.render）：有就用实时预览，没有画近似预览 */
   canRender: boolean
+  /** 解析好的配置（展开 include 的那份优先）：细节面板按节点路径取原节点和 styles */
+  configDoc?: UmgConfig
   /** 配置原文（「配置原文」视图）：AssetForge 页传进来的，或资源页按资产问 forge.describe 的 */
   configText?: string
   parent?: string
@@ -47,7 +50,7 @@ function withConfigProps(live: WNode, cfg?: WNode): WNode {
   walk(cfg)
   const visit = (n: WNode): WNode => {
     const c = idx.get(n.key)
-    return { ...n, props: n.props ?? c?.props, slot: n.slot ?? c?.slot, children: n.children.map(visit) }
+    return { ...n, props: n.props ?? c?.props, slot: n.slot ?? c?.slot, at: c?.at, children: n.children.map(visit) }
   }
   return visit(live)
 }
@@ -84,8 +87,11 @@ export function useUmgData(path: string, config: AssetConfig | undefined, offlin
     [project.id, pkg, forge],
   )
   const configText = config ? config.text : desc.data?.managed !== false ? desc.data?.configText : undefined
-  const cfg = useMemo(() => parseUmgConfig(configText), [configText])
-  const cfgTree = useMemo(() => (cfg?.root ? fromConfig(cfg.root) : undefined), [cfg])
+  const parsed = useMemo(() => parseUmgConfig(configText), [configText])
+  // AssetForge 页给了展开 include 的配置就用它（片段里的节点也画出来、路径和写回查的对得上）
+  const cfg = (config?.doc && typeof config.doc === 'object' ? (config.doc as UmgConfig) : undefined) ?? parsed
+  // 预览按套好样式的节点画（和导入出来的一样）；节点路径不变，细节面板再按路径取没套样式的原节点
+  const cfgTree = useMemo(() => (cfg?.root ? fromConfig(resolveStyles(cfg.root, cfg.styles)) : undefined), [cfg])
   const designErr = design.error && !unsupported(design.error) ? design.error : ''
   const animsErr = anims.error && !unsupported(anims.error) ? anims.error : ''
   const live = design.data?.root ? design.data : undefined
@@ -101,6 +107,7 @@ export function useUmgData(path: string, config: AssetConfig | undefined, offlin
       animSource: ueAnims ? 'ue' : cfg?.animations ? 'config' : 'none',
       animsTruncated: !!anims.data?.truncated,
       canRender: !!live && has('umg.render'),
+      configDoc: cfg,
       configText,
       parent: live?.parent ?? cfg?.parent,
       loading: design.loading || anims.loading || desc.loading || !!config?.loading,

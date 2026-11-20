@@ -22,6 +22,8 @@ export interface UmgConfig {
   parent?: string
   root?: CfgNode
   animations?: unknown
+  /** 样式复用（shared/forge-doc/styles.ts）：预览按套好样式的节点画，细节面板标「来自样式」 */
+  styles?: unknown
 }
 
 export function stripComments(text: string) {
@@ -64,7 +66,7 @@ export function parseUmgConfig(text?: string): UmgConfig | undefined {
 export const configKind = (text?: string) => parseUmgConfig(text)?.kind
 
 /** 配置的节点树换成 WNode：key 从根起按名字拼（和动画 target 一样），没名字的用下标 */
-export function fromConfig(n: CfgNode, parentKey = '', index = 0): WNode {
+export function fromConfig(n: CfgNode, parentKey = '', index = 0, at: (string | number)[] = ['root']): WNode {
   const name = n.name ?? `${shortCls(n.class) || 'Widget'}_${index}`
   const key = parentKey ? `${parentKey}/${name}` : name
   const props = n.props ?? {}
@@ -80,7 +82,8 @@ export function fromConfig(n: CfgNode, parentKey = '', index = 0): WNode {
     asset: n.ref,
     props,
     slot: n.slot,
-    children: (n.children ?? []).map((c, i) => fromConfig(c, key, i)),
+    at,
+    children: (n.children ?? []).map((c, i) => fromConfig(c, key, i, [...at, 'children', i])),
   }
 }
 
