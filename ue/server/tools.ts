@@ -13,6 +13,7 @@ import { ASSET_ACTIONS, ASSET_TOOLS, assetAction, JOB_HINT } from './tools-asset
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
 import { batchNudge } from './batch/nudge.ts'
+import { findBySelect } from './batch/find-select.ts'
 import { BATCH_HINT, BATCH_PROPS, runBatch } from './batch/run.ts'
 import { isBatch } from './batch/targets.ts'
 import { dumpObject, readProps } from './object-dump.ts'
@@ -115,7 +116,7 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；名字通配符、父类、多个目录、标签用 select（写法同批量的 select，如 select={path:"/Game", class:"Blueprint", name:"*Box*"}，只列出路径不操作，total 是选中总数，offset / limit 翻页）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
     {
       kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset', 'node'] },
       prefix: { type: 'string' },
@@ -124,6 +125,8 @@ const DEFS = [
       blueprint: { type: 'string' },
       class: { type: 'string' },
       path: { type: 'string' },
+      select: BATCH_PROPS.select,
+      offset: { type: 'number' },
       limit: { type: 'number' },
       target: TARGET,
     },
@@ -143,6 +146,7 @@ const DEFS = [
       if (a.kind === 'object') return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit }))
       if (a.kind === 'lua')
         return out(await runOp(ctx, 'lua.objects', { class: a.class, prefix: a.prefix, module: a.module, limit }))
+      if (a.kind === 'asset' && isBatch({ select: a.select })) return out(await findBySelect(a, ctx))
       if (a.kind === 'asset')
         return out(await runOp(ctx, 'assets', { class: a.class, prefix: a.prefix, path: a.path || '/Game', limit }))
       return out(await runOp(ctx, 'actors', { prefix: a.prefix, limit }))

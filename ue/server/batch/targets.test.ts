@@ -2,7 +2,7 @@
 // 用法（在仓库根）：node --test ue/server/batch/targets.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEFAULT_LIST_MAX, itemsFromJson, keep, tooMany, wildcard } from './select-filter.ts'
+import { DEFAULT_LIST_MAX, isBatch, itemsFromJson, keep, tooMany, wildcard } from './select-filter.ts'
 
 test('通配符和 UE 的 MatchesWildcard 一样：* ? 不分大小写，点号按字面', () => {
   assert.ok(wildcard('BP_Goblin_Boss', '*_boss'))
@@ -37,4 +37,9 @@ test('itemsFile 的内容：数组、{items}、一行一个对象都认，缺 pa
   assert.equal((itemsFromJson('{"path":"/Game/A"}\n{"path":"/Game/B"}\n') as unknown[]).length, 2)
   assert.match(String(itemsFromJson('[{"path":"/Game/A"},{"value":1}]')), /第 2 项没有 path/)
   assert.match(String(itemsFromJson('')), /空/)
+})
+
+test('空的 select（{}）不算批量：有的客户端把没填的对象补成 {}，不能把整个 /Game 选进来', () => {
+  assert.equal(isBatch({ action: 'describe', path: '/Game/A', select: {} }), false)
+  assert.equal(isBatch({ action: 'describe', select: { path: '/Game', name: '*Box*' } }), true)
 })
