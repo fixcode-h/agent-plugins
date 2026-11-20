@@ -3,7 +3,7 @@ import { op, useAction } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { isRuntimePath } from '../details/model.ts'
-import { useEditorSelection, useFollow, useFollowEffect } from './use-selection.ts'
+import { useEditorSelection, useFollow, useFollowEffect, type EditorSelection } from './use-selection.ts'
 
 /**
  * 对象页、资源页左栏顶上的一条「编辑器选中 …」（设计稿「UE 插件优化与扩展」二 P0、效果图 1、3）：
@@ -30,7 +30,7 @@ export function SelectionBar({
   const { busy, run } = useAction()
   const first = page === 'objects' ? sel.data?.actors[0] : sel.data?.assets[0]
   const count = page === 'objects' ? (sel.data?.actorCount ?? 0) : (sel.data?.assets.length ?? 0)
-  useFollowEffect(first?.path, follow, current, onOpen)
+  const syncFollow = useFollowEffect(first?.path, follow, onOpen)
   if (!sel.supported || !sel.inst) return null
   if (hideEmpty && !first) return null
 
@@ -50,6 +50,23 @@ export function SelectionBar({
         { instance: sel.inst!.pid },
       )
       if (r.missing?.length) toast.error(t('编辑器里没找到：{p}', { p: r.missing.join('，') }))
+    })
+
+  // 打开跟随（用户 2026-11-20 报「点了跟随无用」：以前打开那一下不跳）：先重读选中再跳，
+  // 推送断过（编辑器重启、通道重连）时手里的选中是旧的，直接跳会先跳旧的再跳新的
+  const turnOn = () =>
+    run('follow', async () => {
+      let p = first?.path
+      try {
+        const d = await op<EditorSelection>(project.id, 'editor.selection', {}, { instance: sel.inst!.pid })
+        p = (page === 'objects' ? d.actors[0] : d.assets[0])?.path
+        syncFollow(p)
+        sel.setData({ ...d, blueprint: sel.data?.blueprint })
+      } catch {
+        // 重读失败（编辑器正忙）：用手里的选中，下次推送来了照常跟
+      }
+      setFollow(true)
+      if (p && p !== current) onOpen(p)
     })
 
   return (
@@ -82,12 +99,9 @@ export function SelectionBar({
         size="xs"
         variant={follow ? 'secondary' : 'ghost'}
         aria-pressed={follow}
+        disabled={busy === 'follow'}
         title={t('开着时编辑器里点哪个，这里跟到哪个（打开时先跳到现在选中的）')}
-        onClick={() => {
-          // 打开时重读一次选中：推送断过（编辑器重启、通道重连）时手里的选中可能是旧的
-          if (!follow) void sel.reload()
-          setFollow(!follow)
-        }}
+        onClick={() => (follow ? setFollow(false) : void turnOn())}
       >
         <Radio className={cn('ue:h-3 ue:w-3', follow && 'ue:text-accent-text')} /> {t('跟随')}
       </ui.Button>
