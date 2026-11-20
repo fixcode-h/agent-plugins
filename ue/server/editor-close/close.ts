@@ -39,7 +39,8 @@ export async function closeInstance(p: UeProject, pid: number, force: boolean): 
     await liveCards(p.root)
     return { closed: true, stale: true }
   }
-  if (card.kind === 'background') {
+  // 后台编辑器正常关走 closeBackground（顺带取消启动中的那次）；强制结束和前台一样走下面的 taskkill /F
+  if (card.kind === 'background' && !force) {
     await closeBackground(p, 'user')
     return alive(pid) ? { closed: false, reason: t('后台编辑器 15 秒内没有退出') } : { closed: true }
   }
