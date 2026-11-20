@@ -5,6 +5,8 @@ import type { OpenHow } from '../details/RefChip.tsx'
 import { h, t } from '../host.ts'
 import { Note } from '../ui.tsx'
 import { InspectorActions } from './actions.tsx'
+import { AssetChanges } from '../asset-dirty/AssetChanges.tsx'
+import { useChangesOn } from '../asset-dirty/store.ts'
 import { AssetView } from './AssetView.tsx'
 import { kindOfPath, lastSeg, toCrumb, toRecent } from './bar-items.ts'
 import { scopeOf, useNavHistory, type NavPage } from './history.ts'
@@ -35,6 +37,9 @@ export function Inspector({
   const nav = useNavHistory()
   const { path, comp } = splitSub(sub)
   const asset = !!path && isAssetPath(path)
+  // 「改动」页只在资源页有（保存只放在资源页，见 asset-dirty/ChangesButton.tsx）
+  const changesOn = useChangesOn(asset ? path : '')
+  const changes = page === 'assets' && changesOn
 
   /** 点引用：Ctrl+点资源去资源页，其余在这一页往下看 */
   const open = (p: string, via?: string, how?: OpenHow) =>
@@ -138,6 +143,9 @@ export function Inspector({
       )}
       {!path ? (
         <p className="ue:p-6 ue:text-center ue:text-footnote ue:text-subtle">{empty}</p>
+      ) : asset && changes ? (
+        // 资源页上点了「改动」（或左栏「当前修改」里的一项）：换成磁盘上 → 编辑器里的差异
+        <AssetChanges key={path} path={path} />
       ) : asset ? (
         <AssetView
           key={path}

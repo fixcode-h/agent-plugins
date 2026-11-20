@@ -1,4 +1,4 @@
-import { typeTone } from './model.ts'
+import { nodeSize } from './ue-style.ts'
 
 /**
  * 蓝图图表的画法（效果图 A2）：bp.graph format=json 回的节点和引脚连线 → 画布上的节点位置和连线。
@@ -63,9 +63,6 @@ export interface GEdge {
   type: string
 }
 
-export const NODE_W = 236
-export const HEAD_H = 32
-export const ROW_H = 22
 const GAP_X = 70
 const GAP_Y = 28
 const CLUSTER_GAP = 80
@@ -77,8 +74,6 @@ export function pinRows(n: GNode): { in?: GPin; out?: GPin }[] {
   const outs = order(n.pins.filter((p) => p.dir !== 'in'))
   return Array.from({ length: Math.max(ins.length, outs.length) }, (_, i) => ({ in: ins[i], out: outs[i] }))
 }
-
-export const nodeHeight = (rows: number) => HEAD_H + Math.max(rows, 1) * ROW_H + 8
 
 /** 连线只从输出引脚的 to 取（输入引脚上的 to 是同一条线的另一头，不重复）；指向列表外节点的线丢掉 */
 export function graphEdges(nodes: GNode[]): GEdge[] {
@@ -158,6 +153,24 @@ function clusters(nodes: GNode[], edges: GEdge[]): string[][] {
 function autoPlace(nodes: GNode[], edges: GEdge[]): PlacedNode[] {
   const rank = rankNodes(nodes, edges)
   const byId = new Map(nodes.map((n) => [n.id, n]))
+  // 节点宽窄照 UE 估（ue-style.ts），每列的 x 按前面各列最宽的节点累加，宽节点不会压到右边一列
+  const sized = new Map(
+    nodes.map((n) => {
+      const rows = pinRows(n)
+      return [n.id, { rows, ...nodeSize(n, rows) }]
+    }),
+  )
+  const colW = new Map<number, number>()
+  for (const n of nodes) {
+    const r = rank.get(n.id) ?? 0
+    colW.set(r, Math.max(colW.get(r) ?? 0, sized.get(n.id)!.w))
+  }
+  const colX = new Map<number, number>()
+  let x = 0
+  for (const r of [...colW.keys()].sort((a, b) => a - b)) {
+    colX.set(r, x)
+    x += colW.get(r)! + GAP_X
+  }
   const placed = new Map<string, PlacedNode>()
   let top = 0
   for (const ids of clusters(nodes, edges)) {
@@ -177,13 +190,11 @@ function autoPlace(nodes: GNode[], edges: GEdge[]): PlacedNode[] {
       const col = [...cols.get(r)!].sort((a, b) => center(a) - center(b))
       let y = top
       for (const id of col) {
-        const node = byId.get(id)!
-        const rows = pinRows(node)
-        const h = nodeHeight(rows.length)
+        const { rows, w, h } = sized.get(id)!
         // 尽量和上游对齐，但不和同列上一个重叠
         const want = center(id)
         const at = Number.isFinite(want) ? Math.max(y, Math.round(want - h / 2)) : y
-        placed.set(id, { node, x: r * (NODE_W + GAP_X), y: at, w: NODE_W, h, rows })
+        placed.set(id, { node: byId.get(id)!, x: colX.get(r) ?? 0, y: at, w, h, rows })
         y = at + h + GAP_Y
         bottom = Math.max(bottom, y)
       }
@@ -217,7 +228,7 @@ export function layoutGraph(all: GNode[]): {
   if (!positioned) return { nodes: autoPlace(nodes, edges), edges, comments: notes, boxes: [], positioned }
   const placed = nodes.map((node) => {
     const rows = pinRows(node)
-    return { node, x: node.x!, y: node.y!, w: NODE_W, h: nodeHeight(rows.length), rows }
+    return { node, x: node.x!, y: node.y!, ...nodeSize(node, rows), rows }
   })
   const framed = (n: GNode) => isNum(n.x) && isNum(n.y) && isNum(n.w) && isNum(n.h) && n.w > 0 && n.h > 0
   return {
@@ -226,31 +237,5 @@ export function layoutGraph(all: GNode[]): {
     comments: notes.filter((n) => !framed(n)),
     boxes: notes.filter(framed).map((n) => ({ node: n, x: n.x!, y: n.y!, w: n.w!, h: n.h!, color: n.color })),
     positioned,
-  }
-}
-
-/** 节点头部的颜色（照 UE：事件红、函数调用蓝、纯节点绿、流程控制灰、变量看类型、入口出口紫） */
-export function nodeTone(n: GNode): string {
-  switch (n.kind) {
-    case 'event':
-    case 'custom_event':
-      return 'danger'
-    case 'entry':
-    case 'return':
-      return 'ask'
-    case 'branch':
-    case 'macro':
-      return 'subtle'
-    case 'cast':
-      return 'run'
-    case 'get':
-    case 'set': {
-      const v = n.pins.find((p) => p.type !== 'exec' && p.name !== 'self')
-      return v ? typeTone(v.type) : 'subtle'
-    }
-    case 'call':
-      return n.pins.some((p) => p.type === 'exec') ? 'accent' : 'success'
-    default:
-      return 'subtle'
   }
 }

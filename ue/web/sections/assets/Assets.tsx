@@ -2,7 +2,8 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { useAssetSave } from '../../inspect/asset-save.tsx'
+import { DirtyHeadButton, DirtySection } from '../../asset-dirty/DirtySection.tsx'
+import { reloadDirty } from '../../asset-dirty/store.ts'
 import { useNavHistory } from '../../inspect/history.ts'
 import { Inspector } from '../../inspect/Inspector.tsx'
 import { splitSub } from '../../inspect/nav-state.ts'
@@ -20,13 +21,13 @@ import { SelectionBar } from '../../selection/SelectionBar.tsx'
 /**
  * 资源页（设计稿第 3、8 节）：和对象页同一套「浏览栏 + 检视区」布局，左边浏览栏是文件夹树（照 Content Browser
  * 点开才读下一层），树上方的搜索框搜整个项目（原来单独的「搜索」页签 2026-11-19 合进来）；右边检视区和对象页是同一个组件、同一份导航历史。
- * 资源的改动只暂存在编辑器里，页头「保存」才写回（P4 先签出）；保存只放在这里，对象页里改的也在这里存
+ * 资源的改动只暂存在编辑器里，「保存」才写回（P4 先签出）：改了没保存的列在左栏「当前修改」（2026-11-20 从页头挪过去），
+ * 点一项看它的「改动」页、在那里保存或放弃；保存只放在资源页，对象页里改的也在这里存
  */
 export function Assets() {
-  const { project, sub } = useUe()
+  const { project, sub, reloadBadges } = useUe()
   const { ui } = h()
   const nav = useNavHistory()
-  const save = useAssetSave()
   const { path } = splitSub(sub)
   const kk = `${project.id}/assets`
   // Ctrl+K、日志、配置里带过来的名字、路径：填进文件夹树上方的搜索框直接搜（lazy 初始值只看一次，切回来不会再填）
@@ -81,6 +82,10 @@ export function Assets() {
         folder={folder}
         onFolder={showFolder}
         tick={tick}
+        top={
+          // 编辑器里改了没保存的资源（效果图 designs/UE资源页当前修改-效果图）：点一项看它的改动
+          <DirtySection selected={folder ? '' : path} onOpen={(p) => openAsset(p, 'folders')} onReveal={setReveal} />
+        }
       />
     </>
   )
@@ -88,13 +93,13 @@ export function Assets() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <PageHead title={t('资源')} desc={t('编辑器没开时自动起后台编辑器读取；改动点「保存」才写回文件')}>
-        {save.head}
+        <DirtyHeadButton />
         <PrecheckButton onOpen={(p) => openAsset(p, 'assetSearch')} />
         <ui.Button
           size="sm"
           variant="secondary"
           onClick={() => {
-            save.reload()
+            reloadDirty()
             setTick((n) => n + 1)
           }}
         >
@@ -135,12 +140,14 @@ export function Assets() {
             key={tick}
             page="assets"
             empty={t('选一个资源：DataTable 显示成表格，DataAsset 显示属性，蓝图可以看组件、大纲和图表')}
-            onChanged={save.reload}
+            onChanged={() => {
+              reloadDirty()
+              reloadBadges()
+            }}
             onReveal={setReveal}
           />
         )}
       </div>
-      {save.dialog}
       <MenuHost />
     </div>
   )

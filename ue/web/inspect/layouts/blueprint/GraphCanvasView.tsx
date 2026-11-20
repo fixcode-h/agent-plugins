@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import { getNodesBounds, Panel, useNodesInitialized, useReactFlow, useStore, type Edge, type Node } from '@xyflow/react'
 import { MessageSquare } from 'lucide-react'
 import { GraphCanvas } from '@panel/web/src/components/flow/GraphCanvas'
-import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
 import { layoutGraph, type GNode } from './graph.ts'
 import type { CommentBoxData } from './CommentBox.tsx'
 import { GRAPH_NODE_TYPES, type GraphNodeData } from './GraphNode.tsx'
-import { typeTone } from './model.ts'
+import { UeBackdrop, WIRE_TYPES, type WireData } from './GraphWire.tsx'
+import { pinColor } from './ue-style.ts'
 
 type AnyNode = Node<GraphNodeData> | Node<CommentBoxData>
 
@@ -14,7 +14,8 @@ type AnyNode = Node<GraphNodeData> | Node<CommentBoxData>
  * 图表的节点图（效果图 A2 中间）：bp.graph 的节点有 UE 坐标（2.18 bp.layout）时照原位置画、注释画成框，
  * 没坐标时按连线自动排（graph.ts）；用面板共用的流程图画布画，只读。
  * 打开时按可读的缩放显示（TopLeftFit），放不下就从左上角开始，靠拖动和小地图看其余。
- * 执行线粗一点、用前景色，数据线按类型上色（和引脚同色）；没有框位置的注释节点列在左上角
+ * 外观照 UE 5.4 蓝图编辑器（深灰网格、UE 配色的节点和引脚、水平出入的曲线，配色表在 ue-theme.ts），
+ * 面板浅色主题下也是深色画布，因为 UE 的图表本来就是深色；没有框位置的注释节点列在左上角
  */
 export function GraphCanvasView({
   nodes: raw,
@@ -55,28 +56,29 @@ export function GraphCanvasView({
     ],
     [laid, picked],
   )
-  const edges = useMemo<Edge[]>(
+  const edges = useMemo<Edge<WireData>[]>(
     () =>
-      laid.edges.map((e) => ({
-        id: e.id,
-        source: e.from,
-        target: e.to,
-        sourceHandle: `out:${e.fromPin}`,
-        targetHandle: `in:${e.toPin}`,
-        style: {
-          stroke: toneColor(typeTone(e.type)),
-          strokeWidth: e.exec ? 2.2 : 1.6,
-          opacity: picked && e.from !== picked && e.to !== picked ? 0.35 : 0.9,
-        },
-      })),
+      laid.edges.map((e) => {
+        const hot = !!picked && (e.from === picked || e.to === picked)
+        return {
+          id: e.id,
+          type: 'ue',
+          source: e.from,
+          target: e.to,
+          sourceHandle: `out:${e.fromPin}`,
+          targetHandle: `in:${e.toPin}`,
+          data: { color: pinColor(e.type), exec: e.exec, hot, dim: !!picked && !hot },
+        }
+      }),
     [laid, picked],
   )
   return (
-    <GraphCanvas<AnyNode, Edge>
+    <GraphCanvas<AnyNode, Edge<WireData>>
       frameClassName="ue:min-h-0 ue:flex-1"
       nodes={nodes}
       edges={edges}
       nodeTypes={GRAPH_NODE_TYPES}
+      edgeTypes={WIRE_TYPES}
       onNodeClick={(_, n) => onPick(n.id)}
       onPaneClick={() => onPick('')}
       minimap={12}
@@ -87,6 +89,7 @@ export function GraphCanvasView({
       panOnDrag={[1, 2]}
       selectionOnDrag
     >
+      <UeBackdrop />
       <TopLeftFit />
       {laid.comments.length > 0 && (
         <Panel position="top-left">

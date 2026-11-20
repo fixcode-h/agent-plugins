@@ -14,6 +14,7 @@ import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
 import { LayoutSettingsSpecimen, TimelineSpecimen, UmgLayoutSpecimen } from './inspect/layouts/settings/Specimen.tsx'
+import { DirtyListSpecimen } from './asset-dirty/DirtyList.tsx'
 import { FavFoldersSpecimen } from './sections/assets/FavFolders.tsx'
 import { FolderTableSpecimen } from './sections/assets/FolderTableSpecimen.tsx'
 import { ForgeSpecimen } from './sections/uekit/ForgeSpecimen.tsx'
@@ -123,6 +124,8 @@ const activate: ActivateWeb = (host) => {
         Specimen: LayoutSettingsSpecimen,
       },
       // 资源页文件夹树上面的收藏区和行尾星标：跟面板「行」「菜单」的调节项
+      // 资源页文件夹树上面的「当前修改」：跟面板「行」「徽标」「菜单」的调节项
+      { id: 'dirty-list', label: t('资源 · 当前修改'), tune: ['row', 'badge', 'menu'], Specimen: DirtyListSpecimen },
       { id: 'fav-folders', label: t('资源 · 收藏的文件夹'), tune: ['row', 'menu'], Specimen: FavFoldersSpecimen },
       // 资源页选中文件夹时右栏的内容表：跟面板「徽标」「行」的调节项
       { id: 'folder-table', label: t('资源 · 文件夹内容表'), tune: ['badge', 'row'], Specimen: FolderTableSpecimen },
