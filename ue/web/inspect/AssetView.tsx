@@ -37,7 +37,7 @@ export function canOffline(configText?: string) {
  * 资源的检视（对象页、资源页、AssetForge 页共用；设计稿「资源查看页-按UE编辑器布局」第 2 节）：
  * 读出资源的类和类链，在布局注册表（layouts/registry.ts）里挑布局交给它画；类型读回来之前按路径猜。
  * 这里不按类型写分支：DataTable、蓝图、控件蓝图、其他资源各是 layouts/ 下的一个文件夹。
- * 只管看和改，不管保存（保存在资源页页头，asset-save.tsx），也不管导航历史（onOpen 交给外面）
+ * 只管看和改，不管保存（保存在资源页左栏「当前修改」和「改动」页，asset-dirty/），也不管导航历史（onOpen 交给外面）
  */
 export function AssetView(props: AssetViewProps) {
   const { path, comp = '', offline, config } = props

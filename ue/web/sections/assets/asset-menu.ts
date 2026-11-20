@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, GitCompareArrows, LocateFixed } from 'lucide-react'
+import { Copy, ExternalLink, History, LocateFixed } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { op } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -39,7 +39,7 @@ export function useAssetMenu() {
         onClick: () => void open(path),
       },
       more?.onReveal && { label: t('在文件夹里定位'), icon: LocateFixed, onClick: more.onReveal },
-      { label: t('版本差异…'), icon: GitCompareArrows, onClick: () => openAssetDiff(path) },
+      { label: t('历史版本…'), icon: History, onClick: () => openAssetDiff(path) },
       'sep',
       { label: t('复制路径'), icon: Copy, onClick: () => copyText(pkgOf(path)) },
       pkgOf(path) !== path && { label: t('复制对象路径'), icon: Copy, onClick: () => copyText(path) },

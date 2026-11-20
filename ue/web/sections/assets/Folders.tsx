@@ -54,6 +54,7 @@ export function AssetFolders({
   folder,
   onFolder,
   tick = 0,
+  top,
 }: {
   /** 当前选中的资源路径（/Game/A/B.B 或 /Game/A/B） */
   selected: string
@@ -67,6 +68,8 @@ export function AssetFolders({
   onFolder?: (path: string) => void
   /** 页头「刷新」点了几次：变了就重读挂载根和展开着的层 */
   tick?: number
+  /** 搜索框下面、收藏上面多放的一块（资源页的「当前修改」）；搜索时不画 */
+  top?: ReactNode
 }) {
   const { project, target, state } = useUe()
   const data = useFolderData(project.id, target)
@@ -384,6 +387,7 @@ export function AssetFolders({
           <ErrorText>{root.error}</ErrorText>
         </div>
       )}
+      {!q.trim() && top}
       <FavFolders
         folders={favs}
         selected={selFolder}
