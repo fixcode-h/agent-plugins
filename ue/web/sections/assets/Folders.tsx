@@ -1,5 +1,5 @@
 import { Copy, Folder as FolderIcon, FolderOpen, LocateFixed, RefreshCw, Star, StarOff } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { op } from '../../api.ts'
 import { assetIcon } from '../../asset-icons.ts'
 import { ClassPicker, type ClassOpt } from '../../ClassPicker.tsx'
@@ -15,7 +15,7 @@ import { useFavFolders } from './fav-data.ts'
 import { FavFolders, FavStar } from './FavFolders.tsx'
 import { RedirectorDialog, redirectorMenuItem } from './Redirectors.tsx'
 import { pkgOf, useFolderData, type Folder, type Item } from './folder-data.ts'
-import { SEARCH_MAX, useFolderSearch } from './folder-search.ts'
+import { useFolderSearch } from './folder-search.ts'
 
 /** 类型下拉不打字时列的常用类型（少几个不常按文件夹找的） */
 const COMMON = [
@@ -90,6 +90,9 @@ export function AssetFolders({
   // 搜索结果默认全展开，用户再点收起记在这里（换关键词清掉）
   const [fold, setFold] = useState<{ q: string; m: Record<string, boolean> }>({ q: '', m: {} })
   const folded = fold.q === q ? fold.m : NONE
+  // 树的行按结果重算、不按每个字重算，收起时要拿当前的关键词
+  const qRef = useRef(q)
+  qRef.current = q
   const [clsOpt, setClsOpt] = useKept<ClassOpt>(`${kk}/clsOpt`, { name: '' })
   // 收藏和定位到的文件夹高亮
   const [selFolder, setSelFolder] = useState('')
@@ -137,11 +140,16 @@ export function AssetFolders({
   const canList = (state?.instances ?? []).some((i) => i.kind === 'editor' || i.kind === 'background')
 
   const searching = !!q.trim()
-  const found = useFolderSearch(project.id, q, clsOpt, folded)
+  // 点进搜索框就先取索引；回车时的关键词记下来，和当前的一样就「全力搜」（folder-search.ts）
+  const [focused, setFocused] = useState(false)
+  const [enterQ, setEnterQ] = useState('')
+  const found = useFolderSearch(project.id, q, clsOpt, folded, { focused, enterQ })
+  // 高亮跟着正在显示的结果走（新的还没搜完时显示的是上一次的）
+  const shownQ = found.q
 
   const lines = useMemo(() => {
     const out: TreeLine[] = []
-    const label = (s: string) => (searching ? <Hit text={s} q={q} /> : s)
+    const label = (s: string) => (searching ? <Hit text={s} q={shownQ} /> : s)
     const itemLine = (it: Item, key: string, depth: number): TreeLine => {
       const ic = assetIcon(it.class)
       return {
@@ -193,7 +201,7 @@ export function AssetFolders({
           iconTone: 'ue:text-subtle',
           expandable: n.expandable,
           open: n.open,
-          onToggle: () => setFold({ q, m: { ...folded, [n.path]: n.open } }),
+          onToggle: () => setFold({ q: qRef.current, m: { ...folded, [n.path]: n.open } }),
           ...folderBits(n.path),
           onMenu: (e: MouseEvent) => folderMenu(e, n.path, () => locate(n.path, 'folder')),
         })
@@ -298,7 +306,7 @@ export function AssetFolders({
     return out
     // toggle、onSelect、folderMenu 每次渲染都是新的，按数据变化重算就够
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [levels, open, selected, selFolder, folder, q, folded, favs, found.nodes, clsOpt.name])
+  }, [levels, open, selected, selFolder, folder, searching, shownQ, folded, favs, found.nodes, clsOpt.name])
 
   /** 搜索结果里的「在文件夹里定位」：回到文件夹树，逐层展开到它并滚过去 */
   function locate(path: string, kind: 'asset' | 'folder') {
@@ -324,7 +332,13 @@ export function AssetFolders({
       <TreeSearch
         key={boxKey}
         value={q}
-        onChange={setQ}
+        // 打字只更新输入框，树按 transition 慢慢跟上，不和打字抢主线程
+        onChange={(v) => startTransition(() => setQ(v))}
+        onEnter={(v) => {
+          startTransition(() => setQ(v))
+          setEnterQ(v)
+        }}
+        onFocusChange={setFocused}
         placeholder={t('搜资源和文件夹：名字、/Game 路径或磁盘路径')}
         hits={found.hits}
         busy={found.loading}
@@ -405,7 +419,10 @@ function note(key: string, depth: number, text: ReactNode, tone = 'ue:text-subtl
 function searchNote(f: ReturnType<typeof useFolderSearch>) {
   if (f.error) return <span className="ue:text-danger">{f.error}</span>
   const parts = [
-    f.capped && t('只列前 {n} 个，多打几个字缩小范围', { n: SEARCH_MAX }),
+    f.capped &&
+      (f.full
+        ? t('只列前 {n} 个，多打几个字缩小范围', { n: f.limit })
+        : t('只列前 {n} 个，按回车列出更多', { n: f.limit })),
     f.source === 'uetovs' && t('来自 UEToVS 的索引'),
     f.source === 'disk' && t('来自本地扫盘的索引'),
     f.source === 'registry' && t('来自 UE 的资源注册表（只搜名字开头）'),

@@ -307,6 +307,8 @@ export function SearchBox({
   allowEmpty,
   live,
   addon,
+  onEnter,
+  onFocusChange,
 }: {
   initial?: string
   placeholder: string
@@ -320,10 +322,15 @@ export function SearchBox({
   live?: boolean
   /** 输入框里最右边的小控件（资源页的类型筛选图标）：放在 label 外面，点它不会把焦点抢回输入框 */
   addon?: ReactNode
+  /** live 时按回车：边打字边筛之外，回车「全力搜」（资源页搜索框：不等停手、列得更多） */
+  onEnter?: (q: string) => void
+  /** 输入框得到 / 失去焦点：还没打字就可以先准备（取索引） */
+  onFocusChange?: (focused: boolean) => void
 }) {
   const [q, setQ] = useState(initial)
   const { Button } = h().ui
   const go = () => {
+    if (live && onEnter) return onEnter(q.trim())
     if (q.trim() || allowEmpty) onSearch(q.trim())
   }
   return (
@@ -343,6 +350,8 @@ export function SearchBox({
               setQ(e.target.value)
               if (live) onSearch(e.target.value.trim())
             }}
+            onFocus={onFocusChange && (() => onFocusChange(true))}
+            onBlur={onFocusChange && (() => onFocusChange(false))}
             placeholder={placeholder}
             aria-label={placeholder}
             className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-body ue:text-fg ue:outline-none ue:placeholder:text-subtle"
