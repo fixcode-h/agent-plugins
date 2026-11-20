@@ -3,7 +3,7 @@ import { op, useAction } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { isRuntimePath } from '../details/model.ts'
-import { useEditorSelection, useFollow, useFollowEffect, type EditorSelection } from './use-selection.ts'
+import { useEditorSelection, useFollow, useFollowEffect } from './use-selection.ts'
 
 /**
  * 对象页、资源页左栏顶上的一条「编辑器选中 …」（设计稿「UE 插件优化与扩展」二 P0、效果图 1、3）：
@@ -56,15 +56,12 @@ export function SelectionBar({
   // 推送断过（编辑器重启、通道重连）时手里的选中是旧的，直接跳会先跳旧的再跳新的
   const turnOn = () =>
     run('follow', async () => {
-      let p = first?.path
-      try {
-        const d = await op<EditorSelection>(project.id, 'editor.selection', {}, { instance: sel.inst!.pid })
-        p = (page === 'objects' ? d.actors[0] : d.assets[0])?.path
-        syncFollow(p)
-        sel.setData({ ...d, blueprint: sel.data?.blueprint })
-      } catch {
-        // 重读失败（编辑器正忙）：用手里的选中，下次推送来了照常跟
-      }
+      // 走 useLoad 的 reload：它会顶掉挂载时还在路上的那次读取，旧结果不会回来覆盖新的
+      const d = await sel.reload()
+      // 重读失败（编辑器正忙）：用手里的选中，下次推送来了照常跟
+      const p = d ? (page === 'objects' ? d.actors[0] : d.assets[0])?.path : first?.path
+      // 重读的结果已经写进选中：先告诉跟随「这个看过了」，免得开关打开后它当成新选中再跳一次
+      syncFollow(p)
       setFollow(true)
       if (p && p !== current) onOpen(p)
     })

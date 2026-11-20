@@ -54,7 +54,9 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
   const inFlight = useRef(false)
   const fn = useRef(load)
   fn.current = load
-  const reload = useCallback(async () => {
+  // 返回这次读到的数据（被更新的一次顶掉、出错时返回 undefined）：调用方要拿最新值接着做事时不用自己另发请求，
+  // 自己另发的请求不进 seq，挡不住还在路上的旧请求回来覆盖（选中「跟随」，PR #208 评审指出）
+  const reload = useCallback(async (): Promise<T | undefined> => {
     const my = ++seq.current
     setLoading(true)
     try {
@@ -62,12 +64,14 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
       if (my === seq.current) {
         setData(d)
         setError('')
+        return d
       }
     } catch (e) {
       if (my === seq.current) setError((e as Error).message)
     } finally {
       if (my === seq.current) setLoading(false)
     }
+    return undefined
   }, [])
   useEffect(() => {
     void reload()
