@@ -1,4 +1,4 @@
-import { AppWindow, Box, CircleCheck } from 'lucide-react'
+import { AppWindow, Box, ChevronDown, ChevronRight, CircleCheck } from 'lucide-react'
 import { useMemo, useState, type MouseEvent } from 'react'
 import type { GtIdentItem, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
@@ -8,6 +8,7 @@ import { TreeList, type TreeLine } from '../../../../TreeList.tsx'
 import { testIdent } from '../compare-table.ts'
 import { classShort } from '../describe.ts'
 import type { RefHits } from '../live.ts'
+import { ownerRows } from './owner-tree.ts'
 
 /**
  * 第 1 栏「此刻实例」。定了类：这个类此刻的每个实例（gt.resolve 只按类的候选），按标识组命中的标「就是它」，
@@ -39,6 +40,14 @@ export function InstancePane({
   onUseClass: (cls: string, instance?: string) => void
 }) {
   const { cn } = h()
+  const [closed, setClosed] = useState<Set<string>>(new Set())
+  const toggle = (k: string) =>
+    setClosed((s) => {
+      const x = new Set(s)
+      if (x.has(k)) x.delete(k)
+      else x.add(k)
+      return x
+    })
   const head = 'ue:px-3 ue:pt-2 ue:pb-1 ue:text-caption ue:font-medium ue:text-muted'
   if (!live)
     return (
@@ -52,6 +61,12 @@ export function InstancePane({
   if (!cls) return <ScreenClasses screen={screen} onUseClass={onUseClass} />
   const mine = new Set((me?.candidates ?? []).map((c) => c.name))
   const rows = all?.candidates ?? []
+  // 按所属（对象路径里的外层）成树，默认全展开，点分组行收起
+  const tree = ownerRows(
+    rows,
+    (c) => c.path,
+    (k) => !closed.has(k),
+  )
   return (
     <>
       <span
@@ -76,7 +91,27 @@ export function InstancePane({
         <p className="ue:px-3 ue:py-2 ue:text-footnote ue:text-subtle">{t('此刻一个也没有：先在游戏里打开它')}</p>
       )}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-0.5 ue:overflow-auto ue:px-2 ue:pb-2">
-        {rows.map((c) => {
+        {tree.map((r) => {
+          if (r.label !== undefined)
+            return (
+              <button
+                key={r.key}
+                type="button"
+                title={r.label}
+                onClick={() => toggle(r.key)}
+                style={{ paddingLeft: 8 + r.depth * 14 }}
+                className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-md ue:py-1 ue:pr-2 ue:text-left ue:text-footnote ue:text-muted ue:hover:bg-hover"
+              >
+                {closed.has(r.key) ? (
+                  <ChevronRight className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
+                ) : (
+                  <ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
+                )}
+                <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono">{r.label}</span>
+                <span className="ue:shrink-0 ue:text-caption ue:text-subtle">{r.count}</span>
+              </button>
+            )
+          const c = r.item!
           const hit = mine.has(c.name)
           const actual = new Map((c.ident ?? []).map((x) => [x.prop, x.actual]))
           const why = hit
@@ -86,7 +121,9 @@ export function InstancePane({
             <button
               key={c.name}
               type="button"
+              title={c.path}
               onClick={() => onSelect(c.name)}
+              style={{ marginLeft: r.depth * 14 }}
               className={cn(
                 'ue:flex ue:cursor-pointer ue:flex-col ue:items-start ue:rounded-md ue:px-2 ue:py-1.5 ue:text-left',
                 selected === c.name ? 'ue:bg-sel' : 'ue:hover:bg-hover',
