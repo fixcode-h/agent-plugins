@@ -25,13 +25,15 @@ export type Grouping = 'module' | 'class' | 'owner'
 export type StateFilter = 'all' | 'alive' | 'problem'
 export type ObjState = 'alive' | 'garbage' | 'noworld'
 
-export type NodeKind = 'module' | 'class' | 'world' | 'owner' | 'object' | 'global' | 'idle'
+export type NodeKind = 'module' | 'class' | 'world' | 'owner' | 'object' | 'global' | 'idle' | 'folder'
 
 export interface TNode {
   key: string
   kind: NodeKind
-  /** 显示的名字：模块名、类名、世界 id、对象名、全局名 */
+  /** 模块名、类名、世界 id、对象名、全局名；目录是目录路径 */
   name: string
+  /** 按目录成树时显示的那一段（模块只显示文件名，目录只显示自己那层）；没有时显示 name */
+  label?: string
   obj?: BoundObj
   /** 下面一共有多少个对象（分组节点用） */
   count?: number
@@ -186,7 +188,53 @@ export function byOwner(objs: BoundObj[]): TNode[] {
 }
 
 export function groupObjects(objs: BoundObj[], g: Grouping): TNode[] {
-  return g === 'module' ? byModule(objs) : g === 'class' ? byClass(objs) : byOwner(objs)
+  return g === 'module' ? folderize(byModule(objs)) : g === 'class' ? byClass(objs) : byOwner(objs)
+}
+
+/** 模块名按 / 或 . 分段（UnLua 的模块名是相对 Script 的路径，有的项目用 /，有的用 .） */
+const segsOf = (mod: string) => mod.split(/[/.]/).filter(Boolean)
+
+/**
+ * 按模块名的目录把模块节点收进一棵文件树（用户 2026-11-21：长路径平铺看不清，要像文件树一样逐级折叠）：
+ * 目录在前、模块在后，各按名字排；只有一个子目录、自己没有模块的目录和子目录并成一行（a/b），和 VS Code 的紧凑目录一样。
+ * 没有名字的（没认出模块）放最后。count 是下面的对象数，idle 叶子各算 1
+ */
+export function folderize(nodes: TNode[]): TNode[] {
+  const root: TNode = { key: 'f:', kind: 'folder', name: '', children: [] }
+  const tail: TNode[] = []
+  for (const n of nodes) {
+    const segs = segsOf(n.name)
+    if (segs.length < 2) {
+      ;(n.name ? root.children : tail).push(n)
+      continue
+    }
+    let at = root
+    for (let i = 0; i < segs.length - 1; i++) {
+      const path = segs.slice(0, i + 1).join('/')
+      let f = at.children.find((c) => c.kind === 'folder' && c.name === path)
+      if (!f) {
+        f = { key: `f:${path}`, kind: 'folder', name: path, label: segs[i], children: [] }
+        at.children.push(f)
+      }
+      at = f
+    }
+    at.children.push({ ...n, label: segs[segs.length - 1] })
+  }
+  const shown = (n: TNode) => n.label ?? n.name
+  const tidy = (n: TNode): TNode => {
+    if (n.kind !== 'folder') return n
+    let f = n
+    while (f.children.length === 1 && f.children[0].kind === 'folder') {
+      const c = f.children[0]
+      f = { ...c, label: `${shown(f)}/${shown(c)}` }
+    }
+    const children = f.children
+      .map(tidy)
+      .sort((a, b) => (a.kind === 'folder') === (b.kind === 'folder') ? shown(a).localeCompare(shown(b)) : a.kind === 'folder' ? -1 : 1)
+    const count = children.reduce((s, c) => s + (c.count ?? (c.kind === 'object' ? 1 : c.kind === 'folder' ? 0 : 1)), 0)
+    return { ...f, children, count }
+  }
+  return [...tidy(root).children, ...tail]
 }
 
 /** 搜索的结果：按类（含子类，一棵类树）、按名字的对象、模块、全局；path 为真时还给「按 Lua 路径打开」 */
