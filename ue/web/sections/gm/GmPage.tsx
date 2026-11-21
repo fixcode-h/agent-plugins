@@ -10,7 +10,16 @@ import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { takePending } from '../../pending.ts'
 import { DockCol } from '../../nav/slot.tsx'
-import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
+import {
+  PANE_FILL,
+  PANE_FILL_H,
+  PANE_FIXED,
+  PANE_FIXED_H,
+  SPLIT_ROW,
+  SplitHandle,
+  usePane,
+  usePaneHeight,
+} from '../../split.tsx'
 import { ErrorText, PageHead } from '../../ui.tsx'
 import { favOf, parseFav, type GmEntry, type GmParam } from './data.ts'
 import { GmDetail } from './GmDetail.tsx'
@@ -18,6 +27,7 @@ import { LuaStatus } from './LuaStatus.tsx'
 import { GmTree, type GmPick, type GmSrcFilter } from './GmTree.tsx'
 import { LuaSetup } from './LuaSetup.tsx'
 import { MacroPane } from './MacroPane.tsx'
+import { RecentRuns, type RecentRun } from './RecentRuns.tsx'
 import { runEntry, type RunOut } from './run.ts'
 import { TableBindDialog } from './TableBindDialog.tsx'
 import { listTables, searchRows, tableShape } from './tables.ts'
@@ -25,7 +35,8 @@ import { useGm } from './use-gm.ts'
 
 /**
  * GM 页（用户 2026-11-16：Lua GM 并进来，原来的页不合理要重做）。分组上百个、Lua GM 上千条后改成两栏：
- * 左边一棵树（收藏、最近执行、宏，加按「 / 」分层的分组文件夹，GM 挂在里面），右边选中 GM 的详情或正在编辑的宏。
+ * 左边一棵树（收藏、宏，加按「 / 」分层的分组文件夹，GM 挂在里面），右边上面是选中 GM 的详情或正在编辑的宏，
+ * 下面是最近执行（用户 2026-11-21：从左边树里挪过来），上下分界能拖、记在本机。
  * Lua GM 不需要 UE 在运行就能列出来（扫描只读本机文件），执行才要
  */
 export function GmPage() {
@@ -46,6 +57,8 @@ export function GmPage() {
   const [dialog, ask] = useAsk()
   const nav = usePane('gm-tree', '380px', 260)
   const navRef = useRef<HTMLElement>(null)
+  const recentPane = usePaneHeight('gm-recent', '14rem', 96)
+  const recentRef = useRef<HTMLDivElement>(null)
 
   const all = d.entries
   const byKey = useMemo(() => new Map(all.map((e) => [e.key, e])), [all])
@@ -69,8 +82,8 @@ export function GmPage() {
       }),
     [d.gm.favGm, all, byKey],
   )
-  const recent = useMemo(
-    () => d.recent.flatMap((r) => (find(r.key) ? [{ entry: find(r.key)!, args: r.args, ok: r.ok, at: r.at }] : [])),
+  const recent = useMemo<RecentRun[]>(
+    () => d.recent.flatMap((r) => (find(r.key) ? [{ entry: find(r.key)!, run: r }] : [])),
     // find 跟着 all 变
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [d.recent, all],
@@ -179,7 +192,6 @@ export function GmPage() {
       <GmTree
         entries={shown}
         favs={favs}
-        recent={recent}
         macros={d.gm.macros}
         src={src}
         onSrc={setSrc}
@@ -241,45 +253,59 @@ export function GmPage() {
             </>
           }
         />
-        <section className={`ue:flex ue:min-h-0 ue:flex-col ${PANE_FILL}`}>
-          {macro ? (
-            <MacroPane
-              macro={macro}
-              find={find}
-              onSave={saveMacro}
-              onDelete={() =>
-                void d
-                  .saveGm({ ...d.gm, macros: d.gm.macros.filter((x) => x.id !== macro.id) })
-                  .then(() => setPick(undefined))
-              }
-              canRun={canRun}
-              toChat={chat.available ? chat.send : undefined}
+        <section className={`ue:flex ue:min-h-0 ue:flex-col ue:divide-y ue:divide-line ue:lg:divide-y-0 ${PANE_FILL}`}>
+          <div className={`ue:flex ue:min-h-80 ue:flex-col ue:lg:min-h-0 ${PANE_FILL_H}`}>
+            {macro ? (
+              <MacroPane
+                macro={macro}
+                find={find}
+                onSave={saveMacro}
+                onDelete={() =>
+                  void d
+                    .saveGm({ ...d.gm, macros: d.gm.macros.filter((x) => x.id !== macro.id) })
+                    .then(() => setPick(undefined))
+                }
+                canRun={canRun}
+                toChat={chat.available ? chat.send : undefined}
+              />
+            ) : entry ? (
+              <GmDetail
+                entry={entry}
+                args={cur}
+                onArg={setArg}
+                onArgs={fill}
+                config={d.lua.data?.config}
+                gm={d.gm}
+                onRun={() => void exec()}
+                running={running}
+                out={outs[entry.key]}
+                canRun={canRun}
+                history={d.recent.filter((r) => r.key === entry.key)}
+                fav={d.gm.favGm.includes(favOf(entry, cur))}
+                onFav={toggleFav}
+                onMacro={() => void addToMacro()}
+                toChat={chat.available ? chat.send : undefined}
+                onEditBinding={(p, current) => setBind({ entry, p, current })}
+              />
+            ) : (
+              <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
+                <Wand2 className="ue:h-6 ue:w-6" />
+                {t('在左边的树里选一条 GM，在这里填参数、执行')}
+              </div>
+            )}
+          </div>
+          <SplitHandle pane={recentPane} paneRef={recentRef} side="right" reserve={() => 200} />
+          <div
+            ref={recentRef}
+            className={`ue:flex ue:flex-col ${PANE_FIXED_H}`}
+            style={recentPane.style('calc(100% - 200px)')}
+          >
+            <RecentRuns
+              items={recent.slice(0, 60)}
+              selected={pick?.kind === 'gm' ? (pick.line ?? '') : ''}
+              onPick={(line, r) => choose({ kind: 'gm', line, key: r.entry.key, args: r.run.args })}
             />
-          ) : entry ? (
-            <GmDetail
-              entry={entry}
-              args={cur}
-              onArg={setArg}
-              onArgs={fill}
-              config={d.lua.data?.config}
-              gm={d.gm}
-              onRun={() => void exec()}
-              running={running}
-              out={outs[entry.key]}
-              canRun={canRun}
-              history={d.recent.filter((r) => r.key === entry.key)}
-              fav={d.gm.favGm.includes(favOf(entry, cur))}
-              onFav={toggleFav}
-              onMacro={() => void addToMacro()}
-              toChat={chat.available ? chat.send : undefined}
-              onEditBinding={(p, current) => setBind({ entry, p, current })}
-            />
-          ) : (
-            <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
-              <Wand2 className="ue:h-6 ue:w-6" />
-              {t('在左边的树里选一条 GM，在这里填参数、执行')}
-            </div>
-          )}
+          </div>
         </section>
       </div>
       {setup && d.lua.data && (

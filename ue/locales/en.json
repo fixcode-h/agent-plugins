@@ -4660,5 +4660,7 @@
   "还有 {n} 层": "{n} more levels",
   "按反射补上的父类，没有 Lua 这边的函数": "Parent class filled in from reflection; no Lua-side functions",
   "绑了 Lua 的类": "Classes bound to Lua",
-  "绑了 Lua 的类（还没开始玩，没有实例）": "Classes bound to Lua (play hasn't started, no instances)"
+  "绑了 Lua 的类（还没开始玩，没有实例）": "Classes bound to Lua (play hasn't started, no instances)",
+  "点一行选中这条 GM 并填回参数": "Click a row to select that GM and fill its arguments back in",
+  "还没有执行过 GM，执行后列在这里": "No GM has run yet; runs are listed here"
 }
