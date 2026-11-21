@@ -1,23 +1,76 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
-import type { GmStore, UeProject } from './types.ts'
+import { GM_VERSION, GmStore as GmSchema, parseGm, type GmStore } from '../shared/gm/schema.ts'
+import { docsRoot, legacyDocsRoot } from './doc-root.ts'
+import type { UeProject } from './types.ts'
 import { c, readJson, writeJson } from './util.ts'
 
 /**
- * GM 预设、宏和收藏（设计文档 3.3）：默认存在项目里 .agent-panel/ue/gm.json（可以提交，团队共用），
- * 也可以只存在插件数据目录；控制台历史和监视列表只存本机。
+ * GM 的东西（gm.json v2：预设、宏、表格关联、对象列表、自定义 GM、模块、收藏，契约见 shared/gm/schema.ts）：
+ * 默认存在项目文档根的 AgentPanel/UE/gm.json（用户 2026-11-21：GM 相关的都默认放 docs 下，和 Lua GM 扫描设置同一个目录，
+ * 可以提交、团队共用）；项目设置选「只在本机」时存插件数据目录。控制台历史、监视列表、GM 最近执行只存本机（下面的 LocalState）。
+ * gm.json 改了（网页、Agent 的 ue_gm save / remove、别人提交后拉下来）都推 gm 事件给网页（gm-custom/watch.ts），不轮询
  */
-const EMPTY: GmStore = { presets: [], macros: [], favConsole: [], favGm: [] }
+export const GM_EVENT = 'gm'
 
-const gmFile = (p: UeProject) =>
-  p.gmStore === 'local'
-    ? path.join(c().dataDir, 'gm', `${encodeURIComponent(p.id)}.json`)
-    : path.join(p.root, '.agent-panel', 'ue', 'gm.json')
+type P = Pick<UeProject, 'id' | 'root' | 'gmStore'>
 
-export async function readGm(p: UeProject): Promise<GmStore> {
-  return { ...EMPTY, ...(await readJson<Partial<GmStore>>(gmFile(p), {})) }
+/** 每个项目最近一次算出的 gm.json 位置：工具的 targets 是同步的、拿不到项目，按它报（没算过就报不出，给空） */
+const seenGmFile = new Map<string, string>() // 模块状态：只是缓存，重启后第一次读写 gm.json 时补上
+export const gmFile = (p: P) => {
+  const f =
+    p.gmStore === 'local'
+      ? path.join(c().dataDir, 'gm', `${encodeURIComponent(p.id)}.json`)
+      : path.join(docsRoot(p), 'AgentPanel', 'UE', 'gm.json')
+  seenGmFile.set(p.id, f)
+  return f
 }
-export async function writeGm(p: UeProject, data: GmStore) {
-  await writeJson(gmFile(p), data)
+export const knownGmFile = (projectId: string) => {
+  const f = seenGmFile.get(projectId)
+  return f ? [f] : []
+}
+
+/** 以前放过 gm.json 的地方：项目的 .agent-panel/ue、升级前按旧规则猜的文档根 */
+const oldGmFiles = (p: P) => [
+  path.join(p.root, '.agent-panel', 'ue', 'gm.json'),
+  path.join(legacyDocsRoot(p.root), 'AgentPanel', 'UE', 'gm.json'),
+]
+
+/**
+ * 新位置还没有 gm.json、旧位置有：第一次读时搬过来（用户 2026-11-21）。只带预设、宏和表格关联——
+ * 旧的收藏 favGm / favConsole 照规格第 1 节不再读；旧文件留着不删（可能已经提交进版本管理，删不删由用户定）
+ */
+async function adoptOldGm(p: P, file: string) {
+  if (p.gmStore === 'local' || existsSync(file)) return
+  const old = oldGmFiles(p).find((f) => path.resolve(f) !== path.resolve(file) && existsSync(f))
+  if (!old) return
+  const raw = await readJson<Record<string, unknown>>(old, {})
+  const next =
+    raw.version === GM_VERSION
+      ? parseGm(raw)
+      : GmSchema.parse({
+          version: GM_VERSION,
+          presets: raw.presets ?? [],
+          macros: raw.macros ?? [],
+          ...(raw.bindings ? { bindings: raw.bindings } : {}),
+          ...(raw.tableBindings ? { tableBindings: raw.tableBindings } : {}),
+        })
+  await writeJson(file, next)
+  c().log?.info('UE：gm.json 搬到项目文档根', { project: p.id, from: old, to: file })
+}
+
+export async function readGm(p: P): Promise<GmStore> {
+  const file = gmFile(p)
+  await adoptOldGm(p, file).catch((e: Error) => c().log?.warn('UE：旧 gm.json 没搬过来', { error: e.message }))
+  return parseGm(await readJson<unknown>(file, null))
+}
+
+/** 写之前按契约校验（网页整份传上来的、Agent 拼的都过一遍），写完推 gm 事件让打开着的 GM 页刷新 */
+export async function writeGm(p: P, data: unknown) {
+  const next = GmSchema.parse(data)
+  await writeJson(gmFile(p), next)
+  c().pages?.push(GM_EVENT, { project: p.id })
+  return next
 }
 
 export interface LocalState {
@@ -34,10 +87,11 @@ export interface LocalState {
   gmRecent: GmRun[]
 }
 export interface GmRun {
-  /** GM 页里的条目 key（lua:名字 / cpp:类.名字） */
+  /** GM 页里的条目 key（lua:名字 / cpp:类.名字 / custom:id） */
   key: string
   name: string
-  args: string[]
+  /** 按顺序的参数；自定义 GM 是 {参数名: 值} */
+  args: string[] | Record<string, unknown>
   /** 实际执行的：Lua 代码或控制台写法 */
   code: string
   ok: boolean

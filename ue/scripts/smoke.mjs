@@ -63,6 +63,8 @@ const bridge = await startFakeBridge(proj)
 // 面板开放给插件的模块（server/download）：冒烟测试不连外网，给一份用 fetch 写文件的替身
 globalThis.__agentPanelServer = {
   modules: {
+    // gm.json 的契约（shared/gm/schema.ts）用面板开放的 zod：冒烟测试直接给仓库里装的那份
+    zod: await import('zod'),
     // 资源版本差异用的版本记录（面板 server/exec/vcs-history）：冒烟测试不碰版本管理，给个空替身
     'server/exec/vcs-history': {
       fileHistory: async () => ({ vcs: 'none', items: [] }),
@@ -458,6 +460,49 @@ try {
   )
   const webGm = await api('POST', '/p/p1/lua-gm/run', { name: 'AddItem', args: ['7'] })
   assert.equal(webGm.code, 'GM.AddItem(7)')
+  // 自定义 GM（规格第 8 节）：save 演练不落盘、存进 gm.json（模块没有就建）、list source=custom 列得出、remove 报出用到它的宏
+  const def = {
+    name: '买一个',
+    module: '商店',
+    obj: '商店界面',
+    function: 'BuyItem',
+    args: { id: 2003 },
+    editable: ['id'],
+  }
+  const objDef = { name: '商店界面', ref: { class: 'WBP_Shop_C' } }
+  assert.ok(!(await call('ue_gm', { action: 'save', kind: 'object', def: objDef })).isError)
+  const gmDry = JSON.parse(
+    text(
+      await call('ue_gm', {
+        action: 'save',
+        kind: 'gm',
+        def: { ...def, objects: { 商店界面: { ref: objDef.ref } } },
+        dryRun: true,
+      }),
+    ),
+  )
+  assert.ok(gmDry.dryRun && gmDry.newModule, JSON.stringify(gmDry))
+  assert.equal(
+    JSON.parse(text(await call('ue_gm', { action: 'list', source: 'custom' }))).custom.length,
+    0,
+    '演练不落盘',
+  )
+  const gmSaved = await call('ue_gm', {
+    action: 'save',
+    kind: 'gm',
+    def: { ...def, objects: { 商店界面: { ref: objDef.ref } } },
+  })
+  assert.ok(!gmSaved.isError, text(gmSaved))
+  const customs = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'custom' })))
+  assert.ok(
+    customs.custom.some((x) => x.name === '买一个' && x.module === '商店'),
+    JSON.stringify(customs),
+  )
+  assert.ok(
+    (await call('ue_gm', { action: 'run', source: 'custom', name: '买一个', args: { count: 2 } })).isError,
+    '不可改的参数',
+  )
+  assert.ok(!(await call('ue_gm', { action: 'remove', kind: 'gm', name: '买一个' })).isError)
   // UELink 2.4：Lua 改完能验（check → reload → errors）、调 Lua 函数、函数签名，ue_status 带编辑器选中
   const chk = await call('ue_lua', { action: 'check', files: ['Content/Script/UI/BadPanel.lua'] })
   assert.match(text(chk), /'end' expected/)

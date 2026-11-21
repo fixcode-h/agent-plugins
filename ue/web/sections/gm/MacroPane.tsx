@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Check, CirclePlus, MessageSquarePlus, Pencil, Play, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
-import type { GmMacro } from '../../../server/types.ts'
+import { callText } from '../../../shared/gm/custom.ts'
+import { customKey, type GmMacro } from '../../../shared/gm/schema.ts'
 import { ppost } from '../../api.ts'
 import { useAsk } from '../../ask.tsx'
 import { useUe } from '../../ctx.tsx'
@@ -17,18 +18,25 @@ interface StepResult {
   error?: string
 }
 
-/** 一步怎么显示：Lua 按扫描结果拼出调用代码，C++ 是控制台写法 */
+const listArgs = (a: Step['args']) => (Array.isArray(a) ? a : [])
+
+/** 一步怎么显示：Lua 按扫描结果拼出调用代码，C++ 是控制台写法，自定义 GM 是「在 对象 上调 函数(参数)」 */
 export function stepText(s: Step, find: (key: string) => GmEntry | undefined) {
   if (s.console) return s.console
+  if (s.custom) {
+    const c = find(customKey(s.custom))?.custom
+    if (!c) return t('自定义 GM 已经不在了（{id}）', { id: s.custom })
+    return `${c.name}：${callText(c, { ...c.args, ...(Array.isArray(s.args) ? {} : s.args) })}`
+  }
   if (s.lua) {
     const e = find(`lua:${s.lua}`)
-    return (e && preview(e, s.args ?? []).code) || [s.lua, ...(s.args ?? [])].join(' ')
+    return (e && preview(e, listArgs(s.args)).code) || [s.lua, ...listArgs(s.args)].join(' ')
   }
-  return cppLine(s.gm ?? '', s.args ?? [])
+  return cppLine(s.gm ?? '', listArgs(s.args))
 }
 
 /**
- * 右边编辑宏（效果图 2）：步骤可以混 C++ GM、Lua GM 和控制台命令；在中间列表点 ＋ 加进来，
+ * 右边编辑宏（效果图 2）：步骤可以混 C++ GM、Lua GM、自定义 GM 和控制台命令；在 GM 详情里点「加到宏」加进来，
  * 这里调顺序、删步骤、加命令。改了马上存进 gm.json（团队共用）；执行全部时任何一步失败就停，标出是哪一步
  */
 export function MacroPane({
@@ -110,7 +118,9 @@ export function MacroPane({
                 className="ue:group ue:flex ue:min-h-10 ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:px-3 ue:last:border-b-0"
               >
                 <span className="ue:w-4 ue:shrink-0 ue:text-caption ue:text-subtle">{i + 1}</span>
-                <Badge tone={s.lua ? 'accent' : 'muted'}>{s.console ? t('命令') : s.lua ? 'Lua' : 'C++'}</Badge>
+                <Badge tone={s.lua || s.custom ? 'accent' : 'muted'}>
+                  {s.console ? t('命令') : s.custom ? t('自定义') : s.lua ? 'Lua' : 'C++'}
+                </Badge>
                 <code className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
                   {stepText(s, find)}
                 </code>
@@ -175,7 +185,9 @@ export function MacroPane({
           }}
         >
           <CirclePlus className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />
-          <span className="ue:shrink-0">{t('在中间列表点 ＋ 把 GM 连同当前参数加进来；或者加一条控制台命令：')}</span>
+          <span className="ue:shrink-0">
+            {t('在 GM 详情里点「加到宏」把 GM 连同当前参数加进来；或者加一条控制台命令：')}
+          </span>
           <ui.Input
             size="sm"
             className="ue:min-w-0 ue:flex-1 ue:font-mono"

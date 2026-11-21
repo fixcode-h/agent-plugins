@@ -19,11 +19,11 @@ export type Handler = (a: Record<string, unknown>, ctx: OpCtx) => Promise<McpRes
 /**
  * 工具对项目做什么（面板插件接口 3）：只有真正写磁盘的（ue_save）标 edit、编译（ue_compile）标 verify，
  * 其余都是只读或只改内存 / 运行时，不标——标成 edit 会让只读角色、Bug 先诊断阶段连读资源都被面板守卫挡住。
- * targets 按参数算要改的文件，root 是 UE 项目根目录
+ * targets 按参数算要改的文件，root 是 UE 项目根目录，projectId 是 UE 页的项目（文件不在项目根下时按它找，例如 gm.json）
  */
 export interface ToolEffect {
   effect?: McpToolEffect
-  targets?: (a: Record<string, unknown>, root: string) => string[]
+  targets?: (a: Record<string, unknown>, root: string, projectId: string) => string[]
 }
 
 export function tool(

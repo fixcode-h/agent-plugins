@@ -44,14 +44,15 @@ function located(p: P, name: string) {
  */
 export async function adoptOld(p: P) {
   const dir = storeDir(p)
-  const old = path.join(legacyDocsRoot(p.root), 'AgentPanel', 'UE')
-  if (path.resolve(old) === path.resolve(dir)) return
-  for (const name of [SCRIPT_NAME, CONFIG_NAME]) {
-    const from = path.join(old, name)
-    const to = path.join(dir, name)
-    if (existsSync(to) || !existsSync(from)) continue
-    await mkdir(dir, { recursive: true })
-    await copyFile(from, to)
+  for (const old of oldDirs(p)) {
+    if (path.resolve(old) === path.resolve(dir)) continue
+    for (const name of [SCRIPT_NAME, CONFIG_NAME]) {
+      const from = path.join(old, name)
+      const to = path.join(dir, name)
+      if (existsSync(to) || !existsSync(from)) continue
+      await mkdir(dir, { recursive: true })
+      await copyFile(from, to)
+    }
   }
 }
 

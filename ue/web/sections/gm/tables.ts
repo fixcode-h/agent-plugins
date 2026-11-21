@@ -1,6 +1,25 @@
 import { request } from '@panel/web/src/lib/api'
 import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
 import { t } from '../../host.ts'
+import { pluginToStored, storedToPlugin, type TableRoots } from '../../../shared/gm/table-path.ts'
+
+/**
+ * 存进 gm.json / Lua GM 设置的表格路径是相对版本管理根（或 UE 项目根）的（shared/gm/table-path.ts），表格插件认的是相对面板项目目录的：
+ * 每次调表格插件前换过去，从它拿到的路径换回来，界面上只出现存的写法。根由 use-gm.ts 取到后登记在这里（按项目）；
+ * 还没取到时原样传（旧数据、刚打开页面的第一下）
+ */
+const roots = new Map<string, TableRoots>() // 模块状态：use-gm 每次渲染都会重登记
+export const setTableRoots = (projectId: string, r: TableRoots) => roots.set(projectId, r)
+const toPlugin = (projectId: string, p: string) => {
+  const r = roots.get(projectId)
+  return r ? storedToPlugin(p, r) : p
+}
+const toStored = (projectId: string, p: string) => {
+  const r = roots.get(projectId)
+  return r ? pluginToStored(p, r) : p
+}
+/** 存之前规整：旧数据里的绝对路径这时换成相对的（读值照旧认绝对路径，不另做迁移） */
+export const storedTable = (projectId: string, p: string) => toStored(projectId, toPlugin(projectId, p))
 
 /**
  * GM 参数下拉的数据：经面板动作入口调表格插件的 table.list / table.query（插件之间不互相 import，设计稿 4.2）。
@@ -40,9 +59,10 @@ export function resolveHint(projectId: string, table: string, key: string): Prom
       const file = files.find((f) => base(f) === table.toLowerCase()) ?? files[0]
       if (!file) throw new Error(t('表格目录里没有名字含「{table}」的表', { table }))
       const q = await act<{ fields: string[] }>('table.query', { projectId, path: file, limit: 1 })
-      if (!q.fields.includes(key)) throw new Error(t('{file} 没有「{key}」列', { file, key }))
+      const stored = toStored(projectId, file)
+      if (!q.fields.includes(key)) throw new Error(t('{file} 没有「{key}」列', { file: stored, key }))
       const label = NAME_COLS.find((c) => q.fields.includes(c))
-      return { table: file, key, ...(label ? { label } : {}) }
+      return { table: stored, key, ...(label ? { label } : {}) }
     })()
     resolved.set(k, p)
     // 失败的不缓存：用户装好表格插件、设好表格目录后再点开就能用
@@ -67,7 +87,7 @@ export function searchRows(projectId: string, b: LuaGmBinding, q: string) {
       const one = (where?: Record<string, string>) =>
         act<{ total: number; fields: string[]; rows: { values: Record<string, string> }[] }>('table.query', {
           projectId,
-          path: b.table,
+          path: toPlugin(projectId, b.table),
           ...(b.sheet ? { sheet: b.sheet } : {}),
           fields,
           limit: 30,
@@ -109,15 +129,16 @@ export async function listTables(projectId: string, q: string) {
     projectId,
     ...(q.trim() ? { name: q.trim() } : {}),
   })
-  return { files: r.files.map((f) => f.replace(/（只读）$/, '')), truncated: !!r.truncated }
+  return { files: r.files.map((f) => toStored(projectId, f.replace(/（只读）$/, ''))), truncated: !!r.truncated }
 }
 
 /** 关联弹窗：一张表的页签，和某个页签的列（表头按表格页里设的结构认） */
 export async function tableShape(projectId: string, table: string, sheet?: string) {
-  const s = await act<{ sheets: string[] }>('table.schema', { projectId, path: table, ...(sheet ? { sheet } : {}) })
+  const path = toPlugin(projectId, table)
+  const s = await act<{ sheets: string[] }>('table.schema', { projectId, path, ...(sheet ? { sheet } : {}) })
   const q = await act<{ sheet: string; fields: string[]; key: string }>('table.query', {
     projectId,
-    path: table,
+    path,
     ...(sheet ? { sheet } : {}),
     limit: 1,
   })
@@ -129,7 +150,7 @@ export async function labelOf(projectId: string, b: LuaGmBinding, value: string)
   if (!value || !b.label) return ''
   const r = await act<{ rows: { values: Record<string, string> }[] }>('table.query', {
     projectId,
-    path: b.table,
+    path: toPlugin(projectId, b.table),
     ...(b.sheet ? { sheet: b.sheet } : {}),
     fields: [b.key, b.label],
     where: { [b.key]: value },

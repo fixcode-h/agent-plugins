@@ -8,7 +8,7 @@ import { Badge } from '../../ui.tsx'
 
 /**
  * Lua GM 扫描设置（效果图 3）：填 GM 文件的路径模式，边改边看找到哪些文件；第一次「保存并让 AI 写扫描脚本」，
- * 提示词放进新对话的输入框（toChat，用户看过再发）。脚本和设置存在资源页收藏同一个位置
+ * 提示词放进新对话的输入框（toChat，用户看过再发）。脚本和设置存在项目文档根的 AgentPanel/UE（和 gm.json 同一个目录）
  */
 export function LuaSetup({
   config,
@@ -129,7 +129,7 @@ export function LuaSetup({
           </span>
           <span className="ue:text-footnote ue:text-subtle">
             {t(
-              '第一次由 AI 读这几个文件，总结 GM 怎么写（挂在哪个表、分组和说明写在哪、参数怎么声明、参数关联哪张表），写成脚本存到项目里（和资源页收藏同一个位置）。以后都用脚本扫，文件变了自动重扫，不再调 AI。',
+              '第一次由 AI 读这几个文件，总结 GM 怎么写（挂在哪个表、分组和说明写在哪、参数怎么声明、参数关联哪张表），写成脚本存到项目文档根的 AgentPanel/UE（团队共用）。以后都用脚本扫，文件变了自动重扫，不再调 AI。',
             )}
           </span>
           <code className="ue:truncate ue:font-mono ue:text-caption ue:text-fg">{rel(scan.script)}</code>
