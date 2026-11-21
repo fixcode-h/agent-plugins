@@ -221,3 +221,54 @@ test('vswhere 输出：取第一个 devenv.exe，没有返回空', () => {
   assert.equal(parseVswhere(''), undefined)
   assert.equal(parseVswhere('C:\\BuildTools\\MSBuild.exe'), undefined)
 })
+
+test('运行中改了断点：下一次刷新重取列表，总数 0 时不再挂着旧列表', async () => {
+  const p = await project('running-bp')
+  await writeFile(path.join(p.root, 'Game.sln'), '')
+  setPipeOverride((pipe) => path.join(base, `${pipe}.sock`))
+  let items = [
+    { i: 1, file: 'A.cpp', line: 1, enabled: true, byAgent: true },
+    { i: 2, file: 'B.cpp', line: 2, enabled: true, byAgent: true },
+  ]
+  const ops: string[] = []
+  await fakeVs('running-vs', (req) => {
+    ops.push(req.op)
+    if (req.op === 'bp.list') return { ok: true, result: { items } }
+    if (req.op === 'bp.clear') {
+      items = []
+      return { ok: true, result: { removed: 2 } }
+    }
+    return { ok: true, result: { mode: 'run', building: false, breakpoints: items.length } }
+  })
+  await writeEndpoint(p.root, { pipe: 'running-vs', project: p.uproject })
+  // 第一次刷新拿到列表；之后在跑，只问 status
+  assert.equal((await vsDebugState(p))?.breakpoints?.length, 2)
+  ops.length = 0
+  assert.equal((await vsDebugState(p))?.breakpoints?.length, 2)
+  assert.deepEqual(ops, ['status'])
+  // 网页点「清掉 Agent 下的」：下一次刷新哪怕在跑也重取列表
+  await vsCall(p, 'bp.clear', { scope: 'agent' })
+  ops.length = 0
+  assert.deepEqual((await vsDebugState(p))?.breakpoints, [])
+  assert.deepEqual(ops, ['status', 'bp.list'])
+  setPipeOverride(undefined)
+})
+
+test('运行中在 VS 里删了断点：status 总数为 0 直接清空缓存的列表', async () => {
+  const p = await project('running-bp-vs')
+  await writeFile(path.join(p.root, 'Game.sln'), '')
+  setPipeOverride((pipe) => path.join(base, `${pipe}.sock`))
+  let items = [{ i: 1, file: 'A.cpp', line: 1, enabled: true }]
+  let first = true
+  await fakeVs('running-vs2', (req) => {
+    if (req.op === 'bp.list') return { ok: true, result: { items } }
+    const r = { ok: true, result: { mode: 'run', building: false, breakpoints: first ? 1 : 0 } }
+    first = false
+    return r
+  })
+  await writeEndpoint(p.root, { pipe: 'running-vs2', project: p.uproject })
+  assert.equal((await vsDebugState(p))?.breakpoints?.length, 1)
+  items = []
+  assert.deepEqual((await vsDebugState(p))?.breakpoints, [])
+  setPipeOverride(undefined)
+})
