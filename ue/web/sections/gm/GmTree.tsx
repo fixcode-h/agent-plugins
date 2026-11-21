@@ -1,5 +1,5 @@
 import { pinyinInitials } from '@panel/shared/pinyin'
-import { CirclePlus, FileCode, Folder, FolderOpen, History, ListVideo, Plus, Star, Wand2 } from 'lucide-react'
+import { CirclePlus, FileCode, Folder, FolderOpen, ListVideo, Plus, Star, Wand2 } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import type { GmMacro } from '../../../server/types.ts'
 import { h, t } from '../../host.ts'
@@ -10,7 +10,7 @@ import { groupKey, groupPath, search, type GmEntry } from './data.ts'
 
 export type GmSrcFilter = 'all' | 'lua' | 'cpp' | 'engine'
 
-/** 树上点的是哪一行：GM（带收藏、最近执行里那组参数）或宏 */
+/** 树上点的是哪一行：GM（带收藏、最近执行里那组参数；最近执行在右侧下方，见 RecentRuns）或宏 */
 export type GmPick = { kind: 'gm'; line: string; key: string; args?: string[] } | { kind: 'macro'; id: string }
 
 interface Folder {
@@ -52,13 +52,12 @@ const nameHit = (name: string, k: string) => !!k && (norm(name).includes(k) || p
 
 /**
  * GM 页左边的一棵树（用户 2026-11-16：分组上百个、Lua GM 上千条，左栏分组 + 中间列表两栏太挤，合成一棵树）。
- * 顶上搜索（名字、说明、参数、分组名，分组名也认拼音首字母）和来源切换；树里收藏、最近执行、宏在最上面，
+ * 顶上搜索（名字、说明、参数、分组名，分组名也认拼音首字母）和来源切换；树里收藏、宏在最上面（最近执行挪到右侧下方，用户 2026-11-21），
  * 下面是按「 / 」拆层的分组文件夹，GM 挂在文件夹里。搜索时有命中的文件夹自动展开。用共用的 TreeList（只画看得见的行）
  */
 export function GmTree({
   entries,
   favs,
-  recent,
   macros,
   src,
   onSrc,
@@ -74,7 +73,6 @@ export function GmTree({
   /** 已按来源筛过的 GM */
   entries: GmEntry[]
   favs: { entry: GmEntry; args: string[] }[]
-  recent: { entry: GmEntry; args: string[]; ok: boolean; at: string }[]
   macros: GmMacro[]
   src: GmSrcFilter
   onSrc: (s: GmSrcFilter) => void
@@ -144,7 +142,7 @@ export function GmTree({
       kids: TreeLine[],
       action?: ReactNode,
     ) => {
-      // 搜索时：收藏、最近里没命中的整段不显示
+      // 搜索时：收藏里没命中的整段不显示
       if (q && !kids.length) return
       const isOpen = q ? true : open.has(id)
       out.push({
@@ -169,17 +167,6 @@ export function GmTree({
       t('收藏'),
       favs.length,
       favs.flatMap((f, i) => (want(f.entry) ? [gmLine(f.entry, 1, `fav:${i}`, f.args)] : [])),
-    )
-    section(
-      '§recent',
-      History,
-      t('最近执行'),
-      recent.length,
-      recent
-        .slice(0, 30)
-        .flatMap((r, i) =>
-          want(r.entry) ? [gmLine(r.entry, 1, `run:${i}`, r.args, new Date(r.at).toLocaleTimeString())] : [],
-        ),
     )
     section(
       '§macro',
@@ -248,7 +235,7 @@ export function GmTree({
     return out
     // onPick、onAdd 每次渲染都是新函数；行跟着数据、搜索、展开和选中变就够了
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [tree, hits, k, open, selected, favs, recent, macros, !!onAdd])
+  }, [tree, hits, k, open, selected, favs, macros, !!onAdd])
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">

@@ -90,7 +90,7 @@ export function useScenarioLibrary(o: {
       title: t('新建脚本'),
       okText: t('新建'),
       placeholder: t('脚本名，例如 每日福利'),
-      note: t('{where}。先放一步「等 1 秒」占位，打开后在步骤列表里插入真正的步骤。', { where: where(dir) }),
+      note: t('{where}。新建后直接打开，在画布上加步骤。', { where: where(dir) }),
       validate: (name) => nameTaken(o.scenarios, name),
       run: (name) =>
         void libOp<{ path: string }>(o.project, o.root, 'create', { dir, name })

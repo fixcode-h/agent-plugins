@@ -72,10 +72,13 @@ export async function vsDebugState(p: UeProject): Promise<VsDebugState | undefin
     if (!st.ok) return { ...base, reason: 'error', message: st.error }
     const status = st.result as unknown as VsDebugStatus
     let breakpoints = bp?.ok && Array.isArray(bp.result.items) ? (bp.result.items as VsBreakpoint[]) : last.breakpoints
-    // 没重取列表时拿 status 的总数核对缓存：VS 里自己删了断点也会对不上。总数 0 直接清空，别的下次刷新重取
-    if (!bp && breakpoints && typeof status.breakpoints === 'number') {
-      if (status.breakpoints === 0) breakpoints = []
-      else if (Math.min(status.breakpoints, 50) !== breakpoints.length) markBreakpointsStale(p.id)
+    // 列表没取到（没问或 VS 回了错）时拿 status 的总数核对缓存：VS 里自己删了断点也会对不上。总数 0 直接清空、不再重取；
+    // 别的情况下次刷新重取：强制重取却失败了（作废标记已经取走，不再标上运行中总数不变时旧列表会一直挂着），或总数和缓存对不上
+    if (!bp?.ok) {
+      const n = typeof status.breakpoints === 'number' ? status.breakpoints : undefined
+      if (n === 0) breakpoints = []
+      else if (bp || (breakpoints && n !== undefined && Math.min(n, 50) !== breakpoints.length))
+        markBreakpointsStale(p.id)
     }
     lastState.set(p.id, {
       breakpoints,

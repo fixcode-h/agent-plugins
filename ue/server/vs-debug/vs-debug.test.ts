@@ -272,3 +272,37 @@ test('运行中在 VS 里删了断点：status 总数为 0 直接清空缓存的
   assert.deepEqual((await vsDebugState(p))?.breakpoints, [])
   setPipeOverride(undefined)
 })
+
+test('运行中重取列表失败：总数为 0 时清空且不再重取，总数不为 0 时下次再取', async () => {
+  const p = await project('running-bp-fail')
+  await writeFile(path.join(p.root, 'Game.sln'), '')
+  setPipeOverride((pipe) => path.join(base, `${pipe}.sock`))
+  let count = 1
+  let listOk = true
+  const ops: string[] = []
+  await fakeVs('running-vs3', (req) => {
+    ops.push(req.op)
+    if (req.op === 'bp.list')
+      return listOk
+        ? { ok: true, result: { items: [{ i: 1, file: 'A.cpp', line: 1, enabled: true }] } }
+        : { ok: false, error: 'busy' }
+    if (req.op === 'bp.remove') return { ok: true, result: {} }
+    return { ok: true, result: { mode: 'run', building: false, breakpoints: count } }
+  })
+  await writeEndpoint(p.root, { pipe: 'running-vs3', project: p.uproject })
+  assert.equal((await vsDebugState(p))?.breakpoints?.length, 1)
+  listOk = false
+  // 改了断点、重取失败、总数还是 1：下次再取
+  await vsCall(p, 'bp.remove', { index: 1 })
+  await vsDebugState(p)
+  ops.length = 0
+  await vsDebugState(p)
+  assert.deepEqual(ops, ['status', 'bp.list'])
+  // 总数变成 0：清空，之后只问 status
+  count = 0
+  assert.deepEqual((await vsDebugState(p))?.breakpoints, [])
+  ops.length = 0
+  await vsDebugState(p)
+  assert.deepEqual(ops, ['status'])
+  setPipeOverride(undefined)
+})

@@ -2962,7 +2962,7 @@
   "文件夹名，例如 common": "Folder name, e.g. common",
   "新建脚本": "New script",
   "脚本名，例如 每日福利": "Script name, e.g. Daily rewards",
-  "{where}。先放一步「等 1 秒」占位，打开后在步骤列表里插入真正的步骤。": "{where}. It starts with a placeholder \"wait 1 second\" step; open it and insert the real steps in the step list.",
+  "{where}。新建后直接打开，在画布上加步骤。": "{where}. It opens right away; add steps on the canvas.",
   "已移到 {p}，改了 {n} 处 call": "Moved to {p}; updated {n} calls",
   "已移到 {p}": "Moved to {p}",
   "文件夹改名": "Rename folder",
@@ -3538,6 +3538,7 @@
   "键": "key",
   "没有对上的": "No matches",
   "跑这个文件夹": "Run this folder",
+  "在左边选一个脚本打开": "Pick a script on the left to open it",
   "还没有测试脚本": "No test scripts yet",
   "新建一个脚本在画布上拖节点编写，或者在游戏里操作一遍录下来，也可以让 Agent 照着说明写": "Create a script and build it from nodes on the canvas, record it by playing through the game, or have an Agent write it from a description",
   "让 Agent 写": "Let an Agent write it",
@@ -4660,5 +4661,7 @@
   "还有 {n} 层": "{n} more levels",
   "按反射补上的父类，没有 Lua 这边的函数": "Parent class filled in from reflection; no Lua-side functions",
   "绑了 Lua 的类": "Classes bound to Lua",
-  "绑了 Lua 的类（还没开始玩，没有实例）": "Classes bound to Lua (play hasn't started, no instances)"
+  "绑了 Lua 的类（还没开始玩，没有实例）": "Classes bound to Lua (play hasn't started, no instances)",
+  "点一行选中这条 GM 并填回参数": "Click a row to select that GM and fill its arguments back in",
+  "还没有执行过 GM，执行后列在这里": "No GM has run yet; runs are listed here"
 }
