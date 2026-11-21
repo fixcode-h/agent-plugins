@@ -15,6 +15,7 @@ import { mcpText } from './util.ts'
 import { batchNudge } from './batch/nudge.ts'
 import { findBySelect } from './batch/find-select.ts'
 import { BATCH_HINT, BATCH_PROPS, runBatch } from './batch/run.ts'
+import { knownGmFile } from './store.ts'
 import { isBatch } from './batch/targets.ts'
 import { dumpObject, readProps } from './object-dump.ts'
 import { UE_GUIDES } from './tool-guides.ts'
@@ -116,7 +117,7 @@ const DEFS = [
     async (a, ctx) => {
       if (a.action === 'save' || a.action === 'remove') {
         const r = a.action === 'save' ? await saveGmDef(ctx, a) : await removeGmDef(ctx, a)
-        // 实际改了 gm.json 时交给面板记成这一轮的改动（插件接口 3）
+        // 实际改了 gm.json 时带上 changed（插件接口 3）：工具没标 edit，面板现在不记，留着和 targets 一致
         const wrote = 'saved' in r ? r.saved : 'removed' in r && r.removed
         return { ...out(r), ...(wrote ? { changed: [r.file] } : {}) }
       }
@@ -138,10 +139,10 @@ const DEFS = [
       return out(await listGm(ctx, str(a.source), str(a.filter)))
     },
     {
-      // save / remove 改团队共用的 gm.json（规格第 9 节）。gm.json 在面板的文档根下，这里只拿得到项目根、算不出，
-      // 按约定给空；实际改了哪个文件在结果的 changed 里报
-      effect: 'edit',
-      targets: () => [],
+      // 不标 effect（按只读算）：面板的 effect 是整个工具一个值、不能按 action 分，标 edit 会让只读角色连 list / run 都被守卫挡住
+      // （toolkit.ts 的约定）。save / remove 改的是团队共用的 gm.json，在 targets 里如实报出（演练不算），面板哪天按 action 区分时直接可用
+      targets: (a, _root, projectId) =>
+        (a.action === 'save' || a.action === 'remove') && !a.dryRun ? knownGmFile(projectId) : [],
     },
   ),
   tool(
@@ -648,7 +649,7 @@ export const TOOL_NAMES = DEFS.map((d) => d.name)
 export function ueTools(projectId: string, root: string, agent: string): McpTool[] {
   return ueToolDefs().map(({ fn, targets, ...def }) => ({
     ...def,
-    ...(targets && { targets: (args: Record<string, unknown>) => targets(args, root) }),
+    ...(targets && { targets: (args: Record<string, unknown>) => targets(args, root, projectId) }),
     call: async (args: Record<string, unknown>, mctx: McpCallContext) => {
       const project = await getProject(projectId)
       if (!project) return mcpText('这个项目已经从 UE 页移除了', true)

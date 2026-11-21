@@ -15,10 +15,20 @@ export const GM_EVENT = 'gm'
 
 type P = Pick<UeProject, 'id' | 'root' | 'gmStore'>
 
-export const gmFile = (p: P) =>
-  p.gmStore === 'local'
-    ? path.join(c().dataDir, 'gm', `${encodeURIComponent(p.id)}.json`)
-    : path.join(docsRoot(p), 'AgentPanel', 'UE', 'gm.json')
+/** 每个项目最近一次算出的 gm.json 位置：工具的 targets 是同步的、拿不到项目，按它报（没算过就报不出，给空） */
+const seenGmFile = new Map<string, string>() // 模块状态：只是缓存，重启后第一次读写 gm.json 时补上
+export const gmFile = (p: P) => {
+  const f =
+    p.gmStore === 'local'
+      ? path.join(c().dataDir, 'gm', `${encodeURIComponent(p.id)}.json`)
+      : path.join(docsRoot(p), 'AgentPanel', 'UE', 'gm.json')
+  seenGmFile.set(p.id, f)
+  return f
+}
+export const knownGmFile = (projectId: string) => {
+  const f = seenGmFile.get(projectId)
+  return f ? [f] : []
+}
 
 /** 以前放过 gm.json 的地方：项目的 .agent-panel/ue、升级前按旧规则猜的文档根 */
 const oldGmFiles = (p: P) => [

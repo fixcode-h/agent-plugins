@@ -57,12 +57,19 @@ export function GmPage() {
   const [srcBy, setSrcBy] = useLocalPref<Partial<Record<GmCat, SrcFilter>>>(`src/${project.id}`, {})
   // 从双击 Shift 跳过来带着搜索词：落在 GM 分类
   const [qBy, setQBy] = useState<Partial<Record<GmCat, string>>>(() => ({ gm: takePending('gm') ?? '' }))
-  const [pick, setPick] = useKept<GmPick | undefined>(`gm-pick/${project.id}`, undefined)
+  // 右边选中的按分类记（规格第 6 节）：切到哪个分类就显示它上次选的，没选过就是空的，不留别的分类的详情
+  const [picks, setPicks] = useKept<Partial<Record<GmCat, GmPick>>>(`gm-picks/${project.id}`, {})
+  const pick = cat === 'objcall' ? undefined : picks[cat]
+  const setPickIn = (c: GmCat, p: GmPick | undefined) => setPicks((m) => ({ ...m, [c]: p }))
+  const setPick = (p: GmPick | undefined) => setPickIn(cat, p)
   const [scanning, setScanning] = useState(false)
   const [setup, setSetup] = useState(false)
   const [bind, setBind] = useState<{ entry: GmEntry; p: GmParam; current?: LuaGmBinding }>()
   const [dialog, ask] = useAsk()
-  const menus = useGmMenus(d, ask, (id) => pick?.kind === 'macro' && pick.id === id && setPick(undefined))
+  const menus = useGmMenus(d, ask, (id) => {
+    const m = picks.macro
+    if (m?.kind === 'macro' && m.id === id) setPickIn('macro', undefined)
+  })
   const nav = usePane('gm-tree', '380px', 260)
   const navRef = useRef<HTMLElement>(null)
   const recentPane = usePaneHeight('gm-recent', '14rem', 96)
@@ -76,8 +83,8 @@ export function GmPage() {
     [d.recent, byKey],
   )
   const entry = pick?.kind === 'gm' ? byKey.get(pick.key) : undefined
-  const choose = (p: GmPick) => {
-    setPick(p)
+  const choose = (p: GmPick, c: GmCat = cat) => {
+    setPickIn(c, p)
     // 从收藏、最近执行点进来：连那组参数一起填好
     const e = p.kind === 'gm' ? byKey.get(p.key) : undefined
     if (e && p.kind === 'gm' && p.args) run.fill(e, p.args)
@@ -90,7 +97,7 @@ export function GmPage() {
     const m: GmMacro = { id: `m${Date.now().toString(36)}`, name: name.trim(), steps: first ? [first] : [] }
     await d.saveGm({ ...d.gm, macros: [...d.gm.macros, m] })
     setCat('macro')
-    setPick({ kind: 'macro', id: m.id })
+    setPickIn('macro', { kind: 'macro', id: m.id })
   }
   // 「加到宏」：有宏时选一个（或写个新名字新建）
   const addToMacro = async (e: GmEntry) => {
@@ -257,8 +264,9 @@ export function GmPage() {
               selected=""
               onPick={(_line, r) => {
                 // 点最近执行：切到它所在的分类再选中
-                setCat(r.entry.src === 'engine' || r.entry.src === 'console' ? 'engine' : 'gm')
-                choose({ kind: 'gm', key: r.entry.key, args: r.run.args })
+                const c: GmCat = r.entry.src === 'engine' || r.entry.src === 'console' ? 'engine' : 'gm'
+                setCat(c)
+                choose({ kind: 'gm', key: r.entry.key, args: r.run.args }, c)
               }}
             />
           </div>
