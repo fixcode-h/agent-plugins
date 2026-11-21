@@ -250,6 +250,21 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
   const limit = Math.min(LIMIT_MAX, Math.max(1, Number(args.limit ?? LIMIT) || LIMIT))
   const items: GtClassItem[] = []
   let size = 0
+  // 子目录只在第一页给，最多占预算的一半，太多时截断标 dirsMore（和 UE 侧一致）
+  let shownDirs: typeof dirs
+  let dirsMore = false
+  if (dirs && !offset) {
+    shownDirs = []
+    for (const d of dirs) {
+      const n = JSON.stringify(d).length + 1
+      if (shownDirs.length && size + n > MAX_CHARS / 2) {
+        dirsMore = true
+        break
+      }
+      size += n
+      shownDirs.push(d)
+    }
+  }
   for (const n of list.slice(offset, offset + limit)) {
     const it = item(n)
     size += JSON.stringify(it).length + 1
@@ -262,7 +277,8 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
     total: list.length,
     hasMore: next < list.length,
     ...(next < list.length ? { nextOffset: next } : {}),
-    ...(dirs && !offset ? { dirs } : {}),
+    ...(shownDirs ? { dirs: shownDirs } : {}),
+    ...(dirsMore ? { dirsMore } : {}),
   }
 }
 
