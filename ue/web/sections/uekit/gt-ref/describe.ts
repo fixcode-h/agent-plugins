@@ -2,7 +2,9 @@ import {
   describeItem,
   describeRef as sharedDescribeRef,
   describeTarget,
+  inObj,
   inlineOf,
+  inWords,
   looksLikeSelector,
   refForm,
   shortClass,
@@ -33,14 +35,25 @@ export const identShort = (it: GtIdentItem) => describeItem(it, o())
 export const describeRef = (ref: GtRefLike | undefined, objects?: unknown) =>
   ref === undefined || ref === null || ref === '' ? '' : sharedDescribeRef(ref, o(objects))
 
-/** 对象卡片的「在哪找」 */
+/** 「在哪找」一个词的显示 */
+export const inWordText = (w: string) =>
+  w === 'screen'
+    ? t('屏上界面')
+    : w === 'world'
+      ? t('关卡 Actor')
+      : w === 'lua'
+        ? t('Lua 对象')
+        : w === 'all'
+          ? t('所有对象')
+          : w
+
+/** 对象卡片的「在哪找」：一个词、几个词（数组）、`@来源`、另一个对象里的容器 */
 export function inText(inn: GtRef['in']): string {
   if (inn === undefined) return t('自动')
-  if (inn === 'screen') return t('屏上的界面')
-  if (inn === 'world') return t('关卡里')
-  if (inn === 'all') return t('所有对象')
-  if (typeof inn === 'string') return inn
-  return `${typeof inn.obj === 'string' ? inn.obj : classShort(inn.obj.class)}${inn.part ? ` › ${inn.part}` : ''}`
+  const io = inObj(inn)
+  if (io) return `${typeof io.obj === 'string' ? io.obj : classShort(io.obj.class)}${io.part ? ` › ${io.part}` : ''}`
+  if (typeof inn === 'string' && inn.startsWith('@')) return inn
+  return inWords(inn).map(inWordText).join(' · ')
 }
 
 /** 引用对象（不是名字、不是 $var） */
@@ -68,8 +81,8 @@ export function inlineRef(ref: GtRefLike, objects: Record<string, unknown> | und
     const def = inlineOf(ref, objects)
     return def ? inlineRef(def, objects, depth + 1) : ref
   }
-  if (ref.in && typeof ref.in === 'object')
-    return { ...ref, in: { ...ref.in, obj: inlineRef(ref.in.obj, objects, depth + 1) } }
+  const io = inObj(ref.in)
+  if (io) return { ...ref, in: { ...io, obj: inlineRef(io.obj, objects, depth + 1) } }
   return ref
 }
 

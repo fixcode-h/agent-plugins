@@ -1,4 +1,5 @@
 import type { Step } from './types.ts'
+import { rebasePath } from '../../../shared/gt-script/ref/path.ts'
 
 /** 录制时附带、和「做了什么」无关的字段：比较两步是不是同一个操作时不看 */
 const NOISE = new Set([
@@ -59,11 +60,11 @@ export function widgetOf(target: unknown): string {
   ).replace(/\[.*$/, '')
 }
 
-/** 「这个目标在屏上」的条件：v4 写对象判断，v3 写选择器 + 状态（跟着录制的格式走，不混用） */
+/** 「这个目标在屏上」的条件：v5 写对象判断，v3 写选择器 + 状态（跟着录制的格式走，不混用） */
 export function shownCond(target: unknown, state: 'shown' | 'onScreen'): Obj {
   if (isRefTarget(target)) {
-    const part = typeof target.part === 'string' && target.part ? `@${target.part}` : ''
-    return { obj: target.obj, prop: `${part}:${state}`, op: 'is', value: true }
+    const part = typeof target.part === 'string' && target.part ? target.part : undefined
+    return { obj: target.obj, prop: rebasePath(`@:${state}`, part), op: 'is', value: true }
   }
   return state === 'shown' ? { target, visible: true } : { target, onScreen: true }
 }

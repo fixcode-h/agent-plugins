@@ -6,7 +6,8 @@ import { parseScalar, scalarText } from '../../gt-cond/compare.tsx'
 import { TargetInput } from '../../gt-cond/TargetInput.tsx'
 import { ValueInput } from '../../gt-cond/ValueInput.tsx'
 import { ObjInput, useRefGroups } from '../../gt-ref/ObjInput.tsx'
-import { PropPathInput } from '../../gt-ref/PropPathInput.tsx'
+import { itemsOf } from '../../gt-ref/pick/data.ts'
+import { PropPickField } from '../../gt-ref/PropPickField.tsx'
 import { NumberField, patch, Row, TextField } from '../parts.tsx'
 import { NOT_FIELDS, type FieldDef } from './registry.ts'
 
@@ -108,13 +109,13 @@ function Control({ def, step, onChange }: { def: FieldDef; step: GtStep; onChang
   }
 }
 
-/** 属性路径：下拉来自这一步的对象（step.obj）的属性树，Lua 字段名可搜索，也能直接填 */
+/** 属性路径：按名字从这一步的对象（step.obj）的属性树里找（Lua 字段、运行状态都在里面），也能按写法填 */
 function PropField({ step, k, onChange }: { step: GtStep; k: string; onChange: (s: GtStep) => void }) {
   const { groups } = useRefGroups(step.obj as GtRefLike | undefined)
   return (
-    <PropPathInput
+    <PropPickField
       value={typeof step[k] === 'string' ? (step[k] as string) : ''}
-      groups={groups}
+      items={itemsOf(groups)}
       onChange={(x) => onChange(patch(step, k, x))}
     />
   )

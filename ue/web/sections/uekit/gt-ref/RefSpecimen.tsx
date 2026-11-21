@@ -14,24 +14,24 @@ import { CompareEditor } from './CompareEditor.tsx'
 import { RefRpcProvider, type RefRpc } from './live.ts'
 import { PropTree } from './PropTree.tsx'
 import { RefCard } from './RefCard.tsx'
-import { WidgetTreePick } from './WidgetTreePick.tsx'
+import { RefDialog } from './RefDialog.tsx'
 
 /**
- * 设置 →「控件样式」里 GameTest 对象引用（2.0）这组控件的示例：属性树、对象卡片、比较编辑、关闭方式、从游戏里抓。
- * 全是假数据，不连 UE；「从游戏里抓」的 gt.tree / gt.refFor / gt.props 由 RefRpcProvider 换成本文件的假回包
+ * 设置 →「控件样式」里 GameTest 对象引用（2.0）这组控件的示例：属性树、对象卡片、比较编辑、关闭方式、选对象面板。
+ * 全是假数据，不连 UE；选对象面板的 gt.classes / gt.tree / gt.props 由 RefRpcProvider 换成本文件的假回包
  */
 const PROPS: GtPropsResult = {
   class: '/Game/UI/Shop/WBP_ShopItem.WBP_ShopItem_C',
   luaModule: 'UI/Shop/ShopItem',
   siblings: 6,
-  suggest: ['@self.ItemId'],
+  suggest: ['@.ItemId'],
   groups: [
     {
       id: 'state',
       title: '状态',
       items: [
-        { prop: ':onScreen', name: '在屏上', src: 'state', type: 'bool', kind: 'bool', value: true, distinct: 1 },
-        { prop: ':enabled', name: '能点', src: 'state', type: 'bool', kind: 'bool', value: true, distinct: 2 },
+        { prop: '@:onScreen', name: '在屏上', src: 'state', type: 'bool', kind: 'bool', value: true, distinct: 1 },
+        { prop: '@:enabled', name: '能点', src: 'state', type: 'bool', kind: 'bool', value: true, distinct: 2 },
       ],
     },
     {
@@ -40,7 +40,7 @@ const PROPS: GtPropsResult = {
       class: 'WBP_ShopItem_C',
       items: [
         {
-          prop: '@self.ItemId',
+          prop: '@.ItemId',
           name: 'ItemId',
           src: 'bp',
           type: 'int32',
@@ -50,7 +50,7 @@ const PROPS: GtPropsResult = {
           score: 9,
         },
         {
-          prop: '@self.Price',
+          prop: '@.Price',
           name: 'Price',
           src: 'bp',
           type: 'int32',
@@ -60,7 +60,7 @@ const PROPS: GtPropsResult = {
           score: 5,
         },
         {
-          prop: '@self.Visibility',
+          prop: '@.Visibility',
           name: 'Visibility',
           src: 'cpp',
           type: 'ESlateVisibility',
@@ -69,7 +69,7 @@ const PROPS: GtPropsResult = {
           distinct: 1,
         },
         {
-          prop: '@self.RenderTransform',
+          prop: '@.RenderTransform',
           name: 'RenderTransform',
           src: 'cpp',
           type: 'FWidgetTransform',
@@ -86,7 +86,7 @@ const PROPS: GtPropsResult = {
       class: 'UTextBlock',
       items: [
         {
-          prop: '@TxtName:text',
+          prop: '@/TxtName:text',
           name: '文字',
           src: 'state',
           type: 'FText',
@@ -102,7 +102,7 @@ const PROPS: GtPropsResult = {
       title: 'UI/Shop/ShopItem.lua',
       items: [
         {
-          prop: '@lua.slot',
+          prop: '@#slot',
           name: 'slot',
           src: 'lua',
           type: 'number',
@@ -112,7 +112,7 @@ const PROPS: GtPropsResult = {
           score: 3,
           why: '位置会变，不适合当标识',
         },
-        { prop: '@lua.cdLeft', name: 'cdLeft', src: 'lua', type: 'number', kind: 'float', value: 2.4, changing: true },
+        { prop: '@#cdLeft', name: 'cdLeft', src: 'lua', type: 'number', kind: 'float', value: 2.4, changing: true },
       ],
     },
     {
@@ -130,12 +130,22 @@ const PROPS: GtPropsResult = {
 const REF: GtRef = {
   class: '/Game/UI/Shop/WBP_ShopItem.WBP_ShopItem_C',
   in: { obj: 'shop', part: 'ListItems' },
-  ident: [{ prop: '@self.ItemId', op: 'eq', value: 1001 }],
+  ident: [{ prop: '@.ItemId', op: 'eq', value: 1001 }],
 }
 
 const TREE: GtTreeNode[] = [
   { id: 'n1', depth: 0, class: 'WBP_Shop_C', name: 'WBP_Shop', user: true, visible: true },
-  { id: 'n2', parent: 'n1', depth: 1, class: 'UTextBlock', name: 'TxtTitle', part: 'TxtTitle', text: '杂货铺', owner: 'n1', ownerClass: 'WBP_Shop_C' },
+  {
+    id: 'n2',
+    parent: 'n1',
+    depth: 1,
+    class: 'UTextBlock',
+    name: 'TxtTitle',
+    part: 'TxtTitle',
+    text: '杂货铺',
+    owner: 'n1',
+    ownerClass: 'WBP_Shop_C',
+  },
   {
     id: 'n3',
     parent: 'n1',
@@ -179,9 +189,33 @@ const CHAIN: GtRefForResult = {
   matches: 1,
 }
 
-/** 假回包：只认「从游戏里抓」用到的几个操作，其余报错（和真桥接一样显示在界面上） */
-export const fakeRpc: RefRpc = <T,>(_project: string, name: string) => {
+const CLASSES = {
+  items: [
+    { name: 'Object', kind: 'object', kids: 2 },
+    { name: 'UserWidget', parent: 'Object', kind: 'umg', kids: 2 },
+    { name: 'WBP_Shop_C', parent: 'UserWidget', kind: 'umg', asset: '/Game/UI/Shop/WBP_Shop', kids: 0, live: 1 },
+    {
+      name: 'WBP_ShopItem_C',
+      parent: 'UserWidget',
+      kind: 'umg',
+      asset: '/Game/UI/Shop/WBP_ShopItem',
+      kids: 0,
+      live: 6,
+    },
+    { name: 'Actor', parent: 'Object', kind: 'actor', kids: 1 },
+    { name: 'BP_ShopNpc_C', parent: 'Actor', kind: 'actor', kids: 0, live: 3 },
+  ],
+}
+
+/** 假回包：只认选对象面板用到的几个操作，其余报错（和真桥接一样显示在界面上） */
+export const fakeRpc: RefRpc = <T,>(_project: string, name: string, args: Record<string, unknown>) => {
+  // 类树：按 parent 给一层，按 q 给开头匹配的
+  const q = String(args?.q ?? '').toLowerCase()
+  const cls = CLASSES.items.filter((c) =>
+    q ? c.name.toLowerCase().startsWith(q) : (c.parent ?? '') === String(args?.parent ?? ''),
+  )
   const r: Record<string, unknown> = {
+    'gt.classes': { items: args?.lua ? [] : cls, total: cls.length, hasMore: false },
     'gt.tree': { nodes: TREE, total: TREE.length },
     'gt.refFor': CHAIN,
     'gt.props': PROPS,
@@ -192,10 +226,10 @@ export const fakeRpc: RefRpc = <T,>(_project: string, name: string) => {
 
 export function RefSpecimen() {
   const { ui } = h()
-  const [sel, setSel] = useState<string[]>(['@self.ItemId'])
-  const [cmp, setCmp] = useState<GtIdentItem>({ prop: '@TxtName:text', op: 'eq', value: '回血药水' })
+  const [sel, setSel] = useState<string[]>(['@.ItemId'])
+  const [cmp, setCmp] = useState<GtIdentItem>({ prop: '@/TxtName:text', op: 'eq', value: '回血药水' })
   const [vis, setVis] = useState<GtIdentItem>({
-    prop: '@self.Visibility',
+    prop: '@.Visibility',
     op: 'in',
     value: ['Visible', 'SelfHitTestInvisible'],
   })
@@ -238,18 +272,22 @@ export function RefSpecimen() {
         <CloseVerify verify={verify.verify} verifyMs={verify.verifyMs} onChange={setVerify} />
       </div>
       <div className={box}>
-        <span className={cap}>WidgetTreePick</span>
-        <p className="ue:text-footnote ue:text-subtle">
-          {t('示例：左边是假的控件树，点「WBP_ShopItem_0」下的 BtnBuy 看右边')}
-        </p>
+        <span className={cap}>RefDialog</span>
+        <p className="ue:text-footnote ue:text-subtle">{t('示例：假的类树和属性，不连游戏')}</p>
         <div>
           <ui.Button size="sm" variant="secondary" onClick={() => setPick(true)}>
-            {t('从游戏里抓')}
+            {t('选对象')}
           </ui.Button>
         </div>
         {pick && (
           <RefRpcProvider value={fakeRpc}>
-            <WidgetTreePick project="" mode="target" onClose={() => setPick(false)} onUse={() => setPick(false)} />
+            <RefDialog
+              project=""
+              live={false}
+              value={{ class: 'WBP_ShopItem_C', ident: [{ prop: '@.ItemId', op: 'eq', value: 1001 }] }}
+              onClose={() => setPick(false)}
+              onSave={() => setPick(false)}
+            />
           </RefRpcProvider>
         )}
       </div>

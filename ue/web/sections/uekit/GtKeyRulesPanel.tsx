@@ -193,13 +193,13 @@ export function GtKeyRulesPanel({ project, root, onClose }: { project: string; r
               </Field>
               <Field
                 label={t('按什么认')}
-                hint={t('条件左边的写法，多个用逗号连（都要满足），如 Data.ItemId、@lua.cfgId、@text')}
+                hint={t('条件左边的属性，多个用逗号连（都要满足），如 @item.ItemId、@#cfgId、@:text')}
               >
                 <ui.Input
                   size="sm"
                   className="ue:font-mono"
                   value={current.by.join(', ')}
-                  placeholder="Data.ItemId"
+                  placeholder="@item.ItemId"
                   onChange={(e: { target: { value: string } }) => patch(sel, { by: e.target.value.split(',') })}
                 />
               </Field>

@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "打开示例界面（子脚本）",
   "_note": "给其他示例场景 call 的子脚本：进图（PIE 已经在跑这张图就沿用）、等界面出来、把示例界面重置回首页，再点侧栏切到要测的页。返回切完之后顶栏面包屑的文字。",
   "revision": 1,
@@ -36,7 +36,7 @@
         "obj": {
           "class": "WBP_ForgeSample"
         },
-        "prop": "@Crumb:exists",
+        "prop": "@/Crumb:exists",
         "op": "is",
         "value": true
       }
@@ -76,7 +76,7 @@
         "obj": {
           "class": "WBP_ForgeSample"
         },
-        "prop": "@Crumb:text",
+        "prop": "@/Crumb:text",
         "op": "eq",
         "value": "$title"
       }
@@ -84,7 +84,7 @@
     {
       "id": "done",
       "action": "return",
-      "value": "=prop({\"class\":\"WBP_ForgeSample\"}, \"@Crumb:text\")"
+      "value": "=prop({\"class\":\"WBP_ForgeSample\"}, \"@/Crumb:text\")"
     }
   ]
 }

@@ -1,13 +1,12 @@
-import { Box, Crosshair, PencilLine, Variable, X } from 'lucide-react'
+import { Box, PencilLine, Variable, X } from 'lucide-react'
 import { useState } from 'react'
-import type { GtRef, GtRefLike } from '../../../../shared/gt-script/ref/types.ts'
+import type { GtRef, GtRefLike, GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
 import { SuggestInput } from '../../../SuggestInput.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { classOfRef, describeRef, isRefObj } from './describe.ts'
 import { useProps } from './live.ts'
 import { RefDialog } from './RefDialog.tsx'
-import { WidgetTreePick, type TreePicked } from './WidgetTreePick.tsx'
 
 /** 引用对应的属性树（只按类读）：部件下拉、属性路径下拉、判断的类型都从这里来 */
 export function useRefGroups(ref: GtRefLike | undefined) {
@@ -19,25 +18,24 @@ export function useRefGroups(ref: GtRefLike | undefined) {
 
 /**
  * 选对象（引用的三种写法，协议第 1 节）：脚本里命名的对象（下拉）、`$变量`（这次运行里 obj.find 存的）、
- * 或者内联一个引用（弹对象弹窗：类 + 标识）。连着游戏时能从 Widget 树里抓
+ * 或者内联一个引用（弹选对象面板：类 + 在哪找 + 标识；连着游戏时面板里能直接从此刻的实例里挑）
  */
 export function ObjInput({
   value,
   onChange,
-  pickMode = 'ident',
-  onPicked,
+  part,
+  onTarget,
 }: {
   value: GtRefLike | undefined
   onChange: (v: GtRefLike | undefined) => void
-  /** 从游戏里抓时抓什么：动作落点要连部件一起抓（交给 onPicked） */
-  pickMode?: 'ident' | 'target'
-  /** 抓到的整个结果（动作落点用它同时填部件）；不给时只取引用 */
-  onPicked?: (r: TreePicked) => void
+  /** 动作落点：现在的部件，面板结构栏里打开时选中它 */
+  part?: string
+  /** 动作落点：面板里连部件一起选，保存时交回对象 + 部件（不给时只交引用） */
+  onTarget?: (t: GtTarget) => void
 }) {
   const { ui } = h()
   const ctx = useEditCtx()
   const [dialog, setDialog] = useState(false)
-  const [picking, setPicking] = useState(false)
   const objects = (ctx.doc?.objects ?? {}) as Record<string, unknown>
   const names = Object.keys(objects)
   const inline: GtRef | undefined = isRefObj(value) ? value : undefined
@@ -89,32 +87,19 @@ export function ObjInput({
           <PencilLine className="ue:h-3.5 ue:w-3.5" />
         </ui.IconButton>
       )}
-      {ctx.live && (
-        <ui.IconButton size="sm" label={t('从游戏里抓')} onClick={() => setPicking(true)}>
-          <Crosshair className="ue:h-3.5 ue:w-3.5" />
-        </ui.IconButton>
-      )}
       {dialog && (
         <RefDialog
           project={ctx.project}
+          live={ctx.live}
           value={inline}
           objects={objects}
+          withPart={!!onTarget}
+          part={part}
           onClose={() => setDialog(false)}
-          onSave={(_, ref) => {
-            onChange(ref)
+          onSave={(_, ref, pt) => {
+            if (onTarget) onTarget(pt ? { obj: ref, part: pt } : { obj: ref })
+            else onChange(ref)
             setDialog(false)
-          }}
-        />
-      )}
-      {picking && (
-        <WidgetTreePick
-          project={ctx.project}
-          mode={pickMode}
-          onClose={() => setPicking(false)}
-          onUse={(r) => {
-            if (onPicked) onPicked(r)
-            else onChange(r.ref)
-            setPicking(false)
           }}
         />
       )}

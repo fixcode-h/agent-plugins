@@ -1,4 +1,4 @@
-import { propOnPart, type CondNode, type GtStep } from '../../../../shared/gt-script/index.ts'
+import { rebasePath, type CondNode, type GtStep } from '../../../../shared/gt-script/index.ts'
 import type { GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { t } from '../../../host.ts'
 
@@ -43,13 +43,13 @@ export interface StatePreset {
 
 /**
  * 一键分路的几种分法（定稿 9.4A）：按控件给出常用的几条路，每条路的条件都是完整的条件组，之后可以随便改。
- * v4 起每条判断是「对象 + 属性」（协议 game-test-ref 第 4 节）：落点的部件拼进属性路径（`@BtnFinish:enabled`）。
+ * v4 起每条判断是「对象 + 属性」（协议 game-test-ref 第 4 节）：落点的部件拼进属性路径（`@/BtnFinish:enabled`）。
  * 反面的路（不显示、其余情况）由执行器按 elseSettleMs 稳住再走
  */
 export const statePresets = (target: GtTarget): StatePreset[] => {
   const on = (state: string, op: string, value?: unknown): CondNode => ({
     obj: target.obj,
-    prop: propOnPart(target.part, `:${state}`),
+    prop: rebasePath(`@:${state}`, target.part),
     op,
     ...(value === undefined ? {} : { value }),
   })

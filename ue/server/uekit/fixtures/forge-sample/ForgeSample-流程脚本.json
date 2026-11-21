@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "AssetForge 示例界面：脚本流程",
   "_note": "配套「流程」页（AssetForge 1.5.0 起）。把 GameTest 脚本的能力过一遍：参数和变量、子脚本 call / return、对象定位器、invoke 调界面函数、接口和表达式、loop 四种写法和 break / continue、if / elif / else、已达成就跳过（skipIf + also）、等待条件、守护处理定时弹出的公告、块级重试和时限、expectNoErrors、disabled、widget.call。",
   "revision": 1,
@@ -45,7 +45,7 @@
         "obj": {
           "class": "WBP_ForgeSample"
         },
-        "prop": "@Popup_Notice:shown",
+        "prop": "@/Popup_Notice:shown",
         "op": "is",
         "value": true
       },
@@ -112,14 +112,14 @@
           "id": "countIsTimes",
           "action": "assert",
           "cond": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) == \"$times\""
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) == \"$times\""
           }
         },
         {
           "id": "incUntil",
           "action": "loop",
           "until": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) >= 5",
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) >= 5",
             "settleMs": 0
           },
           "max": 10,
@@ -141,7 +141,7 @@
           "id": "decWhile",
           "action": "loop",
           "while": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) > 2"
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) > 2"
           },
           "max": 10,
           "do": [
@@ -161,7 +161,7 @@
         {
           "id": "atTwo",
           "action": "assert",
-          "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) == 2"
+          "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) == 2"
         },
         {
           "id": "addEach",
@@ -189,7 +189,7 @@
         {
           "id": "lastIs8",
           "action": "assert",
-          "expr": "$last == 8 and num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) == 8"
+          "expr": "$last == 8 and num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) == 8"
         },
         {
           "id": "getCounter",
@@ -249,7 +249,7 @@
               "id": "enough",
               "action": "break",
               "cond": {
-                "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) >= 3"
+                "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) >= 3"
               }
             }
           ]
@@ -272,19 +272,19 @@
           "id": "byCount",
           "action": "if",
           "cond": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) >= 5"
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) >= 5"
           },
           "then": [
             {
               "id": "tooMany",
               "action": "fail",
-              "message": "='计数不该到 5：' + prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")"
+              "message": "='计数不该到 5：' + prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")"
             }
           ],
           "elif": [
             {
               "cond": {
-                "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) == 3"
+                "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) == 3"
               },
               "then": [
                 {
@@ -299,7 +299,7 @@
             {
               "id": "unexpected",
               "action": "fail",
-              "message": "='计数应该是 3，实际 ' + prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")"
+              "message": "='计数应该是 3，实际 ' + prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")"
             }
           ]
         },
@@ -321,7 +321,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Flow.Reveal_Tip:shown",
+            "prop": "@/Page_Flow/Reveal_Tip:shown",
             "op": "is",
             "value": true
           },
@@ -365,7 +365,7 @@
                   "obj": {
                     "class": "WBP_ForgeSample"
                   },
-                  "prop": "@Page_Flow.Reveal_Tip:shown",
+                  "prop": "@/Page_Flow/Reveal_Tip:shown",
                   "op": "is",
                   "value": true
                 }
@@ -400,7 +400,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Flow.Claim_$what:text",
+                "prop": "@/Page_Flow/Claim_$what:text",
                 "op": "contains",
                 "value": "已领取"
               }
@@ -410,7 +410,7 @@
         {
           "id": "claimedAll",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '共领了 3 个')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '共领了 3 个')"
         },
         {
           "id": "claimAgain",
@@ -431,7 +431,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Flow.Claim_$what:text",
+                "prop": "@/Page_Flow/Claim_$what:text",
                 "op": "contains",
                 "value": "已领取"
               }
@@ -466,7 +466,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Flow.Claim_Daily:text",
+            "prop": "@/Page_Flow/Claim_Daily:text",
             "op": "contains",
             "value": "已领取",
             "also": 1
@@ -504,7 +504,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Flow.Reveal_Loot:shown",
+            "prop": "@/Page_Flow/Reveal_Loot:shown",
             "op": "is",
             "value": false
           }
@@ -517,7 +517,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Flow.Reveal_Loot:shown",
+            "prop": "@/Page_Flow/Reveal_Loot:shown",
             "op": "is",
             "value": true
           },
@@ -542,7 +542,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Popup_Reward:shown",
+                "prop": "@/Popup_Reward:shown",
                 "op": "is",
                 "value": true
               },
@@ -550,7 +550,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Popup_Reward_Subject:text",
+                "prop": "@/Popup_Reward_Subject:text",
                 "op": "contains",
                 "value": "宝箱"
               }
@@ -576,7 +576,7 @@
               "obj": {
                 "class": "WBP_ForgeSample"
               },
-              "prop": "@Popup_Reward:shown",
+              "prop": "@/Popup_Reward:shown",
               "op": "is",
               "value": true
             }
@@ -628,7 +628,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Popup_Notice:shown",
+            "prop": "@/Popup_Notice:shown",
             "op": "is",
             "value": false
           }
@@ -636,7 +636,7 @@
         {
           "id": "noticeHandled",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '活动公告')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '活动公告')"
         }
       ]
     },
@@ -701,7 +701,7 @@
         {
           "id": "textIsNum",
           "action": "assert",
-          "expr": "num($counterText) == num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) and len($counterText) == 1"
+          "expr": "num($counterText) == num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) and len($counterText) == 1"
         },
         {
           "id": "mapName",
@@ -763,13 +763,13 @@
               {
                 "any": [
                   {
-                    "expr": "'流程' in prop({\"class\":\"WBP_ForgeSample\"}, \"@Crumb:text\")"
+                    "expr": "'流程' in prop({\"class\":\"WBP_ForgeSample\"}, \"@/Crumb:text\")"
                   },
                   {
                     "obj": {
                       "class": "WBP_ForgeSample"
                     },
-                    "prop": "@Crumb:text",
+                    "prop": "@/Crumb:text",
                     "op": "eq",
                     "value": "首页"
                   }
@@ -777,7 +777,7 @@
               },
               {
                 "not": {
-                  "expr": "startsWith(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), 'xyz')"
+                  "expr": "startsWith(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), 'xyz')"
                 }
               }
             ]
@@ -814,7 +814,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Flow.Claim_Weekly:text",
+            "prop": "@/Page_Flow/Claim_Weekly:text",
             "op": "contains",
             "value": "已领取",
             "settleMs": 200
@@ -829,7 +829,7 @@
         {
           "id": "stillOk",
           "action": "assert",
-          "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Flow.Counter:text\")) == 4"
+          "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Flow/Counter:text\")) == 4"
         }
       ]
     },
@@ -855,7 +855,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Flow.Counter:text",
+                "prop": "@/Page_Flow/Counter:text",
                 "op": "eq",
                 "value": "0"
               },
@@ -863,7 +863,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Flow.Claim_Daily:text",
+                "prop": "@/Page_Flow/Claim_Daily:text",
                 "op": "matches",
                 "value": "^领取"
               },
@@ -871,7 +871,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Flow.Reveal_Loot:shown",
+                "prop": "@/Page_Flow/Reveal_Loot:shown",
                 "op": "is",
                 "value": false
               }

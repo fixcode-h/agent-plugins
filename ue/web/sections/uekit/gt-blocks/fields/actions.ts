@@ -266,7 +266,7 @@ registerFields('wait', [
   f('radius', () => t('半径'), 'number', { unit: () => t('厘米'), when: until('actorNear') }),
 ])
 
-// 检查只用条件组（cond-leaves.tsx）：v3 按控件写的 exists / visible / text… GameTest 2.0 不认，升级脚本时改写
+// 检查只用条件组（cond-leaves.tsx）：v3 按控件写的 exists / visible / text… GameTest 2.0 不认，旧格式不迁移
 registerFields('assert', [])
 
 registerActionTitles({

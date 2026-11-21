@@ -34,7 +34,7 @@ const DIM = /anim|time|tick|hover|timer|tween/i
 const CONSTRUCTIBLE = /^(integer|number|string|boolean|int|float|bool|any|table)\??$/
 
 /**
- * prefix：字段在条件里怎么写。界面绑的 Lua 实例是 `@lua.`（配 target）；模块表是 `@luaMod.<require 路径>.`
+ * prefix：字段在条件里怎么写。界面绑的 Lua 实例是 `@#`（属性路径 v5，配 obj）；模块表是 `@luaMod.<require 路径>.`
  */
 export async function luaGroup(root: string, mod: string, prefix: string, filter = ''): Promise<VarGroup | undefined> {
   let abs: string
@@ -48,18 +48,20 @@ export async function luaGroup(root: string, mod: string, prefix: string, filter
   const f = filter.toLowerCase()
   const keep = (name: string) => !f || name.toLowerCase().includes(f)
   const items: VarItem[] = [
-    ...info.fields.filter((x) => keep(x.name)).map(
-      (x): VarItem => ({
-        name: x.name,
-        path: `${prefix}${x.name}`,
-        type: x.type,
-        kind: 'prop',
-        readOnly: false,
-        line: x.line,
-        ...(x.note ? { note: x.note } : {}),
-        ...(DIM.test(x.name) ? { dim: true } : {}),
-      }),
-    ),
+    ...info.fields
+      .filter((x) => keep(x.name))
+      .map(
+        (x): VarItem => ({
+          name: x.name,
+          path: `${prefix}${x.name}`,
+          type: x.type,
+          kind: 'prop',
+          readOnly: false,
+          line: x.line,
+          ...(x.note ? { note: x.note } : {}),
+          ...(DIM.test(x.name) ? { dim: true } : {}),
+        }),
+      ),
     ...info.functions
       .filter((x) => keep(x.name) && !x.name.startsWith('_'))
       .map(

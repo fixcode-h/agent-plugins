@@ -29,7 +29,7 @@ import { GtStepHistory } from '../GtStepHistory.tsx'
 import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
-import { useRefGate } from '../gt-ref/MigrateBanner.tsx'
+import { useRefGate } from '../gt-ref/gate.tsx'
 import { useScript } from './use-script.ts'
 import { allViews } from './views.ts'
 
@@ -123,8 +123,8 @@ export function GtEditor({
 }) {
   const { ui } = h()
   const s = useScript({ project, root, path: scenario.relativePath })
-  // GameTest 2.0（对象引用）：旧格式脚本、旧版 GameTest 时只读，顶上给「升级脚本」（协议 game-test-ref 第 12 节）
-  const gate = useRefGate({ project, scenario: scenario.relativePath, base: s.base, gtVersion, reload: s.reload })
+  // 旧格式脚本、旧版 GameTest 时只读，顶上写原因（旧格式不迁移，按新写法重写）
+  const gate = useRefGate({ base: s.base, gtVersion })
   const apply: typeof s.apply = gate.locked
     ? () => {
         h().toast.error(gate.reason)

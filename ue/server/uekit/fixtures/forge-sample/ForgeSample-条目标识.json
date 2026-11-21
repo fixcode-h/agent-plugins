@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "AssetForge 示例界面：按条目标识点列表",
   "_note": "配套「列表条目」页。三种容器写成一张数据表，用 loop in 逐行点、逐行核对状态栏：加一种条目只加一行。后半段用 select 按数据选中、scroll 按序号滚动。手动录制时点这页条目上的按钮：仓库按 ItemId 自动认，邮件和技能栏会暂停游戏、在面板上弹窗问用哪个字段认。",
   "revision": 3,
@@ -26,7 +26,7 @@
       "id": "cases",
       "action": "group",
       "name": "按条目标识点按钮，状态栏写出点到的是哪一条",
-      "note": "每种容器一组：条目类 + 在哪个容器里 + 唯一标识组（ListView 族按数据对象 @item.，面板容器按条目自己的 @self.）",
+      "note": "每种容器一组：条目类 + 在哪个容器里 + 唯一标识组（ListView 族按数据对象 @item.，面板容器按条目自己的 @.）",
       "do": [
         {
           "id": "click_bag",
@@ -59,7 +59,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Status:text",
+            "prop": "@/Status:text",
             "op": "contains",
             "value": "ItemId 1030"
           }
@@ -95,7 +95,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Status:text",
+            "prop": "@/Status:text",
             "op": "contains",
             "value": "11-10 14:00"
           }
@@ -115,12 +115,12 @@
               },
               "ident": [
                 {
-                  "prop": "@self.SkillType",
+                  "prop": "@.SkillType",
                   "op": "eq",
                   "value": 13
                 },
                 {
-                  "prop": "@self.Level",
+                  "prop": "@.Level",
                   "op": "eq",
                   "value": 2
                 }
@@ -136,7 +136,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Status:text",
+            "prop": "@/Status:text",
             "op": "contains",
             "value": "SkillType 13"
           }
@@ -181,7 +181,7 @@
                 }
               ]
             },
-            "prop": ":selected",
+            "prop": "@:selected",
             "op": "is",
             "value": true
           }
@@ -212,13 +212,13 @@
               },
               "ident": [
                 {
-                  "prop": ":selected",
+                  "prop": "@:selected",
                   "op": "is",
                   "value": true
                 }
               ]
             },
-            "prop": ":exists",
+            "prop": "@:exists",
             "op": "is",
             "value": true
           },
@@ -256,7 +256,7 @@
                 }
               ]
             },
-            "prop": ":exists",
+            "prop": "@:exists",
             "op": "is",
             "value": true
           }

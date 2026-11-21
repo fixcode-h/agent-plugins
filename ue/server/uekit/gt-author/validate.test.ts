@@ -41,16 +41,16 @@ const codes = (r: { errors: { code: string }[]; warnings: { code: string }[] }) 
   warnings: r.warnings.map((x) => x.code).sort(),
 })
 
-test('一份写对了的 v4 脚本没有错误', async () => {
+test('一份写对了的 v5 脚本没有错误', async () => {
   const { scen, lua } = await setup()
   const doc = {
     kind: 'gametest-scenario',
-    schemaVersion: 4,
+    schemaVersion: 5,
     vars: { gold0: 0 },
     guards: [
       {
         id: 'g1',
-        when: { obj: { class: 'WBP_Guide' }, prop: ':onScreen', op: 'is', value: true },
+        when: { obj: { class: 'WBP_Guide' }, prop: '@:onScreen', op: 'is', value: true },
         do: [{ action: 'call', script: 'common/翻完引导' }],
       },
     ],
@@ -74,7 +74,7 @@ test('一份写对了的 v4 脚本没有错误', async () => {
 test('常见写错的地方都按错误码报出来', async () => {
   const { scen, lua } = await setup()
   const doc = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     blockers: [],
     steps: [
       { id: 's1', action: 'loop', until: { visible: true }, max: -1, do: [{ id: 's1', action: 'key', key: 'E' }] },

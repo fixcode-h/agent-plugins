@@ -129,7 +129,7 @@ export function applyKey(target: string, key: StepKey, cond: string | undefined)
   return { target: from + target.slice(key.from.length), from }
 }
 
-/** 规则存的字段：条件 `Data.ItemId=1001,@lua.Slot=3` → `["Data.ItemId", "@lua.Slot"]` */
+/** 规则存的字段：条件 `@item.ItemId=1001,@#Slot=3` → `["@item.ItemId", "@#Slot"]` */
 export function fieldsOfCond(cond: string) {
   return cond
     .split(',')

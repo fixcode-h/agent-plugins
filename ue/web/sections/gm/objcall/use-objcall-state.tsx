@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useState } from 'react'
 import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import type { GmCustom, GmCustomObj, GmMany, GmObject } from '../../../../shared/gm/schema.ts'
 import { toggleFav } from '../../../../shared/gm/favs.ts'
@@ -17,12 +17,6 @@ import type { CallMode } from './CallPane.tsx'
 import type { FnInfo } from './members.ts'
 import type { MemberTab } from './MemberPane.tsx'
 import { useObjHits, type ParamClass } from './use-objcall.ts'
-
-/**
- * RefDialog 正在由选对象面板那边改成一页（规格第 5 节）：会加 lockClass（从函数参数打开时类定成参数类型）。
- * 现在的版本还没有这个 prop，先按新契约传、在这里断言一次类型，合并后去掉
- */
-const RefDialogX = RefDialog as unknown as ComponentType<Parameters<typeof RefDialog>[0] & { lockClass?: string }>
 
 const NAME_OK = (n: string, list: GmObject[], self?: string) => !!n && (n === self || !list.some((o) => o.name === n))
 
@@ -221,7 +215,7 @@ export function useObjCallState(d: GmData, live: boolean) {
     <>
       {dialog}
       {refEdit && (
-        <RefDialogX
+        <RefDialog
           project={project.id}
           value={refEdit.value}
           lockClass={refEdit.lockClass}

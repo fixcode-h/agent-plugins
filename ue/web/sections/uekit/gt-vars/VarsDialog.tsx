@@ -22,23 +22,27 @@ const playerLabel = (w: (typeof PLAYERS)[number]) =>
     hud: 'HUD',
   })[w]
 
-/** 挑中的字段 → 一条判断（协议 4.1）：界面上的是 target + field，其余是 value + 来源路径 */
+/** 挑中的字段 → 一条判断（协议 4.1）：界面上的是「对象的属性」（obj + v5 属性路径），其余是 value + 来源路径 */
 export function checkOf(scope: VarScope, g: VarGroup, it: VarItem): CondNode {
   const call = it.kind === 'fn' ? '()' : ''
   const strip = (p: string) => p.replace(/^(self|[A-Z]\w*)\./, '')
+  const v = it.value
+  const simple = typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string'
+  if (scope.scope === 'widget') {
+    // v5 路径：Lua 字段 @#x，属性 @.X，无参方法 @.X()
+    const prop = g.src === 'lua' ? `@#${strip(it.path)}` : `@.${it.path}${call}`
+    const c: CondNode = { obj: { class: scope.class }, prop }
+    // 有此刻的值时默认「等于此刻的值」，改起来最快；没有值时按真值算
+    if (simple) Object.assign(c, typeof v === 'boolean' ? { op: 'is', value: v } : { op: 'eq', value: v })
+    else Object.assign(c, { op: 'is', value: true })
+    return c
+  }
   let c: CondNode
-  if (scope.scope === 'widget')
-    c = {
-      target: `${scope.class}:.`,
-      field: g.src === 'lua' ? `@lua.${strip(it.path)}` : `@self.${it.path}${call}`,
-    }
-  else if (scope.scope === 'player') c = { value: `@${scope.which}.${it.path}${call}` }
+  if (scope.scope === 'player') c = { value: `@${scope.which}.${it.path}${call}` }
   else if (scope.scope === 'subsystem') c = { value: `@sub.${g.class ?? scope.name ?? ''}.${it.path}${call}` }
   else if (scope.scope === 'lua') c = { value: `@luaMod.${scope.module}.${strip(it.path)}` }
   else c = { value: it.path }
-  // 有此刻的值时默认「等于此刻的值」，改起来最快；没有值时按真值算
-  const v = it.value
-  if (typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string') c.equals = v
+  if (simple) c.equals = v
   return c
 }
 

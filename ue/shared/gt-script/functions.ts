@@ -50,18 +50,18 @@ export const EXPR_FUNCTIONS: ExprFunction[] = [
 const byName = new Map(EXPR_FUNCTIONS.map((x) => [x.name, x]))
 
 /**
- * v3 按选择器读控件的内置函数：v4 删掉了（校验报 expr_removed），迁移改写成 prop(引用, ":状态")。
+ * v3 按选择器读控件的内置函数：v4 删掉了（校验报 expr_removed），改写成 prop(引用, "@:状态")。
  * 值是对应的属性路径（number 还要包一层 num，checked 要和 "Checked" 比）
  */
 export const REMOVED_EXPR_FUNCTIONS: Record<string, string> = {
-  text: ':text',
-  number: ':text',
-  visible: ':shown',
-  enabled: ':enabled',
-  exists: ':exists',
-  onScreen: ':onScreen',
-  checked: ':checked',
-  count: ':count',
+  text: '@:text',
+  number: '@:text',
+  visible: '@:shown',
+  enabled: '@:enabled',
+  exists: '@:exists',
+  onScreen: '@:onScreen',
+  checked: '@:checked',
+  count: '@:count',
 }
 
 export const exprFunction = (name: string) => byName.get(name)
@@ -82,5 +82,5 @@ export const VALUE_SOURCES = [
   'luaG',
   'cvar',
 ] as const
-/** 对象上的属性路径的根（协议 3.1）：@self 反射、@lua 绑的 Lua 实例、@item 条目数据对象、@itemLua；其余第一段是部件名 */
-export const FIELD_SOURCES = ['self', 'lua', 'item', 'itemLua'] as const
+/** 对象上的属性路径 v5 的根（协议 3.1）：`@` 对象自己、`@item` 条目数据对象；后面每段一个符号（ref/path.ts） */
+export const FIELD_SOURCES = ['', 'item'] as const

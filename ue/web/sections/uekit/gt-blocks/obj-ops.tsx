@@ -10,7 +10,7 @@ import { CloseHowList, closeHowText, CloseVerify } from '../gt-ref/CloseHowList.
 import { classOfRef, describeRef, identText, inlineRef, isRefObj } from '../gt-ref/describe.ts'
 import { useRefHit } from '../gt-ref/live.ts'
 import { ObjInput, useRefGroups } from '../gt-ref/ObjInput.tsx'
-import { PartInput, partsOf } from '../gt-ref/PropPathInput.tsx'
+import { PartInput, partsOf } from '../gt-ref/PartInput.tsx'
 import { RefCard } from '../gt-ref/RefCard.tsx'
 import { patchRunConfig, upsertCloseRule } from '../gt-ref/rules-io.ts'
 import { InvokeFnPick } from './invoke-pick.tsx'
@@ -21,7 +21,7 @@ import { registerBlockUi } from './registry.ts'
 /**
  * 对象动作（协议 game-test-ref 5.2、5.3）：关闭 obj.close、调函数 obj.call、等对象 obj.wait，
  * 以及只用字段表的找对象 obj.find、设属性 obj.set（字段在 fields/actions.ts）。
- * 取代 v3 的 widget.close / widget.call / invoke / find（GameTest 2.0 不认，升级脚本时改写）
+ * 取代 v3 的 widget.close / widget.call / invoke / find（GameTest 2.0 不认，旧格式不迁移）
  */
 
 const objText = (v: unknown) => (typeof v === 'string' ? v : describeRef(v as GtRefLike))

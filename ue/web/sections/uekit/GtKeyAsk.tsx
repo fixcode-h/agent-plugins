@@ -9,6 +9,7 @@ import { type KeyAnswer, type KeyAsk } from './gt-key.ts'
 import { defaultIdent } from './gt-ref/compare-table.ts'
 import { asTarget, classShort, describeRef, targetText } from './gt-ref/describe.ts'
 import { IdentList } from './gt-ref/IdentList.tsx'
+import { itemsOf } from './gt-ref/pick/data.ts'
 import { useProps, useRefHits, type PropsArgs } from './gt-ref/live.ts'
 import { PropTree } from './gt-ref/PropTree.tsx'
 import { ShotImage } from './GtRecordShot.tsx'
@@ -183,7 +184,7 @@ export function GtKeyAsk({
                 </span>
               )}
             </div>
-            <IdentList value={ident} onChange={setIdent} groups={props.data?.groups} />
+            <IdentList value={ident} onChange={setIdent} items={itemsOf(props.data?.groups)} />
             <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
               <input
                 type="checkbox"

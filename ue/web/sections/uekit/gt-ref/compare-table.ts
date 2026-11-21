@@ -2,7 +2,7 @@ import {
   defaultOpFor,
   implicitOp,
   opDef,
-  parsePropPath,
+  lastSegOf,
   stateOf,
   type GtIdentItem,
   type GtPropItem,
@@ -97,10 +97,10 @@ export function kindOfProp(prop: string, items?: GtPropItem[]): GtPropKind | und
   return st ? stateOf(st)?.kind : undefined
 }
 
-/** 属性路径里的算出状态名（`@Btn:enabled` → enabled）；不是状态返回 undefined */
+/** 属性路径里的算出状态名（`@/Btn:enabled` → enabled）；不是状态返回 undefined */
 export function stateOfProp(prop: string): string | undefined {
-  const r = parsePropPath(prop)
-  return 'path' in r ? r.path.state : undefined
+  const last = lastSegOf(prop)
+  return last?.kind === 'state' ? (stateOf(last.name)?.name ?? last.name) : undefined
 }
 
 /** 枚举成员：属性树给了就用（members 是协议外的可选字段），否则按引擎类型名查常见的 */

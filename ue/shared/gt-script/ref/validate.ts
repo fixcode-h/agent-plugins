@@ -6,10 +6,11 @@ import { getAt, pathStr } from '../path.ts'
 import type { GtPath, GtScript, GtStep } from '../types.ts'
 import { walk, walkGuards } from '../walk.ts'
 import { allOps, COUNT_CMPS, implicitOp, opDef, opsFor } from './compare/index.ts'
-import { parsePropPath } from './prop-path.ts'
+import { oldPathHint, parsePropPath } from './path.ts'
 import {
   findRefCycle,
   inObj,
+  luaClassOf,
   looksLikeComponent,
   looksLikeSelector,
   looksLikeSubsystem,
@@ -21,9 +22,10 @@ import { stateOf } from './states.ts'
 import type { GtPropKind } from './types.ts'
 
 /**
- * v4 脚本的离线校验（协议 game-test-ref 第 10 节的错误码）：引用的写法、in 成环、部件和 Slate 段的写法、属性路径、
- * op 和属性类型对不对得上（只知道算出状态的类型；反射属性、Lua 字段的类型由调用方 kindOf 给）、v3 旧写法
- * （选择器、按控件写的条件、invoke / find / widget.*、text(sel)）、迁移留下的 todo。
+ * v5 脚本的离线校验（协议 game-test-ref 第 10 节的错误码）：引用的写法、in 成环、部件和 Slate 段的写法、属性路径
+ * （v5 写法，旧写法报 path_old、写法不对报 path_syntax）、op 和属性类型对不对得上（只知道算出状态的类型；反射属性、
+ * Lua 字段的类型由调用方 kindOf 给）、v3 旧写法（选择器、按控件写的条件、invoke / find / widget.*、text(sel)）。
+ * 旧版本脚本不迁移（用户 2026-11-21），只报 schema_old。
  * 部件在不在类的树里（part_missing）、属性在不在（prop_missing）要读 WBP 和反射，在编辑器里的 gt.validate 做。
  * message 是给 Agent 和用户看的中文，写清楚怎么改；界面按 code 另行翻译。
  */
@@ -45,9 +47,12 @@ export interface ValidateRefOptions {
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
 
-export const SCHEMA_V4 = 4
+export const SCHEMA_V5 = 5
 
-/** 条件里按控件写的判断（v3），v4 改成 {obj, prop, op, value}（第 4 节） */
+/** 读到旧版本时的说明（C++ 那边同一句） */
+export const SCHEMA_OLD_MESSAGE = '旧格式不再支持，请按新写法重写'
+
+/** 条件里按控件写的判断（v3），现在写成 {obj, prop, op, value}（第 4 节） */
 export const REMOVED_COND_KEYS = [
   'exists',
   'visible',
@@ -65,7 +70,7 @@ export const REMOVED_COND_KEYS = [
   'onScreen',
 ]
 
-/** v4 不认的动作和改成什么 */
+/** 不再认的动作和改成什么 */
 export const REMOVED_ACTIONS: Record<string, string> = {
   invoke: 'obj.call（object 字段改成 obj）',
   find: 'obj.find（into 改成 saveAs）',
@@ -75,7 +80,7 @@ export const REMOVED_ACTIONS: Record<string, string> = {
 
 const CLOSE_BY = ['call', 'lua', 'click', 'visibility', 'remove', 'pop', 'key', 'destroy']
 const MANY = ['error', 'first', 'last', 'nearest']
-const IN_WORDS = ['screen', 'world', 'all']
+const IN_WORDS = ['screen', 'world', 'lua', 'all']
 /** 要 target 的动作（协议 5.1）；snapshot、screenshot、key、wheel 的 target 可选 */
 const NEED_TARGET = ['click', 'drag', 'type', 'select', 'scroll', 'probe', 'stack.push', 'stack.pop', 'widget.remove']
 
@@ -111,17 +116,43 @@ export function checkItem(
   const prop = item.prop
   if (prop === undefined && checkMode) return
   if (typeof prop !== 'string' || !prop)
-    return add(c, at, owner, 'bad_type', '判断项缺 prop（属性路径，如 @self.ShopId、@TxtTitle:text、:onScreen）')
+    return add(c, at, owner, 'bad_type', '判断项缺 prop（属性路径，如 @.ShopId、@/TxtTitle:text、@:onScreen）')
+  const hint = oldPathHint(prop)
+  if (hint !== undefined)
+    return add(
+      c,
+      [...at, 'prop'],
+      owner,
+      'path_old',
+      `${prop} 是旧的路径写法，v5 不再认：改成 ${hint}（@ 对象自己，/子控件或组件，.属性，.函数()，#Lua 字段，:运行状态）`,
+    )
   const parsed = parsePropPath(prop)
-  if ('error' in parsed) {
-    const why =
-      parsed.error === 'unknown_state'
-        ? `没有这个状态（能用 :exists :onScreen :shown :enabled :text :textKey :count :index :selected :checked :image :hovered :focused :pos :size :location :distance :hiddenInGame :class）`
-        : parsed.error === 'no_at'
-          ? '属性路径要以 @ 开头（@self.X、@部件.X、@lua.X），状态以 : 开头'
-          : '写法不对：段之间用 .，下标写 [0] 或 ["键"]，状态写在最后（@部件:text）'
-    return add(c, [...at, 'prop'], owner, 'bad_type', `${prop}：${why}`)
-  }
+  if ('error' in parsed)
+    return add(
+      c,
+      [...at, 'prop'],
+      owner,
+      'path_syntax',
+      `${prop} 第 ${parsed.at + 1} 个字符：${parsed.error}（写法：@/子控件.属性、@.属性、@.函数()、@#Lua字段、@/子控件:状态）`,
+    )
+  const last = parsed.segs.at(-1)
+  if (!last || last.kind === 'child')
+    return add(
+      c,
+      [...at, 'prop'],
+      owner,
+      'path_syntax',
+      `${prop} 只到对象 / 子控件，后面要接属性、函数、Lua 字段或状态`,
+    )
+  const state = last.kind === 'state' ? stateOf(last.name) : undefined
+  if (last.kind === 'state' && !state)
+    return add(
+      c,
+      [...at, 'prop'],
+      owner,
+      'bad_type',
+      `${prop}：没有这个状态（能用 :exists :onScreen :shown :enabled :text :textKey :count :index :selected :checked :image :hovered :focused :pos :size :location :distance :hiddenInGame :class）`,
+    )
   const op = item.op
   if (op !== undefined && (typeof op !== 'string' || !allOps().has(op)))
     return add(
@@ -131,7 +162,6 @@ export function checkItem(
       'op_unknown',
       `不认识的比较 ${JSON.stringify(op)}（能用的按属性类型选，见 gt.props 每项的 ops）`,
     )
-  const state = parsed.path.state ? stateOf(parsed.path.state) : undefined
   const kind = state?.kind ?? c.o.kindOf?.(ref, prop)
   const name = typeof op === 'string' ? op : kind ? implicitOp(kind) : undefined
   if (kind && name && !opsFor(kind).includes(name)) {
@@ -192,7 +222,7 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
         at,
         owner,
         'selector_removed',
-        `${ref} 是 v3 的选择器：v4 写成 {obj: {class: "WBP_X", ident: […]}, part: "控件名"}（用「升级脚本」自动改）`,
+        `${ref} 是 v3 的选择器，不再支持：写成 {obj: {class: "WBP_X", ident: […]}, part: "控件名"}`,
       )
     return add(c, at, owner, 'bad_type', '引用要写成 objects 里的名字、"$变量" 或 {class, in?, ident?}')
   }
@@ -201,13 +231,7 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
   if (form === 'name') {
     const name = ref as string
     if (looksLikeSelector(name))
-      return add(
-        c,
-        at,
-        owner,
-        'selector_removed',
-        `${name} 是 v3 的选择器：v4 写成 {obj: 引用, part: "控件名"}（用「升级脚本」自动改）`,
-      )
+      return add(c, at, owner, 'selector_removed', `${name} 是 v3 的选择器，不再支持：写成 {obj: 引用, part: "控件名"}`)
     if (!(name in c.objects))
       add(
         c,
@@ -222,7 +246,15 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
   const r = ref as Obj
   const cls = String(r.class).trim()
   if (!cls)
-    add(c, [...at, 'class'], owner, 'ref_bad_class', '引用缺 class（类名或资源路径，如 WBP_Shop、/Game/UI/WBP_Shop）')
+    add(
+      c,
+      [...at, 'class'],
+      owner,
+      'ref_bad_class',
+      '引用缺 class（类名或资源路径，如 WBP_Shop、/Game/UI/WBP_Shop；按 Lua 类认写 lua:模块名）',
+    )
+  else if (luaClassOf(cls) === '')
+    add(c, [...at, 'class'], owner, 'ref_bad_class', 'lua: 后面要写 Lua 模块名（require 路径，如 lua:UI/Shop/Shop）')
   for (const k of ['key', 'component'])
     if (k in r)
       add(
@@ -231,7 +263,7 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
         owner,
         'bad_type',
         k === 'key'
-          ? 'key 是 v3 的写法：改成 ident: [{prop: "@self.X", op: "eq", value}]'
+          ? 'key 是 v3 的写法：改成 ident: [{prop: "@.X", op: "eq", value}]'
           : 'component 是 v3 的写法：另起一个组件引用 {class: 组件类, in: {obj: Actor 引用}}',
       )
   const where = r.in
@@ -246,6 +278,10 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
         'bad_type',
         `容器部件 ${JSON.stringify(io.part)} 写法不对：设计器里的控件名，嵌套 WBP 用 . 连`,
       )
+  } else if (Array.isArray(where)) {
+    const bad = where.filter((w) => typeof w !== 'string' || !IN_WORDS.includes(w))
+    if (bad.length || !where.length)
+      add(c, [...at, 'in'], owner, 'bad_type', 'in 写成数组时每项是 screen / world / lua（都不限写 "all"）')
   } else if (where !== undefined && !(typeof where === 'string' && (IN_WORDS.includes(where) || where.startsWith('@'))))
     add(
       c,
@@ -253,8 +289,8 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
       owner,
       'bad_type',
       where === 'widgets'
-        ? 'in: "widgets" 是 v3 的写法，v4 写 "screen"'
-        : 'in 写 screen / world / all / @来源.路径，或 {obj: 引用, part: "容器部件"}',
+        ? 'in: "widgets" 是 v3 的写法，写 "screen"'
+        : 'in 写 screen / world / lua / all（可以写成数组）、@来源.路径，或 {obj: 引用, part: "容器部件"}',
     )
   else if (where === undefined && cls && looksLikeComponent(cls))
     add(c, at, owner, 'ref_need_owner', `${cls} 像是组件类：写 in: {obj: 它所在的 Actor 的引用}`)
@@ -270,7 +306,6 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
     add(c, [...at, 'many'], owner, 'bad_type', `many 只能是 ${MANY.join(' / ')}`)
   if (r.near !== undefined && r.near !== null && !Array.isArray(r.near) && r.near !== '@pawn')
     checkRef(c, r.near, [...at, 'near'], owner)
-  if (typeof r.todo === 'string' && r.todo) add(c, at, owner, 'migrate_todo', `迁移待定：${r.todo}`, 'warning')
 }
 
 /** target 写法（第 2 节）：{obj, part?, slate?}，或直接一个引用 */
@@ -308,7 +343,7 @@ function checkCond(c: Ctx, cond: unknown, at: GtPath, owner: GtPath | undefined)
         here,
         owner,
         'cond_removed',
-        `按控件写的判断（${['target', ...old].filter((k) => k in leaf).join('、')}）v4 不认：写成 {obj: 引用, prop: ":onScreen" / "@部件:text" / "@self.X", op, value}（用「升级脚本」自动改）`,
+        `按控件写的判断（${['target', ...old].filter((k) => k in leaf).join('、')}）不再支持：写成 {obj: 引用, prop: "@:onScreen" / "@/部件:text" / "@.X", op, value}`,
       )
   })
 }
@@ -350,16 +385,15 @@ function checkStep(c: Ctx, s: GtStep, at: GtPath) {
   const need = (k: string, why: string) =>
     (s[k] === undefined || s[k] === '' || s[k] === null) &&
     add(c, [...at, k], at, 'param_missing', `${a} 缺 ${k}：${why}`)
-  if (a in REMOVED_ACTIONS) add(c, at, at, 'action_removed', `${a} 在 v4 不认：改用 ${REMOVED_ACTIONS[a]}`)
+  if (a in REMOVED_ACTIONS) add(c, at, at, 'action_removed', `${a} 不再支持：改用 ${REMOVED_ACTIONS[a]}`)
   if (a === 'wait' && (s.until === 'widget' || s.until === 'widgetGone'))
     add(
       c,
       at,
       at,
       'action_removed',
-      `wait until=${s.until} 在 v4 不认：改用 obj.wait 或 wait until=cond + {obj, prop: ":exists"}`,
+      `wait until=${s.until} 不再支持：改用 obj.wait 或 wait until=cond + {obj, prop: "@:exists"}`,
     )
-  if (typeof s.todo === 'string' && s.todo) add(c, at, at, 'migrate_todo', `迁移待定：${s.todo}`, 'warning')
   // target：set 设变量（有 var）时不是界面动作
   for (const k of ['target', 'toTarget']) if (s[k] !== undefined && s[k] !== '') checkTarget(c, s[k], [...at, k], at)
   if (NEED_TARGET.includes(a) && (s.target === undefined || s.target === ''))
@@ -391,16 +425,23 @@ function checkStep(c: Ctx, s: GtStep, at: GtPath) {
   }
   if (a === 'obj.set') {
     need('obj', '对象的引用')
-    need('prop', '属性路径（@self.X、@部件.Text、@lua.x）')
+    need('prop', '属性路径（@.X、@/部件.Text、@#x）')
     if (!('value' in s)) add(c, at, at, 'param_missing', 'obj.set 缺 value')
-    else if (typeof s.prop === 'string' && s.prop.includes(':'))
-      add(
-        c,
-        [...at, 'prop'],
-        at,
-        'prop_readonly',
-        `${s.prop} 是算出来的状态，不能设：改设对应的属性（如 @部件.Visibility）`,
-      )
+    else if (typeof s.prop === 'string') {
+      checkItem(c, { prop: s.prop }, at, at, s.obj)
+      const last = parsePropPath(s.prop)
+      const seg = 'error' in last ? undefined : last.segs.at(-1)
+      if (seg?.kind === 'state' || seg?.kind === 'fn')
+        add(
+          c,
+          [...at, 'prop'],
+          at,
+          'prop_readonly',
+          seg.kind === 'state'
+            ? `${s.prop} 是算出来的状态，不能设：改设对应的属性（如 @/部件.Visibility）`
+            : `${s.prop} 是取值函数，不能设：改设对应的属性，或用 obj.call 调设置函数`,
+        )
+    }
   }
   if (a === 'obj.call') {
     need('function', '函数名；静态函数写 类名.函数')
@@ -421,22 +462,20 @@ function checkStep(c: Ctx, s: GtStep, at: GtPath) {
   checkExprs(c, s, at, at, SLOT_KEYS)
 }
 
-/** 整份 v4 场景（或 _settings.json 的守护部分）的引用检查。v1–v3 只报 schema_old，其余不查（先升级） */
+/** 整份 v5 场景（或 _settings.json 的守护部分）的引用检查。旧版本只报 schema_old，其余不查（不迁移，按新写法重写） */
 export function validateRefs(doc: GtScript, o: ValidateRefOptions = {}): RefIssue[] {
   const c: Ctx = { doc, objects: isObj(doc.objects) ? doc.objects : {}, out: [], o }
   const v = typeof doc.schemaVersion === 'number' ? doc.schemaVersion : 1
-  if (v < SCHEMA_V4) {
+  if (v < SCHEMA_V5) {
     add(
       c,
       ['schemaVersion'],
       undefined,
       'schema_old',
-      `这是 v${v} 格式的脚本，GameTest 2.0 只认 v4：在面板里用「升级脚本」转成 v4（会先备份），或 ue_gametest action=migrate`,
+      `这是 v${v} 格式的脚本：${SCHEMA_OLD_MESSAGE}（schemaVersion 5）`,
     )
     return c.out
   }
-  if (typeof doc.todo === 'string' && doc.todo)
-    add(c, [], undefined, 'migrate_todo', `迁移待定：${doc.todo}`, 'warning')
   if (doc.objects !== undefined && !isObj(doc.objects))
     add(c, ['objects'], undefined, 'bad_type', 'objects 要是对象 {名字: 引用}')
   for (const [name, ref] of Object.entries(c.objects)) {
@@ -446,15 +485,11 @@ export function validateRefs(doc: GtScript, o: ValidateRefOptions = {}): RefIssu
   const cycle = findRefCycle(c.objects)
   if (cycle) add(c, ['objects', cycle[0]], undefined, 'ref_cycle', `objects 里的 in 成环了：${cycle.join(' → ')}`)
   walk(doc, (e) => checkStep(c, e.step, e.path))
-  walkGuards(doc, (g) => {
-    checkCond(c, g.guard.when, [...g.path, 'when'], g.path)
-    if (typeof g.guard.todo === 'string' && g.guard.todo)
-      add(c, g.path, g.path, 'migrate_todo', `迁移待定：${g.guard.todo}`, 'warning')
-  })
+  walkGuards(doc, (g) => checkCond(c, g.guard.when, [...g.path, 'when'], g.path))
   return c.out
 }
 
-/** _settings.json（协议第 6 节）：旧的 itemKeys / objectKeys 报 settings_old；守护和 closeRules 照场景查 */
+/** _settings.json（协议第 6 节）：旧的 itemKeys / objectKeys 报 settings_old（不迁移）；守护和 closeRules 照场景查 */
 export function validateSettingsRefs(doc: Obj, o: ValidateRefOptions = {}): RefIssue[] {
   const out: RefIssue[] = []
   for (const k of ['itemKeys', 'objectKeys', 'blockers'])
@@ -462,10 +497,10 @@ export function validateSettingsRefs(doc: Obj, o: ValidateRefOptions = {}): RefI
       out.push({
         at: [k],
         code: 'settings_old',
-        message: `${k} 是旧的运行配置字段（v4 改成 identRules / guards）：在面板里用「升级脚本」一起迁移（会先备份）`,
+        message: `${k} 是旧的运行配置字段：${SCHEMA_OLD_MESSAGE}（改成 identRules / guards）`,
         level: 'error',
       })
-  out.push(...validateRefs({ schemaVersion: SCHEMA_V4, guards: doc.guards as GtScript['guards'] }, o))
+  out.push(...validateRefs({ schemaVersion: SCHEMA_V5, guards: doc.guards as GtScript['guards'] }, o))
   const rules = (key: string) => (Array.isArray(doc[key]) ? (doc[key] as unknown[]) : [])
   rules('identRules').forEach((r, i) => {
     if (!isObj(r) || typeof r.class !== 'string' || !r.class || !Array.isArray(r.ident))
@@ -474,6 +509,17 @@ export function validateSettingsRefs(doc: Obj, o: ValidateRefOptions = {}): RefI
         code: 'bad_type',
         message: 'identRules 每条写 {class, in?, ident: [属性路径…]}',
         level: 'error',
+      })
+    else
+      r.ident.forEach((p, k) => {
+        const hint = typeof p === 'string' ? oldPathHint(p) : undefined
+        if (hint !== undefined)
+          out.push({
+            at: ['identRules', i, 'ident', k],
+            code: 'path_old',
+            message: `${String(p)} 是旧的路径写法，v5 不再认：改成 ${hint}`,
+            level: 'error',
+          })
       })
   })
   rules('closeRules').forEach((r, i) => {
