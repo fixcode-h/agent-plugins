@@ -5,6 +5,7 @@ import { badges } from './badges.ts'
 import { closeInstance } from './editor-close/close.ts'
 import { clearHistory } from './history.ts'
 import { editFavs, readFavs } from './favorites.ts'
+import { editLuaExclude, readLuaExclude } from './uekit/gt-ref/lua-exclude.ts'
 import { build, install, uninstall } from './install.ts'
 import { cancelJob, getJob } from './jobs.ts'
 import { buildProcs } from './build/procs.ts'
@@ -215,6 +216,10 @@ export async function handle(req: Request): Promise<Response> {
         return json(await readFavs(project))
       case 'POST favorites':
         return json(await editFavs(project, b))
+      case 'GET gt-ref/lua-exclude':
+        return json(await readLuaExclude(project))
+      case 'POST gt-ref/lua-exclude':
+        return json(await editLuaExclude(project, b))
       case 'POST local':
         return json(await patchLocal(project.id, b as Partial<LocalState>))
       case 'POST logs':

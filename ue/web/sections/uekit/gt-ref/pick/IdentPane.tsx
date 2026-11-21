@@ -32,7 +32,7 @@ export function IdentPane({
         <span className="ue:text-footnote ue:font-medium ue:text-fg">{t('唯一标识组')}</span>
         <span className="ue:text-caption ue:text-subtle">{t('都要满足 · 点属性行尾的准星加')}</span>
       </div>
-      {cls && live && me && (
+      {cls && live && typeof me?.count === 'number' && (
         <p
           className={cn(
             'ue:flex ue:items-start ue:gap-1.5 ue:px-3 ue:py-1 ue:text-caption',

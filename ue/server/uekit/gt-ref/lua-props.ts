@@ -3,6 +3,7 @@ import { comparable, opsFor, whyNotComparable } from '../../../shared/gt-script/
 import type { GtPropGroup, GtPropItem, GtPropKind } from '../../../shared/gt-script/ref/types.ts'
 import { parseLuaModule, type LuaField } from '../gt-author/lua-parse.ts'
 import { moduleFile, readLua, relToRoot } from '../gt-author/lua-files.ts'
+import { parseLuaHead } from './offline/lua-parents.ts'
 import { t } from '../../util.ts'
 
 /**
@@ -16,10 +17,56 @@ export interface LuaDeclared {
   /** 相对脚本根的文件 */
   file: string
   fields: LuaField[]
+  /** 函数（自己的和顺着父类继承来的），形状同 gt.props 的 functions 组：游戏没开时「方法」页靠它（用户 2026-11-21） */
+  functions: { name: string; params: string[]; from?: string }[]
 }
 
+/** 往上找父类最多几层（防绕圈） */
+const MAX_CHAIN = 8
+
 export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaDeclared | undefined> {
-  if (!mod.trim()) return undefined
+  const first = await readModule(luaRootAbs, mod)
+  if (!first) return undefined
+  // 函数顺着父类链收（子类覆盖的同名函数只留子类的），父类写法认 lua-parents.ts 那几种
+  const functions: LuaDeclared['functions'] = []
+  const seen = new Set<string>()
+  const visited = new Set<string>()
+  let cur: typeof first | undefined = first
+  for (let level = 0; cur && level < MAX_CHAIN && !visited.has(cur.file); level++) {
+    visited.add(cur.file)
+    for (const f of cur.info.functions) {
+      if (seen.has(f.name)) continue
+      seen.add(f.name)
+      functions.push({
+        name: f.name,
+        params: f.args.map((a) => a.name),
+        ...(level ? { from: cur.mod } : {}),
+      })
+    }
+    const parent: string | undefined = parseLuaHead(cur.text).parent
+    cur = parent
+      ? ((await readModule(luaRootAbs, parent)) ?? (await byRequire(luaRootAbs, cur.text, parent)))
+      : undefined
+  }
+  return { file: first.file, fields: first.info.fields, functions }
+}
+
+/**
+ * 注解里的父类常写类名（`---@class Child : Base`），不是模块路径：在这个文件 require 过的模块里找最后一段同名的
+ * （`local Base = require "UI.Base"`），找到就读它
+ */
+async function byRequire(luaRootAbs: string, text: string, cls: string) {
+  for (const m of text.matchAll(/require\s*\(?\s*["']([^"']+)["']/g)) {
+    const mod = m[1]
+    if (mod.split(/[./\\]/).pop() === cls) return readModule(luaRootAbs, mod)
+  }
+  return undefined
+}
+
+/** 模块名（点或 / 分隔，可带开头的 /）→ 源文件和解析结果；不在脚本根里、没有这个文件时 undefined */
+async function readModule(luaRootAbs: string, rawMod: string) {
+  const mod = rawMod.trim().replace(/^[/\\]+/, '')
+  if (!mod) return undefined
   let abs: string
   try {
     abs = moduleFile(luaRootAbs, mod)
@@ -27,7 +74,8 @@ export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaD
     return undefined
   }
   if (!(await stat(abs).catch(() => undefined))?.isFile()) return undefined
-  return { file: relToRoot(luaRootAbs, abs), fields: parseLuaModule(await readLua(abs)).fields }
+  const text = await readLua(abs)
+  return { mod, file: relToRoot(luaRootAbs, abs), text, info: parseLuaModule(text) }
 }
 
 /**
@@ -90,7 +138,7 @@ function declaredItem(f: LuaField, file: string): GtPropItem {
  */
 export function mergeLuaProps(
   groups: GtPropGroup[],
-  decl: LuaDeclared,
+  decl: Pick<LuaDeclared, 'file' | 'fields'>,
   o: { filter?: string; selfTitle: string },
 ): { groups: GtPropGroup[]; added: number } {
   const f = (o.filter ?? '').toLowerCase()

@@ -4817,5 +4817,11 @@
   "用内容浏览器选中的": "Use Content Browser selection",
   "也命中：再加标识区分": "Also matches: add an identifier to tell apart",
   "屏上没有名字里含 {q} 的界面": "No on-screen widget with {q} in its name",
-  "屏上此刻没有界面（要开着游戏）": "No widgets on screen right now (the game must be running)"
+  "屏上此刻没有界面（要开着游戏）": "No widgets on screen right now (the game must be running)",
+  "没给目录": "No folder given",
+  "排除": "Excluded",
+  "排除的目录不在树里、不参与搜索": "Excluded folders are hidden from the tree and from search",
+  "点一下恢复": "Click to restore",
+  "恢复这个目录": "Restore this folder",
+  "排除这个目录": "Exclude this folder"
 }
