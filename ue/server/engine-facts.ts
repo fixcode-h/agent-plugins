@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { findEngine, installedEngines } from './engine-locate.ts'
 import type { EngineInfo, UeProject } from './types.ts'
-import { exists } from './util.ts'
+import { exists, readJson } from './util.ts'
 
 /**
  * 新会话开头给 Agent 的「本项目引擎」事实（Agent 写代码能力分析 A4）：
@@ -22,18 +22,26 @@ function otherEngines() {
   return enginesCache.list
 }
 
-/** 登记时存下的引擎目录没了（引擎挪了、重装了）时重新找一次；手动指定的目录优先 */
-async function currentEngine(p: UeProject): Promise<EngineInfo> {
-  if (p.engine.dir && exists(path.join(p.engine.dir, 'Engine'))) return p.engine
-  return findEngine(p.uproject, p.engine.association, p.engineDir).catch(() => p.engine)
+/**
+ * 项目现在的引擎和是不是 C++ 项目：登记时存下的可能已经过时（项目升了引擎版本、纯蓝图项目后来加了 Source），
+ * 每个新会话按 .uproject 现在的内容重新判断；EngineAssociation 没变、存的目录还在时直接用存的，不再去找
+ */
+async function current(p: UeProject): Promise<{ engine: EngineInfo; cpp: boolean }> {
+  const desc = await readJson<{ EngineAssociation?: string; Modules?: unknown[] }>(p.uproject, {})
+  const association = desc.EngineAssociation ?? p.engine.association
+  const cpp = p.cpp || exists(path.join(p.root, 'Source')) || (desc.Modules?.length ?? 0) > 0
+  if (association === p.engine.association && p.engine.dir && exists(path.join(p.engine.dir, 'Engine')))
+    return { engine: p.engine, cpp }
+  const engine = await findEngine(p.uproject, association, p.engineDir).catch(() => p.engine)
+  return { engine, cpp }
 }
 
 /** 本机其他引擎最多列几个：兼容多版本时一般就两三个，列多了只占提示词 */
 const OTHERS_MAX = 4
 
 export async function engineFacts(p: UeProject): Promise<string> {
-  if (!p.cpp) return ''
-  const e = await currentEngine(p)
+  const { engine: e, cpp } = await current(p)
+  if (!cpp) return ''
   const lines = ['## UE C++ 引擎']
   const src = e.dir ? path.join(e.dir, 'Engine', 'Source') : ''
   if (!e.dir) {

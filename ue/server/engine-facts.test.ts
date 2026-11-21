@@ -26,7 +26,7 @@ before(async () => {
   engine = path.join(base, 'UE_5.4')
   await mkdir(path.join(engine, 'Engine', 'Source'), { recursive: true })
   await mkdir(path.join(base, 'Game'), { recursive: true })
-  await writeFile(path.join(base, 'Game', 'Game.uproject'), '{"EngineAssociation":""}')
+  await writeFile(path.join(base, 'Game', 'Game.uproject'), '{}')
 })
 
 test('C++ 项目：写明版本、源码目录和先查后写的技能', async () => {
@@ -38,8 +38,24 @@ test('C++ 项目：写明版本、源码目录和先查后写的技能', async (
   assert.match(s, /get_members/)
 })
 
-test('纯蓝图项目不给', async () => {
+test('纯蓝图项目不给；登记后加了 Source 的按 C++ 项目给', async () => {
   assert.equal(await engineFacts(proj({ cpp: false })), '')
+  const root = path.join(base, 'Later')
+  await mkdir(path.join(root, 'Source'), { recursive: true })
+  await writeFile(path.join(root, 'Later.uproject'), '{"EngineAssociation":"5.4"}')
+  assert.match(
+    await engineFacts(proj({ cpp: false, root, uproject: path.join(root, 'Later.uproject') })),
+    /UE C\+\+ 引擎/,
+  )
+})
+
+test('登记后项目换了引擎版本：按 .uproject 现在的 EngineAssociation 重新找，不用存下的旧引擎', async () => {
+  const root = path.join(base, 'Upgraded')
+  await mkdir(root, { recursive: true })
+  await writeFile(path.join(root, 'Upgraded.uproject'), '{"EngineAssociation":"9.9"}')
+  const s = await engineFacts(proj({ root, uproject: path.join(root, 'Upgraded.uproject') }))
+  assert.ok(!s.includes(path.join(engine, 'Engine', 'Source')), '不再指向登记时的旧引擎')
+  assert.match(s, /没找到这个项目用的引擎目录/)
 })
 
 test('没找到引擎目录：说清楚请用户指定或贴声明，不凭记忆写', async () => {
