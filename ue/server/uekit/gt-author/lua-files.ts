@@ -11,9 +11,12 @@ export const luaRoot = (p: Pick<UeProject, 'root' | 'luaBuild'>) =>
 
 const slash = (s: string) => s.replace(/\\/g, '/')
 
-/** Game.UI.GuidePanel → <脚本根>/Game/UI/GuidePanel.lua；也认直接给的相对路径（UI/Guide/GuidePanel.lua） */
+/**
+ * Game.UI.GuidePanel → <脚本根>/Game/UI/GuidePanel.lua；也认直接给的相对路径（UI/Guide/GuidePanel.lua）
+ * 和斜杠开头的 require 路径（`/Module/A/B`，有的框架这样 require，用户 2026-11-21）：开头的 / 是相对脚本根，不是盘符根
+ */
 export function moduleFile(root: string, mod: string) {
-  const m = mod.trim().replace(/\\/g, '/')
+  const m = mod.trim().replace(/\\/g, '/').replace(/^\/+/, '')
   const rel = /\.lua$/i.test(m) ? m : `${m.replace(/\./g, '/')}.lua`
   const abs = path.resolve(root, rel)
   const r = path.relative(root, abs)

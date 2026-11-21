@@ -61,3 +61,17 @@ export async function luaDevAction(a: Record<string, unknown>, ctx: OpCtx) {
       return undefined
   }
 }
+
+/**
+ * ue_find kind=lua：绑了 Lua 的对象（lua.objects）；给了模块名时再找这个 Lua 类的纯 Lua 实例（lua.instances，UELink 2.20 起，
+ * 用户 2026-11-21：Lua 框架自己 new 的表也要能找到）。旧 UELink 没有 lua.instances 时只回绑定对象
+ */
+export async function findLua(a: Record<string, unknown>, ctx: OpCtx, limit: number) {
+  const bound = await runOp(ctx, 'lua.objects', { class: a.class, prefix: a.prefix, module: a.module, limit })
+  const module = str(a.module).trim()
+  if (!module || a.class || a.prefix) return bound
+  const pure = await runOp(ctx, 'lua.instances', { module, limit }, 60000).catch((e: Error) =>
+    /lua\.instances/.test(e.message) ? undefined : { error: e.message },
+  )
+  return pure ? { ...bound, pure } : bound
+}

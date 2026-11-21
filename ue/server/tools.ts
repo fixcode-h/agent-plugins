@@ -26,7 +26,7 @@ import { listGm } from './lua-gm/tool.ts'
 import { removeGmDef } from './gm-custom/remove.ts'
 import { runCustom } from './gm-custom/run.ts'
 import { saveGmDef } from './gm-custom/save.ts'
-import { LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
+import { findLua, LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
 import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
 import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
@@ -147,7 +147,7 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；名字通配符、父类、多个目录、标签用 select（写法同批量的 select，如 select={path:"/Game", class:"Blueprint", name:"*Box*"}，只列出路径不操作，total 是选中总数，offset / limit 翻页）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；module 写完整模块名时 pure 里还有这个 Lua 类的纯 Lua 实例（Lua 框架自己 new、不绑 UObject 的表），它的 ref（luaref:编号）可当 ue_get / ue_lua 的 path 用；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；名字通配符、父类、多个目录、标签用 select（写法同批量的 select，如 select={path:"/Game", class:"Blueprint", name:"*Box*"}，只列出路径不操作，total 是选中总数，offset / limit 翻页）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
     {
       kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset', 'node'] },
       prefix: { type: 'string' },
@@ -175,8 +175,7 @@ const DEFS = [
         )
       if (a.kind === 'component') return out(await runOp(ctx, 'components', { path: a.path }))
       if (a.kind === 'object') return out(await runOp(ctx, 'objects', { class: a.class, prefix: a.prefix, limit }))
-      if (a.kind === 'lua')
-        return out(await runOp(ctx, 'lua.objects', { class: a.class, prefix: a.prefix, module: a.module, limit }))
+      if (a.kind === 'lua') return out(await findLua(a, ctx, limit))
       if (a.kind === 'asset' && isBatch({ select: a.select })) return out(await findBySelect(a, ctx))
       if (a.kind === 'asset')
         return out(await runOp(ctx, 'assets', { class: a.class, prefix: a.prefix, path: a.path || '/Game', limit }))

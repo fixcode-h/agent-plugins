@@ -118,7 +118,13 @@ export const refFor = (project: string, node: string, level?: number, rpc: RefRp
 export interface RefHits {
   count: number
   /** path：对象路径（GameTest 2.1.3 起），点了某个实例时拿它给 gt.props 读这一个 */
-  candidates?: { name: string; path?: string; ident?: { prop: string; actual: unknown }[] }[]
+  candidates?: {
+    name: string
+    path?: string
+    ident?: { prop: string; actual: unknown }[]
+    /** GameTest 2.2.0：纯 Lua 实例（不绑 UObject 的 Lua 表）的替身；path 是替身对象的路径，这里的 path 是 Lua 里拿着它的路径 */
+    luaTable?: { ref: string; module: string; path: string }
+  }[]
   error?: string
 }
 
