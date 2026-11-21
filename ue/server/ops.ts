@@ -1,3 +1,4 @@
+import { offlineClasses } from './uekit/gt-ref/offline/classes.ts'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { assetChildren } from './asset-folders.ts'
@@ -484,6 +485,7 @@ export async function runOp(
         ...(await rpc(card, op, a, timeoutMs)),
         instance: { pid: card.pid, kind: card.kind },
       }),
+      offlineClasses: async (a, note) => ({ ...(await offlineClasses(ctx.project, a, note)) }),
     })
   // GameTest 的只读操作：编辑器没开（或网页说它正忙、要磁盘上的）时直接读场景、报告和历史文件（uekit/gt-disk.ts）
   if (

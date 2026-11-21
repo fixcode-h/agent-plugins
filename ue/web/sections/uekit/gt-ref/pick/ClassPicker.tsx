@@ -22,7 +22,7 @@ type Tab = 'class' | 'lua'
 const ROOT = 'Object'
 
 /**
- * 顶栏的类下拉（效果图 2）：框里直接打字按开头搜，下拉里两个页签「UObject 类树」「Lua 类」，数据来自 gt.classes。
+ * 顶栏的类下拉（效果图 2）：框里直接打字搜（类名里含这几个字就算），下拉里两个页签「UObject 类树」「Lua 类」，数据来自 gt.classes。
  * 不搜时类树逐层读（点开一层再问下一层），搜时只列命中的和它们的祖先、全部展开。
  * lockClass：类定成它（从函数参数打开时），树从它开始，只能选它和子类
  */
@@ -118,7 +118,8 @@ export function ClassPicker({
       setText('')
     }
     const row = (it: GtClassItem, depth: number, expandable: boolean, isOpen: boolean, onToggle?: () => void) => {
-      const hit = q && it.name.toLowerCase().startsWith(q.toLowerCase())
+      // 名字里含 q 就算命中（用户 2026-11-21：不要只按开头），把命中的那段标出来
+      const at = q ? it.name.toLowerCase().indexOf(q.toLowerCase()) : -1
       const engine = !it.asset && it.kind !== 'lua'
       const allowed = !lockClass || lockedIn.has(it.name)
       out.push({
@@ -128,10 +129,11 @@ export function ClassPicker({
         iconTone: engine ? undefined : 'ue:text-accent',
         label: (
           <span className={cn('ue:font-mono', (engine || !allowed) && 'ue:opacity-55')}>
-            {hit ? (
+            {at >= 0 ? (
               <>
-                <b className="ue:text-accent">{it.name.slice(0, q.length)}</b>
-                {it.name.slice(q.length)}
+                {it.name.slice(0, at)}
+                <b className="ue:text-accent">{it.name.slice(at, at + q.length)}</b>
+                {it.name.slice(at + q.length)}
               </>
             ) : (
               it.name
@@ -231,7 +233,7 @@ export function ClassPicker({
             setText(e.target.value)
             setOpen(true)
           }}
-          placeholder={t('填类名搜，按开头匹配')}
+          placeholder={t('填类名搜')}
           aria-label={t('类')}
           className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:font-mono ue:text-footnote ue:text-fg ue:outline-none ue:placeholder:font-sans ue:placeholder:text-subtle"
         />
@@ -262,7 +264,7 @@ export function ClassPicker({
           {error && <p className="ue:px-3 ue:py-1 ue:text-footnote ue:text-danger">{error}</p>}
           {!error && !lines.length && (
             <p className="ue:px-3 ue:py-4 ue:text-center ue:text-footnote ue:text-subtle">
-              {q ? t('没有以 {q} 开头的类', { q }) : t('读类树…')}
+              {q ? t('没有名字里含 {q} 的类', { q }) : t('读类树…')}
             </p>
           )}
           <TreeList lines={lines} label={t('类')} />

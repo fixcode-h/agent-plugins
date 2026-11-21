@@ -73,7 +73,7 @@ export function DetailPane({
         <span className="ue:text-body ue:font-medium ue:text-fg">{t('先定类')}</span>
         <span className="ue:max-w-md ue:text-footnote ue:text-subtle">
           {t(
-            '在顶上的类下拉里从类树挑（可以搜，按开头匹配），或者在左边双击一个界面、右键「选这个类」。定了类，这里列出它的属性，点行尾的准星加进唯一标识组。',
+            '在顶上的类下拉里从类树挑（可以搜），或者在左边双击一个界面、右键「选这个类」。定了类，这里列出它的属性，点行尾的准星加进唯一标识组。',
           )}
         </span>
       </div>
