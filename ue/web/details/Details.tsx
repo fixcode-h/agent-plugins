@@ -62,10 +62,13 @@ export function Details({
   loading,
   top,
   footer,
+  flatSingle,
 }: {
   props: Prop[]
   api: Omit<DetailsApi, 'q'>
   loading?: boolean
+  /** 只有一个分类、没有子分类和高级区时不画分类条（GameTest 选对象的 Lua 页：标题「自己」没有意义，用户 2026-11-21） */
+  flatSingle?: boolean
   /** 放在所有分类前面的块（Actor 的「变换」） */
   top?: (q: string) => ReactNode
   footer?: ReactNode
@@ -205,7 +208,9 @@ export function Details({
         <div ref={box} className="ue:relative" style={{ '--ue-name-w': name.css } as CSSProperties}>
           {loading && !props.length && <p className="ue:p-4 ue:text-footnote ue:text-subtle">{t('读取中…')}</p>}
           {!cur && top?.(query)}
-          {shown.map((g) => group(g, 0))}
+          {flatSingle && shown.length === 1 && !shown[0].subs.length && !shown[0].advanced.length
+            ? shown[0].props.map((p) => <Row key={p.name} n={nodeOf(p)} />)
+            : shown.map((g) => group(g, 0))}
           {internalShown.length > 0 && (
             <section>
               <CategoryBar

@@ -5,6 +5,7 @@ import { Details } from '../../../../details/Details.tsx'
 import type { DetailsApi, Node } from '../../../../details/rows.tsx'
 import { h, t } from '../../../../host.ts'
 import { tabOf, toDetailProps, type DetailTab } from './data.ts'
+import { FnList } from './FnList.tsx'
 
 /** gt.props 截过的长字符串（C++ 截成前 200 字再加「…」，GameTestRpcProps.cpp MaxValueChars） */
 export const TRUNCATED_AT = 200
@@ -63,7 +64,17 @@ export function DetailPane({
     return m
   }, [items])
   const cur = byTab[tab].length || !items.length ? tab : (TABS.find((x) => byTab[x.id].length)?.id ?? tab)
-  const props = useMemo(() => toDetailProps(byTab[cur], groupTitle, siblings), [byTab, cur, groupTitle, siblings])
+  // 函数（functions 组）没有值，不进细节面板，单独列（FnList）；带值的 .Get() 这类照常在细节面板里
+  const fns = useMemo(() => byTab[cur].filter((x) => x.luaFn), [byTab, cur])
+  const props = useMemo(
+    () =>
+      toDetailProps(
+        byTab[cur].filter((x) => !x.luaFn),
+        groupTitle,
+        siblings,
+      ),
+    [byTab, cur, groupTitle, siblings],
+  )
   const byProp = useMemo(() => new Map(items.map((x) => [x.prop, x])), [items])
 
   if (noClass)
@@ -93,7 +104,8 @@ export function DetailPane({
     loadFull: async (path: string) => byProp.get(path)?.value,
     action: (n: Node) => {
       const item = byProp.get(n.path)
-      const v = n.value
+      // 源码里读的字段显示的是原文或类型（不是值）：准星带上真的值（没有就空，在标识组里再填）
+      const v = item?.fromSource ? item.value : n.value
       // 结构体、数组本身不能直接比（UE 标了 comparable: false 的也一样），展开后比成员
       const structy = v !== null && typeof v === 'object' && !Array.isArray(v)
       if (structy || item?.comparable === false) return null
@@ -133,10 +145,15 @@ export function DetailPane({
       {error && <p className="ue:px-3 ue:py-2 ue:text-footnote ue:text-danger">{error}</p>}
       {note && <p className="ue:px-3 ue:py-1.5 ue:text-caption ue:text-warning">{note}</p>}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-auto">
-        {!loading && !error && !props.length ? (
+        {!loading && !error && !props.length && !fns.length ? (
           <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">{t('这一页没有可看的项')}</p>
         ) : (
-          <Details props={props} api={api} loading={loading} />
+          <>
+            {(props.length > 0 || loading) && (
+              <Details props={props} api={api} loading={loading} flatSingle={cur === 'lua'} />
+            )}
+            {fns.length > 0 && <FnList items={fns} picked={picked} onPick={onPick} />}
+          </>
         )}
       </div>
     </>

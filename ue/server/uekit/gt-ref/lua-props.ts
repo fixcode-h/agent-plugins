@@ -18,7 +18,7 @@ export interface LuaDeclared {
   file: string
   fields: LuaField[]
   /** 函数（自己的和顺着父类继承来的），形状同 gt.props 的 functions 组：游戏没开时「方法」页靠它（用户 2026-11-21） */
-  functions: { name: string; params: string[]; from?: string }[]
+  functions: { name: string; params: string[]; from?: string; ret?: string }[]
 }
 
 /** 往上找父类最多几层（防绕圈） */
@@ -41,6 +41,8 @@ export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaD
         name: f.name,
         params: f.args.map((a) => a.name),
         ...(level ? { from: cur.mod } : {}),
+        // ---@return 注解（用户 2026-11-21：函数返回值也要显示）
+        ...(f.returns ? { ret: f.returns } : {}),
       })
     }
     const parent: string | undefined = parseLuaHead(cur.text).parent
@@ -104,7 +106,19 @@ export function luaKind(type: string): GtPropKind | undefined {
 const srcNote = (k: LuaField['kind']) =>
   k === 'field' ? t('---@field 声明') : k === 'self' ? t('方法里的 self 赋值') : t('模块表字段')
 
-/** 一个声明 → 属性树的一项：只有声明（实例表里没有）的带 note，写清楚来源和行号 */
+/** 源码里的初始赋值 → 值：只认字面量（数、字符串、布尔、空表）；表达式、nil、非空表构造给 undefined，界面显示原文 */
+export function initValue(init: string | undefined, kind: GtPropKind | undefined): unknown {
+  if (init === undefined) return undefined
+  const v = init.trim()
+  if (/^-?(0x[\da-f]+|\d+(\.\d*)?(e[+-]?\d+)?)$/i.test(v)) return Number(v)
+  if (v === 'true' || v === 'false') return v === 'true'
+  const str = v.match(/^(["'])(.*)\1$/)
+  if (str) return str[2]
+  if (/^\{\s*\}$/.test(v)) return kind === 'array' ? [] : undefined
+  return undefined
+}
+
+/** 一个声明 → 属性树的一项：值取源码里的初始赋值，说明只留注释，来源和行号放悬停提示（用户 2026-11-21：值是空的、说明挤） */
 function declaredItem(f: LuaField, file: string): GtPropItem {
   const kind = luaKind(f.type)
   const item: GtPropItem = {
@@ -113,16 +127,13 @@ function declaredItem(f: LuaField, file: string): GtPropItem {
     src: 'lua',
     type: f.type,
     kind: kind ?? 'none',
+    fromSource: true,
+    declAt: `${file}:${f.line}（${srcNote(f.kind)}）`,
   }
-  const where = `${file}:${f.line}（${srcNote(f.kind)}）`
-  item.note = [
-    f.note,
-    kind
-      ? t('只在源码里看到，此刻实例表里没有值：{where}', { where })
-      : t('类型 {type} 要看运行时的值，开着游戏再选：{where}', { type: f.type, where }),
-  ]
-    .filter(Boolean)
-    .join('；')
+  const value = initValue(f.init, kind)
+  if (value !== undefined) item.value = value
+  else if (f.init !== undefined) item.srcInit = f.init
+  if (f.note) item.note = f.note
   if (kind && comparable(kind)) item.ops = opsFor(kind)
   else {
     item.comparable = false

@@ -127,8 +127,14 @@ export interface GtPropItem {
   why?: string
   readOnly?: boolean
   note?: string
+  /** 只在源码里看到的 Lua 字段：值取自源码里的初始赋值（游戏没开、实例表里还没有），declAt 是「文件:行（来源）」，悬停时看 */
+  fromSource?: boolean
+  declAt?: string
+  /** 源码里的初始赋值原文（不是字面量时 value 为空，界面显示这段） */
+  srcInit?: string
   /** Lua 类的函数（gt.props class: "lua:模块" 的 functions 组）：只列出来看，不能当路径、不能当标识 */
-  luaFn?: { params: string[]; from?: string }
+  /** UE 类也用它（2.1.5 起 gt.props 的 functions 组）：ret 返回类型，src 是 cpp / bp / lua，pure 是 BlueprintPure */
+  luaFn?: { params: string[]; from?: string; ret?: string; src?: 'cpp' | 'bp' | 'lua'; pure?: boolean }
 }
 export interface GtPropGroup {
   id: string

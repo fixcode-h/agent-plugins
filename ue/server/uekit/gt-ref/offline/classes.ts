@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { GtClassItem, GtClassesResult } from '../../../../shared/gt-script/ref/types.ts'
+import { searchText } from '../../../../shared/gt-script/ref/search-text.ts'
 import { nativeParents } from '../../../search-index/native-widgets.ts'
 import { projectMounts } from '../../../search-index/mounts.ts'
 import { searchIndex } from '../../../search-index/index.ts'
@@ -73,6 +74,8 @@ export interface OfflineArgs {
   lua?: boolean
   /** Lua 按目录列（空 = 最顶层），协议 7.7 */
   dir?: string
+  /** 不用缓存重建类表（面板的「刷新」） */
+  fresh?: boolean
   offset?: number
   limit?: number
 }
@@ -216,8 +219,8 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
     const want = new Map<string, number>()
     const hits = [...nodes.values()]
       // 名字里含 q 就算（用户 2026-11-21：不要只按开头）
-      .filter((n) => n.name.toLowerCase().includes(q))
-      .map((n) => ({ n, rank: n.name.toLowerCase().startsWith(q) ? 0 : 1 }))
+      .filter((n) => searchText(n.name, q).includes(q))
+      .map((n) => ({ n, rank: searchText(n.name, q).startsWith(q) ? 0 : 1 }))
       .sort((a, b) => a.rank - b.rank)
     for (const { n, rank } of hits) {
       const seen = new Set<string>()
@@ -282,8 +285,25 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
   }
 }
 
+/**
+ * 建好的类表按项目缓存：面板逐层展开、再打开时定位会连着发好几次，每次都 stat 全部 Lua 文件 / 读 .uasset 标签很慢
+ * （用户 2026-11-21 嫌慢）。NODES_MS 内直接复用，过期后重建（文件头按修改时间各自缓存，只重读改过的）；fresh 强制重建
+ */
+const NODES_MS = 15_000
+const nodesCache = new Map<string, { at: number; nodes: Promise<Map<string, Node>> }>()
+function cachedNodes(p: UeProject, lua: boolean, fresh: boolean) {
+  const key = `${lua ? 'lua' : 'ue'}:${p.root}`
+  const hit = nodesCache.get(key)
+  if (!fresh && hit && Date.now() - hit.at < NODES_MS) return hit.nodes
+  const nodes = lua ? luaNodes(p) : ueNodes(p)
+  nodesCache.set(key, { at: Date.now(), nodes })
+  // 出错不留在缓存里，下次重试
+  nodes.catch(() => nodesCache.get(key)?.nodes === nodes && nodesCache.delete(key))
+  return nodes
+}
+
 /** UE 没开时的类树；why 是连不上 UE 的原因，写进 note 给界面显示 */
 export async function offlineClasses(p: UeProject, args: OfflineArgs, note: string): Promise<GtClassesResult> {
-  const nodes = args.lua ? await luaNodes(p) : await ueNodes(p)
+  const nodes = await cachedNodes(p, !!args.lua, !!args.fresh)
   return { ...pickClasses(nodes, args, args.lua ? undefined : ROOT), note }
 }

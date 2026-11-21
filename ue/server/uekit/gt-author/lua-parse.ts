@@ -18,6 +18,27 @@ export interface LuaField {
   kind: 'field' | 'self' | 'module'
   line: number
   note?: string
+  /** 源码里的初始赋值（等号右边，一行内、去掉结尾的逗号分号）：游戏没开时细节面板拿它当值显示（用户 2026-11-21） */
+  init?: string
+}
+
+/** 赋值右边 → 初始值文本：跨行的表构造、函数只留开头，太长的截断 */
+function initOf(rhs: string): string | undefined {
+  const v = rhs
+    .trim()
+    .replace(/[,;]\s*$/, '')
+    .trim()
+  if (!v || /^function\b/.test(v)) return undefined
+  return v.length > 80 ? `${v.slice(0, 79)}…` : v
+}
+
+/** 字段已经有了（---@field 先声明）但还没有初始值：用后面第一处赋值补上 */
+function fillInit(fields: LuaField[], name: string, rhs: string) {
+  const f = fields.find((x) => x.name === name)
+  if (f && f.init === undefined) {
+    const init = initOf(rhs)
+    if (init !== undefined) f.init = init
+  }
 }
 
 export interface LuaArg {
@@ -82,6 +103,27 @@ interface Doc {
 const emptyDoc = (): Doc => ({ params: new Map(), returns: [], readOnly: false, note: [] })
 
 /** 一行注释（已去掉开头的 -- / ---）记进紧挨着下一段代码的说明 */
+/**
+ * 注解里的类型（可带空格：`table<number, Foo>|nil`、`fun(a: int): bool`）+ 后面的说明：
+ * 括号里的空格、`|` / `,` 两边的空格都算类型的一部分（以前按第一个空格切，说明里混进半截类型）
+ */
+export function splitType(rest: string): { type: string; note: string } {
+  let depth = 0
+  let i = 0
+  for (; i < rest.length; i++) {
+    const ch = rest[i]
+    if ('<({['.includes(ch)) depth++
+    else if ('>)}]'.includes(ch)) depth = Math.max(0, depth - 1)
+    else if (/\s/.test(ch) && depth === 0) {
+      const before = rest.slice(0, i).trimEnd().slice(-1)
+      const after = rest.slice(i).trimStart()[0] ?? ''
+      if (before === '|' || before === ',' || after === '|') continue
+      break
+    }
+  }
+  return { type: rest.slice(0, i).replace(/\s+/g, ' ').trim(), note: rest.slice(i).trim() }
+}
+
 function readDocLine(doc: Doc, text: string, fields: LuaField[], line: number) {
   const tag = text.match(/^@(\w+)\s*(.*)$/)
   if (!tag) {
@@ -95,19 +137,20 @@ function readDocLine(doc: Doc, text: string, fields: LuaField[], line: number) {
     const m = rest.match(new RegExp(`^(${IDENT}|\\.\\.\\.)(\\??)\\s+(\\S+)\\s*(.*)$`))
     if (m) doc.params.set(m[1], { type: m[3] + (m[2] ? '?' : ''), ...(m[4].trim() ? { note: m[4].trim() } : {}) })
   } else if (name === 'return') {
-    const m = rest.match(/^(\S+)/)
-    if (m) doc.returns.push(m[1])
+    const { type } = splitType(rest.trim())
+    if (type) doc.returns.push(type)
   } else if (name === 'readonly') doc.readOnly = true
   else if (name === 'field') {
     // ---@field [public|protected|private] 名 类型 说明
-    const m = rest.match(new RegExp(`^(?:(?:public|protected|private|package)\\s+)?(${IDENT})(\\??)\\s+(\\S+)\\s*(.*)$`))
-    if (m && !fields.some((f) => f.name === m[1]))
+    const m = rest.match(new RegExp(`^(?:(?:public|protected|private|package)\\s+)?(${IDENT})(\\??)\\s+(.*)$`))
+    const tn = m ? splitType(m[3]) : undefined
+    if (m && tn?.type && !fields.some((f) => f.name === m[1]))
       fields.push({
         name: m[1],
-        type: m[3] + (m[2] ? '?' : ''),
+        type: tn.type + (m[2] ? '?' : ''),
         kind: 'field',
         line,
-        ...(m[4].trim() ? { note: m[4].trim() } : {}),
+        ...(tn.note ? { note: tn.note } : {}),
       })
   }
 }
@@ -202,7 +245,8 @@ export function parseLuaModule(text: string): LuaModuleInfo {
       if (ctorDepth === 1) {
         const m = s.match(new RegExp(`^(${IDENT})\\s*=\\s*(.*)$`))
         if (m && !seenField(m[1]))
-          fields.push({ name: m[1], type: literalType(m[2]), kind: 'module', line, ...noteOf(doc) })
+          fields.push({ name: m[1], type: literalType(m[2]), kind: 'module', line, ...noteOf(doc), ...initField(m[2]) })
+        else if (m) fillInit(fields, m[1], m[2])
       }
       ctorDepth += (s.match(/\{/g)?.length ?? 0) - (s.match(/\}/g)?.length ?? 0)
       doc = emptyDoc()
@@ -238,7 +282,9 @@ export function parseLuaModule(text: string): LuaModuleInfo {
       // 一行写完的 { a = 1, b = 2 }：逐个键认
       if (ctorDepth <= 0) {
         for (const m of rest.matchAll(new RegExp(`(?:^|,)\\s*(${IDENT})\\s*=\\s*([^,}]+)`, 'g')))
-          if (!seenField(m[1])) fields.push({ name: m[1], type: literalType(m[2]), kind: 'module', line })
+          if (!seenField(m[1]))
+            fields.push({ name: m[1], type: literalType(m[2]), kind: 'module', line, ...initField(m[2]) })
+          else fillInit(fields, m[1], m[2])
         ctorDepth = 0
       }
       doc = emptyDoc()
@@ -247,7 +293,16 @@ export function parseLuaModule(text: string): LuaModuleInfo {
 
     const mf = reModField && top ? s.match(reModField) : null
     if (mf) {
-      if (!seenField(mf[1])) fields.push({ name: mf[1], type: literalType(mf[2]), kind: 'module', line, ...noteOf(doc) })
+      if (!seenField(mf[1]))
+        fields.push({
+          name: mf[1],
+          type: literalType(mf[2]),
+          kind: 'module',
+          line,
+          ...noteOf(doc),
+          ...initField(mf[2]),
+        })
+      else fillInit(fields, mf[1], mf[2])
       doc = emptyDoc()
       return
     }
@@ -255,11 +310,18 @@ export function parseLuaModule(text: string): LuaModuleInfo {
     if (inMethod) {
       // 一行里可能有几处 self.x = …（a and b 的写法少见，按第一处算）
       const m = s.match(new RegExp(`(?:^|[^\\w.])self\\.(${IDENT})\\s*=(?!=)\\s*(.*)$`))
-      if (m && !seenField(m[1])) fields.push({ name: m[1], type: literalType(m[2]), kind: 'self', line, ...noteOf(doc) })
+      if (m && !seenField(m[1]))
+        fields.push({ name: m[1], type: literalType(m[2]), kind: 'self', line, ...noteOf(doc), ...initField(m[2]) })
+      else if (m) fillInit(fields, m[1], m[2])
     }
     doc = emptyDoc()
   })
   return { table, fields, functions }
+}
+
+function initField(rhs: string) {
+  const init = initOf(rhs)
+  return init !== undefined ? { init } : {}
 }
 
 function noteOf(doc: Doc) {

@@ -4460,8 +4460,6 @@
   "---@field 声明": "---@field declaration",
   "方法里的 self 赋值": "self assignment in a method",
   "模块表字段": "module table field",
-  "只在源码里看到，此刻实例表里没有值：{where}": "Only seen in source; the instance table has no value right now: {where}",
-  "类型 {type} 要看运行时的值，开着游戏再选：{where}": "Type {type} depends on the runtime value; pick it while the game is running: {where}",
   "Lua 类型 {type} 不知道怎么比": "Don't know how to compare Lua type {type}",
   "自己": "Self",
   "存在": "Exists",
@@ -4777,7 +4775,6 @@
   "点子控件选部件": "click a child widget to pick the part",
   "以后抓 {c} 默认选这几项": "Use these by default when picking {c} from now on",
   "按它分路": "Branch on it",
-  "Lua 函数只列出来看：调用用 obj.call": "Lua functions are listed for reference only; call them with obj.call",
   "填类名搜": "Search class name",
   "没有名字里含 {q} 的类": "No class name contains {q}",
   "UE 没在运行，类树从项目文件读，没有此刻实例数（{why}）": "UE is not running: the class tree is read from project files, without live instance counts ({why})",
@@ -4823,5 +4820,10 @@
   "排除的目录不在树里、不参与搜索": "Excluded folders are hidden from the tree and from search",
   "点一下恢复": "Click to restore",
   "恢复这个目录": "Restore this folder",
-  "排除这个目录": "Exclude this folder"
+  "排除这个目录": "Exclude this folder",
+  "定义在 {cls}": "Defined in {cls}",
+  "有参数的函数不能当条件：调用用 obj.call": "Functions with parameters can't be conditions; call them with obj.call",
+  "这个函数不是 Pure 或 const，读值会改游戏，不能当条件": "This function is neither Pure nor const; reading it could change the game, so it can't be a condition",
+  "函数只列出来看：调用用 obj.call": "Functions are listed for reference; call them with obj.call",
+  "游戏没开：值是源码里的初始值（{at}）": "Game not running: the value is the initial value in source ({at})"
 }

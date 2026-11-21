@@ -6,23 +6,49 @@ interface LuaFnRaw {
   name: string
   params?: string[]
   from?: string
+  /** UE 类的函数（GameTest 2.1.5）才有：返回类型、cpp / bp、BlueprintPure */
+  ret?: string
+  src?: string
+  pure?: boolean
+  /** 无参取值函数：能写进路径（`@.名字()`），带 kind / ops，可以当唯一标识的条件 */
+  path?: string
+  kind?: string
+  ops?: string[]
 }
 
 const isFn = (x: unknown): x is LuaFnRaw =>
   !!x && typeof x === 'object' && typeof (x as LuaFnRaw).name === 'string' && !('prop' in (x as object))
 
-/** Lua 函数 → 细节栏的一行：路径写不出来（Lua 段后面不能调函数），所以用一个不是路径的键、标成不能比 */
+/** 函数 → 细节栏「方法」页的一行：路径写不出来（不能当标识），所以用一个不是路径的键、标成不能比 */
 function fnItem(f: LuaFnRaw): GtPropItem {
   const params = Array.isArray(f.params) ? f.params.map(String) : []
+  const src = f.src === 'cpp' || f.src === 'bp' ? f.src : 'lua'
+  // 能当条件的取值函数（UE 给了 path）：路径就是它，kind 是返回值的
+  const usable = typeof f.path === 'string' && f.path.startsWith('@') && Array.isArray(f.ops) && f.ops.length > 0
   return {
-    prop: `fn:${f.name}`,
+    prop: usable ? f.path! : `fn:${f.name}`,
     name: `${f.name}(${params.join(', ')})`,
-    src: 'lua',
-    type: 'function',
-    kind: 'object',
-    comparable: false,
-    why: t('Lua 函数只列出来看：调用用 obj.call'),
-    luaFn: { params, ...(f.from ? { from: f.from } : {}) },
+    src: src === 'lua' ? 'lua' : src,
+    type: typeof f.ret === 'string' && f.ret ? f.ret : 'function',
+    kind: usable ? (f.kind as GtPropItem['kind']) : 'object',
+    ...(usable
+      ? { ops: f.ops!.map(String) }
+      : {
+          comparable: false,
+          why:
+            params.length > 0
+              ? t('有参数的函数不能当条件：调用用 obj.call')
+              : f.ret
+                ? t('这个函数不是 Pure 或 const，读值会改游戏，不能当条件')
+                : t('函数只列出来看：调用用 obj.call'),
+        }),
+    luaFn: {
+      params,
+      ...(f.from ? { from: f.from } : {}),
+      ...(typeof f.ret === 'string' && f.ret ? { ret: f.ret } : {}),
+      src,
+      ...(f.pure ? { pure: true } : {}),
+    },
   }
 }
 
