@@ -172,10 +172,14 @@ export function toDetailProps(items: GtPropItem[], groupTitle: (it: GtPropItem) 
     displayName: it.name,
     type: it.type,
     category: it.cat || groupTitle(it),
-    value: it.value,
+    // 只在源码里看到的 Lua 字段（游戏没开）：有字面量初始值就是它；没有时显示源码里写的或类型，不留空框（用户 2026-11-21）
+    value: it.value !== undefined || !it.fromSource ? it.value : (it.srcInit ?? `<${it.type}>`),
+    ...(it.declAt ? { tooltip: it.declAt } : {}),
     ...(it.members?.length ? { enum: it.members } : {}),
     readOnly: true,
-    readOnlyWhy: t('这里只看此刻的值；要改值在脚本里用 obj.set'),
+    readOnlyWhy: it.fromSource
+      ? t('游戏没开：值是源码里的初始值（{at}）', { at: it.declAt ?? '' })
+      : t('这里只看此刻的值；要改值在脚本里用 obj.set'),
     edit: true,
     note: noteOf(it, siblings),
   }))

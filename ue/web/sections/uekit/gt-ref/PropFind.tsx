@@ -15,7 +15,7 @@ function rowsOf(items: GtPropItem[], q: string, skip?: Set<string>) {
   const k = q.trim().toLowerCase()
   const all: SuggestRow[] = items
     // Lua 函数写不成路径，不能当判断、标识
-    .filter((i) => !i.luaFn && !skip?.has(i.prop))
+    .filter((i) => (!i.luaFn || i.comparable !== false) && !skip?.has(i.prop))
     .map((i) => ({
       key: i.prop,
       value: i.prop,

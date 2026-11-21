@@ -67,7 +67,8 @@ test('Lua 声明合进 self 组：UE 给了的保留值，只有声明的带 not
   assert.equal(id.prop, '@#shopId')
   assert.equal(id.kind, 'int')
   assert.ok(id.ops?.includes('eq'))
-  assert.match(id.note ?? '', /商店编号.*UI\/Shop\.lua:3/)
+  assert.match(id.note ?? '', /商店编号/)
+  assert.match(id.declAt ?? '', /UI\/Shop\.lua:3/)
   const owner = items.find((x) => x.name === 'owner')!
   assert.equal(owner.comparable, false)
   assert.equal(mergeLuaProps([], decl, { selfTitle: '自己', filter: 'shop' }).groups[0].items.length, 1)
@@ -183,4 +184,39 @@ test('游戏没开：Lua 类的函数从源码读，顺着父类继承', async (
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('没开游戏时 Lua 字段的值取源码里的初始赋值（用户 2026-11-21：值是空的）', async () => {
+  const { parseLuaModule } = await import('../gt-author/lua-parse.ts')
+  const info = parseLuaModule(
+    [
+      'local M = Class()',
+      '---@field Count number 数量',
+      'M.Mode = "normal"',
+      'function M:Ctor()',
+      '  self.Count = 3',
+      '  self.Enabled = true',
+      '  self.Items = {}',
+      '  self.Owner = GetOwner()',
+      'end',
+      'return M',
+    ].join('\n'),
+  )
+  const byName = Object.fromEntries(info.fields.map((f) => [f.name, f]))
+  assert.equal(byName.Count.init, '3')
+  assert.equal(byName.Mode.init, '"normal"')
+  const r = mergeLuaProps([], { file: 'M.lua', fields: info.fields }, { selfTitle: '自己' })
+  const v = Object.fromEntries(r.groups[0].items.map((x) => [x.name, x]))
+  assert.equal(v.Count.value, 3)
+  assert.equal(v.Mode.value, 'normal')
+  assert.equal(v.Enabled.value, true)
+  assert.equal(v.Owner.value, undefined)
+  assert.equal(v.Owner.srcInit, 'GetOwner()')
+})
+
+test('注解里带空格的类型不切断（table<number, Foo>|nil）', async () => {
+  const { splitType } = await import('../gt-author/lua-parse.ts')
+  assert.deepEqual(splitType('table<number, Foo>|nil 当前索引'), { type: 'table<number, Foo>|nil', note: '当前索引' })
+  assert.deepEqual(splitType('number | string 名字'), { type: 'number | string', note: '名字' })
+  assert.deepEqual(splitType('boolean'), { type: 'boolean', note: '' })
 })

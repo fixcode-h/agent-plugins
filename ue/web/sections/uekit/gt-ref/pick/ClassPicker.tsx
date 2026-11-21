@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GtClassItem, GtClassesResult } from '../../../../../shared/gt-script/index.ts'
+import { searchText } from '../../../../../shared/gt-script/ref/search-text.ts'
 import { CornerHandle, useCornerSize } from '../../../../corner-resize.tsx'
 import { Checkbox } from '../../../../details/controls.tsx'
 import { h, t } from '../../../../host.ts'
@@ -103,21 +104,38 @@ export function ClassPicker({
     }
   }, [open])
 
-  // 打字停一会儿再搜
+  const shown = value.replace(/^lua:/, '')
+  // 打开时框里留着当前类名并全选（用户 2026-11-21：选中了上面却是空的），直接打字就替换成搜索
+  const input = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    const id = setTimeout(() => setQ(text.trim()), 250)
+    if (!open) return
+    setText(shown)
+    requestAnimationFrame(() => input.current === document.activeElement && input.current?.select())
+    // 只在打开那一下填；打开期间 value 变了（选中即关）不用再填
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  // 打字停一会儿再搜；框里还是当前类名（打开时填进去的）不算搜，树照常显示并定位到它
+  useEffect(() => {
+    const id = setTimeout(() => setQ(text.trim() === shown ? '' : text.trim()), 250)
     return () => clearTimeout(id)
-  }, [text])
+  }, [text, shown])
 
   // Lua 不定类时从最顶层按目录列（dir），点开模块再按 parent 看子类
   const byDir = lua && !lockClass
   // asLua：打开下拉定位已选的类时页签可能还没切过来，按已选的类决定读哪棵树
+  // 点「刷新」（RefDialog 换了 rpc）后的第一次读带 fresh
+  const fresh = useRef(false)
+  const firstRpc = useRef(rpc)
   const load = (parent: string, force = false, dir?: string, asLua = lua) => {
     const key = dir !== undefined ? `dir:${dir}` : `${asLua ? 'lua' : 'cls'}:${parent}`
     if (kids[key] && !force) return
+    const wasFresh = fresh.current
+    fresh.current = false
     rpc<GtClassesResult>(project, 'gt.classes', {
       ...(dir !== undefined ? { dir } : parent && parent !== ROOT ? { parent } : {}),
       ...(asLua ? { lua: true } : {}),
+      // 点了「刷新」后的第一次读：让 UE / 面板别用缓存的类表（gt.classes 15 秒内复用上一次建好的）
+      ...(wasFresh ? { fresh: true } : {}),
       limit: 500,
     })
       .then((r) => {
@@ -167,8 +185,9 @@ export function ClassPicker({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // 刷新（RefDialog 换了 rpc）：读过的类树作废
+  // 刷新（RefDialog 换了 rpc）：读过的类树作废；第一次挂上时不算刷新
   useEffect(() => {
+    if (rpc !== firstRpc.current) fresh.current = true
     setKids({})
     setDirs({})
     setFound(undefined)
@@ -289,10 +308,10 @@ export function ClassPicker({
           })
     }
     if (q && found && byDir) {
-      // Lua 搜索也按目录成树（用户 2026-11-21）：只留名字里含 q 的模块，所在目录全部展开
+      // Lua 搜索也按目录成树（用户 2026-11-21）：只留模块名（最后一段）含 q 的，目录名对上不算，所在目录全部展开
       const needle = q.toLowerCase()
       const hits = found.items.filter(
-        (it) => it.name.toLowerCase().includes(needle) && keep(it) && !ex.isExcluded(it.name),
+        (it) => searchText(it.name, needle).includes(needle) && keep(it) && !ex.isExcluded(it.name),
       )
       const subDirs = new Map<string, Set<string>>()
       const mods = new Map<string, GtClassItem[]>()
@@ -431,7 +450,6 @@ export function ClassPicker({
 
   const revealKey = q ? undefined : lines.find((l) => l.selected)?.key
   const Icon = kind ? KIND_ICON[kind] : AppWindow
-  const shown = value.replace(/^lua:/, '')
   return (
     <div ref={box} className="ue:relative ue:w-full ue:max-w-[380px]">
       <label
@@ -443,6 +461,7 @@ export function ClassPicker({
         <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', value ? 'ue:text-accent' : 'ue:text-subtle')} />
         <input
           value={open ? text : shown}
+          ref={input}
           onFocus={() => setOpen(true)}
           onChange={(e) => {
             setText(e.target.value)

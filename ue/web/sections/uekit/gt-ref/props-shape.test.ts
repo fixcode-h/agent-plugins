@@ -21,7 +21,22 @@ test('gt.props 读 Lua 类：lua 组照收，functions 组的函数整成只看�
   const fn = g[1].items[0]
   assert.equal(fn.name, 'Refresh(force)')
   assert.equal(fn.comparable, false)
-  assert.deepEqual(fn.luaFn, { params: ['force'], from: 'UI.BaseView' })
+  assert.deepEqual(fn.luaFn, { params: ['force'], from: 'UI.BaseView', src: 'lua' })
+})
+
+test('UE 类的函数带返回类型和来源', () => {
+  const g = normalizeGroups({
+    groups: [
+      {
+        id: 'functions',
+        title: '函数',
+        items: [{ name: 'GetActorLocation', params: [], ret: 'FVector', from: 'Actor', src: 'cpp', pure: true }],
+      },
+    ],
+  })
+  const fn = g[0].items[0]
+  assert.equal(fn.src, 'cpp')
+  assert.deepEqual(fn.luaFn, { params: [], from: 'Actor', ret: 'FVector', src: 'cpp', pure: true })
 })
 
 test('lua / functions 放在顶层时也认', () => {

@@ -21,7 +21,8 @@ export function slimProps(res: A): A {
   const groups = (res.groups as GtPropGroup[]).map((g) => ({
     ...g,
     items: g.items.map(({ ops: _ops, ...x }) => {
-      kinds.add(x.kind)
+      // functions 组（GameTest 2.1.5）里只列出来看的函数没有 kind
+      if (x.kind) kinds.add(x.kind)
       return x
     }),
   }))

@@ -3,6 +3,7 @@ import type {
   GtCloseHow,
   GtIdentItem,
   GtMany,
+  GtPropItem,
   GtPropsResult,
   GtRef,
   GtRefForResult,
@@ -15,6 +16,8 @@ import { RefRpcProvider, type RefRpc } from './live.ts'
 import { PropTree } from './PropTree.tsx'
 import { RefCard } from './RefCard.tsx'
 import { RefDialog } from './RefDialog.tsx'
+import { SPECIMEN_LUA_PROPS } from './specimen-lua-props.ts'
+import { searchText } from '../../../../shared/gt-script/ref/search-text.ts'
 
 /**
  * 设置 →「控件样式」里 GameTest 对象引用（2.0）这组控件的示例：属性树、对象卡片、比较编辑、关闭方式、选对象面板。
@@ -127,6 +130,52 @@ const PROPS: GtPropsResult = {
   ],
 }
 
+/** 选对象面板的回包才带（PropTree 示例直接吃 PROPS，不走 normalizeGroups，放进去会读到没有 prop 的项） */
+const FN_GROUP = {
+  // UE 类的函数（GameTest 2.1.5 起，形状同 C++ 回包，经 normalizeGroups 整成行）：无参取值函数带 path 能当条件
+  id: 'functions',
+  title: '函数',
+  items: [
+    {
+      name: 'GetItemId',
+      params: [],
+      ret: 'int32',
+      src: 'bp',
+      pure: true,
+      path: '@.GetItemId()',
+      kind: 'int',
+      ops: ['eq', 'ne', 'in'],
+    },
+    {
+      name: 'IsSoldOut',
+      params: [],
+      ret: 'bool',
+      src: 'bp',
+      pure: true,
+      path: '@.IsSoldOut()',
+      kind: 'bool',
+      ops: ['eq'],
+    },
+    { name: 'SetCount', params: ['int32 NewCount'], src: 'bp' },
+    { name: 'PlayBuyAnim', params: ['float Delay', 'bool bLoop'], src: 'bp' },
+    {
+      name: 'GetVisibility',
+      params: [],
+      ret: 'ESlateVisibility',
+      src: 'cpp',
+      from: 'Widget',
+      pure: true,
+      path: '@.GetVisibility()',
+      kind: 'visibility',
+      ops: ['eq', 'in'],
+    },
+    { name: 'RemoveFromParent', params: [], src: 'cpp', from: 'Widget' },
+  ] as unknown as GtPropItem[],
+}
+
+/** Lua 类按类读（游戏没开）：由面板服务端的真实代码读一份仿照真实项目写的 Lua 文件生成（gt-ref/ops.ts → lua-props.ts） */
+const LUA_PROPS = SPECIMEN_LUA_PROPS as unknown as GtPropsResult
+
 const REF: GtRef = {
   class: '/Game/UI/Shop/WBP_ShopItem.WBP_ShopItem_C',
   in: { obj: 'shop', part: 'ListItems' },
@@ -209,12 +258,20 @@ const CLASSES = {
 
 /** 假回包：只认选对象面板用到的几个操作，其余报错（和真桥接一样显示在界面上） */
 /** Lua 类：按目录（dir）或按名字搜，两个目录几个模块 */
-const LUA = ['UI.Shop.ShopPanel', 'UI.Shop.ShopItem', 'UI.Common.Tips', 'GDefine']
+const LUA = [
+  'UI.Shop.ShopPanel',
+  'UI.Shop.ShopItem',
+  'UI.Common.Tips',
+  'GDefine',
+  'Module.MainModule_HomeDecoration.SM_HD_HomeDecoration.s_HD_HD_HomeDecoration',
+  'Module.MainModule_HomeDecoration.SM_HD_HomeDecoration.HomeDecoration.lt_HD_HardDecoration_Instance',
+  'Module.MainModule_HomeDecoration.SM_HD_HomeDecoration.SM_HD_HomeDecoration',
+]
 function fakeLua(args: Record<string, unknown>) {
   const item = (name: string) => ({ name, kind: 'lua', kids: 0 })
   const q = String(args.q ?? '').toLowerCase()
   if (q) {
-    const items = LUA.filter((n) => n.toLowerCase().includes(q)).map(item)
+    const items = LUA.filter((n) => searchText(n, q).includes(q)).map(item)
     return { items, total: items.length, hasMore: false }
   }
   const dir = String(args.dir ?? '').replace(/\./g, '/')
@@ -241,7 +298,9 @@ export const fakeRpc: RefRpc = <T,>(_project: string, name: string, args: Record
     'gt.classes': args?.lua ? fakeLua(args) : { items: cls, total: cls.length, hasMore: false },
     'gt.tree': { nodes: TREE, total: TREE.length },
     'gt.refFor': CHAIN,
-    'gt.props': PROPS,
+    'gt.props': String(args?.class ?? '').startsWith('lua:')
+      ? LUA_PROPS
+      : { ...PROPS, groups: [...PROPS.groups, FN_GROUP] },
     'gt.highlight': {},
   }
   return name in r ? Promise.resolve(r[name] as T) : Promise.reject(new Error(t('示例：不连游戏')))

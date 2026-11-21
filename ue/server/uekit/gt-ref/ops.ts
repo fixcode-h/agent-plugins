@@ -1,4 +1,4 @@
-import type { GtPropGroup } from '../../../shared/gt-script/ref/types.ts'
+import type { GtPropGroup, GtPropItem } from '../../../shared/gt-script/ref/types.ts'
 import { luaRoot } from '../gt-author/lua-files.ts'
 import { cmpVersion } from '../../semver.ts'
 import type { UeProject } from '../../types.ts'
@@ -100,8 +100,16 @@ async function withLua(project: GtRefDeps<CardLike>['project'], res: A, args: A,
   })
   out.groups = merged.groups
   out.luaFile = decl.file
-  // UE 没给函数组（游戏没开、读的是实例）时用源码里的
-  if (!merged.groups.some((g) => g.id === 'functions') && decl.functions.length) out.functions = decl.functions
+  // Lua 函数：UE 给过（lua: 类在游戏里读的 functions 组，项没有 src）就按名字补上源码里的返回类型；
+  // 没给（游戏没开、读的是 UE 实例，GameTest 2.1.5 起 functions 组是 UE 函数）时单独一组用源码里的
+  const fnRet = new Map(decl.functions.filter((f) => f.ret).map((f) => [f.name, f.ret!]))
+  const luaFns = merged.groups.find((g) => g.id === 'functions' && g.items.some((x) => !(x as { src?: string }).src))
+  if (luaFns) {
+    for (const x of luaFns.items as unknown as { name: string; ret?: string }[])
+      if (!x.ret && fnRet.has(x.name)) x.ret = fnRet.get(x.name)
+  } else if (decl.functions.length) {
+    merged.groups.push({ id: 'luaFunctions', title: t('Lua 函数'), items: decl.functions as unknown as GtPropItem[] })
+  }
   // 超长时从补上的 Lua 声明尾部砍（UE 给的部分 UE 自己分过页），至少留一项
   const self = merged.groups.find((g) => g.id === 'self')
   let extra = merged.added
