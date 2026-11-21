@@ -160,7 +160,16 @@ test('游戏没开：Lua 类的函数从源码读，顺着父类继承', async (
       path.join(root, 'UI/Shop.lua'),
       '---@class Shop\nlocal M = Class("UI.Base")\n---@field shopId integer\nfunction M:Open(id) end\nfunction M:Buy(item, n) end\nreturn M\n',
     )
+    await writeFile(
+      path.join(root, 'UI/Child.lua'),
+      '---@class Child : Base\nlocal Base = require "UI.Base"\nlocal M = setmetatable({}, Base)\nfunction M:Own() end\nreturn M\n',
+    )
     const { luaDeclared } = await import('./lua-props.ts')
+    const child = await luaDeclared(root, 'UI.Child')
+    assert.deepEqual(
+      child?.functions.map((f) => f.name),
+      ['Own', 'Open', 'Close'],
+    )
     const d = await luaDeclared(root, '/UI/Shop')
     assert.ok(d)
     assert.deepEqual(

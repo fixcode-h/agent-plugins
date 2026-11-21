@@ -44,9 +44,23 @@ export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaD
       })
     }
     const parent: string | undefined = parseLuaHead(cur.text).parent
-    cur = parent ? await readModule(luaRootAbs, parent) : undefined
+    cur = parent
+      ? ((await readModule(luaRootAbs, parent)) ?? (await byRequire(luaRootAbs, cur.text, parent)))
+      : undefined
   }
   return { file: first.file, fields: first.info.fields, functions }
+}
+
+/**
+ * 注解里的父类常写类名（`---@class Child : Base`），不是模块路径：在这个文件 require 过的模块里找最后一段同名的
+ * （`local Base = require "UI.Base"`），找到就读它
+ */
+async function byRequire(luaRootAbs: string, text: string, cls: string) {
+  for (const m of text.matchAll(/require\s*\(?\s*["']([^"']+)["']/g)) {
+    const mod = m[1]
+    if (mod.split(/[./\\]/).pop() === cls) return readModule(luaRootAbs, mod)
+  }
+  return undefined
 }
 
 /** 模块名（点或 / 分隔，可带开头的 /）→ 源文件和解析结果；不在脚本根里、没有这个文件时 undefined */
