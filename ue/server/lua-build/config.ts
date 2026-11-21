@@ -2,22 +2,14 @@ import path from 'node:path'
 import { patchProject } from '../registry.ts'
 import type { LuaBuildConfig, UeProject } from '../types.ts'
 import { t } from '../util.ts'
-import { saveSharedLuaBuild, SHARED_KEYS, sharedPart } from './store.ts'
+import { DEFAULT_LUA_BUILD, saveSharedLuaBuild, SHARED_KEYS, sharedPart } from './store.ts'
 
 /**
  * Lua 编译的设置（设计稿四.3）：团队共用的部分存项目文档根、个人习惯存本机项目登记，读项目时已合进 p.luaBuild（store.ts）。
  * 只有这里配好的两条指令能跑：网页按钮和 Agent 的 ue_lua action=compile 都不能自己传命令；
  * 从仓库拉来、本机没确认过的指令也不跑（store.ts 的 luaBuildApproved）。
  */
-export const DEFAULT_LUA_BUILD: LuaBuildConfig = {
-  full: '',
-  incremental: '',
-  cwd: '',
-  scriptDir: 'Content/Script',
-  errorFormat: '{file}:{line}: {message}',
-  autoReload: true,
-  editor: '',
-}
+export { DEFAULT_LUA_BUILD }
 
 export function luaBuildConfig(p: UeProject): LuaBuildConfig {
   return { ...DEFAULT_LUA_BUILD, ...(p.luaBuild ?? {}) }

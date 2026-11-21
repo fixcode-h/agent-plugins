@@ -15,6 +15,17 @@ import { c, readJson, writeJson } from '../util.ts'
  * 所以本机记一份「确认过的指令」的哈希，指令和它对不上（新拉的、被别人改过的）先在设置里确认才跑，
  * 和 Lua 片段的批准（lua-debug/snippets.ts）一个道理。自己在网页上保存的算确认过。
  */
+/** 没配过时的默认值（config.ts 也从这里取）：确认的哈希要按生效的值算，没写进文件的字段和默认值一样 */
+export const DEFAULT_LUA_BUILD: LuaBuildConfig = {
+  full: '',
+  incremental: '',
+  cwd: '',
+  scriptDir: 'Content/Script',
+  errorFormat: '{file}:{line}: {message}',
+  autoReload: true,
+  editor: '',
+}
+
 export const SHARED_KEYS = ['full', 'incremental', 'cwd', 'scriptDir', 'errorFormat'] as const
 type SharedKey = (typeof SHARED_KEYS)[number]
 export type SharedLuaBuild = Partial<Pick<LuaBuildConfig, SharedKey>>
@@ -39,10 +50,12 @@ export function localPart(x?: Partial<LuaBuildConfig>): Partial<LuaBuildConfig> 
   return Object.keys(out).length ? out : undefined
 }
 
-/** 确认认的是真正会执行的三样：两条指令和工作目录 */
+/** 确认认的是决定执行什么的四样：两条指令、工作目录和脚本目录（{files} 按它换成文件，全编译也编它下面的文件） */
 const commandHash = (s: SharedLuaBuild) =>
   createHash('sha256')
-    .update(JSON.stringify([s.full ?? '', s.incremental ?? '', s.cwd ?? '']))
+    .update(
+      JSON.stringify([s.full ?? '', s.incremental ?? '', s.cwd ?? '', s.scriptDir || DEFAULT_LUA_BUILD.scriptDir]),
+    )
     .digest('hex')
 
 const approvedFile = (id: string) => path.join(c().dataDir, 'lua-build-approved', `${encodeURIComponent(id)}.json`)

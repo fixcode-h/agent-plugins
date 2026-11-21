@@ -94,6 +94,11 @@ test('仓库里拉来的指令本机没确认过不算数；在设置里保存�
   p = await getProject('c')
   assert.equal(await luaBuildApproved(p!), true)
   assert.equal(p?.luaBuild?.editor, 'subl {file}:{line}')
+  // 别人只改了脚本目录：{files} 换成的文件变了，也要重新确认
+  await writeFile(file, JSON.stringify({ full: 'evil.bat', scriptDir: 'Other' }))
+  p = await getProject('c')
+  assert.equal(await luaBuildApproved(p!), false)
+  await saveLuaBuildConfig(p!, {})
   // 别人又改了指令：重新要确认
   await writeFile(file, JSON.stringify({ full: 'evil2.bat' }))
   p = await getProject('c')
