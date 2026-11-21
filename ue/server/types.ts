@@ -45,16 +45,17 @@ export interface UeProject {
   perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: PythonPerm }
   /** GM 预设和宏存哪：项目里 .agent-panel/ue/gm.json（团队共用）/ 插件数据目录（只自己用） */
   gmStore: 'project' | 'local'
-  /** 资源页收藏的文件夹存哪：项目文档根 docs/AgentPanel/UE（默认）/ 项目里 .agent-panel/ue，都在项目里、团队共用 */
-  favStore: 'docs' | 'project'
   /** 手动指定的引擎目录（自动找不到时填） */
   engineDir: string
   /** 自定义编译命令（空用 Build.bat 默认的） */
   buildCmd: string
   /** 网页上选的目标：实例类型（editor / game / server / background）和世界 id */
   target: { kind: string; world: string }
-  /** Lua 页「编译」的设置（server/lua-build/config.ts），没配过为空 */
-  luaBuild?: LuaBuildConfig
+  /**
+   * Lua 页「编译」的设置（server/lua-build/config.ts），没配过为空。读项目时合好的一份：团队共用的部分来自项目文档根，
+   * 存登记时只存个人那部分（server/lua-build/store.ts）
+   */
+  luaBuild?: Partial<LuaBuildConfig>
   /**
    * 性能页录 trace 时带不带 Lua（server/perf/lua-trace.ts）：用户在录制控件上改过才有，没有时装了 UnLua 就带。
    * c=false 是 C 函数不单独成块（只录 lua 通道，时间算进调用它的 Lua 函数）

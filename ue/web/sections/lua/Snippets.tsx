@@ -28,10 +28,7 @@ export function LuaSnippets({
 }) {
   const { project } = useUe()
   const { busy, run } = useAction()
-  const list = useLoad(
-    () => pget<{ items: SnippetView[]; file: string }>(project.id, 'lua/snippets'),
-    [project.id, project.favStore],
-  )
+  const list = useLoad(() => pget<{ items: SnippetView[]; file: string }>(project.id, 'lua/snippets'), [project.id])
   const [editing, setEditing] = useState<{ oldName?: string; name: string; desc: string } | null>(null)
   const edit = (b: Record<string, unknown>) =>
     run('edit', async () =>

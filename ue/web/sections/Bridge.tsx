@@ -123,20 +123,14 @@ export function Bridge() {
                 ]}
               />
             </ui.Field>
+            {/* 收藏、Lua 片段、Lua GM 扫描设置、Lua 编译的共用设置都存项目文档根，可以提交给团队共用（用户 2026-11-21 定，不再可选） */}
             <ui.Field
-              label={t('资源页收藏的文件夹存在')}
-              hint={favFile.data?.file || t('都在项目里，可以提交给团队共用；换位置时现有的收藏会一起带过去')}
+              label={t('资源页收藏、Lua 片段和 GM 扫描设置存在')}
+              hint={t('项目文档目录里，可以提交给团队共用')}
             >
-              <ui.Select
-                value={form.favStore}
-                onChange={(e: { target: { value: string } }) =>
-                  void saveSettings({ favStore: e.target.value as UeProject['favStore'] }).then(() => favFile.reload())
-                }
-                options={[
-                  { value: 'docs', label: t('项目文档目录 docs/AgentPanel/UE') },
-                  { value: 'project', label: t('项目里 .agent-panel/ue') },
-                ]}
-              />
+              <div className="ue:min-h-8 ue:break-all ue:py-1.5 ue:font-mono ue:text-footnote ue:text-fg">
+                {favFile.data?.file ? favFile.data.file.replace(/[\\/][^\\/]+$/, '') : '…'}
+              </div>
             </ui.Field>
             <ui.Field
               label={t('引擎目录')}

@@ -35,6 +35,13 @@ export function LuaBuildSettings() {
 
   return (
     <Card title={t('Lua 编译')} aside={t('在本机跑，不经过 UE；Agent 也只能跑这两条')}>
+      {b.snap?.unapproved && (
+        <div className="ue:border-b ue:border-warning/30 ue:bg-warning/10 ue:px-4 ue:py-2 ue:text-body ue:text-fg">
+          {t(
+            '编译指令来自仓库里的共用设置，这台机器还没确认过（新拉的或被别人改过）。看过下面的指令没问题后点保存，才能编译',
+          )}
+        </div>
+      )}
       <form
         className="ue:grid ue:gap-4 ue:p-4 ue:sm:grid-cols-2"
         onSubmit={(e) => {
@@ -85,10 +92,15 @@ export function LuaBuildSettings() {
         >
           <ui.Input className="ue:font-mono" placeholder={t('系统默认')} {...field('editor')} />
         </ui.Field>
-        <div className="ue:sm:col-span-2">
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:sm:col-span-2">
           <ui.Button size="sm" type="submit" disabled={!!busy}>
-            {t('保存')}
+            {b.snap?.unapproved ? t('确认并保存') : t('保存')}
           </ui.Button>
+          {b.snap?.sharedFile && (
+            <span className="ue:min-w-0 ue:break-all ue:text-caption ue:text-subtle">
+              {t('指令、目录和报错格式存在 {f}，团队共用；编完重载和编辑器只存本机', { f: b.snap.sharedFile })}
+            </span>
+          )}
         </div>
       </form>
     </Card>

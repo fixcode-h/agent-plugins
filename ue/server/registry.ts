@@ -1,6 +1,7 @@
 import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { refreshDocsRoot } from './doc-root.ts'
+import { adoptProjectStore, refreshDocsRoot } from './doc-root.ts'
+import { localPart, mergeLuaBuild } from './lua-build/store.ts'
 import type { UeProject } from './types.ts'
 import { c, now, readJson, writeJson } from './util.ts'
 
@@ -23,7 +24,6 @@ function norm(p: UeProject): UeProject {
     ...p,
     perms: { ...DEFAULT_PERMS, ...p.perms, python: pythonPerm(p.perms?.python) },
     gmStore: p.gmStore ?? 'project',
-    favStore: p.favStore === 'project' ? 'project' : 'docs',
     buildCmd: p.buildCmd ?? '',
     engineDir: p.engineDir ?? '',
     target: p.target ?? { kind: '', world: '' },
@@ -35,22 +35,41 @@ export async function listProjects(): Promise<UeProject[]> {
   for (const n of await readdir(dir()).catch(() => [] as string[])) {
     if (!n.endsWith('.json')) continue
     const p = await readJson<UeProject | null>(path.join(dir(), n), null)
-    if (p?.id) out.push(norm(p))
+    if (p?.id) out.push(p)
   }
-  await Promise.all(out.map((p) => refreshDocsRoot(p)))
-  return out.sort((a, b) => a.addedAt.localeCompare(b.addedAt))
+  const loaded = await Promise.all(out.map((p) => load(p)))
+  return loaded.sort((a, b) => a.addedAt.localeCompare(b.addedAt))
 }
 
 export async function getProject(id: string): Promise<UeProject | undefined> {
   const p = await readJson<UeProject | null>(file(id), null)
-  if (!p) return undefined
-  // 文档根问面板（doc-root.ts）：项目存放的脚本、收藏都按它找，取项目时顺手取好，后面同步用
-  await refreshDocsRoot(p)
-  return norm(p)
+  return p ? load(p) : undefined
 }
 
+/** 登记文件里以前有、已经不用的字段：读到时搬家（load）再从文件里去掉 */
+type Stored = UeProject & { favStore?: string }
+
+/**
+ * 读项目：文档根问面板（doc-root.ts），项目存放的脚本、收藏都按它找，取项目时顺手取好，后面同步用；
+ * 再把文档根里团队共用的 Lua 编译设置合进来（lua-build/store.ts）。升级前存的东西在这里一次性搬家
+ */
+async function load(raw: Stored): Promise<UeProject> {
+  await refreshDocsRoot(raw)
+  let rewrite = false
+  // 以前「收藏存哪」选了项目 .agent-panel/ue 的（2026-11-21 起统一存文档根）：那边的文件复制过来
+  if ('favStore' in raw) {
+    if (raw.favStore === 'project') await adoptProjectStore(raw)
+    delete raw.favStore
+    rewrite = true
+  }
+  const lb = await mergeLuaBuild(raw)
+  if (rewrite || lb.strip) await saveProject(raw)
+  return norm({ ...raw, luaBuild: lb.luaBuild })
+}
+
+/** 存项目登记：Lua 编译设置只存个人那部分，团队共用的在文档根（lua-build/store.ts） */
 export async function saveProject(p: UeProject) {
-  await writeJson(file(p.id), { ...p, addedAt: p.addedAt || now() })
+  await writeJson(file(p.id), { ...p, luaBuild: localPart(p.luaBuild), addedAt: p.addedAt || now() })
 }
 
 export async function patchProject(id: string, patch: Partial<UeProject>) {

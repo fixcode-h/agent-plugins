@@ -13,6 +13,7 @@ import { changedFiles, moduleName } from './changes.ts'
 import { compileErrorPattern } from './config.ts'
 import { parseErrorLine } from './errors.ts'
 import { startLuaBuild, waitBuild } from './run.ts'
+import { approveLuaBuild, sharedPart } from './store.ts'
 
 let root = ''
 let data = ''
@@ -85,6 +86,8 @@ test('没编过不猜改过的文件；全编译成功后只列之后改的；�
     incremental: 'node -e "console.log(process.argv.slice(1).join(\',\'))" -- {files}',
   })
   const ctx = { project: p, actor: { kind: 'user' } } as unknown as OpCtx
+  // 本机没确认过的指令不跑（store.ts）：测试里先确认
+  await approveLuaBuild(p.id, sharedPart(p.luaBuild))
   // 把现有文件的时间调到过去，全编译的时刻就晚于它们
   const old = new Date(Date.now() - 60000)
   for (const f of ['UI/BagPanel.lua', 'Main.lua']) await utimes(path.join(dir, f), old, old)
@@ -112,6 +115,7 @@ test('没编过不猜改过的文件；全编译成功后只列之后改的；�
   const bad = project({
     full: 'node -e "console.error(\'luac: UI/BagPanel.lua:9: unexpected symbol\'); process.exit(1)"',
   })
+  await approveLuaBuild(bad.id, sharedPart(bad.luaBuild))
   const b = await startLuaBuild({ project: bad, actor: { kind: 'agent' } } as unknown as OpCtx, 'full')
   const br = await waitBuild(bad.id, b.id, 15000)
   assert.equal(br?.status, 'failed')
