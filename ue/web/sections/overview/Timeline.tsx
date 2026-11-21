@@ -17,8 +17,11 @@ interface Ev {
   undo?: HistoryItem
 }
 
-/** 固定成 10 行的高度（最多列 10 条），条数变了版面不跳，带报错第二行的多了就在里面滚 */
-const TIMELINE_BODY = 'ue:h-[23rem] ue:overflow-auto'
+/**
+ * 窄屏上下排时固定成 10 行的高度（最多列 10 条），条数变了版面不跳，带报错第二行的多了就在里面滚；
+ * 宽屏两栏时（用户 2026-11-21）占满左栏剩下的高度，由 Card 的内容区滚动
+ */
+const TIMELINE_BODY = 'ue:h-[23rem] ue:overflow-auto ue:lg:h-auto ue:lg:overflow-visible'
 
 const hms = (ms: number) =>
   ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
@@ -31,7 +34,10 @@ export function Timeline({
   history,
   busy,
   onUndo,
+  className,
 }: {
+  /** 外框的类名：概览两栏布局里让它占满左栏剩下的高度 */
+  className?: string
   /** 还没取到时是 undefined，显示占位 */
   history?: HistoryItem[]
   busy: boolean
@@ -75,6 +81,8 @@ export function Timeline({
     .slice(0, 10)
   return (
     <Card
+      className={className}
+      bodyClass="ue:lg:overflow-auto"
       title={
         <>
           <HistoryIcon className="ue:h-4 ue:w-4" /> {t('最近发生的')}

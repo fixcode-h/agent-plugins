@@ -1,11 +1,11 @@
 import { Activity, Cpu, FileText, ListChecks, Save } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { HistoryItem } from '../../../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from '../../api.ts'
 import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { STACK } from '../../split.tsx'
+import { PANE_FIXED, PANE_FIXED_H, STACK, SplitHandle, usePane, usePaneHeight } from '../../split.tsx'
 import { Card, Confirm, PageHead, fmtTime, kindLabel } from '../../ui.tsx'
 import { RunBar } from '../RunBar.tsx'
 import type { GtRunSummary } from '../uekit/gt-run/types.ts'
@@ -21,14 +21,20 @@ import { VsDebugCard } from '../../vs-debug/VsDebugCard.tsx'
 import { TargetChips } from '../../nav/TargetChips.tsx'
 
 /**
- * 概览（设计稿 designs/UE插件优化与扩展-设计稿.md 三.1，效果图 1）：四个读数、「需要你处理」（按紧急程度，每条一个主动作）、
- * 右栏编辑器选中和扩展、「最近发生的」时间线，下面是实例和常用。
+ * 概览（设计稿 designs/UE插件优化与扩展-设计稿.md 三.1，效果图 1）：四个读数，下面左右两栏：
+ * 左栏「需要你处理」（按紧急程度，每条一个主动作）、「最近发生的」时间线、实例；右栏 VS 调试、编辑器选中、扩展、常用。
  * 崩溃、帧时间、最近的错误跟着左栏徽标的同一个请求来（UePage 在概览页加 overview=1），不另起轮询；
  * 扩展和测试结果打开页面时取一次
  */
 export function Overview() {
   const { project, state, go, badges, reloadBadges, switcher } = useUe()
-  const { toast, ui } = h()
+  const { toast, ui, cn } = h()
+  // 两栏的尺寸记在本机：右栏宽度、左栏「需要你处理」的高度
+  const sidePane = usePane('overview-side', '36%', 320)
+  const attPane = usePaneHeight('overview-attention', '15rem', 96)
+  const sideRef = useRef<HTMLDivElement>(null)
+  const attRef = useRef<HTMLElement>(null)
+  const instRef = useRef<HTMLDivElement>(null)
   const { busy, run } = useAction()
   const chat = useToChat()
   const hist = useLoad(() => pget<{ items: HistoryItem[] }>(project.id, 'history'), [project.id], 5000)
@@ -137,46 +143,71 @@ export function Overview() {
           />
         </div>
 
-        {/* 中间一排、时间线、实例和常用都是固定高度、里面滚动：数据隔几秒刷一次，条数一变整页就跳（用户 2026-11-18） */}
-        <div className="ue:grid ue:shrink-0 ue:gap-px ue:bg-line ue:xl:h-[26rem] ue:xl:grid-cols-[1.6fr_1fr]">
-          <Card
-            className="ue:h-60 ue:xl:h-auto ue:xl:min-h-0"
-            bodyClass="ue:overflow-auto"
-            title={
-              <>
-                <ListChecks className="ue:h-4 ue:w-4" /> {t('需要你处理')}
-              </>
-            }
-            aside={items.length ? t('按紧急程度排') : undefined}
-          >
-            {!badges ? (
-              <Skeleton rows={3} />
-            ) : items.length ? (
-              <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
-                {items.map((it) => (
-                  <AttentionRow key={it.key} item={it} disabled={!!busy} />
-                ))}
-              </ul>
-            ) : (
-              <p className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
-                {t('一切正常：没有崩溃、没保存的资源和要升级的插件')}
-              </p>
+        {/*
+          用户 2026-11-21：整页分成左右两栏。左栏「需要你处理」「最近发生的」「实例」，右栏 VS 调试、编辑器选中、扩展、常用；
+          宽屏时两栏占满剩下的高度、各自在里面滚，数据隔几秒刷一次条数变了也不让整页跳（用户 2026-11-18）。
+          左右分界和「需要你处理」的高度都能拖、记在本机（split.tsx），双击恢复默认；窄屏上下排、整页滚
+        */}
+        <div className="ue:flex ue:shrink-0 ue:flex-col ue:divide-y ue:divide-line ue:lg:min-h-[36rem] ue:lg:flex-1 ue:lg:flex-row ue:lg:divide-y-0">
+          <div className="ue:flex ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">
+            <Card
+              ref={attRef}
+              className={cn('ue:h-60 ue:border-b ue:border-line ue:lg:border-b-0', PANE_FIXED_H)}
+              style={attPane.style('calc(100% - 20rem)')}
+              bodyClass="ue:overflow-auto"
+              title={
+                <>
+                  <ListChecks className="ue:h-4 ue:w-4" /> {t('需要你处理')}
+                </>
+              }
+              aside={items.length ? t('按紧急程度排') : undefined}
+            >
+              {!badges ? (
+                <Skeleton rows={3} />
+              ) : items.length ? (
+                <ul className="ue:flex ue:flex-col ue:divide-y ue:divide-line">
+                  {items.map((it) => (
+                    <AttentionRow key={it.key} item={it} disabled={!!busy} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="ue:px-4 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
+                  {t('一切正常：没有崩溃、没保存的资源和要升级的插件')}
+                </p>
+              )}
+            </Card>
+            {/* 拖动条留给「最近发生的」至少 10rem，再加上实例那一块的高度 */}
+            <SplitHandle
+              pane={attPane}
+              paneRef={attRef}
+              reserve={() => 160 + (instRef.current?.getBoundingClientRect().height ?? 0)}
+            />
+            <Timeline
+              className="ue:lg:min-h-40 ue:lg:flex-1"
+              history={hist.data?.items}
+              busy={!!busy}
+              onUndo={undoOne}
+            />
+            <div ref={instRef} className="ue:shrink-0 ue:border-t ue:border-line">
+              <Instances />
+            </div>
+          </div>
+          <SplitHandle pane={sidePane} paneRef={sideRef} side="right" reserve={() => 480} />
+          <div
+            ref={sideRef}
+            style={sidePane.style('calc(100% - 480px)')}
+            className={cn(
+              'ue:flex ue:flex-col ue:gap-px ue:bg-line ue:*:shrink-0 ue:lg:min-h-0 ue:lg:overflow-auto',
+              PANE_FIXED,
             )}
-          </Card>
-          <div className="ue:flex ue:h-[26rem] ue:min-h-0 ue:flex-col ue:*:shrink-0 ue:gap-px ue:overflow-auto ue:bg-line ue:xl:h-auto">
-            {/* VS 调试放在页头「启动编辑器 / PIE」旁边这一页：都是「怎么把 UE 跑起来」的控制，右栏最上面 */}
+          >
+            {/* VS 调试放最上面：和页头「启动编辑器 / PIE」一样是「怎么把 UE 跑起来」的控制 */}
             <VsDebugCard />
             <SelectionSlot />
             <Extensions exts={ext.data?.items} upgrades={upgrades} />
+            <Favorites />
             <div className="ue:flex-1 ue:bg-card" />
           </div>
-        </div>
-
-        <Timeline history={hist.data?.items} busy={!!busy} onUndo={undoOne} />
-
-        <div className="ue:grid ue:shrink-0 ue:gap-px ue:bg-line ue:xl:grid-cols-[1.4fr_1fr]">
-          <Instances />
-          <Favorites />
         </div>
       </div>
       {chat.dialog}
