@@ -14,11 +14,13 @@ import { stopGmWatch } from './gm-custom/watch.ts'
 import { installedIn } from './uekit/catalog.ts'
 import { EXT_TOOL_PLUGIN } from './uekit/tools-ext.ts'
 import { listProjects, projectForRun } from './registry.ts'
+import type { UeProject } from './types.ts'
 import { ueTextifier } from './textify.ts'
 import { ueToolDefs, ueTools } from './tools.ts'
 import { UE_SUMMARY } from './tool-guides.ts'
-import { setCtx, t } from './util.ts'
+import { c, setCtx, t } from './util.ts'
 import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
+import { engineFacts } from './engine-facts.ts'
 
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
@@ -65,6 +67,16 @@ async function withExtensions<T extends { name: string }>(root: string, tools: T
   return tools.filter((x) => !missing.has(x.name))
 }
 
+/** 用法说明后面接上本项目引擎的事实（engine-facts.ts）；读不到引擎时照旧只给用法，不让一次读失败把工具挂不上 */
+async function withEngine(hint: string, project: UeProject, dryRun?: boolean) {
+  if (dryRun) return hint
+  const facts = await engineFacts(project).catch((e: Error) => {
+    c().log.warn('UE：取引擎信息失败', { error: e.message })
+    return ''
+  })
+  return facts ? `${hint}\n\n${facts}` : hint
+}
+
 const activate: ActivateServer = async (ctx) => {
   setCtx(ctx)
   // 升级到按项目生效：已经在 UE 页接入过的项目都打开一次，免得升级后工具突然不挂了
@@ -90,7 +102,8 @@ const activate: ActivateServer = async (ctx) => {
             tools: () => withExtensions(project.root, ueTools(project.id, project.root, run.agentName)),
           },
         ],
-        hint: run.resume ? undefined : HINT,
+        // 引擎版本和源码目录只在新会话开头给一次（续接的会话已经有了）；自检不读注册表、不起进程
+        hint: run.resume ? undefined : await withEngine(HINT, project, run.dryRun),
         notices: run.resume ? undefined : await bridgeNotice(project.root),
       }
     },

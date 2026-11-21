@@ -109,3 +109,24 @@ export async function findEngine(uproject: string, association: string, custom =
   }
   return { association, dir: '', version: '', source: 'unknown' }
 }
+
+/**
+ * 本机装着的全部引擎（Launcher 装的 + 注册过的源码版），按版本从高到低。
+ * 写 C++ 要同时兼容几个引擎版本时，Agent 要在每个版本的头文件里各查一次签名（ue-cpp-engine-api 技能），所以把其他版本也告诉它
+ */
+export async function installedEngines(): Promise<{ version: string; dir: string }[]> {
+  const out: { version: string; dir: string }[] = []
+  for (const e of await launcherEngines())
+    if (exists(e.dir)) out.push({ version: (await buildVersion(e.dir)) || e.version, dir: e.dir })
+  for (const dir of Object.values(await sourceBuilds())) {
+    if (!exists(dir) || out.some((o) => path.resolve(o.dir) === path.resolve(dir))) continue
+    const version = await buildVersion(dir)
+    if (version) out.push({ version, dir })
+  }
+  const num = (v: string) => v.split('.').map((x) => parseInt(x, 10) || 0)
+  return out.sort((a, b) => {
+    const [x, y] = [num(a.version), num(b.version)]
+    for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return (y[i] ?? 0) - (x[i] ?? 0)
+    return 0
+  })
+}

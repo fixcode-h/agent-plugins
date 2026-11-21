@@ -63,6 +63,15 @@ UEToVS（VS 扩展）0.8.0 起在 VS 进程里开一条调试控制管道，用 
 - **停在断点**：UE 停在 VS 里时进程冻住，UELink 调不通。`ue_*` 工具超时 / 连不上、网页判断「忙」时，如果 VS 处于 break，说明换成「UE 停在 VS 断点 文件:行（函数），先 ue_vs_debug continue 继续」。
 - 单测：`node --test ue/server/vs-debug/vs-debug.test.ts ue/server/vs-debug/open-vs.test.ts`（假服务端用 unix socket 代替命名管道）。还没在真实的 VS + UEToVS 0.8.0 上联调过。
 
+## 写 UE C++：引擎 API 先查后写
+
+凭记忆写引擎 API（函数名、参数、头文件、模块、5.4 和 5.8 的差异）是写 UE C++ 最常见的返工，每猜错一次就是一整轮编译。
+
+- **引擎事实**（`server/engine-facts.ts`）：C++ 项目的新会话开头，用法说明后面接一节「UE C++ 引擎」：项目用的引擎版本和来源、`Engine/Source` 和 `Engine/Plugins` 的路径、本机装的其他引擎（兼容几个版本时每个都查）。登记时存的引擎目录没了会重新找；找不到或引擎里没装源码时说清楚请用户指定目录或贴声明。本机引擎列表 10 分钟内的新会话复用，设置 →「MCP」的自检不读。
+- **技能 `ue-cpp-engine-api`**：什么时候必须先查、怎么查（UEToVS 的 `get_members`、`search_symbols scope=all`、`go_to_definition`、`suggest_include`、`get_module_info`，没有就 `rg` 引擎源码的限定目录）、兼容几个引擎版本时差异只写在 `<插件>Compat.h`、编译报错的对照表。
+- **编译报错**：面板在编译失败的结果里认出 C2039 / C3861 / C2065 / C2660 / C2664 / LNK2019 / LNK2001（和 clang 的同类）时列出符号、提醒先查定义（面板 `shared/compile/hints.ts`），UE 编译只给日志路径时也带。
+- 单测：`node --test ue/server/engine-facts.test.ts`。
+
 ## 只认 Agent 模式里的项目
 
 - 「添加 UE 项目」只列面板里已经添加的项目。
