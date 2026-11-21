@@ -20,13 +20,16 @@ export const STRUCT_MAX = 12000
 const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : d)
 const s = (v: unknown) => (typeof v === 'string' ? v : '')
 
-const editorOpen = async (ctx: OpCtx) => (await liveCards(ctx.project.root)).some((x) => x.kind === 'editor' || x.kind === 'game')
+const editorOpen = async (ctx: OpCtx) =>
+  (await liveCards(ctx.project.root)).some((x) => x.kind === 'editor' || x.kind === 'game')
 
 /** 旧版 GameTest 不认新操作：说清楚要升级，不把「未知操作」原样丢给 Agent */
 function needNew(e: unknown, op: string): never {
   const msg = (e as Error).message
   if (/unknown|不认识|未知|not found|没有.*操作/i.test(msg))
-    throw new Error(`编辑器里的 GameTest 不认 ${op}：在 UE 页「UE 插件」把 GameTest 升到 1.9.0 以上并重新编译（原始错误：${msg}）`)
+    throw new Error(
+      `编辑器里的 GameTest 不认 ${op}：在 UE 页「UE 插件」把 GameTest 升到 1.9.0 以上并重新编译（原始错误：${msg}）`,
+    )
   throw e
 }
 
@@ -57,7 +60,9 @@ export async function gtVars(op: Op, a: A, ctx: OpCtx) {
   const filter = s(a.filter)
   const args: A = {
     scope,
-    ...Object.fromEntries(['target', 'class', 'name', 'which', 'module', 'filter'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]])),
+    ...Object.fromEntries(
+      ['target', 'class', 'name', 'which', 'module', 'filter'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]]),
+    ),
     ...(a.object !== undefined ? { object: a.object } : {}),
     values: a.values !== false,
     functions: a.functions !== false,
@@ -73,8 +78,12 @@ export async function gtVars(op: Op, a: A, ctx: OpCtx) {
     if (await editorOpen(ctx)) game = await op('gt.vars', args).catch(() => undefined)
     const fromGame = (game?.groups as VarGroup[] | undefined)?.find((g) => g.src === 'lua')
     const merged = mergeLuaGroups(file, fromGame)
-    if (!merged) return { error: `找不到 Lua 模块 ${mod}：脚本根是 ${root.replace(/\\/g, '/')}，module 写相对它的 require 路径` }
-    return fit({ owner: { luaModule: mod }, groups: [], ...(game && !game.error ? { valuesFrom: 'game' } : {}) }, merged)
+    if (!merged)
+      return { error: `找不到 Lua 模块 ${mod}：脚本根是 ${root.replace(/\\/g, '/')}，module 写相对它的 require 路径` }
+    return fit(
+      { owner: { luaModule: mod }, groups: [], ...(game && !game.error ? { valuesFrom: 'game' } : {}) },
+      merged,
+    )
   }
   if (!(await editorOpen(ctx)))
     return { error: '列 C++ 和蓝图的字段要编辑器开着（读反射）；只要 Lua 的用 scope=lua module=…', offline: true }
@@ -83,8 +92,19 @@ export async function gtVars(op: Op, a: A, ctx: OpCtx) {
   const owner = (res.owner ?? {}) as { luaModule?: string }
   const groups = (res.groups as VarGroup[] | undefined) ?? []
   if (owner.luaModule && num(a.offset, 0) === 0) {
-    const file = await luaGroup(root, owner.luaModule, scope === 'widget' ? '@lua.' : `@luaMod.${owner.luaModule}.`, filter)
-    return fit(res, mergeLuaGroups(file, groups.find((g) => g.src === 'lua')))
+    const file = await luaGroup(
+      root,
+      owner.luaModule,
+      scope === 'widget' ? '@#' : `@luaMod.${owner.luaModule}.`,
+      filter,
+    )
+    return fit(
+      res,
+      mergeLuaGroups(
+        file,
+        groups.find((g) => g.src === 'lua'),
+      ),
+    )
   }
   return res
 }
@@ -109,7 +129,9 @@ export async function gtApi(op: Op, a: A, ctx: OpCtx) {
   const lua = await writeLuaApi(scen, luaRoot(ctx.project)).catch((e: Error) => ({ error: e.message }))
   const scanNote = 'error' in lua ? { luaScanError: lua.error } : lua.missing ? { luaMissingFolders: lua.missing } : {}
   const args = {
-    ...Object.fromEntries(['query', 'category', 'src', 'readOnly'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]])),
+    ...Object.fromEntries(
+      ['query', 'category', 'src', 'readOnly'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]]),
+    ),
     offset: num(a.offset, 0),
     limit: Math.min(num(a.limit, 60), 200),
   }

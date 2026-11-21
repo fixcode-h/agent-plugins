@@ -12,6 +12,7 @@ import { h, t } from '../../../host.ts'
 import { SettingGroup, SettingRow } from '../../../SettingRows.tsx'
 import { CloseHowList, closeHowText, CloseVerify } from './CloseHowList.tsx'
 import { inText } from './describe.ts'
+import { PathListInput } from './PathListInput.tsx'
 import { usePrefs } from './prefs.ts'
 import { MANY_OPTIONS } from './RefCard.tsx'
 import type { RefConfig } from './rules-io.ts'
@@ -104,11 +105,7 @@ export function RefSettings({ value, onChange }: { value: RefConfig; onChange: (
             ) : (
               cell(r.in ?? '', (s) => setIdent(i, { ...r, in: s || undefined }), t('任意'))
             )}
-            {cell(
-              r.ident.join(', '),
-              (s) => setIdent(i, { ...r, ident: s.split(',').map((x) => x.trim()) }),
-              '@item.ItemId',
-            )}
+            <PathListInput value={r.ident} onChange={(ident) => setIdent(i, { ...r, ident })} />
             {cell(r.note ?? '', (s) => setIdent(i, { ...r, note: s || undefined }))}
             <ui.IconButton
               size="sm"

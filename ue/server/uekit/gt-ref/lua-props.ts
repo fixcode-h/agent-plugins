@@ -8,7 +8,7 @@ import { t } from '../../util.ts'
 /**
  * gt.props 的 Lua 字段（协议 game-test-ref 7.3、7.5）：UE 只按实例表给此刻有值的 Lua 字段，
  * 面板再按对象的 luaModule 找到源文件，用 lua-parse 读 `---@field`（以及 self.x、模块表字段）补全：
- * 还没赋值的、游戏没开时整组都靠这里，`@lua.` 的下拉才有东西可选。做法和 gt.vars 的 Lua 组一样（gt-author/lua-vars.ts）。
+ * 还没赋值的、游戏没开时整组都靠这里，Lua 字段的下拉才有东西可选。做法和 gt.vars 的 Lua 组一样（gt-author/lua-vars.ts）。
  */
 
 /** 模块文件里声明的字段（没有这个文件、模块名不在脚本根里时 undefined） */
@@ -60,7 +60,7 @@ const srcNote = (k: LuaField['kind']) =>
 function declaredItem(f: LuaField, file: string): GtPropItem {
   const kind = luaKind(f.type)
   const item: GtPropItem = {
-    prop: `@lua.${f.name}`,
+    prop: `@#${f.name}`,
     name: f.name,
     src: 'lua',
     type: f.type,
@@ -84,7 +84,7 @@ function declaredItem(f: LuaField, file: string): GtPropItem {
 }
 
 /**
- * 把声明合进 UE 回的组：Lua 字段放在 self 组（C++ → 蓝图 → Lua）末尾；UE 已经给了的（同名 @lua.）保留 UE 的值，
+ * 把声明合进 UE 回的组：Lua 字段放在 self 组（C++ → 蓝图 → Lua）末尾；UE 已经给了的（同名 @#）保留 UE 的值，
  * 只在它缺类型时补上声明的类型；没给的按声明补。没有 self 组（游戏没开、UE 太旧）时新建一个。
  * filter 和 gt.props 一样按名字子串筛
  */

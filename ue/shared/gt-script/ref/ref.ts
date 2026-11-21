@@ -47,8 +47,23 @@ export function toTarget(v: unknown): GtTarget | undefined {
 /** v3 选择器的样子（屏名冒号、路径斜杠、嵌套 >、方括号、#类名、@句柄）：v4 报 selector_removed */
 export const looksLikeSelector = (s: string) => /[:/>[\]#=]|^@|^\*/.test(s) || s === '.'
 
+/** `lua:模块名`：按 Lua 继承链认的类（协议第 1 节），返回模块名；不是返回 undefined */
+export const luaClassOf = (cls: string): string | undefined => {
+  const m = /^lua:(.*)$/i.exec(cls.trim())
+  return m ? m[1].trim() : undefined
+}
+
+/** in 里的词（字符串或数组；对象写法、`@来源` 返回空数组） */
+export function inWords(v: unknown): string[] {
+  if (typeof v === 'string') return v && !v.startsWith('@') ? [v] : []
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string')
+  return []
+}
+
 /** 类名规整成比较用的键：去掉 `_C` 后缀、资源路径只留最后一段、`U` / `A` 前缀可省（协议第 1 节）、忽略大小写 */
 export function classKey(cls: string) {
+  const lua = luaClassOf(cls)
+  if (lua !== undefined) return `lua:${lua.toLowerCase()}`
   let c = cls.trim().split(/[/.]/).filter(Boolean).at(-1) ?? ''
   if (/_C$/i.test(c)) c = c.slice(0, -2)
   if (/^[UA][A-Z]/.test(c)) c = c.slice(1)
@@ -57,6 +72,8 @@ export function classKey(cls: string) {
 
 /** 显示用的短类名：`/Game/UI/WBP_Shop.WBP_Shop_C` → `WBP_Shop` */
 export function shortClass(cls: string) {
+  const lua = luaClassOf(cls)
+  if (lua !== undefined) return lua
   const c = cls.trim().split(/[/.]/).filter(Boolean).at(-1) ?? cls
   return c.replace(/_C$/i, '')
 }

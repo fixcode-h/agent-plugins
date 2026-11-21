@@ -13,7 +13,6 @@ import { batchUndo, itemPaths } from './batch/undo.ts'
 import { followJob } from './uekit/follow.ts'
 import { FORGE_DISK_OPS, forgeFromDisk } from './uekit/forge-disk.ts'
 import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
-import { gtMigrate } from './uekit/gt-ref/migrate.ts'
 import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
@@ -475,8 +474,8 @@ export async function runOp(
   await checkPerms(ctx, op, kind, args)
   // 文件夹树：自己挑进程，没有编辑器或桥接旧时扫磁盘；不进 ASSET_OPS，免得为列目录启动后台编辑器（asset-folders.ts）
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
-  // GameTest v4（对象引用）：迁移只在面板做、不经过 UE；对象引用的几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）
-  if (op === 'gt.migrate') return { ...(await gtMigrate(ctx.project.root, args)) }
+  // GameTest 对象引用：几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）。gt.migrate 随 v5 删掉（旧脚本不迁移）
+  if (op === 'gt.migrate') throw new BridgeError(t('旧格式不再支持，请按新写法重写'))
   if (GT_REF_OPS.has(op))
     return gtRefOp(op, args, {
       project: ctx.project,

@@ -9,8 +9,8 @@ import { luaDeclared, mergeLuaProps } from './lua-props.ts'
  * GameTest 2.0 的对象引用操作（协议 game-test-ref 第 7 节）：gt.tree / gt.highlight / gt.props / gt.refFor 照常转给 UE，
  * 面板在前后各做一件事：
  * - 前：编辑器里的 GameTest 低于 2.0.0 时直接报「请升级 GameTest 到 2.0.0」，不把「未知操作」原样丢出去；
- * - 后：gt.props 按 luaModule 读 Lua 源码补 `@lua.` 字段（7.5）。UE 太旧、游戏没开时，只要知道模块（参数 luaModule）
- *   照样返回 Lua 声明的字段（unavailable 写原因），编辑页的 `@lua.` 下拉不至于空着。
+ * - 后：gt.props 按 luaModule 读 Lua 源码补 Lua 字段 `@#x`（7.5）。UE 太旧、游戏没开时，只要知道模块（参数 luaModule）
+ *   照样返回 Lua 声明的字段（unavailable 写原因），编辑页的 Lua 字段下拉不至于空着。
  * 不 import instances.ts（选进程、发请求由 ops.ts 传进来），单测不用面板。
  */
 export const GT_REF_OPS = new Set(['gt.tree', 'gt.highlight', 'gt.props', 'gt.refFor'])

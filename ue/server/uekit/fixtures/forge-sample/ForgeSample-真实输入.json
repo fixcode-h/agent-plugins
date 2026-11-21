@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "AssetForge 示例界面：真实鼠标和键盘",
   "_note": "配套「控件」页（AssetForge 1.5.0 起）。用真实鼠标（via: pointer）和按键：悬停、长按蓄力、拖动滑条、滚轮、点开下拉框选项、菜单、输入框里退格和回车、按键选择器。会真的移动光标，跑的时候别动鼠标；PIE 窗口要在前台。",
   "revision": 1,
@@ -41,7 +41,7 @@
         {
           "id": "pointed",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '普通按钮')"
         },
         {
           "id": "hover",
@@ -62,7 +62,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Hover_Card_Value:text",
+            "prop": "@/Page_Controls/Hover_Card_Value:text",
             "op": "eq",
             "value": "悬停中"
           }
@@ -81,7 +81,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Hover_Card_Value:text",
+            "prop": "@/Page_Controls/Hover_Card_Value:text",
             "op": "eq",
             "value": "未悬停"
           },
@@ -113,7 +113,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Hold_Charge_Value:text",
+            "prop": "@/Page_Controls/Hold_Charge_Value:text",
             "op": "eq",
             "value": "蓄力完成"
           }
@@ -154,7 +154,7 @@
           "id": "brightHigh",
           "action": "assert",
           "cond": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Controls.Brightness_Value:text\")) >= 80"
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Controls/Brightness_Value:text\")) >= 80"
           }
         },
         {
@@ -197,7 +197,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.LogPicked:text",
+            "prop": "@/Page_Controls/LogPicked:text",
             "op": "contains",
             "value": "日志 08"
           }
@@ -241,7 +241,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Server_Value:text",
+            "prop": "@/Page_Controls/Server_Value:text",
             "op": "eq",
             "value": "华东一区"
           }
@@ -271,7 +271,7 @@
         {
           "id": "copied",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '菜单：复制')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '菜单：复制')"
         }
       ]
     },
@@ -316,7 +316,7 @@
         {
           "id": "committed",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '输入：abc')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '输入：abc')"
         },
         {
           "id": "listenKey",
@@ -342,7 +342,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.JumpKey_Value:text",
+            "prop": "@/Page_Controls/JumpKey_Value:text",
             "op": "eq",
             "value": "J"
           }

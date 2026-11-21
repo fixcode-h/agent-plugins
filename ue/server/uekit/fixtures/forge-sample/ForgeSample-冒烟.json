@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "AssetForge 示例界面：跳页、弹窗、返回",
   "_note": "配套 AssetForge 示例测试界面（先在 AssetForge 页导入 Test/umg/WBP_ForgeSample.json，会连带导入 pages/ 下的子页面；再导入 map/）。每页一段 group、参数和变量、表达式断言、loop until 连按返回、块里的守护。",
   "revision": 3,
@@ -54,7 +54,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Crumb:text",
+            "prop": "@/Crumb:text",
             "op": "eq",
             "value": "商店"
           }
@@ -80,7 +80,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Popup_Buy:shown",
+                "prop": "@/Popup_Buy:shown",
                 "op": "is",
                 "value": true
               },
@@ -88,7 +88,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Popup_Buy_Subject:text",
+                "prop": "@/Popup_Buy_Subject:text",
                 "op": "contains",
                 "value": "红宝石"
               }
@@ -113,7 +113,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Popup_Help:shown",
+            "prop": "@/Popup_Help:shown",
             "op": "is",
             "value": true
           }
@@ -136,7 +136,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Popup_Buy:shown",
+            "prop": "@/Popup_Buy:shown",
             "op": "is",
             "value": true
           }
@@ -154,7 +154,7 @@
         {
           "id": "buyClosed",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '关闭')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '关闭')"
         }
       ]
     },
@@ -201,7 +201,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Settings.Quality_Value:text",
+            "prop": "@/Page_Settings/Quality_Value:text",
             "op": "eq",
             "value": "$quality"
           }
@@ -249,7 +249,7 @@
           "action": "set",
           "var": "echo",
           "note": "把回显的名字读进变量，下一步拿它和参数比",
-          "value": "=prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Profile.PlayerName_Echo:text\")"
+          "value": "=prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Profile/PlayerName_Echo:text\")"
         },
         {
           "id": "echoOk",
@@ -273,7 +273,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Crumb:text",
+            "prop": "@/Crumb:text",
             "op": "eq",
             "value": "设置"
           }
@@ -292,7 +292,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Popup_Buy:shown",
+            "prop": "@/Popup_Buy:shown",
             "op": "is",
             "value": true
           },
@@ -353,7 +353,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Crumb:text",
+                "prop": "@/Crumb:text",
                 "op": "eq",
                 "value": "任务详情"
               },
@@ -361,7 +361,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_TaskDetail.Page_TaskDetail_Subject:text",
+                "prop": "@/Page_TaskDetail/Page_TaskDetail_Subject:text",
                 "op": "contains",
                 "value": "熔火之心"
               }
@@ -385,7 +385,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Crumb:text",
+            "prop": "@/Crumb:text",
             "op": "eq",
             "value": "商店"
           }
@@ -397,7 +397,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Crumb:text",
+            "prop": "@/Crumb:text",
             "op": "eq",
             "value": "任务"
           },

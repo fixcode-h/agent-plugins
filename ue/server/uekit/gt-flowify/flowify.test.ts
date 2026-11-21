@@ -105,7 +105,7 @@ test('两条改动都要搬走同一步时整份退回', () => {
   )
 })
 
-test('v4 录制（部件写法）：循环的 until、弹窗守护的 when 写成对象判断', () => {
+test('v5 录制（部件写法）：循环的 until、弹窗守护的 when 写成对象判断', () => {
   const next = { obj: { class: 'WBP_Shop' }, part: 'Btn_Next' }
   const steps = [
     { action: 'click', target: next },
@@ -116,7 +116,7 @@ test('v4 录制（部件写法）：循环的 until、弹窗守护的 when 写�
   const rep = runFlowRules(steps)
   const p = plan(rep[0].changes, 4)
   const loop = applyTidyDoc(steps, p, all(p.changes.length), false).steps[0] as Record<string, unknown>
-  assert.deepEqual(loop.until, { obj: { class: 'WBP_Shop' }, prop: '@Btn_Buy:shown', op: 'is', value: true })
+  assert.deepEqual(loop.until, { obj: { class: 'WBP_Shop' }, prop: '@/Btn_Buy:shown', op: 'is', value: true })
 
   const notice = { obj: { class: 'WBP_Notice' }, part: 'Btn_Close' }
   const hints = runFlowRules([
@@ -127,5 +127,5 @@ test('v4 录制（部件写法）：循环的 until、弹窗守护的 when 写�
   ])
   const g = hints.find((h) => h.rule === 'popup-guard')!
   const guard = (g.changes[0] as { guard: { when: unknown } }).guard
-  assert.deepEqual(guard.when, { obj: { class: 'WBP_Notice' }, prop: ':onScreen', op: 'is', value: true })
+  assert.deepEqual(guard.when, { obj: { class: 'WBP_Notice' }, prop: '@:onScreen', op: 'is', value: true })
 })

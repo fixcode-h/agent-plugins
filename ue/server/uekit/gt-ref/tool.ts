@@ -1,10 +1,9 @@
 import { opsFor } from '../../../shared/gt-script/ref/compare/index.ts'
 import type { GtPropGroup, GtPropKind } from '../../../shared/gt-script/ref/types.ts'
-import { compactMigrate, type GtMigrateResult } from './migrate.ts'
 
 /**
- * ue_gametest 的 props / migrate（协议 game-test-ref 7.3、第 9 节）：Agent 从代码写 v4 脚本时要知道对象上有哪些属性、
- * 哪些能当标识（score、suggest），以及把旧脚本升级上来。都走 runOp（版本门槛、Lua 补全、迁移在 ops.ts 那一层），
+ * ue_gametest 的 props（协议 game-test-ref 7.3）：Agent 从代码写 v5 脚本时要知道对象上有哪些属性、
+ * 哪些能当标识（score、suggest）。走 runOp（版本门槛、Lua 补全在 ops.ts 那一层），
  * 这里只整理参数和把返回压到 ADR 0067 的上限内。
  */
 type A = Record<string, unknown>
@@ -42,10 +41,4 @@ export async function gtProps(op: Op, a: A): Promise<A> {
   args.offset = num(a.offset, 0)
   args.limit = Math.min(num(a.limit, 120), 400)
   return slimProps(await op('gt.props', args))
-}
-
-export async function gtMigrateTool(op: Op, a: A): Promise<A> {
-  const args: A = a.all === true ? { all: true } : { scenario: a.scenario }
-  if (a.dryRun === true) args.dryRun = true
-  return compactMigrate((await op('gt.migrate', args)) as unknown as GtMigrateResult)
 }

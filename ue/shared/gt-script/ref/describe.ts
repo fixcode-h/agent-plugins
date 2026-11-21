@@ -1,4 +1,4 @@
-import { parsePropPath } from './prop-path.ts'
+import { parsePropPath } from './path.ts'
 import { inObj, namedRef, refForm, shortClass } from './ref.ts'
 import type { GtIdentItem, GtRef, GtRefLike } from './types.ts'
 
@@ -135,24 +135,28 @@ const fmt = (v: unknown): string => {
   return JSON.stringify(v)
 }
 
-/** 属性路径的显示名：@self.ShopId → ShopId，@TxtTitle:text → TxtTitle 文字，:onScreen → 在屏上 */
+/** 属性路径的显示名：@.ShopId → ShopId，@/TxtTitle:text → TxtTitle 文字，@:onScreen → 在屏上，@#x → x */
 export function propLabel(prop: string, o: DescribeOptions = {}): string {
   const given = o.label?.(prop)
   if (given) return given
   const t = o.t ?? ((s: string) => s)
   const r = parsePropPath(prop)
   if ('error' in r) return prop
-  const p = r.path
-  const head = p.root === 'named' || p.root === 'self' ? '' : `${p.root}.`
-  const body = `${head}${p.segs.join('.')}`
-  if (!p.state) return body
-  return body ? `${body} ${stateWord(p.state, t)}` : stateWord(p.state, t)
+  let body = r.root === 'item' ? 'item' : ''
+  let state = ''
+  for (const s of r.segs) {
+    if (s.kind === 'state') state = s.name
+    else if (s.kind === 'index') body += /^\d+$/.test(s.name) ? `[${s.name}]` : `["${s.name}"]`
+    else body += `${body ? '.' : ''}${s.name}${s.kind === 'fn' ? '()' : ''}`
+  }
+  if (!state) return body
+  return body ? `${body} ${stateWord(state, t)}` : stateWord(state, t)
 }
 
 /** 一条判断项：`ShopId = 1001`、`TxtTitle 文字 包含 杂货`、`在屏上`（bool 为 true 时只写名字） */
 export function describeItem(item: Partial<GtIdentItem>, o: DescribeOptions = {}): string {
   const t = o.t ?? ((s: string) => s)
-  const label = propLabel(item.prop ?? ':exists', o)
+  const label = propLabel(item.prop ?? '@:exists', o)
   const bare = bareOp(item.op, t)
   if (bare) return `${label} ${bare}`
   if ((item.op === undefined || item.op === 'is') && (item.value === true || item.value === undefined)) return label

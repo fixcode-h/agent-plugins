@@ -49,7 +49,7 @@ export const blankGuard = (used: Set<string>): GtGuard => {
   return {
     id: `g${n}`,
     name: '',
-    when: { obj: '', prop: ':onScreen', op: 'is', value: true },
+    when: { obj: '', prop: '@:onScreen', op: 'is', value: true },
     do: [{ action: 'obj.close', obj: '' }],
   }
 }

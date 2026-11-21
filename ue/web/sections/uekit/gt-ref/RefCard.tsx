@@ -118,7 +118,6 @@ export function RefCard({
               {ids.map((it, i) => (
                 <span
                   key={i}
-                  title={it.prop}
                   className="ue:rounded-sm ue:bg-accent/8 ue:px-1.5 ue:py-0.5 ue:font-mono ue:text-caption ue:text-fg"
                 >
                   {identShort(it)}

@@ -16,19 +16,19 @@ const DOC: GtScript = {
     {
       id: 'g1',
       name: '新手引导出现',
-      when: { obj: { class: 'WBP_Guide_C' }, prop: ':onScreen', op: 'is', value: true },
+      when: { obj: { class: 'WBP_Guide_C' }, prop: '@:onScreen', op: 'is', value: true },
       do: [{ action: 'call', script: 'common/翻完引导' }],
     },
     {
       id: 'g2',
       name: '断线重连弹出',
-      when: { obj: { class: 'WBP_Reconnect_C' }, prop: ':onScreen', op: 'is', value: true },
+      when: { obj: { class: 'WBP_Reconnect_C' }, prop: '@:onScreen', op: 'is', value: true },
       do: [{ action: 'console', command: 'gm.Reconnect' }],
     },
     {
       id: 'g3',
       name: '登录公告出现',
-      when: { obj: { class: 'WBP_Notice_C' }, prop: ':onScreen', op: 'is', value: true },
+      when: { obj: { class: 'WBP_Notice_C' }, prop: '@:onScreen', op: 'is', value: true },
       do: [{ action: 'obj.close', obj: { class: 'WBP_Notice_C' } }],
     },
   ],
@@ -45,7 +45,7 @@ const DOC: GtScript = {
           id: 's4',
           action: 'obj.wait',
           obj: { class: 'WBP_Welfare_C' },
-          prop: '@DailyList:visible',
+          prop: '@/DailyList:visible',
           op: 'is',
           value: true,
         },
@@ -64,8 +64,8 @@ const DOC: GtScript = {
           // 两项条件：蓝图画布的节点里一行一项列出来（「且」写在行首）
           cond: {
             all: [
-              { obj: '$item', prop: '@BtnClaim:text', op: 'contains', value: '领取' },
-              { obj: '$item', prop: '@BtnClaim:enabled', op: 'is', value: true },
+              { obj: '$item', prop: '@/BtnClaim:text', op: 'contains', value: '领取' },
+              { obj: '$item', prop: '@/BtnClaim:enabled', op: 'is', value: true },
             ],
           },
           then: [
@@ -74,7 +74,7 @@ const DOC: GtScript = {
               id: 's6',
               action: 'obj.wait',
               obj: { class: 'WBP_RewardPopup_C' },
-              prop: ':onScreen',
+              prop: '@:onScreen',
               op: 'is',
               value: true,
             },
@@ -87,7 +87,7 @@ const DOC: GtScript = {
     {
       id: 's9',
       action: 'assert',
-      cond: { obj: { class: 'WBP_Main_C' }, prop: '@Dot:visible', op: 'is', value: false },
+      cond: { obj: { class: 'WBP_Main_C' }, prop: '@/Dot:visible', op: 'is', value: false },
     },
   ],
 }

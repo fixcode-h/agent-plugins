@@ -5,14 +5,14 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { SettingGroup, SettingRow, useSettingsPage } from '../../SettingRows.tsx'
 import { ErrorText } from '../../ui.tsx'
-import { migrateSettings, type GtGuard } from '../../../shared/gt-script/index.ts'
+import type { GtGuard } from '../../../shared/gt-script/index.ts'
 import { blockersToGuards, guardsSupported, tidyGuards, type BlockerRule } from './gt-guards/model.ts'
 import { GtGuardsGroup } from './gt-guards/GtGuardsGroup.tsx'
 import { GtBlockersGroup } from './GtBlockersGroup.tsx'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
 import { type GtSkipConfig, GtSkipSettings, readSkip, tidySkip } from './GtSkipSettings.tsx'
 import { tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
-import { refSupported, REF_MIN_VERSION } from './gt-ref/MigrateBanner.tsx'
+import { refSupported, REF_MIN_VERSION } from './gt-ref/gate.tsx'
 import { REF_KEYS, RefSettings, tidyRefConfig } from './gt-ref/RefSettings.tsx'
 import type { RefConfig } from './gt-ref/rules-io.ts'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
@@ -186,10 +186,8 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
       if (refOn) {
         // GameTest 2.0 起 itemKeys / objectKeys 并进 identRules（旧字段读到会报 settings_old，不再写回）
         // 「以后都按这个认」「这个类以后都这样关」也写这份文件：表单里没有的规则从最新文件里补上
-        // 文件里还有旧的 itemKeys / objectKeys（没跑过「升级脚本」）：先按迁移规则转成 identRules 再合并，不然整份重写时就丢了
-        const disk = (
-          'itemKeys' in latest || 'objectKeys' in latest ? migrateSettings(latest).doc : latest
-        ) as RefConfig
+        // 旧的 itemKeys / objectKeys 不迁移（旧格式不再支持），整份重写时不再带上
+        const disk = latest as RefConfig
         const mine = tidyRefConfig(refCfg)
         const merged: RefConfig = {
           ...mine,

@@ -16,7 +16,8 @@ export interface GtPathParsed {
   segs: GtPathSeg[]
 }
 
-const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
+// 名字里可以嵌 $变量（按文字替换，`Claim_$what`，和部件写法一致）
+const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
 /** 拆开；写法不对返回 `{ error, at }`（at 是第几个字符，从 0 起） */
 export function parsePropPath(text: string): GtPathParsed | { error: string; at: number } {
@@ -74,4 +75,70 @@ export function formatPropPath(p: GtPathParsed): string {
     else out += `.${s.name}`
   }
   return out
+}
+
+/**
+ * v4 的写法（`@self.X`、`@部件.X`、`@lua.X`、`@itemLua.X`、开头 `:状态`）：v5 不再认（不做迁移，用户 2026-11-21），
+ * 校验报 path_old 并给出新写法。返回 undefined 表示不像旧写法（可能是新写法，也可能是别的错）
+ */
+export function oldPathHint(text: string): string | undefined {
+  const s = text.trim()
+  if (s.startsWith(':')) return `@${s}`
+  const m = /^@([A-Za-z_一-鿿][\w一-鿿]*)(.*)$/.exec(s)
+  if (!m) return undefined
+  const [, head, rest] = m
+  const low = head.toLowerCase()
+  // `@item` 后面跟 . # : [ 或什么都没有是 v5 的条目数据对象
+  if (low === 'item' && head === 'item') return undefined
+  const tail = (r: string) => r.replace(/\.lua\./g, '#')
+  if (low === 'self') return `@${tail(rest)}`
+  if (low === 'lua') return `@#${rest.replace(/^\./, '')}`
+  if (low === 'itemlua') return `@item#${rest.replace(/^\./, '')}`
+  // `@部件.X` / `@Header.TxtTitle:text`：离线分不出哪几段是部件，按「最后一段之前都是部件」给个参考
+  const body = `${head}${rest}`
+  const state = body.indexOf(':')
+  if (state >= 0) return `@/${body.slice(0, state).replace(/\./g, '/')}${body.slice(state)}`
+  const lua = body.indexOf('.lua.')
+  if (lua >= 0) return `@/${body.slice(0, lua).replace(/\./g, '/')}#${body.slice(lua + 5)}`
+  const dot = body.lastIndexOf('.')
+  return dot > 0 ? `@/${body.slice(0, dot).replace(/\./g, '/')}${body.slice(dot)}` : `@.${body}`
+}
+
+/** 部件写法（`Header.BtnClose` 或 `Header/BtnClose`）→ 子控件段 */
+const partSegs = (part: string | undefined): GtPathSeg[] =>
+  (part ?? '')
+    .split(/[./]/)
+    .filter(Boolean)
+    .map((name) => ({ kind: 'child' as const, name }))
+
+/** 路径里子控件 / 组件那几段（`@/Header/TxtTitle.Text` → `Header/TxtTitle`），没有返回空串 */
+export function childOfPath(text: string): string {
+  const p = parsePropPath(text)
+  if ('error' in p) return ''
+  return p.segs
+    .filter((s) => s.kind === 'child')
+    .map((s) => s.name)
+    .join('/')
+}
+
+/**
+ * 把一个从对象自己写的路径挪到部件上：`rebasePath('@.Text', 'Header.TxtTitle')` → `@/Header/TxtTitle.Text`，
+ * `rebasePath(':text', 'Btn')` → `@/Btn:text`。路径写法不对时原样返回（校验另外报）
+ */
+export function rebasePath(text: string, part: string | undefined): string {
+  const s = text.trim()
+  const p = parsePropPath(s.startsWith(':') ? `@${s}` : s)
+  if ('error' in p) return text
+  const extra = partSegs(part)
+  if (!extra.length) return formatPropPath(p)
+  const have = p.segs.filter((x) => x.kind === 'child')
+  // 已经带着这个部件（UE 按部件读回来的项已经从外层对象写）就不再加
+  const already = extra.every((x, i) => have[i]?.name === x.name)
+  return formatPropPath(already ? p : { ...p, segs: [...extra, ...p.segs] })
+}
+
+/** 最后一段（判断它是状态、Lua 字段还是取值函数） */
+export function lastSegOf(text: string): GtPathSeg | undefined {
+  const p = parsePropPath(text)
+  return 'error' in p ? undefined : p.segs.at(-1)
 }

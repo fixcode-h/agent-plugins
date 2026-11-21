@@ -18,7 +18,7 @@ import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { ArgsEdit } from '../gt-api/ApiPick.tsx'
-import { PartInput } from './PropPathInput.tsx'
+import { PartInput } from './PartInput.tsx'
 
 /** 关闭方式注册表（协议 5.2，面板这一份只管怎么画）：一种一项，加新方式在这里加一项 */
 interface CloseBy {

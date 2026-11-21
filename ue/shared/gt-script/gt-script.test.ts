@@ -17,7 +17,7 @@ import {
   placeOf,
   remove,
   replace,
-  toV4,
+  tidyScript,
   unwrap,
   usedIds,
   walk,
@@ -173,7 +173,7 @@ test('包成块：同一槽里从第一个到最后一个；跨槽不行', () =>
   assert.deepEqual(r.path, ['steps', 2])
   const lp = r.doc.steps![2]
   assert.equal(lp.action, 'loop')
-  assert.equal(lp.max, undefined, "新循环不写 max = 不限")
+  assert.equal(lp.max, undefined, '新循环不写 max = 不限')
   assert.deepEqual(
     (lp.do as { id: string }[]).map((s) => s.id),
     ['loop1', 's6'],
@@ -206,23 +206,16 @@ test('复制一份：放在下面，里面的步骤都换新 id', () => {
   assert.equal((r.doc.steps![3].do as { id: string }[])[0].id, 's7')
 })
 
-test('v1 → v4：补 via:code、包成录制段、补 id、迁到 v4', () => {
-  const v1: GtScript = { name: 'x', steps: [click(1), { action: 'type', text: 'a' }, { action: 'key', key: 'E' }] }
-  const out = toV4(v1, { wrapFlat: true, groupName: '录制' })
-  assert.equal(out.schemaVersion, 4)
+test('存盘前整理：补 kind、补 id，新建的写成 v5，旧版本号不改（不迁移）', () => {
+  const fresh: GtScript = { name: 'x', steps: [click(1), { action: 'key', key: 'E' }] }
+  const out = tidyScript(fresh)
+  assert.equal(out.schemaVersion, 5)
   assert.equal(out.kind, 'gametest-scenario')
-  const g = out.steps![0]
-  assert.equal(g.action, 'group')
-  assert.equal(g.recorded, true)
-  const inner = g.do as Record<string, unknown>[]
-  assert.equal(inner[0].via, 'code')
-  assert.equal(inner[1].via, 'code')
-  assert.equal(inner[2].via, undefined)
   assert.deepEqual(
-    inner.map((s) => s.id),
-    ['s1', 's2', 's3'],
+    out.steps!.map((s) => s.id),
+    ['s1', 's2'],
   )
-  assert.equal(toV4(v1).steps!.length, 3, '保持平铺')
+  assert.equal(tidyScript({ ...fresh, schemaVersion: 3 }).schemaVersion, 3)
 })
 
 test('列表行：否则如果 / 否则有分隔行、空槽有占位行、折叠后算出藏了几步', () => {
