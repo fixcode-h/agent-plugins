@@ -23,7 +23,7 @@ function norm(p: UeProject): UeProject {
   return {
     ...p,
     perms: { ...DEFAULT_PERMS, ...p.perms, python: pythonPerm(p.perms?.python) },
-    gmStore: p.gmStore ?? 'project',
+    gmStore: p.gmStore === 'local' ? 'local' : 'docs',
     buildCmd: p.buildCmd ?? '',
     engineDir: p.engineDir ?? '',
     target: p.target ?? { kind: '', world: '' },

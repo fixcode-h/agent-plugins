@@ -4,7 +4,6 @@ import { getAt, replace, type GtPath, type GtScript, type GtStep } from '../../.
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { blockUi, CommonFields, NoteField, TONE_TEXT, type BlockTone } from '../gt-blocks/index.ts'
-import { TodoNote } from '../gt-ref/MigrateBanner.tsx'
 import { canRun, commandMenuItems, COMMANDS, type CmdCtx } from './commands.ts'
 
 /** 图标底下的浅色调小方块（效果图 1、11 右上）：和 TONE_TEXT 同一套色调，只是做成底色 */
@@ -126,7 +125,6 @@ export function Inspector({
       <Head icon={bu.icon} tone={bu.tone} title={bu.title()} id={id} ctx={ctx} />
       <div className="ue:divide-y ue:divide-line">
         <Section>
-          <TodoNote step={step} onChange={set} />
           <NoteField step={step} onChange={set} />
           {Own && <Own key={id ?? path.join('.')} step={step} onChange={set} />}
         </Section>

@@ -27,7 +27,12 @@ const DOC: GtScript = {
       name: '打开福利',
       do: [
         { id: 's2', action: 'click', target: { obj: 'main', part: 'BtnWelfare' } },
-        { id: 's3', action: 'wait', until: 'cond', cond: { obj: 'welfare', prop: ':onScreen', op: 'is', value: true } },
+        {
+          id: 's3',
+          action: 'wait',
+          until: 'cond',
+          cond: { obj: 'welfare', prop: '@:onScreen', op: 'is', value: true },
+        },
       ],
     },
     {
@@ -41,14 +46,14 @@ const DOC: GtScript = {
           id: 'if1',
           action: 'if',
           branch: 'state',
-          cond: { obj: '$item', prop: '@BtnClaim:enabled', op: 'is', value: true },
+          cond: { obj: '$item', prop: '@/BtnClaim:enabled', op: 'is', value: true },
           then: [
             { id: 's4', action: 'click', target: { obj: '$item', part: 'BtnClaim' } },
             { id: 'set1', action: 'set', var: 'claimed', value: '=$claimed + 1' },
           ],
           elif: [
             {
-              cond: { obj: '$item', prop: '@TxtState:text', op: 'eq', value: '已领取' },
+              cond: { obj: '$item', prop: '@/TxtState:text', op: 'eq', value: '已领取' },
               then: [{ id: 's5', action: 'continue' }],
             },
           ],
@@ -62,7 +67,7 @@ const DOC: GtScript = {
       cond: {
         all: [
           { value: '$claimed', gte: 1 },
-          { obj: 'welfare', prop: '@RedDot:visible', op: 'is', value: false },
+          { obj: 'welfare', prop: '@/RedDot:visible', op: 'is', value: false },
         ],
       },
     },
@@ -104,7 +109,7 @@ export function EditSpecimen() {
         <CondEditor
           value={{
             any: [
-              { obj: { class: 'WBP_Notice_C' }, prop: ':onScreen', op: 'is', value: true },
+              { obj: { class: 'WBP_Notice_C' }, prop: '@:onScreen', op: 'is', value: true },
               { expr: '@ps.Gold >= $gold0 + 500' },
             ],
           }}

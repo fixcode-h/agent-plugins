@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   parseScript,
   serialize,
-  toV4,
-  versionOf,
+  tidyScript,
   type EditResult,
   type GtPath,
   type GtScript,
@@ -43,7 +42,7 @@ export interface ScriptApi extends ScriptState {
 
 const HISTORY = 100
 
-export function useScript(o: { project: string; root: string; path: string; wrapFlat?: boolean }): ScriptApi {
+export function useScript(o: { project: string; root: string; path: string }): ScriptApi {
   const [doc, setDoc] = useState<GtScript>()
   const [base, setBase] = useState('')
   const [error, setError] = useState('')
@@ -62,12 +61,12 @@ export function useScript(o: { project: string; root: string; path: string; wrap
       const r = await ppost<{ text: string }>(o.project, 'ext/gt/file', { root: o.root, path: o.path, action: 'raw' })
       const p = parseScript(r.text)
       if ('error' in p) throw new Error(t('场景不是合法的 JSON：{e}', { e: p.error }))
-      // 打开时就整理成 v4（补 id、旧场景按选项包成录制段）：没改动时不算「改过」，存盘才写回
-      const v4 = toV4(p.doc, { wrapFlat: o.wrapFlat && versionOf(p.doc) < 3, groupName: t('录制') })
+      // 打开时就整理（补 kind、补 id）：没改动时不算「改过」，存盘才写回。旧版本不迁移，编辑页只读（gt-ref/gate.tsx）
+      const tidy = tidyScript(p.doc)
       setBase(r.text.replace(/^﻿/, ''))
-      setDoc(v4)
-      // 只是格式不同（UE 写的缩进、旧版本、补 id）不算改过：用户没动就不提示「没存」，下次存盘时一起整理
-      saved.current = v4
+      setDoc(tidy)
+      // 只是格式不同（UE 写的缩进、补 id）不算改过：用户没动就不提示「没存」，下次存盘时一起整理
+      saved.current = tidy
       past.current = []
       future.current = []
       setError('')
@@ -76,7 +75,7 @@ export function useScript(o: { project: string; root: string; path: string; wrap
     } finally {
       setLoading(false)
     }
-  }, [o.project, o.root, o.path, o.wrapFlat])
+  }, [o.project, o.root, o.path])
 
   useEffect(() => {
     void reload()
@@ -119,7 +118,7 @@ export function useScript(o: { project: string; root: string; path: string; wrap
     if (!doc) return
     setSaving(true)
     try {
-      const text = serialize(toV4(doc))
+      const text = serialize(tidyScript(doc))
       await ppost(o.project, 'ext/gt/file', { root: o.root, path: o.path, action: 'save', text, expectText: base })
       setBase(text)
       saved.current = doc

@@ -1,33 +1,47 @@
-import { ChevronRight, CircleCheck, Crosshair } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import type { GtIdentItem, GtMany, GtPropItem, GtRef } from '../../../../shared/gt-script/ref/types.ts'
-import { show } from '../../../api.ts'
+import { useContext, useRef, useState } from 'react'
+import type {
+  GtClassItem,
+  GtIdentItem,
+  GtIdentRule,
+  GtPropItem,
+  GtPropKind,
+  GtRef,
+  GtTarget,
+} from '../../../../shared/gt-script/index.ts'
+import { Ctx } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
-import { useEditCtx } from '../gt-edit/ctx.ts'
-import { defaultIdent, testIdent } from './compare-table.ts'
+import { defaultIdent } from './compare-table.ts'
 import { classShort, inText } from './describe.ts'
-import { IdentList } from './IdentList.tsx'
-import { ClassInput } from './ClassInput.tsx'
-import { classOnly, useProps, useRefHits, type PropsArgs, type RefHits } from './live.ts'
-import { PropTree } from './PropTree.tsx'
-import { MANY_OPTIONS } from './RefCard.tsx'
+import { highlight, useRefRpc } from './live.ts'
+import { ClassPicker } from './pick/ClassPicker.tsx'
+import { defaultSources, inOfSources, sourcesOfIn, type Source } from './pick/data.ts'
+import { DetailPane, isTruncated } from './pick/DetailPane.tsx'
+import { IdentPane } from './pick/IdentPane.tsx'
+import { InstancePane } from './pick/InstancePane.tsx'
+import { SourceChips } from './pick/SourceChips.tsx'
+import { StructurePane } from './pick/StructurePane.tsx'
+import { Summary } from './pick/Summary.tsx'
+import { usePick } from './pick/use-pick.ts'
 import { patchRunConfig, upsertIdentRule } from './rules-io.ts'
-import { WidgetTreePick } from './WidgetTreePick.tsx'
 
 const NAME = /^[A-Za-z_]\w*$/
-const IN_OPTIONS = () => [
-  { value: '', label: t('自动（按类）') },
-  { value: 'screen', label: t('屏上的界面') },
-  { value: 'world', label: t('关卡里的 Actor') },
-  { value: 'all', label: t('所有对象（最后才用）') },
-]
+
+/** 不在编辑页里打开时（设置页、GM 面板）按 UE 页的项目状态判断连没连游戏；都拿不到当没连 */
+function useLiveFallback(live: boolean | undefined) {
+  const ue = useContext(Ctx)
+  if (live !== undefined) return live
+  return (ue?.state?.instances ?? []).some((i) => i.kind === 'editor' && i.online)
+}
 
 /**
- * 对象：类和唯一标识（效果图 2，取代 ObjectKeyDialog）。存进脚本的只有类和你选的标识，运行时按它重新找。
- * 左边属性树点准星加标识（游戏开着时读此刻这个对象，没开按类读资产）；右边标识组（每条按类型比较）、
- * 此刻同类的实例表（哪个是它、别的被哪条排除）、命中多个时；底下「以后都按这个认」写进运行设置的 identRules。
- * 存进脚本的 JSON 只在折起来的「高级」里看
+ * 选对象（一页，效果图 GameTest选对象-一页）：顶上定类（可搜的类下拉，UObject 类树 / Lua 类两页）和在哪找（屏上界面 /
+ * 关卡 Actor / Lua 对象，多选，都不选 = 全部），下面四栏都能拖边、记住宽度：此刻实例 · 结构（Widget 树 / 组件树）·
+ * 细节（属性 · 方法 · Lua · 运行状态，行尾准星加标识）· 唯一标识组。底栏写存进脚本的样子。
+ * 存进脚本的只有类、在哪找和标识，运行时按它重新找，不存那个对象本身。
+ * 不依赖编辑页的上下文：设置页、GM 面板也能直接用（live 不给时按 UE 页的项目状态判断）。
+ * withPart：动作落点用，结构栏里点的子控件 / 组件就是部件，保存时一起交出去（等于原来「连部件一起抓」）；
+ * onSplit：条件里用，底栏多一个「按它分路」，把所在的如果换成按状态分支
  */
 export function RefDialog({
   project,
@@ -35,6 +49,11 @@ export function RefDialog({
   withName,
   value,
   objects,
+  lockClass,
+  live: liveProp,
+  withPart,
+  part: initialPart,
+  onSplit,
   onClose,
   onSave,
 }: {
@@ -45,73 +64,86 @@ export function RefDialog({
   value?: GtRef
   /** 场景的 objects（in.obj 写了名字时展开用） */
   objects?: Record<string, unknown>
+  /** 只能选这个类或它的子类（类下拉的根换成它）；`lua:模块` 时只列 Lua 类 */
+  lockClass?: string
+  /** 连没连着游戏；不给时按 UE 页的项目状态判断 */
+  live?: boolean
+  /** 结构栏选的子控件当部件交出去（onSave 的第三个参数，`Header.BtnClose`；对象自己时不给） */
+  withPart?: boolean
+  /** 打开时选中的部件（动作落点原来的） */
+  part?: string
+  /** 「按它分路」：落点（对象 + 选中的部件）和选中那一项的类名 */
+  onSplit?: (target: GtTarget, widgetClass?: string) => void
   onClose: () => void
-  onSave: (name: string, ref: GtRef) => void
+  onSave: (name: string, ref: GtRef, part?: string) => void
 }) {
   const { ui, cn } = h()
-  const ctx = useEditCtx()
+  const rpc = useRefRpc()
+  const live = useLiveFallback(liveProp)
   const [name, setName] = useState(initialName ?? '')
-  const [ref, setRef] = useState<GtRef>(value ?? { class: '' })
-  const [cls, setCls] = useState(ref.class)
-  const [node, setNode] = useState<string>()
-  const [picking, setPicking] = useState(false)
+  const [ref, setRef] = useState<GtRef>(() => value ?? { class: lockClass ?? '' })
+  // in 的三个开关：写法是对象 / @来源时不归开关管（显示原样，能改回开关）
+  const [sources, setSources] = useState<Source[] | undefined>(() => sourcesOfIn(value?.in))
+  // 用户没碰过开关、原来也没写 in 时，存的时候照旧不写（运行时按类自动）
+  const [touched, setTouched] = useState(false)
+  const p = usePick({ project, live, ref, objects, initialPart: initialPart?.split('.').join('/') })
+  // 「以后都按这个认」：勾上时保存对象的同时写进运行设置的 identRules
   const [rule, setRule] = useState(false)
-  const [adv, setAdv] = useState(false)
   const [busy, setBusy] = useState(false)
-  const pane = usePane('gt-ref-dialog', '58%', 360)
-  const paneRef = useRef<HTMLDivElement>(null)
-  const hitPane = usePane('gt-ref-dialog-hits', '22%', 200)
-  const hitRef = useRef<HTMLDivElement>(null)
   const ident = ref.ident ?? []
+  const picked = new Set(ident.map((i) => i.prop))
 
-  // 属性从哪读：刚从树里抓的节点 > 游戏开着时按引用找此刻的对象 > 只按类（找不到实例时也退回这个）
-  const [byClass, setByClass] = useState(!ctx.live)
-  const args: PropsArgs | undefined = node
-    ? { node }
-    : !cls
-      ? undefined
-      : byClass
-        ? { class: cls }
-        : { target: { obj: { ...ref, class: cls } } }
-  const props = useProps(project, args)
-  // 按引用找不到此刻的实例（没开这个界面）：退回只按类读
-  useEffect(() => {
-    if (props.error && !byClass && !node) setByClass(true)
-  }, [props.error, byClass, node])
-  const groups = props.data?.groups
+  const panes = {
+    inst: usePane('gt-pick-inst', '17%', 180),
+    tree: usePane('gt-pick-tree', '22%', 200),
+    ident: usePane('gt-pick-ident', '26%', 280),
+  }
+  const instRef = useRef<HTMLElement>(null)
+  const treeRef = useRef<HTMLElement>(null)
+  const identRef = useRef<HTMLElement>(null)
+  const width = (r: { current: HTMLElement | null }) => r.current?.offsetWidth ?? 0
 
-  const ids = ident.map((i) => i.prop)
-  const hits = useRefHits(
-    project,
-    ctx.live && !!ref.class,
-    [
-      { id: 'me', ref },
-      { id: 'all', ref: classOnly(ref) },
-    ],
-    objects,
-    ids,
-  )
+  const setIdent = (v: GtIdentItem[]) => setRef((r) => ({ ...r, ident: v }))
+  const pickClass = (cls: string, item?: GtClassItem) => {
+    if (cls === ref.class) return
+    // 换类：标识是按旧类的属性挑的，清掉；开关按新类的种类给默认
+    setRef((r) => ({ class: cls, ...(r.many ? { many: r.many } : {}) }))
+    if (!touched || sources === undefined)
+      setSources(defaultSources(item?.kind ?? (cls.startsWith('lua:') ? 'lua' : undefined)))
+  }
+  const onPick = (prop: string, kind: GtPropKind | undefined, v: unknown, item?: GtPropItem) => {
+    const on = picked.has(prop)
+    // 截过的长字符串不能拿去比「等于」：改成「开头是」前 200 字
+    const it = isTruncated(v)
+      ? { prop, op: 'startsWith', value: v.slice(0, -1) }
+      : defaultIdent({ prop, kind: item?.kind ?? kind ?? 'string', value: v })
+    setIdent(p.toggleIdent(it, on))
+  }
 
-  const toggle = (it: GtPropItem) =>
-    setRef({
-      ...ref,
-      ident: ids.includes(it.prop) ? ident.filter((x) => x.prop !== it.prop) : [...ident, defaultIdent(it)],
-    })
+  const inValue: GtRef['in'] =
+    sources === undefined ? ref.in : touched || value?.in !== undefined ? inOfSources(sources) : undefined
+  const out: GtRef = { ...ref, class: ref.class.trim() }
+  if (inValue === undefined) delete out.in
+  else out.in = inValue
+  if (!out.ident?.length) delete out.ident
+  if (!out.many || out.many === 'error') delete out.many
+  const ok = (!withName || NAME.test(name.trim())) && !!out.class
+  // 部件写法用 . 连（validPart），结构栏里是 / 连
+  const outPart = (withPart || onSplit) && p.part ? p.part.split('/').join('.') : undefined
 
-  const ok = (!withName || NAME.test(name.trim())) && ref.class.trim()
   const save = async () => {
-    const out: GtRef = { ...ref, class: ref.class.trim() }
-    if (!out.ident?.length) delete out.ident
-    if (!out.many || out.many === 'error') delete out.many
-    if (rule && ids.length) {
+    if (rule && out.ident?.length) {
       setBusy(true)
       try {
+        // 只有对象写法、@来源这种「哪里的」才进规则；屏上 / 关卡这类开关是找法，不属于这个类的标识
+        const ruleIn = sourcesOfIn(out.in) === undefined ? out.in : undefined
+        const next: GtIdentRule = {
+          class: out.class,
+          ...(ruleIn !== undefined ? { in: ruleIn as GtIdentRule['in'] } : {}),
+          ident: out.ident.map((i) => i.prop),
+        }
         await patchRunConfig(project, (c) => {
-          c.identRules = upsertIdentRule(c.identRules, {
-            class: out.class,
-            ...(typeof out.in === 'string' && out.in !== 'screen' && out.in !== 'world' ? { in: out.in } : {}),
-            ident: ids,
-          })
+          c.identRules = upsertIdentRule(c.identRules, next)
         })
       } catch (e) {
         h().toast.error(t('规则没存上：{e}', { e: (e as Error).message }))
@@ -119,264 +151,176 @@ export function RefDialog({
         setBusy(false)
       }
     }
-    onSave(name.trim(), out)
+    onSave(name.trim(), out, outPart)
   }
 
-  const inValue = typeof ref.in === 'string' ? ref.in : ''
+  const structTitle =
+    p.kind === 'actor' || p.kind === 'component'
+      ? t('组件树 · {c}', { c: p.shown ?? classShort(p.cls) })
+      : p.kind === 'umg'
+        ? t('Widget 树 · {c}', { c: p.shown ?? classShort(p.cls) })
+        : t('结构')
+  const structHead = withPart ? `${structTitle} · ${t('点子控件选部件')}` : structTitle
+  const col = 'ue:relative ue:flex ue:min-h-48 ue:flex-col ue:lg:min-h-0'
+
   return (
     <ui.Modal
       open
       size="full"
       onOpenChange={(o: boolean) => !o && onClose()}
-      title={t('对象：类和唯一标识')}
+      title={t('选对象')}
       footer={
         <>
-          <label className="ue:flex ue:min-w-0 ue:flex-1 ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
-            <input
-              type="checkbox"
-              className="ue:accent-accent"
-              checked={rule}
-              disabled={!ids.length}
-              onChange={(e) => setRule(e.target.checked)}
-            />
-            <span className="ue:truncate">
-              {t('以后抓 {c} 默认选这几项', { c: classShort(ref.class) || t('这个类') })}
-              <span className="ue:ml-1.5 ue:text-subtle">{t('（存进运行设置的「对象与标识」）')}</span>
-            </span>
-          </label>
+          <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">
+            <Summary cls={out.class} inn={out.in} ident={ident} part={outPart} />
+            <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+              <input
+                type="checkbox"
+                className="ue:accent-accent"
+                checked={rule}
+                disabled={!ident.length}
+                onChange={(e) => setRule(e.target.checked)}
+              />
+              {t('以后抓 {c} 默认选这几项', { c: classShort(out.class) || t('这个类') })}
+              <span className="ue:text-subtle">{t('（存进运行设置的「对象与标识」）')}</span>
+            </label>
+          </span>
           <ui.Button variant="secondary" onClick={onClose}>
             {t('取消')}
           </ui.Button>
+          {onSplit && (
+            <ui.Button
+              variant="secondary"
+              disabled={!ok}
+              onClick={() => onSplit({ obj: out, ...(outPart ? { part: outPart } : {}) }, p.selectedNode?.class)}
+            >
+              {t('按它分路')}
+            </ui.Button>
+          )}
           <ui.Button disabled={!ok || busy} onClick={() => void save()}>
             {t('保存对象')}
           </ui.Button>
         </>
       }
     >
-      <p className="ue:-mt-2 ue:mb-3 ue:text-footnote ue:text-subtle">
-        {t('存进脚本的只有类和你选的标识，运行时按它重新找；不会存那个对象本身')}
-      </p>
-      <div className="ue:mb-3 ue:flex ue:flex-wrap ue:items-end ue:gap-3">
-        {withName && (
-          <ui.Field label={t('名字')} hint={t('步骤里写这个名字引用它')}>
-            <ui.Input
-              size="sm"
-              className="ue:w-40 ue:font-mono"
-              value={name}
-              placeholder="shop"
-              onChange={(e: { target: { value: string } }) => setName(e.target.value)}
-            />
+      <div className="ue:flex ue:min-h-[70vh] ue:flex-1 ue:flex-col ue:gap-3">
+        <div className="ue:flex ue:flex-wrap ue:items-end ue:gap-3">
+          {withName && (
+            <ui.Field label={t('名字')} hint={t('步骤里写这个名字引用它')}>
+              <ui.Input
+                size="sm"
+                className="ue:w-40 ue:font-mono"
+                value={name}
+                placeholder="shop"
+                onChange={(e: { target: { value: string } }) => setName(e.target.value)}
+              />
+            </ui.Field>
+          )}
+          <ui.Field label={t('类')}>
+            <ClassPicker project={project} value={ref.class} kind={p.kind} lockClass={lockClass} onPick={pickClass} />
           </ui.Field>
-        )}
-        <ui.Field label={t('类')} hint={t('按继承认，子类也算；_C 后缀、U/A 前缀可省')}>
-          <ClassInput
-            project={project}
-            className="ue:w-64"
-            value={ref.class}
-            onChange={(v) => setRef((r) => ({ ...r, class: v }))}
-            onCommit={(v) => {
-              if (v.trim() === cls) return
-              setCls(v.trim())
-              setNode(undefined)
-              setByClass(!ctx.live)
-            }}
-          />
-        </ui.Field>
-        <ui.Field label={t('在哪找')}>
-          {ref.in && typeof ref.in === 'object' ? (
-            <div className="ue:flex ue:h-8 ue:items-center ue:gap-2 ue:font-mono ue:text-footnote ue:text-fg">
-              {t('{w} 的条目', { w: inText(ref.in) })}
-              <ui.Button size="sm" variant="ghost" onClick={() => setRef({ ...ref, in: undefined })}>
-                {t('改成自动')}
-              </ui.Button>
-            </div>
-          ) : (
-            <ui.Select
-              size="sm"
-              className="ue:w-48"
-              value={inValue}
-              onChange={(e: { target: { value: string } }) => setRef({ ...ref, in: e.target.value || undefined })}
-              options={
-                inValue && !IN_OPTIONS().some((o) => o.value === inValue)
-                  ? [...IN_OPTIONS(), { value: inValue, label: inValue }]
-                  : IN_OPTIONS()
+          <ui.Field label={t('在哪找')}>
+            {sources === undefined ? (
+              <div className="ue:flex ue:h-8 ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+                {inText(ref.in)}
+                <ui.Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSources(defaultSources(p.kind))
+                    setTouched(true)
+                  }}
+                >
+                  {t('改成按开关找')}
+                </ui.Button>
+              </div>
+            ) : (
+              <SourceChips
+                value={sources}
+                allowed={p.allowed}
+                counts={p.counts}
+                onChange={(s) => {
+                  setSources(s)
+                  setTouched(true)
+                }}
+              />
+            )}
+          </ui.Field>
+        </div>
+        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:divide-y ue:divide-line ue:overflow-auto ue:rounded-(--c-row-radius) ue:border ue:border-line ue:lg:flex-row ue:lg:divide-x ue:lg:divide-y-0 ue:lg:overflow-hidden">
+          <section ref={instRef} style={panes.inst.style('30%')} className={cn(PANE_FIXED, col)}>
+            <InstancePane
+              live={live}
+              cls={p.cls}
+              screen={p.screen.nodes}
+              ident={ident}
+              me={p.hits.me}
+              all={p.hits.all}
+              error={p.hits.error || p.screen.error}
+              selected={p.shown}
+              onSelect={(n) => {
+                p.setInst(n)
+                p.setPart('')
+              }}
+              onUseClass={(cls, inst) => {
+                pickClass(cls, { name: cls, kind: 'umg', kids: 0 })
+                if (inst) p.setInst(inst)
+              }}
+            />
+            <SplitHandle pane={panes.inst} paneRef={instRef} reserve={() => 560 + width(treeRef) + width(identRef)} />
+          </section>
+          <section ref={treeRef} style={panes.tree.style('35%')} className={cn(PANE_FIXED, col)}>
+            <StructurePane
+              title={structHead}
+              nodes={p.structure}
+              kind={p.kind}
+              selected={p.part}
+              onSelect={(n) => p.setPart(n.part)}
+              onHover={live && p.structureFromTree ? (node) => void hover(project, node, rpc) : undefined}
+              onUseClass={(cls) => pickClass(cls, { name: cls, kind: 'umg', kids: 0 })}
+              empty={
+                p.cls ? p.subError || (p.props.loading ? t('正在读…') : t('这个类没有子控件 / 组件')) : t('先定类')
               }
             />
-          )}
-        </ui.Field>
-      </div>
-      <div className="ue:flex ue:min-h-[56vh] ue:flex-1 ue:flex-col ue:overflow-auto ue:rounded-(--c-row-radius) ue:border ue:border-line ue:lg:flex-row ue:lg:overflow-hidden">
-        {/* 此刻同类的实例放最左边（用户 2026-11-20：命中的应该在左边），先看命中几个、哪个是它，再看属性挑标识 */}
-        {ctx.live && ref.class && (
-          <section
-            ref={hitRef}
-            style={hitPane.style('30%')}
-            className={cn(
-              PANE_FIXED,
-              'ue:relative ue:flex ue:min-h-48 ue:flex-col ue:overflow-auto ue:p-3 ue:lg:min-h-0',
-            )}
-          >
-            <Siblings cls={ref.class} ident={ident} me={hits.hits.me} all={hits.hits.all} error={hits.error} />
-            <SplitHandle pane={hitPane} paneRef={hitRef} reserve={() => 680} />
+            <SplitHandle pane={panes.tree} paneRef={treeRef} reserve={() => 380 + width(instRef) + width(identRef)} />
           </section>
-        )}
-        <section
-          ref={paneRef}
-          style={pane.style('75%')}
-          className={cn(PANE_FIXED, 'ue:relative ue:flex ue:min-h-80 ue:flex-col ue:lg:min-h-0')}
-        >
-          <PropTree
-            className="ue:flex-1"
-            data={props.data}
-            loading={props.loading}
-            error={byClass ? props.error : undefined}
-            mode="ident"
-            selected={ids}
-            onPick={toggle}
-            loadPart={props.loadPart}
-            toolbar={
-              ctx.live && (
-                <ui.Button size="sm" variant="secondary" onClick={() => setPicking(true)}>
-                  <Crosshair className="ue:h-3.5 ue:w-3.5" />
-                  {t('从游戏里抓')}
-                </ui.Button>
-              )
-            }
-          />
-          <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 320 + (hitRef.current?.offsetWidth ?? 0)} />
-        </section>
-        <section className={cn(PANE_FILL, 'ue:flex ue:min-h-0 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-3')}>
-          <div className="ue:flex ue:flex-col ue:gap-1.5">
-            <span className="ue:text-footnote ue:font-medium ue:text-fg">
-              {t('唯一标识组')}
-              <span className="ue:ml-1.5 ue:font-normal ue:text-subtle">{t('都要满足 · 点左边的准星加')}</span>
-            </span>
-            <IdentList value={ident} onChange={(v) => setRef({ ...ref, ident: v })} groups={groups} />
-          </div>
-          <div className="ue:flex ue:flex-col ue:gap-1.5">
-            <span className="ue:text-footnote ue:font-medium ue:text-fg">{t('命中多个时')}</span>
-            <ui.Segmented
-              size="sm"
-              label={t('命中多个时')}
-              value={ref.many ?? 'error'}
-              onChange={(m: GtMany) => setRef({ ...ref, many: m })}
-              options={MANY_OPTIONS()}
+          <section className={cn(PANE_FILL, col, 'ue:min-h-80')}>
+            <DetailPane
+              noClass={!p.cls}
+              items={p.items}
+              loading={p.props.loading}
+              error={p.props.error && !p.props.data ? p.props.error : undefined}
+              note={p.props.data?.unavailable}
+              siblings={p.props.data?.siblings}
+              groupTitle={p.groupTitle}
+              picked={picked}
+              onPick={onPick}
             />
-            {(ref.many ?? 'error') === 'error' && (
-              <span className="ue:text-caption ue:text-subtle">
-                {t('报错并列出每个候选的标识值；「第一个」容易悄悄点错')}
-              </span>
-            )}
-          </div>
-          <div className="ue:flex ue:flex-col ue:gap-1">
-            <button
-              type="button"
-              onClick={() => setAdv(!adv)}
-              className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-1 ue:text-caption ue:text-subtle ue:hover:text-fg"
-            >
-              <ChevronRight className={cn('ue:h-3 ue:w-3 ue:transition-transform', adv && 'ue:rotate-90')} />
-              {t('高级：存进脚本的样子')}
-            </button>
-            {adv && (
-              <pre className="ue:max-h-40 ue:overflow-auto ue:rounded-(--c-row-radius) ue:bg-term ue:p-2 ue:font-mono ue:text-caption ue:break-all ue:whitespace-pre-wrap ue:text-term">
-                {JSON.stringify(ref)}
-              </pre>
-            )}
-          </div>
-        </section>
+          </section>
+          <section ref={identRef} style={panes.ident.style('40%')} className={cn(PANE_FIXED, col)}>
+            <SplitHandle
+              pane={panes.ident}
+              paneRef={identRef}
+              side="right"
+              reserve={() => 380 + width(instRef) + width(treeRef)}
+            />
+            <IdentPane
+              cls={p.cls}
+              ident={ident}
+              onChange={setIdent}
+              items={p.known.length ? p.known : p.items}
+              actual={p.actual}
+              live={live}
+              me={p.hits.me}
+            />
+          </section>
+        </div>
       </div>
-      {picking && (
-        <WidgetTreePick
-          project={project}
-          mode="ident"
-          onClose={() => setPicking(false)}
-          onUse={(r) => {
-            setRef({ ...ref, ...r.ref })
-            setCls(r.ref.class)
-            setPicking(false)
-          }}
-        />
-      )}
     </ui.Modal>
   )
 }
 
-/**
- * 此刻同类的实例表（效果图 2 右中）：每个候选的标识值，按标识组命中的标「就是它」，没命中的写被哪条排除。
- * 候选和值来自 gt.resolve（只按类的那一项，带 show 要这几个属性的值）
- */
-function Siblings({
-  cls,
-  ident,
-  me,
-  all,
-  error,
-}: {
-  cls: string
-  ident: GtIdentItem[]
-  me?: RefHits
-  all?: RefHits
-  error?: string
-}) {
-  const { cn } = h()
-  const mine = new Set((me?.candidates ?? []).map((c) => c.name))
-  const rows = all?.candidates ?? []
-  return (
-    <div className="ue:flex ue:flex-col ue:gap-1.5">
-      <span className="ue:flex ue:items-center ue:gap-1.5 ue:text-footnote ue:font-medium ue:text-fg">
-        {t('此刻的 {c}', { c: classShort(cls) })}
-        {me && (
-          <span
-            className={cn(
-              'ue:flex ue:items-center ue:gap-1 ue:text-caption ue:font-normal',
-              me.count === 1 ? 'ue:text-success' : 'ue:text-warning',
-            )}
-          >
-            {me.count === 1 && <CircleCheck className="ue:h-3.5 ue:w-3.5" />}
-            {t('命中 {n} 个', { n: me.count })}
-          </span>
-        )}
-        {all && (
-          <span className="ue:text-caption ue:font-normal ue:text-subtle">{t('同类 {n} 个', { n: all.count })}</span>
-        )}
-      </span>
-      {error && <span className="ue:text-caption ue:text-warning">{error}</span>}
-      {rows.length > 0 && (
-        <div className="ue:overflow-auto ue:rounded-(--c-row-radius) ue:border ue:border-line">
-          {rows.map((c) => {
-            const hit = mine.has(c.name)
-            const actual = new Map((c.ident ?? []).map((x) => [x.prop, x.actual]))
-            const why = hit
-              ? undefined
-              : ident.find((it) => actual.has(it.prop) && testIdent(it, actual.get(it.prop)) === false)
-            return (
-              <div
-                key={c.name}
-                className={cn(
-                  'ue:flex ue:h-8 ue:items-center ue:gap-3 ue:border-b ue:border-line/40 ue:px-2.5 ue:text-footnote ue:last:border-b-0',
-                  hit && 'ue:bg-accent/8',
-                )}
-              >
-                <span className="ue:w-36 ue:shrink-0 ue:truncate ue:font-mono ue:text-fg">{c.name}</span>
-                {ident.map((it) => (
-                  <span
-                    key={it.prop}
-                    className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-muted"
-                    title={it.prop}
-                  >
-                    {actual.has(it.prop) ? show(actual.get(it.prop)) : '—'}
-                  </span>
-                ))}
-                <span
-                  className={cn('ue:ml-auto ue:shrink-0 ue:text-caption', hit ? 'ue:text-success' : 'ue:text-subtle')}
-                >
-                  {hit ? t('就是它') : why ? t('排除：{p}', { p: why.prop.replace(/^@(self\.)?/, '') }) : t('排除')}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
+/** 悬停结构树的节点时在游戏画面上描边；移开清掉 */
+function hover(project: string, node: string | undefined, rpc: ReturnType<typeof useRefRpc>) {
+  return highlight(project, node ? { node } : { clear: true }, rpc)
 }

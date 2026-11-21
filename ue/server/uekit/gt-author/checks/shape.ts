@@ -1,7 +1,7 @@
 import { SCHEMA_VERSION } from '../../../../shared/gt-script/index.ts'
 import { issue, type Check, type Issue } from './types.ts'
 
-/** 顶层形状：kind、版本、steps 是数组、守护有 when 和 do。版本太旧（v1–v3）由 refs 检查报 schema_old */
+/** 顶层形状：kind、版本、steps 是数组、守护有 when 和 do。版本太旧（v1–v4）由 refs 检查报 schema_old */
 const SUPPORTED = SCHEMA_VERSION
 
 export const shape: Check = {

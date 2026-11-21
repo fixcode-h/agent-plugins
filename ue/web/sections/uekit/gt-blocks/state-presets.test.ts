@@ -20,13 +20,13 @@ test('按它分路：画成按状态分支，不丢原来的步骤', () => {
   const step: GtStep = {
     action: 'if',
     id: 'if1',
-    cond: { obj: 'x', prop: ':shown', op: 'is', value: true },
+    cond: { obj: 'x', prop: '@:shown', op: 'is', value: true },
     then: [{ action: 'click', target: 'A' }],
     else: [{ action: 'wait', ms: 500 }],
   }
   const out = applyPreset(step, presetFor({ obj: 'guide', part: 'BtnFinish' }, 'button'))
   assert.equal(out.branch, 'state')
-  assert.deepEqual(out.cond, { obj: 'guide', prop: '@BtnFinish:enabled', op: 'is', value: true })
+  assert.deepEqual(out.cond, { obj: 'guide', prop: '@/BtnFinish:enabled', op: 'is', value: true })
   assert.deepEqual(out.then, [{ action: 'click', target: 'A' }])
   assert.equal((out.elif as unknown[]).length, 1)
   assert.deepEqual(out.else, [{ action: 'wait', ms: 500 }])

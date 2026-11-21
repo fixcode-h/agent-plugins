@@ -4,7 +4,7 @@ export interface GtKeyRule {
   entry: string
   /** 只管这个容器（选择器前缀）；空 = 这类条目在哪个容器里都这样认 */
   container?: string
-  /** 条件左边的写法：Data.ItemId、@lua.cfgId…… */
+  /** 条件左边的写法：@item.ItemId、@#cfgId、@.Level…… */
   by: string[]
 }
 

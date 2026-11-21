@@ -19,7 +19,7 @@ const DOC: GtScript = {
     {
       id: 'g1',
       name: '新手引导出现',
-      when: { obj: { class: 'WBP_Guide_C' }, prop: ':onScreen', op: 'is', value: true },
+      when: { obj: { class: 'WBP_Guide_C' }, prop: '@:onScreen', op: 'is', value: true },
       do: [],
     },
   ],
@@ -36,7 +36,7 @@ const DOC: GtScript = {
           id: 's3',
           action: 'wait',
           until: 'cond',
-          cond: { obj: { class: 'WBP_RewardPopup_C' }, prop: ':onScreen', op: 'is', value: true },
+          cond: { obj: { class: 'WBP_RewardPopup_C' }, prop: '@:onScreen', op: 'is', value: true },
           note: '等到 奖励弹窗',
         },
       ],

@@ -7,6 +7,7 @@ import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
+import { consoleFavs, consoleKey, toggleFav as toggleFav_ } from '../../shared/gm/favs.ts'
 
 interface CVar {
   name: string
@@ -101,12 +102,12 @@ export function Console() {
     setCompletions(r.items)
   }
 
-  const favs = gm.data?.favConsole ?? []
+  const favs = consoleFavs(gm.data)
+  // 控制台命令收藏在 gm.json 的 favs.engine（GM 页「引擎」分类的收藏是同一份，规格第 6 节）；先重读一次，别把别人刚改的盖掉
   const toggleFav = (cmd: string) =>
     run('fav', async () => {
-      const g = gm.data ?? { presets: [], macros: [], favConsole: [], favGm: [] }
-      const next = { ...g, favConsole: favs.includes(cmd) ? favs.filter((c) => c !== cmd) : [...favs, cmd] }
-      await ppost(project.id, 'gm', next)
+      const g = await pget<GmStore>(project.id, 'gm')
+      const next = await ppost<GmStore>(project.id, 'gm', toggleFav_(g, 'engine', { key: consoleKey(cmd) }))
       gm.setData(next)
     })
 

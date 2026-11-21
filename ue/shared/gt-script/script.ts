@@ -1,20 +1,19 @@
 import { blockOf, idPrefixOf, isBlock, slotsOf } from './blocks/index.ts'
 import { comparePath, ensureSlot, getAt, isPrefix, placeOf, samePath } from './path.ts'
-import { migrateScript, type MigrateTodo } from './ref/migrate/index.ts'
 import type { GtGuard, GtPath, GtScript, GtStep } from './types.ts'
-import { hasBlocks, idMaker, usedIds, walk } from './walk.ts'
+import { idMaker, usedIds, walk } from './walk.ts'
 
 /**
- * GameTest 脚本的读写和结构操作：插入、删除、移动、放进 / 移出块、包成块、展开、复制、补 id、旧版本 → v4。
+ * GameTest 脚本的读写和结构操作：插入、删除、移动、放进 / 移出块、包成块、展开、复制、补 id、存盘前整理。
  * 全部是纯函数：传入场景，返回新场景（不改传入的对象），撤销就是留着旧对象。界面、流程图、Agent 离线校验共用。
  * 失败（路径不对、操作不适用）返回 undefined，调用方按「做不了」处理，不抛异常。
  */
 
 /**
- * 支持的最高 schemaVersion（比它高的文件只读，提示升级面板）。v4（GameTest 2.0，对象引用）起只认 v4：
- * v1–v3 不再按旧写法编辑，打开时提示「升级脚本」（ref/migrate，先备份）
+ * 支持的 schemaVersion（比它高的文件只读，提示升级面板）。v5（属性路径 v5、in 数组、lua: 类）起只认 v5：
+ * 旧版本不迁移（用户 2026-11-21），打开时只读并提示「旧格式不再支持，请按新写法重写」
  */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 const clone = <T>(v: T): T => structuredClone(v)
 
@@ -244,27 +243,12 @@ export function duplicate(doc: GtScript, path: GtPath): EditResult | undefined {
 // ---------- 版本 ----------
 
 /**
- * 存盘前整理成 v4：旧版本先迁移（ref/migrate，迁不准的写 todo），再补 kind、schemaVersion、id。
- * wrapFlat：旧的平铺场景把主流程包成一个「录制」段（定稿第 14 节，也可以选「保持平铺」）。
- * todos：这次迁移留下的待定（已经是 v4 的为空）
+ * 存盘前整理：补 kind、补 id；没写 schemaVersion 的（新建的）写成当前版本。
+ * 写了旧版本号的不改版本号：旧脚本不迁移，改个版本号会让旧写法冒充新格式
  */
-export function toV4(doc: GtScript, o: { wrapFlat?: boolean; groupName?: string } = {}): GtScript {
-  return toV4WithTodos(doc, o).doc
-}
-
-export function toV4WithTodos(
-  doc: GtScript,
-  o: { wrapFlat?: boolean; groupName?: string } = {},
-): { doc: GtScript; todos: MigrateTodo[] } {
-  const version = versionOf(doc)
-  const m = migrateScript(doc)
-  const out = m.changed ? m.doc : clone(doc)
-  if (o.wrapFlat && version < 3 && !hasBlocks(out) && Array.isArray(out.steps) && out.steps.length)
-    out.steps = [{ action: 'group', name: o.groupName ?? '', recorded: true, do: out.steps }]
+export function tidyScript(doc: GtScript): GtScript {
+  const out = clone(doc)
   out.kind = out.kind ?? 'gametest-scenario'
-  out.schemaVersion = SCHEMA_VERSION
-  return { doc: fillIds(out), todos: m.todos }
+  if (typeof out.schemaVersion !== 'number') out.schemaVersion = SCHEMA_VERSION
+  return fillIds(out)
 }
-
-/** @deprecated 改用 toV4（v3 不再单独存在：旧版本存盘时一律迁移到 v4）。留着给还没换名的调用方 */
-export const toV3 = toV4

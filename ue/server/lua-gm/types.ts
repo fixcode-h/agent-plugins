@@ -8,7 +8,10 @@
  * 选中后把主列的值填进参数
  */
 export interface LuaGmBinding {
-  /** 表格路径（表格插件 table.list 列出来的写法，相对项目目录） */
+  /**
+   * 表格路径：相对版本管理根（不在版本管理里时相对 UE 项目根），根外的存绝对路径；旧数据里的绝对路径照样认。
+   * 和表格插件的写法（相对面板项目目录）不一样，网页调表格插件前换算（shared/gm/table-path.ts）
+   */
   table: string
   /** 页签（工作表）名；不写是第一张 */
   sheet?: string
@@ -49,7 +52,7 @@ export interface LuaGmItem {
   call?: string
 }
 
-/** 存在项目里的 GM 扫描设置（和资源页收藏同一个存放位置：项目文档根的 AgentPanel/UE 或 .agent-panel/ue） */
+/** 存在项目里的 GM 扫描设置（项目文档根的 AgentPanel/UE，和 gm.json 同一个目录） */
 export interface LuaGmConfig {
   /** GM 文件：相对项目根的路径，可以带 * 和 **（Content/Script/GM/**\/*.lua） */
   files: string[]

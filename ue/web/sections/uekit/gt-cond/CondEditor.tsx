@@ -17,6 +17,7 @@ import {
   childrenOf,
   groupKind,
   moveIn,
+  rebasePath,
   removeAt,
   replaceAt,
   setKind,
@@ -26,6 +27,7 @@ import {
   wrapGroup,
   type CondNode,
   type GtPath,
+  type GtTarget,
 } from '../../../../shared/gt-script/index.ts'
 import { ppost, show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
@@ -34,8 +36,7 @@ import { useEditCtx } from '../gt-edit/ctx.ts'
 import { NowBar } from '../gt-live/NowBar.tsx'
 import { useCondNow } from '../gt-live/use-cond-now.ts'
 import { widgetKindOf, type WidgetKind } from '../gt-blocks/state-presets.ts'
-import type { GtTarget } from '../../../../shared/gt-script/ref/types.ts'
-import { WidgetTreePick } from '../gt-ref/WidgetTreePick.tsx'
+import { RefDialog } from '../gt-ref/RefDialog.tsx'
 import { VarsDialog } from '../gt-vars/VarsDialog.tsx'
 import { allChecks, checkKindOf } from './checks/index.ts'
 
@@ -44,7 +45,8 @@ const keyOf = (p: GtPath) => p.join('.')
 /**
  * 条件组编辑器（定稿 4.1、效果图 2）：全部满足 / 任一满足，任意嵌套子组和「不」，每行一条判断，
  * 点开就地改；连着游戏时每条一直标着此刻成不成立和实际值（gt.watch 推送，GameTest 1.10.0 以前点「现在核对」问一次）。
- * 「从游戏里抓」在 Widget 树里选控件、点准星挑属性拼一条「对象的属性」判断（GameTest 2.0）。底下是稳住时间和存进场景里的样子。
+ * 「从游戏里抓」打开选对象面板，从此刻的实例里挑一个对象（结构栏里点子控件就落到那个控件上），加一条「它存在」的判断，点开再换属性；
+ * 在如果里还能「按它分路」，把所在的如果换成按状态分支。底下是稳住时间和存进场景里的样子。
  * if、循环、等到、守护、已达成就跳过、检查都用这一个
  */
 export function CondEditor({
@@ -56,7 +58,7 @@ export function CondEditor({
 }: {
   value: unknown
   onChange: (cond: CondNode) => void
-  /** 「按它分路」：抓到控件后把所在的如果换成按状态分支（只有如果给） */
+  /** 「按它分路」：抓到对象（和部件）后把所在的如果换成按状态分支（只有如果给） */
   onSplit?: (target: GtTarget, kind?: WidgetKind) => void
   /** 有「否」那一边的（if、loop while）显示「走否前」的稳住时间 */
   elseSettle?: boolean
@@ -388,12 +390,15 @@ export function CondEditor({
         </ui.Modal>
       )}
       {picking && (
-        <WidgetTreePick
+        <RefDialog
           project={ctx.project}
-          mode="judge"
+          live={ctx.live}
+          objects={(ctx.doc?.objects ?? {}) as Record<string, unknown>}
+          withPart
           onClose={() => setPicking(undefined)}
-          onUse={(r) => {
-            if (r.check) set(addTo(root, picking, { obj: r.ref, ...r.check } as CondNode) ?? root)
+          onSave={(_, ref, part) => {
+            const prop = rebasePath('@:exists', part)
+            set(addTo(root, picking, { obj: ref, prop, op: 'is', value: true } as CondNode) ?? root)
             setPicking(undefined)
           }}
           onSplit={

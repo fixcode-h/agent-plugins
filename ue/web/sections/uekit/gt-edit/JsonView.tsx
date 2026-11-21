@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { parseScript, serialize, toV4 } from '../../../../shared/gt-script/index.ts'
+import { parseScript, serialize, tidyScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import type { ViewProps } from './views.ts'
 
@@ -32,7 +32,7 @@ export function JsonView({ doc, onChange }: ViewProps) {
           const p = parseScript(e.target.value)
           if ('error' in p) return setErr(p.error)
           setErr('')
-          const next = toV4(p.doc)
+          const next = tidyScript(p.doc)
           setOwn(next)
           onChange(next)
         }}

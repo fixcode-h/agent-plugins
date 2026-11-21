@@ -1,7 +1,7 @@
-import { Check, History, ListPlus, MessageSquarePlus, Play, RotateCcw, Star, X } from 'lucide-react'
+import { Check, History, ListPlus, MessageSquarePlus, Package, Play, RotateCcw, Star, X } from 'lucide-react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../server/lua-gm/types.ts'
 import type { GmRun } from '../../../server/store.ts'
-import type { GmStore } from '../../../server/types.ts'
+import type { GmStore } from '../../../shared/gm/schema.ts'
 import { h, t } from '../../host.ts'
 import { Badge, Term } from '../../ui.tsx'
 import type { GmEntry, GmParam } from './data.ts'
@@ -14,6 +14,7 @@ import { preview, type RunOut } from './run.ts'
  */
 export function GmDetail({
   entry,
+  moduleName,
   args,
   onArg,
   onArgs,
@@ -31,6 +32,8 @@ export function GmDetail({
   onEditBinding,
 }: {
   entry: GmEntry
+  /** 归在哪个模块（GM 分类）；引擎的没有 */
+  moduleName?: string
   args: string[]
   onArg: (i: number, v: string) => void
   onArgs: (a: string[]) => void
@@ -56,7 +59,13 @@ export function GmDetail({
       <header className="ue:flex ue:min-h-10 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-1.5">
         <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">{entry.name}</span>
         <SrcBadge src={entry.src} />
-        {entry.group && <Badge>{entry.group}</Badge>}
+        {moduleName && (
+          <Badge>
+            <Package className="ue:mr-1 ue:inline ue:h-3 ue:w-3" />
+            {moduleName}
+          </Badge>
+        )}
+        {entry.group && entry.group !== moduleName && <Badge>{entry.group}</Badge>}
         {entry.server && <Badge tone="warn">{t('服务器执行')}</Badge>}
         <span className="ue:ml-auto ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={where}>
           {where}
@@ -172,7 +181,7 @@ export function GmDetail({
                 <button
                   key={i}
                   type="button"
-                  onClick={() => onArgs(r.args)}
+                  onClick={() => Array.isArray(r.args) && onArgs(r.args)}
                   className="ue:flex ue:h-8 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:px-3 ue:text-left ue:text-footnote ue:last:border-b-0 ue:hover:bg-hover"
                 >
                   <span className="ue:w-14 ue:shrink-0 ue:text-caption ue:text-subtle ue:tabular-nums">
@@ -200,5 +209,15 @@ export function GmDetail({
 
 /** 来源徽标：Lua 用强调色，C++、引擎用灰色 */
 export const SrcBadge = ({ src }: { src: GmEntry['src'] }) => (
-  <Badge tone={src === 'lua' ? 'accent' : 'muted'}>{src === 'lua' ? 'Lua' : src === 'cpp' ? 'C++' : t('引擎')}</Badge>
+  <Badge tone={src === 'lua' || src === 'custom' ? 'accent' : 'muted'}>
+    {src === 'lua'
+      ? 'Lua'
+      : src === 'cpp'
+        ? 'C++'
+        : src === 'console'
+          ? t('控制台命令')
+          : src === 'custom'
+            ? t('自定义')
+            : t('引擎')}
+  </Badge>
 )

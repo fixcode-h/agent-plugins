@@ -1,6 +1,6 @@
 {
   "kind": "gametest-scenario",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "AssetForge 示例界面：各类控件操作",
   "_note": "配套「控件」页（AssetForge 1.5.0 起）。每种能操作的 UMG 控件各练一遍：按钮（普通、禁用到可用）、单行 / 多行输入框、滑条、微调框、下拉框、复选框、单选按钮组、按键选择器、滚动框、切换器、菜单锚点；最后一段是观察类动作（ping、find、snapshot、probe、标注截图）和临时加界面。都用代码方式（不动鼠标），真实鼠标键盘见「真实输入」。",
   "revision": 1,
@@ -52,7 +52,7 @@
         {
           "id": "normalDone",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '普通按钮')"
         },
         {
           "id": "lockGate",
@@ -73,7 +73,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Btn_Gated:enabled",
+            "prop": "@/Page_Controls/Btn_Gated:enabled",
             "op": "is",
             "value": false
           }
@@ -96,7 +96,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Btn_Gated:enabled",
+            "prop": "@/Page_Controls/Btn_Gated:enabled",
             "op": "is",
             "value": true
           }
@@ -114,7 +114,7 @@
         {
           "id": "gatedDone",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '勾上才能点')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '勾上才能点')"
         },
         {
           "id": "tapHold",
@@ -134,7 +134,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Hold_Charge_Value:text",
+            "prop": "@/Page_Controls/Hold_Charge_Value:text",
             "op": "eq",
             "value": "短按"
           }
@@ -174,7 +174,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Nickname_Echo:text",
+            "prop": "@/Page_Controls/Nickname_Echo:text",
             "op": "eq",
             "value": "$nickname"
           }
@@ -195,7 +195,7 @@
         {
           "id": "searchCommitted",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '输入：火焰剑')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '输入：火焰剑')"
         },
         {
           "id": "typeFeedback",
@@ -242,7 +242,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.Feedback_Echo:text",
+                "prop": "@/Page_Controls/Feedback_Echo:text",
                 "op": "contains",
                 "value": "第二行"
               },
@@ -250,7 +250,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.Feedback_Echo:text",
+                "prop": "@/Page_Controls/Feedback_Echo:text",
                 "op": "contains",
                 "value": "（补充）"
               }
@@ -283,7 +283,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Brightness.Value",
+            "prop": "@/Page_Controls/Brightness.Value",
             "op": "eq",
             "value": 80
           }
@@ -304,7 +304,7 @@
           "id": "amountEcho",
           "action": "assert",
           "cond": {
-            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@Page_Controls.Amount_Value:text\")) == 5"
+            "expr": "num(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Page_Controls/Amount_Value:text\")) == 5"
           }
         }
       ]
@@ -332,7 +332,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Server_Value:text",
+            "prop": "@/Page_Controls/Server_Value:text",
             "op": "eq",
             "value": "$server"
           }
@@ -358,7 +358,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.Server_Value:text",
+                "prop": "@/Page_Controls/Server_Value:text",
                 "op": "eq",
                 "value": "华南二区"
               },
@@ -366,7 +366,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.Server:selectedIndex",
+                "prop": "@/Page_Controls/Server:selectedIndex",
                 "op": "eq",
                 "value": 1
               }
@@ -404,7 +404,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.AutoLoot:checked",
+                "prop": "@/Page_Controls/AutoLoot:checked",
                 "op": "is",
                 "value": "Checked"
               },
@@ -412,7 +412,7 @@
                 "obj": {
                   "class": "WBP_ForgeSample"
                 },
-                "prop": "@Page_Controls.AutoLoot_Value:text",
+                "prop": "@/Page_Controls/AutoLoot_Value:text",
                 "op": "eq",
                 "value": "开"
               }
@@ -437,7 +437,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Difficulty:text",
+            "prop": "@/Page_Controls/Difficulty:text",
             "op": "eq",
             "value": "困难"
           }
@@ -461,7 +461,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.JumpKey:selectedKey",
+            "prop": "@/Page_Controls/JumpKey:selectedKey",
             "op": "eq",
             "value": "SpaceBar"
           }
@@ -502,7 +502,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.LogPicked:text",
+            "prop": "@/Page_Controls/LogPicked:text",
             "op": "contains",
             "value": "日志 20"
           }
@@ -526,7 +526,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.LogList:scrollOffset",
+            "prop": "@/Page_Controls/LogList:scrollOffset",
             "op": "eq",
             "value": 0
           },
@@ -563,7 +563,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.LogPicked:text",
+            "prop": "@/Page_Controls/LogPicked:text",
             "op": "contains",
             "value": "日志 12"
           }
@@ -586,7 +586,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.Steps:activeIndex",
+            "prop": "@/Page_Controls/Steps:activeIndex",
             "op": "eq",
             "value": 1
           }
@@ -610,7 +610,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.StepC:shown",
+            "prop": "@/Page_Controls/StepC:shown",
             "op": "is",
             "value": true
           }
@@ -651,7 +651,7 @@
         {
           "id": "handleClicked",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '普通按钮')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '普通按钮')"
         },
         {
           "id": "snap",
@@ -697,7 +697,7 @@
             "obj": {
               "class": "ForgeSampleMenu"
             },
-            "prop": "@MenuDelete:exists",
+            "prop": "@/MenuDelete:exists",
             "op": "is",
             "value": true
           }
@@ -719,7 +719,7 @@
             "obj": {
               "class": "ForgeSampleMenu"
             },
-            "prop": "@MenuDelete:exists",
+            "prop": "@/MenuDelete:exists",
             "op": "is",
             "value": false
           }
@@ -748,7 +748,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.ActionAnchor:open",
+            "prop": "@/Page_Controls/ActionAnchor:open",
             "op": "is",
             "value": true
           }
@@ -767,7 +767,7 @@
         {
           "id": "renamed",
           "action": "assert",
-          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@Status:text\"), '菜单：重命名')"
+          "expr": "contains(prop({\"class\":\"WBP_ForgeSample\"}, \"@/Status:text\"), '菜单：重命名')"
         },
         {
           "id": "menuClosed",
@@ -776,7 +776,7 @@
             "obj": {
               "class": "WBP_ForgeSample"
             },
-            "prop": "@Page_Controls.ActionAnchor:open",
+            "prop": "@/Page_Controls/ActionAnchor:open",
             "op": "is",
             "value": false
           }
@@ -800,7 +800,7 @@
             "obj": {
               "class": "ForgeSampleMenu"
             },
-            "prop": "@MenuCopy:exists",
+            "prop": "@/MenuCopy:exists",
             "op": "is",
             "value": true
           }
@@ -824,7 +824,7 @@
             "obj": {
               "class": "ForgeSampleMenu"
             },
-            "prop": "@MenuCopy:exists",
+            "prop": "@/MenuCopy:exists",
             "op": "is",
             "value": false
           }

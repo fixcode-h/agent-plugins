@@ -21,6 +21,8 @@ export function Bridge() {
   const [removing, setRemoving] = useState(false)
   // 收藏文件的实际位置（文档根可能在项目外层的 ProjectDoc/docs），写在设置项下面
   const favFile = useLoad(() => pget<{ file: string }>(project.id, 'favorites'), [project.id])
+  // gm.json 的实际位置（文档根由面板算，可能在项目外）
+  const gmFile = useLoad(() => pget<{ file: string }>(project.id, 'gm/info'), [project.id, project.gmStore])
   useEffect(() => {
     setForm(project)
   }, [project])
@@ -111,14 +113,17 @@ export function Bridge() {
               void saveSettings({ gmStore: form.gmStore, engineDir: form.engineDir, buildCmd: form.buildCmd })
             }}
           >
-            <ui.Field label={t('GM 预设和宏存在')}>
+            <ui.Field
+              label={t('GM 的东西存在')}
+              hint={gmFile.data?.file || t('预设、宏、表格关联、对象列表、自定义 GM、模块和收藏')}
+            >
               <ui.Select
-                value={form.gmStore}
+                value={form.gmStore === 'local' ? 'local' : 'docs'}
                 onChange={(e: { target: { value: string } }) =>
                   setForm({ ...form, gmStore: e.target.value as UeProject['gmStore'] })
                 }
                 options={[
-                  { value: 'project', label: t('项目里 .agent-panel/ue/gm.json（团队共用）') },
+                  { value: 'docs', label: t('项目文档根 AgentPanel/UE/gm.json（团队共用）') },
                   { value: 'local', label: t('只在本机') },
                 ]}
               />

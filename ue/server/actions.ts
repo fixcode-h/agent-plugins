@@ -13,6 +13,7 @@ import { runOp, type OpCtx } from './ops.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { hasUnLua } from './lua/unlua-detect.ts'
 import { readGm } from './store.ts'
+import { runCustom } from './gm-custom/run.ts'
 import type { ProjectState, UeProject } from './types.ts'
 import { t } from './util.ts'
 import { breakMessage } from './vs-debug/break-note.ts'
@@ -96,7 +97,10 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
     // 桥接的 verbosity 是最低级别（Warning 连错误也给）；网页要「只看这一级」时在这里再筛一遍，旧桥接也适用
     // 清空过的进程只给清空之后的行：缓冲里的旧行桥接没丢（log-clear/mark.ts）
     const pid = (r.instance as { pid?: number } | undefined)?.pid
-    const mark = markOf(await readMarks(ctx.project.id), cards.find((x) => x.pid === pid))
+    const mark = markOf(
+      await readMarks(ctx.project.id),
+      cards.find((x) => x.pid === pid),
+    )
     const got = ((r.lines as (RawLine & { verbosity?: string; seq?: number })[]) ?? []).filter(
       (l) => !mark || typeof l.seq !== 'number' || l.seq > mark,
     )
@@ -183,7 +187,7 @@ export async function clearLogs(ctx: OpCtx, pids: number[] | undefined, backup: 
   return { cleared }
 }
 
-/** 宏：按顺序执行，任何一步失败就停下并说是哪一步（设计文档 4.3） */
+/** 宏：按顺序执行，任何一步失败就停下并说是哪一步（设计文档 4.3）；一步可以是自定义 GM（custom，args 按参数名，规格第 6 节） */
 export async function runMacro(ctx: OpCtx, id: string) {
   const gm = await readGm(ctx.project)
   const m = gm.macros.find((x) => x.id === id || x.name === id)
@@ -191,12 +195,15 @@ export async function runMacro(ctx: OpCtx, id: string) {
   const steps: { step: number; ok: boolean; output?: unknown; error?: string }[] = []
   for (const [i, s] of m.steps.entries()) {
     try {
-      const res = s.console
+      const list = Array.isArray(s.args) ? s.args : []
+      const res: Record<string, unknown> = s.console
         ? await runOp(ctx, 'console', { command: s.console })
-        : s.lua
-          ? await runLuaGm(ctx, s.lua, s.args ?? [])
-          : await runOp(ctx, 'gm.run', { name: s.gm, args: s.args ?? [] })
-      steps.push({ step: i + 1, ok: true, output: res.output })
+        : s.custom
+          ? await runCustom(ctx, s.custom, Array.isArray(s.args) ? undefined : s.args)
+          : s.lua
+            ? await runLuaGm(ctx, s.lua, list)
+            : await runOp(ctx, 'gm.run', { name: s.gm, args: list })
+      steps.push({ step: i + 1, ok: true, output: res.output ?? (s.custom ? res.invoke : undefined) })
     } catch (e) {
       steps.push({ step: i + 1, ok: false, error: (e as Error).message })
       return { ok: false, macro: m.name, failedAt: i + 1, steps }

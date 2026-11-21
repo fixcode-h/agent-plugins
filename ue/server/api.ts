@@ -20,8 +20,11 @@ import { luaRoute } from './lua/api.ts'
 import { precheck } from './precheck.ts'
 import { luaDebugRoute } from './lua-debug/api.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
-import { patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
-import type { GmStore, InstallMode, Target, UeProject } from './types.ts'
+import { gmFile, patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
+import { tableBase } from './gm-custom/table-base.ts'
+import { followGm } from './gm-custom/watch.ts'
+import { runCustom } from './gm-custom/run.ts'
+import type { InstallMode, Target, UeProject } from './types.ts'
 import { historyWithLive, undoAll } from './undo.ts'
 import { json, now, t } from './util.ts'
 import { enableFor } from './capability.ts'
@@ -65,7 +68,7 @@ async function register(b: Body) {
     cpp: det.cpp,
     vcs: det.vcs,
     perms: { ...DEFAULT_PERMS, ...((b.perms as UeProject['perms']) ?? {}) },
-    gmStore: b.gmStore === 'local' ? 'local' : 'project',
+    gmStore: b.gmStore === 'local' ? 'local' : 'docs',
     engineDir: String(b.engineDir ?? ''),
     buildCmd: '',
     target: { kind: '', world: '' },
@@ -122,6 +125,8 @@ export async function handle(req: Request): Promise<Response> {
         const patch: Partial<UeProject> = {}
         for (const k of ['perms', 'gmStore', 'buildCmd', 'engineDir', 'target', 'name', 'perfLua'] as const)
           if (k in b) (patch as Record<string, unknown>)[k] = b[k]
+        // 旧的「项目里 .agent-panel」不再提供（用户 2026-11-21：GM 的东西默认放 docs 下）
+        if ('gmStore' in b) patch.gmStore = b.gmStore === 'local' ? 'local' : 'docs'
         if ('engineDir' in b) {
           const det = await detect(project.root, String(b.engineDir ?? ''))
           patch.engine = det.engine
@@ -185,10 +190,23 @@ export async function handle(req: Request): Promise<Response> {
         await clearHistory(project.id)
         return json({ ok: true })
       case 'GET gm':
+        // GM 页第一次取时开始盯 gm.json：别人提交后拉下来、手改了也推 gm 事件（gm-custom/watch.ts）
+        void followGm(project)
         return json(await readGm(project))
       case 'POST gm':
-        await writeGm(project, b as unknown as GmStore)
-        return json({ ok: true })
+        return json(await writeGm(project, b))
+      case 'GET gm/info':
+        // 存在哪（设置页显示），和参数关联表格存相对路径用的根（shared/gm/table-path.ts）
+        return json({ file: gmFile(project), table: await tableBase(project) })
+      case 'POST gm/custom':
+        // 概览「常用」里收藏的自定义 GM：和 ue_gm run source=custom 同一份执行（gm-custom/run.ts）
+        return json(
+          await runCustom(
+            ctx,
+            String(b.id ?? ''),
+            b.args && typeof b.args === 'object' ? (b.args as Record<string, unknown>) : undefined,
+          ),
+        )
       case 'POST macro':
         return json(await runMacro(ctx, String(b.id)))
       case 'GET local':
