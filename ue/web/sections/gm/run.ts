@@ -11,10 +11,15 @@ export interface RunOut {
   code: string
 }
 
-/** 执行一条 GM：Lua 走 lua-gm/run（服务端按扫描结果拼代码，和预览同一个 luaCall），C++ 走 gm.run */
+/** 执行一条 GM：Lua 走 lua-gm/run（服务端按扫描结果拼代码，和预览同一个 luaCall），C++ 走 gm.run，控制台命令走 console（自定义 GM 见 custom/run-custom.ts） */
 export async function runEntry(projectId: string, e: GmEntry, args: string[], target?: Target): Promise<RunOut> {
   let code = ''
   try {
+    if (e.src === 'console') {
+      code = e.name
+      const r = await ppost<{ output?: string[] }>(projectId, 'console', { command: e.name, target })
+      return { ok: true, lines: r.output ?? [], code }
+    }
     if (e.src === 'lua') {
       code = e.lua ? luaCall(e.lua, args) : e.name
       const r = await ppost<{ output?: string[]; results?: { v?: unknown }[]; code?: string }>(
@@ -48,6 +53,7 @@ export async function runEntry(projectId: string, e: GmEntry, args: string[], ta
 
 /** 预览「会执行」：参数不对时给出原因而不是抛错 */
 export function preview(e: GmEntry, args: string[]): { code: string; error?: string } {
+  if (e.src === 'console') return { code: e.name }
   if (e.src !== 'lua' || !e.lua) return { code: cppLine(e.name, args) }
   try {
     return { code: luaCall(e.lua, args) }

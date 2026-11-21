@@ -30,8 +30,10 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_gm: {
     title: 'GM 命令',
-    summary: '列出和执行项目的 GM 函数、执行存好的宏',
-    useWhen: '要用项目自带的 GM（加道具、跳关、改数值）复现或验证问题时，先 action=list 看有哪些',
+    summary: '列出和执行项目的 GM（C++、Lua、自定义）和宏；把常用的对象函数调用存成自定义 GM，管理对象列表',
+    useWhen:
+      '要用项目自带的 GM（加道具、跳关、改数值）复现或验证问题时，先 action=list 看有哪些；要反复调同一个对象上的函数，或用户说「存成 GM」时用 action=save kind=gm 存成自定义 GM（之后 run source=custom），常用对象存进对象列表用 kind=object',
+    avoidWhen: '只调一次对象函数用 ue_call；要写进测试场景、能回放的步骤用 ue_gametest',
     group: RUN,
   },
   ue_find: {

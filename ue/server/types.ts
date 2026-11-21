@@ -1,4 +1,3 @@
-import type { LuaGmBinding } from './lua-gm/types.ts'
 /**
  * UE 插件服务端和网页共用的数据形状（网页只 import type）。
  * 项目登记存在插件数据目录 projects/<面板项目 id>.json，不改面板核心的项目结构（设计文档 4.5）。
@@ -43,8 +42,11 @@ export interface UeProject {
   install?: { mode: InstallMode; version: string; at: string }
   /** 默认全都放开不问（用户 2026-11-19 定），想收紧在 UE 页「权限与设置」里改 */
   perms: { runtime: RuntimePerm; asset: AssetPerm; struct: StructPerm; python: PythonPerm }
-  /** GM 预设和宏存哪：项目里 .agent-panel/ue/gm.json（团队共用）/ 插件数据目录（只自己用） */
-  gmStore: 'project' | 'local'
+  /**
+   * GM 的东西（gm.json：预设、宏、表格关联、对象列表、自定义 GM、模块、收藏）存哪：项目文档根的 AgentPanel/UE（团队共用，默认）/
+   * 插件数据目录（只自己用）。以前的 'project'（.agent-panel/ue）不再提供，读到按 docs 处理（用户 2026-11-21）
+   */
+  gmStore: 'docs' | 'local'
   /** 资源页收藏的文件夹存哪：项目文档根 docs/AgentPanel/UE（默认）/ 项目里 .agent-panel/ue，都在项目里、团队共用 */
   favStore: 'docs' | 'project'
   /** 手动指定的引擎目录（自动找不到时填） */
@@ -206,34 +208,8 @@ export interface HistoryItem {
   undone?: string
 }
 
-export interface GmPreset {
-  id: string
-  name: string
-  /** GM 名（gm.list 里的 name）或控制台命令 */
-  gm?: string
-  console?: string
-  args?: string[]
-}
-export interface GmMacro {
-  id: string
-  name: string
-  /** 一步：C++ GM（gm）、Lua GM（lua，扫描出来的 GM 名，见 lua-gm/）或控制台命令（console） */
-  steps: { gm?: string; lua?: string; console?: string; args?: string[] }[]
-}
-export interface GmStore {
-  presets: GmPreset[]
-  macros: GmMacro[]
-  /** 收藏：控制台命令原文、GM 名 */
-  favConsole: string[]
-  favGm: string[]
-  /** GM 参数绑定数据表：键是 <GM 名>.<参数名>，值是 DataTable 路径，下拉里列行名（设计文档 3.3） */
-  bindings?: Record<string, string>
-  /**
-   * C++ GM 参数关联表格的列（和 Lua GM 同一种关联，经表格插件下拉搜）：键是 <GM 名>.<参数名>。
-   * 同一个参数两种都有时用这个，旧的 DataTable 绑定只是还认
-   */
-  tableBindings?: Record<string, LuaGmBinding>
-}
+/** gm.json（v2）的形状：契约在 shared/gm/schema.ts，网页和服务端共用 */
+export type { GmMacro, GmPreset, GmStore } from '../shared/gm/schema.ts'
 
 export interface Job {
   id: string

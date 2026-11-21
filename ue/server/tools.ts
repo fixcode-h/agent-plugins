@@ -22,6 +22,9 @@ import { EXT_TOOLS } from './uekit/tools-ext.ts'
 import { FORGE_GUARDED, forgeNotice } from './uekit/forge-guard.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { listGm } from './lua-gm/tool.ts'
+import { removeGmDef } from './gm-custom/remove.ts'
+import { runCustom } from './gm-custom/run.ts'
+import { saveGmDef } from './gm-custom/save.ts'
 import { LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
 import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
@@ -94,24 +97,51 @@ const DEFS = [
   ),
   tool(
     'ue_gm',
-    'GM：action=list 列出项目的 GM，带参数类型和说明，filter 按名字前缀筛。来源有两种：C++（Exec 函数、继承 UAgentPanelGMLibrary 的函数，要 UE 在运行）和 Lua（项目的 Lua GM 文件由扫描脚本列出，source: lua，UE 没开也能列；参数的 table 是它关联的配置表列，填值前可以用 table.query 查）。source=lua 只列 Lua 的并重新扫描一次。action=run 执行 name（args 按顺序给参数；Lua 的 GM 要写 source=lua；C++ 同名多处时用 owner 指定类）；action=macro 按名字执行项目里存的宏。',
+    'GM：action=list 列出 GM（参数类型、说明、所在模块），filter 按名字前缀筛。source 不写列项目的 C++（Exec 函数、UAgentPanelGMLibrary，要 UE 在运行）、Lua（扫描脚本列出，UE 没开也能列；参数的 table 是关联的配置表列，填值前可用 table.query 查）和自定义 GM；source=lua 只列 Lua 并重扫；source=engine 列引擎自带的；source=custom 列自定义 GM、对象列表和模块名。' +
+      'action=run 执行 name：args 按顺序给参数；Lua 写 source=lua，C++ 同名多处用 owner 指定类；source=custom 执行自定义 GM，args 写 {参数名: 值}，只能改它的 editable。action=macro 按名字执行存的宏。' +
+      'action=save 存进团队共用的 gm.json（同名就改）：kind=gm 时 def 写一条自定义 GM {name, module（模块名，没有就新建）, obj, objects: {对象名: {ref: 匹配规则} 或 {src: "@pawn"}}, function, args（对象参数写 {"$obj": 对象名}）, editable, many: error/first/each, kind: call/get, props（get 时读的属性路径）, note}；kind=object 时 def 写对象列表的一项 {name, ref} 或 {name, src}。存前用 gt.validate 校验，有错不存；dryRun=true 只看结果。action=remove 删 kind + name，返回里列出还在用它的宏。',
     {
-      action: { type: 'string', enum: ['list', 'run', 'macro'] },
-      source: { type: 'string', enum: ['cpp', 'lua'] },
+      action: { type: 'string', enum: ['list', 'run', 'macro', 'save', 'remove'] },
+      source: { type: 'string', enum: ['cpp', 'lua', 'custom', 'engine'] },
+      kind: { type: 'string', enum: ['gm', 'object'] },
       name: { type: 'string' },
       owner: { type: 'string' },
-      args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
+      args: { type: ['array', 'object'] },
+      def: { type: 'object' },
+      dryRun: { type: 'boolean' },
       filter: { type: 'string' },
       target: TARGET,
     },
     ['action'],
     async (a, ctx) => {
-      if (a.action === 'run')
+      if (a.action === 'save' || a.action === 'remove') {
+        const r = a.action === 'save' ? await saveGmDef(ctx, a) : await removeGmDef(ctx, a)
+        // 实际改了 gm.json 时交给面板记成这一轮的改动（插件接口 3）
+        const wrote = 'saved' in r ? r.saved : 'removed' in r && r.removed
+        return { ...out(r), ...(wrote ? { changed: [r.file] } : {}) }
+      }
+      if (a.action === 'run') {
+        if (a.source === 'custom') {
+          const args =
+            a.args && typeof a.args === 'object' && !Array.isArray(a.args)
+              ? (a.args as Record<string, unknown>)
+              : undefined
+          if (Array.isArray(a.args) && a.args.length) return mcpText('source=custom 的 args 写 {参数名: 值}', true)
+          return out(await runCustom(ctx, str(a.name), args))
+        }
+        const list = Array.isArray(a.args) ? (a.args as unknown[]) : []
         return a.source === 'lua'
-          ? out(await runLuaGm(ctx, str(a.name), (a.args as unknown[]) ?? []))
-          : out(await runOp(ctx, 'gm.run', { name: a.name, owner: a.owner, args: a.args ?? [] }))
+          ? out(await runLuaGm(ctx, str(a.name), list))
+          : out(await runOp(ctx, 'gm.run', { name: a.name, owner: a.owner, args: list }))
+      }
       if (a.action === 'macro') return out(await runMacro(ctx, str(a.name)))
       return out(await listGm(ctx, str(a.source), str(a.filter)))
+    },
+    {
+      // save / remove 改团队共用的 gm.json（规格第 9 节）。gm.json 在面板的文档根下，这里只拿得到项目根、算不出，
+      // 按约定给空；实际改了哪个文件在结果的 changed 里报
+      effect: 'edit',
+      targets: () => [],
     },
   ),
   tool(

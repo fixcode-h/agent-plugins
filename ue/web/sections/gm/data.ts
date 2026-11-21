@@ -1,4 +1,6 @@
 import type { LuaGmBinding, LuaGmConfig, LuaGmItem, LuaGmParam } from '../../../server/lua-gm/types.ts'
+import { isEngineOwner as isEngine } from '../../../shared/gm/engine.ts'
+import { customKey, type GmCustom } from '../../../shared/gm/schema.ts'
 
 /**
  * GM 页（设计稿 designs/GM页重设计-效果图）：C++ GM（桥接 gm.list）和 Lua GM（扫描脚本）合成一张表。
@@ -16,7 +18,8 @@ export interface CppGm {
   params: { name: string; type: string; out?: boolean; enum?: string[] }[]
 }
 
-export type GmSrc = 'lua' | 'cpp' | 'engine'
+/** 来源：Lua、项目的 C++、引擎自带、自定义（对象调用保存的）、控制台命令（引擎分类里，收藏和用过的） */
+export type GmSrc = 'lua' | 'cpp' | 'engine' | 'custom' | 'console'
 
 export interface GmParam {
   name: string
@@ -29,7 +32,7 @@ export interface GmParam {
 }
 
 export interface GmEntry {
-  /** 全页唯一：lua:名字 / cpp:类.名字 */
+  /** 全页唯一：lua:名字 / cpp:类.名字 / custom:id / console:命令 */
   key: string
   src: GmSrc
   name: string
@@ -44,53 +47,9 @@ export interface GmEntry {
   file?: string
   line?: number
   lua?: LuaGmItem
+  /** 自定义 GM 的定义（gm.json 的 custom） */
+  custom?: GmCustom
 }
-
-/**
- * 引擎自带的类：这些类（和它们的 Default__ 对象）上的 Exec 函数是引擎的调试命令，几十个，
- * 和项目自己的 GM 混在一起找不到（用户 2026-11-16 截图）。项目自己的子类（XXPlayerController）不在这里，算项目的
- */
-const ENGINE = new Set(
-  [
-    'CheatManager',
-    'CheatManagerExtension',
-    'PlayerController',
-    'HUD',
-    'DebugCameraController',
-    'DebugCameraHUD',
-    'GameModeBase',
-    'GameMode',
-    'GameStateBase',
-    'PlayerState',
-    'Pawn',
-    'Character',
-    'DefaultPawn',
-    'SpectatorPawn',
-    'GameViewportClient',
-    'LocalPlayer',
-    'Engine',
-    'GameEngine',
-    'EditorEngine',
-    'UnrealEdEngine',
-    'AIController',
-    'GameplayDebuggerCategoryReplicator',
-    'GameplayDebuggerPlayerManager',
-    'LogVisualizer',
-    'AbilitySystemComponent',
-    'AbilitySystemCheatManagerExtension',
-    'GameplayCueManager',
-    'EnhancedInputLocalPlayerSubsystem',
-    'WorldPartitionSubsystem',
-    'NavigationSystemV1',
-  ].map((x) => x.toLowerCase()),
-)
-const isEngine = (owner: string) =>
-  ENGINE.has(
-    owner
-      .replace(/^Default__/, '')
-      .replace(/_C$/, '')
-      .toLowerCase(),
-  )
 
 /** 分组名统一：「Cheat Manager」「CheatManager」「cheat_manager」算一组（截图里同一个类出现两次） */
 export const groupKey = (g: string) => g.replace(/[\s_\-|]/g, '').toLowerCase()
@@ -159,17 +118,29 @@ export function search(list: GmEntry[], q: string) {
   ]
 }
 
-/**
- * 收藏的写法（存在 gm.json 的 favGm 里，和以前兼容）：C++ 是「名字 参数…」，Lua 前面加 lua:。
- * 同一条 GM 可以收藏几组不同的参数
- */
-export const favOf = (e: GmEntry, args: string[]) =>
-  [e.src === 'lua' ? `lua:${e.name}` : e.name, ...args.map((a) => a.replace(/\s+/g, '_'))].join(' ').trim()
-export function parseFav(f: string) {
-  const [head, ...args] = f.split(' ')
-  return head.startsWith('lua:')
-    ? { key: `lua:${head.slice(4)}`, name: head.slice(4), lua: true, args }
-    : { name: head, lua: false, args }
+/** 自定义 GM 当成一条 GM 列出：参数是存的 args 的名字（执行时只有 editable 的能改） */
+export function fromCustom(items: GmCustom[]): GmEntry[] {
+  return items.map((c) => ({
+    key: customKey(c.id),
+    src: 'custom',
+    name: c.name,
+    group: '',
+    desc: c.note ?? '',
+    params: Object.keys(c.args).map((n) => ({ name: n, type: '' })),
+    custom: c,
+  }))
+}
+
+/** 控制台命令（引擎分类里：收藏的和最近用过的） */
+export function fromConsole(cmds: { cmd: string; group: string }[]): GmEntry[] {
+  return cmds.map(({ cmd, group }) => ({
+    key: `console:${cmd}`,
+    src: 'console',
+    name: cmd,
+    group,
+    desc: '',
+    params: [],
+  }))
 }
 
 /** 参数实际用的表格关联：GM 设置里改过的优先，其次扫描脚本给的 <表>.<列> 提示 */

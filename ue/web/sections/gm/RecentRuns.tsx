@@ -1,4 +1,5 @@
-import { Check, FileCode, History, Wand2, X } from 'lucide-react'
+import { Check, Crosshair, FileCode, History, SquareTerminal, Wand2, X } from 'lucide-react'
+import { argsText } from '../../../shared/gm/favs.ts'
 import type { GmRun } from '../../../server/store.ts'
 import { h, t } from '../../host.ts'
 import type { GmEntry } from './data.ts'
@@ -41,7 +42,14 @@ export function RecentRuns({
         )}
         {items.map((r, i) => {
           const line = `run:${i}`
-          const Icon = r.entry.src === 'lua' ? FileCode : Wand2
+          const Icon =
+            r.entry.src === 'lua'
+              ? FileCode
+              : r.entry.src === 'custom'
+                ? Crosshair
+                : r.entry.src === 'console'
+                  ? SquareTerminal
+                  : Wand2
           return (
             <button
               key={line}
@@ -64,12 +72,12 @@ export function RecentRuns({
               <Icon
                 className={cn(
                   'ue:h-3.5 ue:w-3.5 ue:shrink-0',
-                  r.entry.src === 'lua' ? 'ue:text-accent-text' : 'ue:text-subtle',
+                  r.entry.src === 'lua' || r.entry.src === 'custom' ? 'ue:text-accent-text' : 'ue:text-subtle',
                 )}
               />
               <span className="ue:min-w-0 ue:shrink ue:truncate ue:font-mono ue:text-fg">
                 {r.entry.name}
-                {r.run.args.some(Boolean) && <span className="ue:text-muted"> {r.run.args.join(' ')}</span>}
+                {argsText(r.run.args) && <span className="ue:text-muted"> {argsText(r.run.args)}</span>}
               </span>
               <span className="ue:min-w-0 ue:flex-1 ue:truncate ue:text-right ue:text-subtle">{r.run.out}</span>
             </button>
