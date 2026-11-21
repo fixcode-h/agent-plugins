@@ -41,7 +41,7 @@ async function gtHistory(op: Op, a: Record<string, unknown>) {
 
 export const GT_TOOL = tool(
   'ue_gametest',
-  'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，status 返回位置；v5 脚本（schemaVersion 5）用对象引用 {class, in?, ident} 指对象（class 可写 lua:模块名，in 可写数组）、{obj, part} 指部件，属性路径 @/子控件.属性、@.属性、@#Lua字段、@:状态，有 if / loop / call / set / obj.* / api / 守护 / 表达式，写法按技能 ue-gametest-authoring）。' +
+  'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，status 返回位置；v5 脚本（schemaVersion 5）用对象引用 {class, in?, ident} 指对象（class 可写 lua:模块名，in 可写数组）、{obj, part} 指部件，ident 每项都要满足、也可写条件组 {any|all: […], not?}，属性路径 @/子控件.属性、@.属性、@.取值函数(常量参数)、@#Lua字段、@:状态，有 if / loop / call / set / obj.* / api / 守护 / 表达式，写法按技能 ue-gametest-authoring）。' +
     '从代码写测试：props 看对象的属性树和推荐标识（给 class 不用开游戏，给 target / object 要开着）→ widgets 读 WBP 控件树拿部件名 → vars 列变量和函数签名（scope=widget|class|subsystem|player|object|lua）→ api 列接口库 → 写脚本 → validate 校验（编辑器没开时只查结构，offline）→ run → job / report。旧版本脚本不再支持也不迁移，validate 报 schema_old / path_old 时按新写法重写。' +
     'run：scenario（可带 params、from / to 步骤 id）、steps + name 或批量 tag / scenarios，马上返回编号；step 执行一步；resolve 核对引用命中几个和 skipIf（要开着 PIE）；inspect 看视口某点是什么、给出引用；actions 列动作；scenarios 列场景；job 看进度；report 取报告，失败步骤的 payload.evidence 有截图、控件快照、日志路径；history 看最近结果；stop 取消。' +
     '编辑器没开时 scenarios / report / history 读磁盘（offline: true）。跑场景文件通过的 report / job 算进完成依据。',

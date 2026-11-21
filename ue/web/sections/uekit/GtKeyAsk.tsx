@@ -1,6 +1,7 @@
 import { Check, LayoutGrid, MousePointerClick, Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { GtIdentItem, GtPropItem } from '../../../shared/gt-script/ref/types.ts'
+import { identLeaves } from '../../../shared/gt-script/ref/ident-tree.ts'
 import { op, useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../split.tsx'
@@ -50,7 +51,7 @@ export function GtKeyAsk({
         : undefined
   const props = useProps(project, args)
   // 默认选推荐的：录制器给的引用里已有的标识，没有就用属性树的 suggest
-  const [ident, setIdent] = useState<GtIdentItem[]>(() => ref?.ident ?? [])
+  const [ident, setIdent] = useState<GtIdentItem[]>(() => identLeaves(ref?.ident))
   const seeded = useRef(!!ref?.ident?.length)
   useEffect(() => {
     if (seeded.current || !props.data?.suggest?.length) return

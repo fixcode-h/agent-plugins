@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type {
   GtCloseHow,
   GtIdentItem,
+  GtIdentNode,
   GtMany,
   GtPropItem,
   GtPropsResult,
@@ -156,6 +157,18 @@ const FN_GROUP = {
       kind: 'bool',
       ops: ['eq'],
     },
+    {
+      // 带常量参数的取值函数（GameTest 2.1.6）：路径里先填零值，加进条件后在参数框里改
+      name: 'GetStock',
+      params: ['int32 WarehouseId'],
+      ret: 'int32',
+      src: 'cpp',
+      pure: true,
+      path: '@.GetStock(0)',
+      args: 1,
+      kind: 'int',
+      ops: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between', 'in'],
+    },
     { name: 'SetCount', params: ['int32 NewCount'], src: 'bp' },
     { name: 'PlayBuyAnim', params: ['float Delay', 'bool bLoop'], src: 'bp' },
     {
@@ -181,6 +194,22 @@ const REF: GtRef = {
   in: { obj: 'shop', part: 'ListItems' },
   ident: [{ prop: '@.ItemId', op: 'eq', value: 1001 }],
 }
+
+/** 选对象示例里的唯一标识：两个条件组，第一组里套一个「任一满足」的子组（GameTest 2.1.6 条件组） */
+const DIALOG_IDENT: GtIdentNode[] = [
+  {
+    all: [
+      { prop: '@.ItemId', op: 'eq', value: 1001 },
+      {
+        any: [
+          { prop: '@.GetStock(1)', op: 'gt', value: 3 },
+          { prop: '@.IsSoldOut()', op: 'is', value: true, not: true },
+        ],
+      },
+    ],
+  },
+  { prop: '@/TxtName:text', op: 'contains', value: '药水' },
+]
 
 const TREE: GtTreeNode[] = [
   { id: 'n1', depth: 0, class: 'WBP_Shop_C', name: 'WBP_Shop', user: true, visible: true },
@@ -366,7 +395,7 @@ export function RefSpecimen() {
             <RefDialog
               project=""
               live={false}
-              value={{ class: 'WBP_ShopItem_C', ident: [{ prop: '@.ItemId', op: 'eq', value: 1001 }] }}
+              value={{ class: 'WBP_ShopItem_C', ident: DIALOG_IDENT }}
               onClose={() => setPick(false)}
               onSave={() => setPick(false)}
             />

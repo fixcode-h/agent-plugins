@@ -1,13 +1,23 @@
 import { RefreshCw } from 'lucide-react'
 import { useContext, useMemo, useRef, useState, type ComponentProps } from 'react'
-import type {
-  GtClassItem,
-  GtIdentItem,
-  GtIdentRule,
-  GtPropItem,
-  GtPropKind,
-  GtRef,
-  GtTarget,
+import {
+  groupAt,
+  groupHasProp,
+  identLeaves,
+  joinOf,
+  kidsOf,
+  makeGroup,
+  normalizeIdent,
+  toGroups,
+  updateGroupAt,
+  type GtClassItem,
+  type GtIdentGroup,
+  type GtIdentRule,
+  type GtPropItem,
+  type GtPropKind,
+  type GtRef,
+  type GtTarget,
+  type IdentPath,
 } from '../../../../shared/gt-script/index.ts'
 import { Ctx } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
@@ -19,7 +29,7 @@ import { ClassPicker } from './pick/ClassPicker.tsx'
 import { FromBrowser } from './pick/FromBrowser.tsx'
 import { defaultSources, inOfSources, sourcesOfIn, type Source } from './pick/data.ts'
 import { DetailPane, isTruncated } from './pick/DetailPane.tsx'
-import { IdentPane } from './pick/IdentPane.tsx'
+import { CondGroups } from './pick/CondGroups.tsx'
 import { InstancePane } from './pick/InstancePane.tsx'
 import { SourceChips } from './pick/SourceChips.tsx'
 import { StructurePane } from './pick/StructurePane.tsx'
@@ -106,8 +116,15 @@ function RefDialogBody({
   // 「以后都按这个认」：勾上时保存对象的同时写进运行设置的 identRules
   const [rule, setRule] = useState(false)
   const [busy, setBusy] = useState(false)
-  const ident = ref.ident ?? []
-  const picked = new Set(ident.map((i) => i.prop))
+  // 编辑时 ref.ident 存条件组本身（空组也留着），保存时才收拾成存盘写法（normalizeIdent）
+  const groups = useMemo(() => toGroups(ref.ident), [ref.ident])
+  const [target, setTarget] = useState<IdentPath>([0])
+  // 目标组不在了（删掉、挪走）时退回最后一组
+  const tgt: IdentPath = groupAt(groups, target) ? target : [Math.max(0, groups.length - 1)]
+  const tgtGroup = groupAt(groups, tgt)
+  // 准星的「已加」按目标组看：同一条属性可以在别的组里再写一次（比如 A 或 B 的两个分支）
+  const picked = new Set(tgtGroup ? kidsOf(tgtGroup).flatMap((k) => ('prop' in k ? [k.prop] : [])) : [])
+  const [flash, setFlash] = useState<{ at: IdentPath; prop: string }>()
 
   const panes = {
     inst: usePane('gt-pick-inst', '17%', 180),
@@ -119,7 +136,7 @@ function RefDialogBody({
   const identRef = useRef<HTMLElement>(null)
   const width = (r: { current: HTMLElement | null }) => r.current?.offsetWidth ?? 0
 
-  const setIdent = (v: GtIdentItem[]) => setRef((r) => ({ ...r, ident: v }))
+  const setGroups = (v: GtIdentGroup[]) => setRef((r) => ({ ...r, ident: v }))
   const pickClass = (cls: string, item?: GtClassItem) => {
     if (cls === ref.class) return
     // 换类：标识是按旧类的属性挑的，清掉；开关按新类的种类给默认
@@ -133,7 +150,25 @@ function RefDialogBody({
     const it = isTruncated(v)
       ? { prop, op: 'startsWith', value: v.slice(0, -1) }
       : defaultIdent({ prop, kind: item?.kind ?? kind ?? 'string', value: v })
-    setIdent(p.toggleIdent(it, on))
+    if (!tgtGroup) {
+      // 还没有组：建「条件组 1」放进去
+      setGroups([makeGroup('all', [it])])
+      setTarget([0])
+    } else
+      setGroups(
+        updateGroupAt(groups, tgt, (g) =>
+          makeGroup(
+            joinOf(g),
+            on ? kidsOf(g).filter((k) => !('prop' in k) || k.prop !== prop) : [...kidsOf(g), it],
+            g.not,
+          ),
+        ),
+      )
+    if (!on) {
+      const at = tgtGroup ? tgt : [0]
+      setFlash({ at, prop })
+      window.setTimeout(() => setFlash((f) => (f?.prop === prop ? undefined : f)), 1400)
+    }
   }
 
   const inValue: GtRef['in'] =
@@ -141,7 +176,9 @@ function RefDialogBody({
   const out: GtRef = { ...ref, class: ref.class.trim() }
   if (inValue === undefined) delete out.in
   else out.in = inValue
-  if (!out.ident?.length) delete out.ident
+  const ident = normalizeIdent(groups)
+  if (ident.length) out.ident = ident
+  else delete out.ident
   if (!out.many || out.many === 'error') delete out.many
   const ok = (!withName || NAME.test(name.trim())) && !!out.class
   // 部件写法用 . 连（validPart），结构栏里是 / 连
@@ -156,7 +193,7 @@ function RefDialogBody({
         const next: GtIdentRule = {
           class: out.class,
           ...(ruleIn !== undefined ? { in: ruleIn as GtIdentRule['in'] } : {}),
-          ident: out.ident.map((i) => i.prop),
+          ident: identLeaves(out.ident).map((i) => i.prop),
         }
         await patchRunConfig(project, (c) => {
           c.identRules = upsertIdentRule(c.identRules, next)
@@ -276,7 +313,7 @@ function RefDialogBody({
               live={live}
               cls={p.cls}
               screen={p.screen.nodes}
-              ident={ident}
+              ident={identLeaves(ident)}
               me={p.hits.me}
               all={p.hits.all}
               error={p.hits.error || p.screen.error}
@@ -333,14 +370,18 @@ function RefDialogBody({
               side="right"
               reserve={() => 380 + width(instRef) + width(treeRef)}
             />
-            <IdentPane
+            <CondGroups
               cls={p.cls}
-              ident={ident}
-              onChange={setIdent}
+              groups={groups}
+              onChange={setGroups}
+              target={tgt}
+              onTarget={setTarget}
+              flash={flash}
               items={p.known.length ? p.known : p.items}
               actual={p.actual}
               live={live}
               me={p.hits.me}
+              groupHits={p.groupHits}
             />
           </section>
         </div>

@@ -2,7 +2,9 @@ import { AppWindow, Boxes, Check, CodeXml, Cpu, User } from 'lucide-react'
 import type { GmRef } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
 import { PathChips } from '../../../path-chips/PathChips.tsx'
-import { classShort } from '../../uekit/gt-ref/describe.ts'
+import { identLeaves, isIdentGroup } from '../../../../shared/gt-script/ref/ident-tree.ts'
+import type { GtIdentNode } from '../../../../shared/gt-script/ref/types.ts'
+import { classShort, identTreeText } from '../../uekit/gt-ref/describe.ts'
 
 /** 对象的两种写法：匹配规则 ref，或来源字符串 src */
 export interface ObjLike {
@@ -39,7 +41,10 @@ export function ObjRule({ o, small }: { o: ObjLike; small?: boolean }) {
   const { cn } = h()
   const Icon = iconOf(o)
   const lua = !!o.src?.startsWith('@luaMod.') || !!o.ref?.class.startsWith('lua:')
-  const ident = (o.ref?.ident as { prop: string; value?: unknown }[] | undefined) ?? []
+  const nodes = (o.ref?.ident as GtIdentNode[] | undefined) ?? []
+  // 写了条件组（2.1.6）时小块摆不下且 / 或、括号：整句写出来
+  const grouped = nodes.some(isIdentGroup)
+  const ident = grouped ? [] : identLeaves(nodes)
   return (
     <span
       className={cn(
@@ -59,7 +64,13 @@ export function ObjRule({ o, small }: { o: ObjLike; small?: boolean }) {
           {x.value !== undefined && <span className="ue:text-fg">= {fmt(x.value)}</span>}
         </span>
       ))}
-      {!o.src && !ident.length && <span className="ue:text-subtle">· {t('只按类')}</span>}
+      {grouped && (
+        <span className="ue:min-w-0 ue:truncate ue:text-fg">
+          <span className="ue:text-subtle">· </span>
+          {identTreeText(nodes)}
+        </span>
+      )}
+      {!o.src && !nodes.length && <span className="ue:text-subtle">· {t('只按类')}</span>}
     </span>
   )
 }

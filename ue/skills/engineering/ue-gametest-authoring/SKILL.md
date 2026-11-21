@@ -16,7 +16,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 - **对象引用**：`{"class": "WBP_Shop", "ident": [{"prop": "@.ShopId", "op": "eq", "value": 1001}]}`；`in` 写在哪找（`screen` 屏上界面、`world` 关卡 Actor、`lua` 绑了 UnLua 的对象，可以写数组 `["screen", "lua"]`，都不限写 `all`，省略按类推）；`class` 也可以写 `lua:模块名`（绑的 Lua 模块是它或它的子类）；常用的写进顶层 `objects` 起名，别处写名字 `"shop"`；`obj.find` 存下的写 `"$变量"`。
 - **部件**：落在对象里某个控件上时 `{"obj": "shop", "part": "BtnBuy"}`，嵌套 WBP 用 `.`（`Header.BtnClose`）。
-- **判断**：`{"obj": "shop", "prop": "@/TxtTitle:text", "op": "contains", "value": "杂货铺"}`。属性路径从 `@`（对象自己）或 `@item`（列表条目的数据对象）出发，每段一个符号：`/名字` 子控件或 Actor 组件（只在属性前面）、`.名字` 反射属性、`.名字()` 无参取值函数、`#名字` Lua 字段、`:名字` 算出的状态（只在最后：`:exists` `:onScreen` `:shown` `:enabled` `:text` `:count` `:selected` `:checked`…）、`[0]` / `["键"]` 下标。例：`@/Header/TxtTitle.Text`、`@.ShopId`、`@#shopName`、`@/ShopComp.Goods[0].Id`、`@:onScreen`、`@item#cfgId`。
+- **判断**：`{"obj": "shop", "prop": "@/TxtTitle:text", "op": "contains", "value": "杂货铺"}`。属性路径从 `@`（对象自己）或 `@item`（列表条目的数据对象）出发，每段一个符号：`/名字` 子控件或 Actor 组件（只在属性前面）、`.名字` 反射属性、`.名字()` 取值函数（GameTest 2.1.6 起括号里能写常量参数 `.GetCount(1001)`）、`#名字` Lua 字段、`:名字` 算出的状态（只在最后：`:exists` `:onScreen` `:shown` `:enabled` `:text` `:count` `:selected` `:checked`…）、`[0]` / `["键"]` 下标。例：`@/Header/TxtTitle.Text`、`@.ShopId`、`@#shopName`、`@/ShopComp.Goods[0].Id`、`@:onScreen`、`@item#cfgId`。
 
 ## 流程：查 → 写 → 校验 → 跑 → 改 → 进回归
 
@@ -91,7 +91,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 ```
 
 - **id**：每步写 `id`（字母数字下划线，场景内唯一）；报告、断点、`from` / `to` 都按它。
-- **对象引用**：`class` 按继承认，`WBP_Shop`、`WBP_Shop_C`、`/Game/UI/WBP_Shop` 都行。`in` 省略时界面在屏上找、Actor 在关卡里找、子系统直接取单例（`ident` 留空）；**组件**要写 `in: {"obj": 所属 Actor 的引用}`，列表 / 面板里的**条目**写 `in: {"obj": 界面, "part": "容器部件"}`。`ident` 全部满足才算；同类有多个又没写够标识时默认报 `ref_ambiguous`（`many: "first"` / `"last"` / `"nearest"` 只在确实无所谓是哪个时用）。
+- **对象引用**：`class` 按继承认，`WBP_Shop`、`WBP_Shop_C`、`/Game/UI/WBP_Shop` 都行。`in` 省略时界面在屏上找、Actor 在关卡里找、子系统直接取单例（`ident` 留空）；**组件**要写 `in: {"obj": 所属 Actor 的引用}`，列表 / 面板里的**条目**写 `in: {"obj": 界面, "part": "容器部件"}`。`ident` 顶层每项都满足才算；一项也可以是条件组 `{"any": [判断项…]}`（任一满足）/ `{"all": [...]}`（都满足），组里能再套子组，判断项和组都能写 `"not": true` 取反（GameTest 2.1.6 起；平铺够用就平铺）；同类有多个又没写够标识时默认报 `ref_ambiguous`（`many: "first"` / `"last"` / `"nearest"` 只在确实无所谓是哪个时用）。
 - **挑标识**：从 `props` 里挑 `score` 高、`distinct` 等于实例数、不会变的（Id、配置表行名、本地化键 `@:textKey`）；不用 `@:index`、位置、选中、计数、会变的文字。项目给某个类定了默认标识的，写在 `_settings.json` 的 `identRules`，照它来。
 - **比较**：`op` 按属性的 `kind` 选（`bool` 用 `is`；数字 `eq` `gt` `between`…；文字 `eq` `contains` `startsWith` `matches`，`text` 还能 `key` 比本地化键；枚举 `is` `isNot` `in`；`visibility` 还有 `visible` / `hidden`；对象 `isNull` `notNull` `classIs`；数组 `count`（配 `cmp`）`has` `empty`）。`op` 省略：bool 按真值，其余 `eq`。浮点、向量的 `eq` / `near` 带 `tol`。
 - **块**：`group`（`do`）、`if`（`cond` / `then` / `elif` / `else`）、`loop`（`until` / `while` / `times` / `each` / `in`，`max` 不写或 0 = 不限轮数，Agent 写的循环**仍要给 `max` 兜底**，免得条件写错一直跑）、`call`（`script` + `with`）、`set`、`api`、`break` / `continue` / `return` / `fail`。

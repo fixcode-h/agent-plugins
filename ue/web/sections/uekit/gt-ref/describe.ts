@@ -1,4 +1,5 @@
 import {
+  describeIdent,
   describeItem,
   describeRef as sharedDescribeRef,
   describeTarget,
@@ -10,6 +11,7 @@ import {
   shortClass,
   toTarget,
   type GtIdentItem,
+  type GtIdentNode,
   type GtRef,
   type GtRefLike,
   type GtTarget,
@@ -30,8 +32,11 @@ export const classShort = (cls: string | undefined) =>
 /** 一条标识 / 判断的一句话：`TxtTitle 文字 = 杂货铺` */
 export const identText = (it: Partial<GtIdentItem>) => describeItem(it, o())
 
-/** 标识的短写（对象卡片的 chips、脚本对象列表） */
-export const identShort = (it: GtIdentItem) => describeItem(it, o())
+/** 标识的短写（对象卡片的 chips、脚本对象列表）；条件组写成「（A 或 B）」 */
+export const identShort = (it: GtIdentNode) => describeIdent([it], o())
+
+/** 整个唯一标识的一句话：组之间「，」，组里「且 / 或」 */
+export const identTreeText = (nodes: readonly GtIdentNode[]) => describeIdent(nodes, o())
 
 /** 引用的一句话：`WBP_Shop（标题 = 杂货铺，ShopId = 1001）`；名字引用、`$var` 原样（给 objects 时名字后面带类） */
 export const describeRef = (ref: GtRefLike | undefined, objects?: unknown) =>
