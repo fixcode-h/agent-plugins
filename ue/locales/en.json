@@ -4849,5 +4849,6 @@
   "删掉这个子组": "Delete this sub-group",
   "子组（括号）": "Sub-group (parentheses)",
   "Lua 函数写不进属性路径：调用用 obj.call": "Lua functions can't go in a property path; call them with obj.call",
-  "参数只能写数字、文字、布尔、枚举的函数才能当条件（GameTest 2.1.6 起）：其余调用用 obj.call": "Only functions whose parameters are numbers, text, bools or enums can be conditions (GameTest 2.1.6+); call others with obj.call"
+  "参数只能写数字、文字、布尔、枚举的函数才能当条件（GameTest 2.1.6 起）：其余调用用 obj.call": "Only functions whose parameters are numbers, text, bools or enums can be conditions (GameTest 2.1.6+); call others with obj.call",
+  "这一步的标识写了条件组（且 / 或、取反），这里只能存成平铺的「都满足」；要保留条件组就关掉，到选对象面板里改": "This step's ID uses condition groups (AND / OR, NOT); saving here flattens it to \"all must hold\". To keep the groups, close this and edit in the object picker"
 }
