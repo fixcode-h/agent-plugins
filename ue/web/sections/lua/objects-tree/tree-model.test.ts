@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { byClass, byModule, byOwner, isA, isClassObj, isPathQuery, parseSrc, regroupFns, search, selfCandidates, tidyChain, type BoundObj, type TNode } from './tree-model.ts'
+import { byClass, byModule, byOwner, folderize, isA, isClassObj, isPathQuery, parseSrc, regroupFns, search, selfCandidates, tidyChain, type BoundObj, type TNode } from './tree-model.ts'
 
 const base = ['Character', 'Pawn', 'Actor', 'Object']
 const O: BoundObj[] = [
@@ -96,4 +96,26 @@ test('selfCandidates：模块表给绑这个模块的实例，类对象给这个
   assert.equal(c?.why, 'class')
   assert.deepEqual(c?.cands.map((o) => o.name), ['BP_A_C_0'])
   assert.equal(selfCandidates({ path: objs[1].path, keys: [] }, objs, objs[1]), undefined)
+})
+
+test('folderize：模块按目录成树，单子目录并成一行，没认出模块的放最后', () => {
+  const objs: BoundObj[] = [
+    { path: 'a', name: 'Dialog_0', class: 'X', module: 'Global/GlobalSystem/UIManager/UMG_Common_Dialog' },
+    { path: 'b', name: 'Toast_0', class: 'X', module: 'Global/GlobalSystem/UIManager/UMG_Common_Toast' },
+    { path: 'c', name: 'Ticker_0', class: 'X', module: 'Global/GlobalSystem/CoreTicker/g_LuaCoreTicker' },
+    { path: 'd', name: 'GI_0', class: 'X', module: 'LuaBoot.SPLuaGameInstance' },
+    { path: 'e', name: 'Odd_0', class: 'X', module: '' },
+  ]
+  const t = folderize(byModule(objs))
+  const show = (ns: TNode[]): unknown => ns.map((n) => (n.kind === 'object' ? n.name : { [`${n.label ?? n.name}(${n.count})`]: show(n.children) }))
+  assert.deepEqual(show(t), [
+    {
+      'Global/GlobalSystem(3)': [
+        { 'CoreTicker(1)': [{ 'g_LuaCoreTicker(1)': ['Ticker_0'] }] },
+        { 'UIManager(2)': [{ 'UMG_Common_Dialog(1)': ['Dialog_0'] }, { 'UMG_Common_Toast(1)': ['Toast_0'] }] },
+      ],
+    },
+    { 'LuaBoot(1)': [{ 'SPLuaGameInstance(1)': ['GI_0'] }] },
+    { '(1)': ['Odd_0'] },
+  ])
 })

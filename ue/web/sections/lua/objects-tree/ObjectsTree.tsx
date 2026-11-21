@@ -4,6 +4,8 @@ import {
   Component,
   CornerDownRight,
   FileCode2,
+  Folder,
+  FolderOpen,
   Ghost,
   Globe,
   RefreshCw,
@@ -24,6 +26,7 @@ import { StateDot, StateBadge, StateLegend, worldName } from './parts.tsx'
 import type { LuaSel, TreeData } from './tree-data.ts'
 import {
   filterState,
+  folderize,
   groupObjects,
   idleModules,
   isClassObj,
@@ -130,9 +133,36 @@ export function ObjectsTree({
         selected: under(x.path, []),
         onSelect: () => onSelect({ kind: 'root', root: { path: x.path, keys: [], label: x.name } }),
       })
+    } else if (n.kind === 'folder') {
+      lines.push({
+        ...base,
+        icon: o ? FolderOpen : Folder,
+        label: (
+          <span className="ue:font-mono">
+            <Hit text={n.label ?? n.name} q={q} />
+          </span>
+        ),
+        title: n.name,
+        aside: n.count,
+        selected: false,
+        clickToggles: true,
+      })
+    } else if (n.kind === 'idle') {
+      lines.push({
+        ...base,
+        icon: FileCode2,
+        label: (
+          <span className="ue:font-mono">
+            <Hit text={n.label ?? n.name} q={q} />
+          </span>
+        ),
+        title: n.name,
+        selected: under('', ['package', 'loaded', n.name]),
+        onSelect: () => onSelect({ kind: 'root', root: { path: '', keys: ['package', 'loaded', n.name], label: n.name } }),
+      })
     } else {
       const group = n.kind === 'module' || n.kind === 'class'
-      const name = n.kind === 'world' ? worldName(n.name) : n.name || t('（没认出模块）')
+      const name = n.kind === 'world' ? worldName(n.name) : n.label || n.name || t('（没认出模块）')
       lines.push({
         ...base,
         icon: n.kind === 'module' ? Braces : n.kind === 'class' ? Component : n.kind === 'world' ? Globe : Box,
@@ -142,7 +172,7 @@ export function ObjectsTree({
             <Hit text={name} q={q} />
           </span>
         ),
-        title: n.kind === 'owner' ? t('外层对象没绑 Lua，只当分组') : undefined,
+        title: n.kind === 'owner' ? t('外层对象没绑 Lua，只当分组') : n.label ? n.name : undefined,
         aside: n.count,
         selected: group && sel?.kind === 'group' && sel.name === n.name && sel.by === n.kind,
         clickToggles: !group,
@@ -232,7 +262,8 @@ export function ObjectsTree({
       for (const g of data.globals) leaf(`g:${g}`, Globe, g, { path: '', keys: [g] })
     const idle = idleModules(data.modules, data.objs)
     if (idle.length && section('s:idle', FileCode2, t('只加载、没有对象的模块'), idle.length, false))
-      for (const m of idle) leaf(`mod:${m}`, FileCode2, m, { path: '', keys: ['package', 'loaded', m], label: m })
+      for (const n of folderize(idle.map((m) => ({ key: `i:${m}`, kind: 'idle' as const, name: m, children: [] }))))
+        node(n, 1, false)
   }
   leakLines()
 
