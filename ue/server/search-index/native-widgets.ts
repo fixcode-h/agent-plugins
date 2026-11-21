@@ -70,8 +70,8 @@ export function widgetClasses(parents: Map<string, string>) {
   return yes
 }
 
-/** 项目（Source、Plugins 下各插件的 Source）里所有 UserWidget 子类的类名（不带 U 前缀） */
-export async function nativeWidgetClasses(root: string) {
+/** 项目（Source、Plugins 下各插件的 Source）里 UCLASS 的类名 → 父类名（都不带 U / A 前缀）；选对象面板的离线类树也用 */
+export async function nativeParents(root: string) {
   const files: string[] = []
   await headers(path.join(root, 'Source'), files)
   await headers(path.join(root, 'Plugins'), files)
@@ -80,5 +80,10 @@ export async function nativeWidgetClasses(root: string) {
     const texts = await Promise.all(files.slice(i, i + 64).map((f) => readFile(f, 'utf8').catch(() => '')))
     for (const t of texts) if (t.includes('UCLASS')) parseDecls(t, parents)
   }
-  return widgetClasses(parents)
+  return parents
+}
+
+/** 项目（Source、Plugins 下各插件的 Source）里所有 UserWidget 子类的类名（不带 U 前缀） */
+export async function nativeWidgetClasses(root: string) {
+  return widgetClasses(await nativeParents(root))
 }

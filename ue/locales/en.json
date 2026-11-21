@@ -4740,15 +4740,12 @@
   "装着的 GameTest {v} 还不认新格式的脚本：编辑页只读，到「UE 插件」页升级到 {m} 以上": "The installed GameTest {v} does not understand new-format scripts: the editor is read-only. Upgrade to {m} or later on the UE Plugins page",
   "引擎 / C++": "Engine / C++",
   "此刻 {n} 个": "{n} now",
-  "填类名搜，按开头匹配": "Type a class name to search (prefix match)",
   "只看此刻有实例的": "Only classes with live instances",
   "· 引擎自带的类压灰": "· engine classes are dimmed",
-  "没有以 {q} 开头的类": "No class starts with {q}",
   "读类树…": "Loading class tree…",
   "只列了前 {n} 个，多打几个字缩小范围": "Showing the first {n} only. Type more to narrow it down",
   "类树 / Lua 类": "Class tree / Lua classes",
   "UObject 类树": "UObject class tree",
-  "在顶上的类下拉里从类树挑（可以搜，按开头匹配），或者在左边双击一个界面、右键「选这个类」。定了类，这里列出它的属性，点行尾的准星加进唯一标识组。": "Pick from the class tree in the class dropdown at the top (searchable, prefix match), or double-click a UI on the left, or right-click \"Use this class\". Once the class is set, its properties are listed here; click the crosshair at the end of a row to add it to the identifier group.",
   "加进唯一标识组": "Add to identifier group",
   "属性 / 方法 / Lua / 运行状态": "Properties / Methods / Lua / Runtime state",
   "这一页没有可看的项": "Nothing to show on this tab",
@@ -4781,5 +4778,9 @@
   "点子控件选部件": "click a child widget to pick the part",
   "以后抓 {c} 默认选这几项": "Use these by default when picking {c} from now on",
   "按它分路": "Branch on it",
-  "Lua 函数只列出来看：调用用 obj.call": "Lua functions are listed for reference only; call them with obj.call"
+  "Lua 函数只列出来看：调用用 obj.call": "Lua functions are listed for reference only; call them with obj.call",
+  "填类名搜": "Search class name",
+  "没有名字里含 {q} 的类": "No class name contains {q}",
+  "UE 没在运行，类树从项目文件读，没有此刻实例数（{why}）": "UE is not running: the class tree is read from project files, without live instance counts ({why})",
+  "在顶上的类下拉里从类树挑（可以搜），或者在左边双击一个界面、右键「选这个类」。定了类，这里列出它的属性，点行尾的准星加进唯一标识组。": "Pick from the class tree in the class dropdown at the top, or double-click a UI on the left, or right-click \"Use this class\". Once the class is set, its properties are listed here; click the crosshair at the end of a row to add it to the identifier group."
 }

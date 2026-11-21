@@ -53,6 +53,8 @@ export interface GtRefDeps<C extends CardLike> {
   /** 挑进程（ops.ts 的 chooseCard：没有游戏进程时抛错） */
   pick: () => Promise<C>
   send: (card: C, args: A) => Promise<A>
+  /** gt.classes 连不上 UE（没开、GameTest 太旧）时改从磁盘读类树（offline/classes.ts）；note 是给界面看的原因 */
+  offlineClasses?: (args: A, note: string) => Promise<A>
 }
 
 export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtRefDeps<C>): Promise<A> {
@@ -67,6 +69,12 @@ export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtR
   } catch (e) {
     failed = explain(e, gtRefMinOf(op))
   }
+  // 类树不该要求编辑器开着（用户 2026-11-21）：连不上 UE 时从磁盘读，界面在下拉底部显示 note
+  if (op === 'gt.classes' && failed && deps.offlineClasses)
+    return deps.offlineClasses(
+      fwd,
+      t('UE 没在运行，类树从项目文件读，没有此刻实例数（{why}）', { why: failed.message }),
+    )
   if (op !== 'gt.props') {
     if (failed) throw failed
     return res!

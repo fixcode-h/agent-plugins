@@ -55,7 +55,7 @@ export function sourcesOfIn(inn: unknown): Source[] | undefined {
 /** 开关 → 存进脚本的 in：一个写字符串，几个写数组，都不选写 all */
 export const inOfSources = (s: Source[]): GtRef['in'] => (s.length === 0 ? 'all' : s.length === 1 ? s[0] : [...s])
 
-/** 调 gt.classes：类树一层（parent）或按开头搜（q，带上命中项的祖先） */
+/** 调 gt.classes：类树一层（parent）或按名字搜（q 包含即命中，带上命中项的祖先） */
 export function useClasses(project: string, args: { parent?: string; q?: string; lua?: boolean } | undefined) {
   const rpc = useRefRpc()
   const [data, setData] = useState<GtClassesResult>()
