@@ -16,6 +16,10 @@ export interface BuildCurrent extends LuaBuildRun {
 
 export interface BuildSnap {
   config: LuaBuildConfig
+  /** 团队共用的那份设置写在哪（项目文档根的 AgentPanel/UE/lua-build.json） */
+  sharedFile?: string
+  /** 指令是从仓库拉来的、这台机器还没确认过：编译会被拦，设置里保存一次算确认 */
+  unapproved?: boolean
   scriptDirExists: boolean
   changes: {
     files: ChangedFile[]

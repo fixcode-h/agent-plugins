@@ -5,6 +5,7 @@ import type { OpCtx } from '../ops.ts'
 import { t } from '../util.ts'
 import { inProject, luaBuildConfig, saveLuaBuildConfig } from './config.ts'
 import { changedFiles } from './changes.ts'
+import { luaBuildApproved, luaBuildFile } from './store.ts'
 import { currentBuild, startLuaBuild, stopLuaBuild } from './run.ts'
 
 /**
@@ -19,6 +20,9 @@ export async function luaBuildRoute(ctx: OpCtx, key: string, b: Record<string, u
       const dir = inProject(p, config.scriptDir)
       return {
         config,
+        // 团队共用的那份存在哪（设置页显示）；指令是从仓库拉来、本机还没确认过的，设置页提示先确认
+        sharedFile: luaBuildFile(p).write,
+        ...((await luaBuildApproved(p)) ? {} : { unapproved: true }),
         scriptDirExists: existsSync(dir),
         changes: await changedFiles(p, dir),
         current: currentBuild(p.id),

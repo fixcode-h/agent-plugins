@@ -2,20 +2,14 @@ import path from 'node:path'
 import { patchProject } from '../registry.ts'
 import type { LuaBuildConfig, UeProject } from '../types.ts'
 import { t } from '../util.ts'
+import { DEFAULT_LUA_BUILD, saveSharedLuaBuild, SHARED_KEYS, sharedPart } from './store.ts'
 
 /**
- * Lua 编译的设置（设计稿四.3）：存在项目登记里（UeProject.luaBuild），和编译命令、引擎目录一样是这台机器上的项目设置。
- * 只有这里配好的两条指令能跑：网页按钮和 Agent 的 ue_lua action=compile 都不能自己传命令。
+ * Lua 编译的设置（设计稿四.3）：团队共用的部分存项目文档根、个人习惯存本机项目登记，读项目时已合进 p.luaBuild（store.ts）。
+ * 只有这里配好的两条指令能跑：网页按钮和 Agent 的 ue_lua action=compile 都不能自己传命令；
+ * 从仓库拉来、本机没确认过的指令也不跑（store.ts 的 luaBuildApproved）。
  */
-export const DEFAULT_LUA_BUILD: LuaBuildConfig = {
-  full: '',
-  incremental: '',
-  cwd: '',
-  scriptDir: 'Content/Script',
-  errorFormat: '{file}:{line}: {message}',
-  autoReload: true,
-  editor: '',
-}
+export { DEFAULT_LUA_BUILD }
 
 export function luaBuildConfig(p: UeProject): LuaBuildConfig {
   return { ...DEFAULT_LUA_BUILD, ...(p.luaBuild ?? {}) }
@@ -34,6 +28,9 @@ export async function saveLuaBuildConfig(p: UeProject, patch: Record<string, unk
   if (!next.errorFormat) next.errorFormat = DEFAULT_LUA_BUILD.errorFormat
   // 报错格式写错了在保存时就说，别等编译完才发现一条错误都认不出来
   compileErrorPattern(next.errorFormat)
+  const before = luaBuildConfig(p)
+  const changed = SHARED_KEYS.some((k) => before[k] !== next[k])
+  await saveSharedLuaBuild(p, sharedPart(next), changed)
   return (await patchProject(p.id, { luaBuild: next })).luaBuild ?? next
 }
 

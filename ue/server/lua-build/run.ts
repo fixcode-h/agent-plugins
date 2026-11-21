@@ -8,6 +8,7 @@ import { c, run, t, uid } from '../util.ts'
 import { compileErrorPattern, inProject, luaBuildConfig } from './config.ts'
 import { changedFiles, luaFiles, moduleName, patchBuildState } from './changes.ts'
 import { errorKey, parseErrorLine, stripAnsi, type ErrorDirs } from './errors.ts'
+import { luaBuildApproved } from './store.ts'
 
 /**
  * 跑 Lua 编译（设计稿四.3）：在本机起进程（面板服务端，不经过 UE），输出逐行推给网页（事件 ue-lua-build），能停止。
@@ -95,6 +96,12 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
       mode === 'full'
         ? t('还没配全编译指令：到 UE 页「权限与设置」→ Lua 编译里填')
         : t('还没配增量编译指令：到 UE 页「权限与设置」→ Lua 编译里填'),
+    )
+  if (!(await luaBuildApproved(p)))
+    throw new Error(
+      t(
+        '编译指令是从仓库里的共用设置读到的，这台机器还没确认过（新拉的或被别人改过）：请用户到 UE 页「权限与设置」→ Lua 编译里看过指令后点保存，再编译',
+      ),
     )
   const re = compileErrorPattern(cfg.errorFormat)
   const scriptDir = inProject(p, cfg.scriptDir)
