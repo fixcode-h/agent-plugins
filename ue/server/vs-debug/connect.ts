@@ -3,6 +3,7 @@ import { t } from '../util.ts'
 import { pipeOne, howToEnable, READ_TIMEOUT_MS, type CallOpts } from './client.ts'
 import { findEndpoint, findSolution, ENDPOINT_REL } from './discover.ts'
 import { sameFile } from './instances.ts'
+import { changesBreakpoints, markBreakpointsStale } from './bp-stale.ts'
 import { MAX_WAIT_MS, VsDebugError } from './protocol.ts'
 
 /** 按项目找到发现文件再发请求：工具、网页路由、状态都从这里进 */
@@ -58,9 +59,13 @@ export function readTimeoutFor(op: string, args: Record<string, unknown>) {
 
 export async function vsCall(p: UeProject, op: string, args: Record<string, unknown> = {}, opts: CallOpts = {}) {
   const { endpoint } = await endpointOf(p)
+  // 改了断点：状态里缓存的断点列表作废（成功失败都作废，失败也可能改了一部分）
+  if (changesBreakpoints(op)) markBreakpointsStale(p.id)
   return pipeOne(endpoint, op, args, {
     readTimeoutMs: readTimeoutFor(op, args),
     ...overridePath(endpoint.pipe),
     ...opts,
+  }).finally(() => {
+    if (changesBreakpoints(op)) markBreakpointsStale(p.id)
   })
 }
