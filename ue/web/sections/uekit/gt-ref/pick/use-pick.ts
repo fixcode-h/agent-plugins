@@ -74,6 +74,8 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
 
   // 细节栏读哪个：树里选中的节点 > 按引用找此刻那个（命中正好一个时）> 只按类（游戏没开、找不到实例）
   const [byClass, setByClass] = useState(false)
+  // 按资产路径读失败（GameTest 2.1.3 之前不认资产路径）时退回按类名读
+  const [byName, setByName] = useState(false)
   const tree = rootNode && sub.nodes.length ? fromTree(sub.nodes, rootNode.id) : undefined
   const treeSel = tree?.find((n) => n.part === part)
   // 点中（或唯一命中）的那个实例的对象路径：Actor 的组件树要按实例读，类默认对象上没有蓝图里加的组件
@@ -85,16 +87,20 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
       : live && !byClass && shownPath
         ? { path: shownPath }
         : live && !byClass && me?.count === 1
-        ? { target: { obj: ref } }
-        : // 蓝图类按资产路径读：类名只在资产已加载时找得到，给路径 UE 会先加载它（GameTest 2.1.3 起）
-          { class: info?.asset && !cls.startsWith('lua:') ? info.asset : cls }
+          ? { target: { obj: ref } }
+          : // 蓝图类按资产路径读：类名只在资产已加载时找得到，给路径 UE 会先加载它（GameTest 2.1.3 起）
+            { class: info?.asset && !byName && !cls.startsWith('lua:') ? info.asset : cls }
   const props = useProps(project, args)
   useEffect(() => {
     if (props.error && args && ('target' in args || 'path' in args)) setByClass(true)
+    else if (props.error && args && 'class' in args && args.class !== cls) setByName(true)
     // args 每次渲染都是新对象：只看出错和读法
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [props.error])
-  useEffect(() => setByClass(false), [cls, shown])
+  useEffect(() => {
+    setByClass(false)
+    setByName(false)
+  }, [cls, shown])
   const groups = props.data?.groups
 
   // 结构：UMG 实例有树就用树；其余按部件组摊开（组件树、没开游戏时的控件树）
