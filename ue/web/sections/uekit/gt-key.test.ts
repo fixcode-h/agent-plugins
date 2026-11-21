@@ -10,27 +10,27 @@ const key: StepKey = {
 }
 
 test('applyKey 把前缀换成按标识的写法，后面的路径不动', () => {
-  const r = applyKey('WBP_Bag:Root/ItemList[6]>BtnUse', key, 'Data.ItemId=1001')
+  const r = applyKey('WBP_Bag:Root/ItemList[6]>BtnUse', key, '@item.ItemId=1001')
   assert.deepEqual(r, {
-    target: 'WBP_Bag:Root/ItemList[Data.ItemId=1001]>BtnUse',
-    from: 'WBP_Bag:Root/ItemList[Data.ItemId=1001]',
+    target: 'WBP_Bag:Root/ItemList[@item.ItemId=1001]>BtnUse',
+    from: 'WBP_Bag:Root/ItemList[@item.ItemId=1001]',
   })
 })
 
 test('applyKey 条件空 = 按位置', () => {
-  const k = { ...key, from: 'WBP_Bag:Root/ItemList[Data.ItemId=1001]' }
+  const k = { ...key, from: 'WBP_Bag:Root/ItemList[@item.ItemId=1001]' }
   assert.equal(
-    applyKey('WBP_Bag:Root/ItemList[Data.ItemId=1001]>BtnUse', k, '')?.target,
+    applyKey('WBP_Bag:Root/ItemList[@item.ItemId=1001]>BtnUse', k, '')?.target,
     'WBP_Bag:Root/ItemList[6]>BtnUse',
   )
 })
 
 test('applyKey target 被手改过对不上前缀时不改', () => {
-  assert.equal(applyKey('WBP_Other:Root/Btn', key, 'Data.ItemId=1'), undefined)
+  assert.equal(applyKey('WBP_Other:Root/Btn', key, '@item.ItemId=1'), undefined)
 })
 
 test('fieldsOfCond 取条件左边', () => {
-  assert.deepEqual(fieldsOfCond('Data.ItemId=1001, @lua.Slot=3'), ['Data.ItemId', '@lua.Slot'])
+  assert.deepEqual(fieldsOfCond('@item.ItemId=1001, @#Slot=3'), ['@item.ItemId', '@#Slot'])
 })
 
 test('keyOf 只认带 from 的 key', () => {
@@ -47,17 +47,17 @@ test('filterKeys 按字段名或值筛、丢掉空组', () => {
         source: 'item',
         title: '数据',
         fields: [
-          { by: 'Data.ItemId', v: 1001 },
-          { by: 'Data.Name', v: 'Sword' },
+          { by: '@item.ItemId', v: 1001 },
+          { by: '@item.Name', v: 'Sword' },
         ],
       },
-      { source: 'self', title: '控件', fields: [{ by: '@self.bSelected', v: false }] },
+      { source: 'self', title: '控件', fields: [{ by: '@.bSelected', v: false }] },
     ],
   }
   const r = filterKeys(data, 'sword')
   assert.equal(r.total, 1)
   assert.equal(r.groups.length, 1)
-  assert.equal(r.groups[0].fields[0].by, 'Data.Name')
+  assert.equal(r.groups[0].fields[0].by, '@item.Name')
   assert.equal(filterKeys(data, 'itemid').groups[0].fields[0].v, 1001)
   assert.equal(filterKeys(data, ' ').total, 3)
 })

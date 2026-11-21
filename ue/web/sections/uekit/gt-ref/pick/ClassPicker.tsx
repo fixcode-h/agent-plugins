@@ -144,7 +144,7 @@ export function ClassPicker({
         ]
           .filter(Boolean)
           .join(' · '),
-        title: it.asset ?? it.name,
+        title: it.asset ?? it.file ?? it.name,
         expandable,
         open: isOpen,
         selected: (lua ? `lua:${it.name}` : it.name) === value,
@@ -266,6 +266,9 @@ export function ClassPicker({
             </p>
           )}
           <TreeList lines={lines} label={t('类')} />
+          {found?.note && (
+            <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-warning">{found.note}</p>
+          )}
           {found?.hasMore && (
             <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-subtle">
               {t('只列了前 {n} 个，多打几个字缩小范围', { n: found.items.length })}

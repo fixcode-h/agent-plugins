@@ -92,7 +92,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 - **id**：每步写 `id`（字母数字下划线，场景内唯一）；报告、断点、`from` / `to` 都按它。
 - **对象引用**：`class` 按继承认，`WBP_Shop`、`WBP_Shop_C`、`/Game/UI/WBP_Shop` 都行。`in` 省略时界面在屏上找、Actor 在关卡里找、子系统直接取单例（`ident` 留空）；**组件**要写 `in: {"obj": 所属 Actor 的引用}`，列表 / 面板里的**条目**写 `in: {"obj": 界面, "part": "容器部件"}`。`ident` 全部满足才算；同类有多个又没写够标识时默认报 `ref_ambiguous`（`many: "first"` / `"last"` / `"nearest"` 只在确实无所谓是哪个时用）。
-- **挑标识**：从 `props` 里挑 `score` 高、`distinct` 等于实例数、不会变的（Id、配置表行名、本地化键 `:textKey`）；不用 `:index`、位置、选中、计数、会变的文字。项目给某个类定了默认标识的，写在 `_settings.json` 的 `identRules`，照它来。
+- **挑标识**：从 `props` 里挑 `score` 高、`distinct` 等于实例数、不会变的（Id、配置表行名、本地化键 `@:textKey`）；不用 `@:index`、位置、选中、计数、会变的文字。项目给某个类定了默认标识的，写在 `_settings.json` 的 `identRules`，照它来。
 - **比较**：`op` 按属性的 `kind` 选（`bool` 用 `is`；数字 `eq` `gt` `between`…；文字 `eq` `contains` `startsWith` `matches`，`text` 还能 `key` 比本地化键；枚举 `is` `isNot` `in`；`visibility` 还有 `visible` / `hidden`；对象 `isNull` `notNull` `classIs`；数组 `count`（配 `cmp`）`has` `empty`）。`op` 省略：bool 按真值，其余 `eq`。浮点、向量的 `eq` / `near` 带 `tol`。
 - **块**：`group`（`do`）、`if`（`cond` / `then` / `elif` / `else`）、`loop`（`until` / `while` / `times` / `each` / `in`，`max` 不写或 0 = 不限轮数，Agent 写的循环**仍要给 `max` 兜底**，免得条件写错一直跑）、`call`（`script` + `with`）、`set`、`api`、`break` / `continue` / `return` / `fail`。
 - **对象动作**：`obj.call`（`obj`、`part?`、`function`、`args`、`saveAs`、`expect`；`obj` 也可以是 `@sub.X` / `@luaMod.X`；静态函数省略 `obj`，`function` 写 `类名.函数`）、`obj.set`（`obj` + `prop` + `value`，控件状态走控件自己的 setter）、`obj.find`（`obj` + `saveAs`，之后写 `"$名字"`）、`obj.wait`（等一个对象判断成立）、`obj.close`（`how` 按顺序试 `call` / `lua` / `click` / `visibility` / `remove` / `pop` / `key` / `destroy`，`verify` 默认 `gone`；`how` 省略时按 `_settings.json` 的 `closeRules`，再按推荐）。
@@ -125,9 +125,9 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 ## 结合真实工作的写法
 
-- **刚改的界面功能**（例：背包加了「一键出售」）：`api` 发几件可售道具 → 记 `$gold0` 和背包列表的 `:count` → 打开背包、点一键出售、确认 → `assert` 金币涨了、`:count` 少了、`Log.Errors` 为空。
+- **刚改的界面功能**（例：背包加了「一键出售」）：`api` 发几件可售道具 → 记 `$gold0` 和背包列表的 `@:count` → 打开背包、点一键出售、确认 → `assert` 金币涨了、`@:count` 少了、`Log.Errors` 为空。
 - **Lua 逻辑改动**（例：任务追踪改了排序）：`vars scope=lua module=…` 找存数据的表 → 用 Lua 接口造几条不同状态的任务 → 打开追踪栏 → `loop each: {"obj": "tracker", "part": "List"}` 逐条检查（条目在 `$item`，读 `prop($item, "@item#questId")`），`assert expr` 比较相邻两条。
-- **引导、弹窗打断**：写全局守护，`when` 用 `:onScreen` 的对象判断，`do` 调 `common/翻完引导` 或 `obj.close`；主流程照常写，不为它加分支。
+- **引导、弹窗打断**：写全局守护，`when` 用 `@:onScreen` 的对象判断，`do` 调 `common/翻完引导` 或 `obj.close`；主流程照常写，不为它加分支。
 - **翻页数不固定**：`loop until` + `max`，条件挑「最后一页才出现 / 才可点」的部件状态或 Lua 字段（`@#isLast`），别写死次数。
 - **列表里找某一条**：写条目引用 `{"class": 条目类, "in": {"obj": 界面, "part": "List"}, "ident": [{"prop": "@item.ItemId", "op": "eq", "value": 1001}]}`，不按第几个找；字段从 `props`（条目类、条目数据那一组）里挑。
 - **切地图、加载**：`api Wait.Loading` 或 `obj.wait` / `wait until=cond`，不写固定秒数。

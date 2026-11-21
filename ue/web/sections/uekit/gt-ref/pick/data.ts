@@ -124,6 +124,8 @@ export function useSubtree(project: string, root: string | undefined) {
 export type DetailTab = 'props' | 'fns' | 'lua' | 'states'
 
 export function tabOf(item: GtPropItem): DetailTab {
+  // Lua 类的函数（functions 组）放「方法」页
+  if (item.luaFn) return 'fns'
   const last = lastSegOf(item.prop)
   if (last?.kind === 'fn') return 'fns'
   if (last?.kind === 'lua' || item.src === 'lua') return 'lua'

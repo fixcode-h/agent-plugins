@@ -78,6 +78,8 @@ test('版本门槛：GameTest 低于 2.0.0 或没加载时报升级；名片没�
   assert.ok(gameTestTooOld({ extensions: [{ name: 'AssetForge', version: '1.0.0' }] }))
   assert.equal(gameTestTooOld({ extensions: [{ name: 'GameTest', version: '2.0.0' }] }), undefined)
   assert.equal(gameTestTooOld({}), undefined)
+  // gt.classes 要 2.1.0：2.0.0 的 GameTest 不够
+  assert.match(gameTestTooOld({ extensions: [{ name: 'GameTest', version: '2.0.0' }] }, '2.1.0') ?? '', /2\.1\.0/)
 })
 
 test('gt.props：UE 太旧时只要知道 luaModule 照样返回 Lua 声明字段；别的操作直接报升级', async () => {

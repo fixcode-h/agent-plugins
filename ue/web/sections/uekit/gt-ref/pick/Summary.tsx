@@ -15,7 +15,18 @@ function compareOf(it: GtIdentItem): string {
 /**
  * 底栏「存进脚本：」那一行（效果图 3、4）：类、在哪找、每条标识。存的只有这些，运行时按它重新找，不存那个对象本身
  */
-export function Summary({ cls, inn, ident }: { cls: string; inn: GtRef['in']; ident: GtIdentItem[] }) {
+export function Summary({
+  cls,
+  inn,
+  ident,
+  part,
+}: {
+  cls: string
+  inn: GtRef['in']
+  ident: GtIdentItem[]
+  /** 动作落点的部件（选对象面板 withPart 时） */
+  part?: string
+}) {
   if (!cls) return <span className="ue:text-footnote ue:text-subtle">{t('先定类，再挑唯一标识组')}</span>
   return (
     <span className="ue:inline-flex ue:min-w-0 ue:flex-wrap ue:items-center ue:gap-1.5 ue:text-footnote ue:text-subtle">
@@ -29,6 +40,12 @@ export function Summary({ cls, inn, ident }: { cls: string; inn: GtRef['in']; id
         </span>
       ))}
       {!ident.length && <span>· {t('只按类认')}</span>}
+      {part && (
+        <span className="ue:inline-flex ue:items-center ue:gap-1">
+          · {t('部件')}
+          <PathChips path={`@/${part.split('.').join('/')}`} small />
+        </span>
+      )}
     </span>
   )
 }

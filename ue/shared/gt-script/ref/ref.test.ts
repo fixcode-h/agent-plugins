@@ -49,6 +49,13 @@ test('属性路径 v5：每段一个符号，旧写法给出新写法', () => {
   for (const x of ['@/ShopComp.Goods[0].Id', '@item.Data.ItemId', '@:text', '@#shopName', '@.Map["k"]'])
     assert.equal(formatPropPath(p(x)), x)
   for (const x of ['self.X', '@.A/B', '@:a.b', '@.a..b', '@[0]']) assert.ok('error' in parsePropPath(x), x)
+  // 进了 Lua 之后只有表字段：.b 是 Lua 段，不能再调函数、接运行状态（和 C++ 一致）
+  assert.deepEqual(
+    p('@#a.b[1].c').segs.map((x) => x.kind),
+    ['lua', 'lua', 'index', 'lua'],
+  )
+  assert.equal(formatPropPath(p('@/Panel#a.b')), '@/Panel#a.b')
+  for (const x of ['@#a.b()', '@#a:text', '@#a.b:exists', '@#a#b']) assert.ok('error' in parsePropPath(x), x)
   assert.equal(oldPathHint('@self.ShopId'), '@.ShopId')
   assert.equal(oldPathHint('@lua.slot'), '@#slot')
   assert.equal(oldPathHint('@itemLua.id'), '@item#id')
@@ -59,7 +66,7 @@ test('属性路径 v5：每段一个符号，旧写法给出新写法', () => {
   assert.equal(oldPathHint('@.X'), undefined)
   assert.equal(childOfPath('@/Header/TxtTitle.Text'), 'Header/TxtTitle')
   assert.equal(rebasePath('@.Text', 'Header.TxtTitle'), '@/Header/TxtTitle.Text')
-  assert.equal(rebasePath(':text', 'Btn'), '@/Btn:text')
+  assert.equal(rebasePath('@:text', 'Btn'), '@/Btn:text')
   assert.equal(rebasePath('@/Btn:text', 'Btn'), '@/Btn:text')
 })
 
@@ -257,4 +264,20 @@ test('运行配置：旧字段报 settings_old，守护照场景查', () => {
     'selector_removed',
     'settings_old',
   ])
+})
+
+test('Lua 字段后面调函数、接运行状态报 path_syntax', () => {
+  const doc = {
+    schemaVersion: 5,
+    kind: 'scenario',
+    steps: [
+      { id: 's1', action: 'assert', cond: { obj: { class: 'W' }, prop: '@#a.b()', op: 'is', value: true } },
+      { id: 's2', action: 'assert', cond: { obj: { class: 'W' }, prop: '@#a:text', op: 'eq', value: '' } },
+      { id: 's3', action: 'assert', cond: { obj: { class: 'W' }, prop: '@#a.b', op: 'eq', value: 1 } },
+    ],
+  } as unknown as Parameters<typeof validateRefs>[0]
+  const codes = validateRefs(doc)
+    .filter((x) => x.code.startsWith('path_'))
+    .map((x) => x.code)
+  assert.deepEqual(codes, ['path_syntax', 'path_syntax'])
 })

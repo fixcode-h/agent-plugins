@@ -6,6 +6,11 @@ import type { DetailsApi, Node } from '../../../../details/rows.tsx'
 import { h, t } from '../../../../host.ts'
 import { tabOf, toDetailProps, type DetailTab } from './data.ts'
 
+/** gt.props 截过的长字符串（C++ 截成前 200 字再加「…」，GameTestRpcProps.cpp MaxValueChars） */
+export const TRUNCATED_AT = 200
+export const isTruncated = (v: unknown): v is string =>
+  typeof v === 'string' && v.length > TRUNCATED_AT && v.endsWith('…')
+
 /** 展开结构体、数组后的子行没有 kind：按此刻的值粗推（比较时按它挑 op） */
 export function kindOfValue(v: unknown): GtPropKind | undefined {
   if (typeof v === 'boolean') return 'bool'
@@ -83,7 +88,9 @@ export function DetailPane({
     arrayOp: () => undefined,
     reset: () => undefined,
     openRef: () => undefined,
-    loadFull: async () => undefined,
+    // gt.props 不截结构体、数组（整个给），只把超过 200 字的字符串截成「前 200 字…」，也没有按路径取完整值的操作：
+    // 展开时给的就是列表里的值；截过的字符串照原样显示省略号
+    loadFull: async (path: string) => byProp.get(path)?.value,
     action: (n: Node) => {
       const item = byProp.get(n.path)
       const v = n.value

@@ -28,7 +28,13 @@ export function TargetInput({ value, onChange }: { value: unknown; onChange: (v:
           </span>
         </p>
       )}
-      <ObjInput value={tg?.obj} onChange={(obj) => (obj ? set({ obj }) : onChange(undefined))} />
+      <ObjInput
+        value={tg?.obj}
+        onChange={(obj) => (obj ? set({ obj }) : onChange(undefined))}
+        part={tg?.part}
+        // 面板里在结构栏点子控件就是部件：对象和部件一起换（原来的 slate 段留着）
+        onTarget={(next) => onChange({ ...(tg?.slate ? { slate: tg.slate } : {}), ...next })}
+      />
       {tg?.obj && <PartInput value={tg.part ?? ''} onChange={(part) => set({ part })} parts={partsOf(groups)} />}
       {tg?.slate !== undefined && (
         <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={tg.slate}>

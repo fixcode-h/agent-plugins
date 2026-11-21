@@ -1,6 +1,6 @@
 import { Box, PencilLine, Variable, X } from 'lucide-react'
 import { useState } from 'react'
-import type { GtRef, GtRefLike } from '../../../../shared/gt-script/ref/types.ts'
+import type { GtRef, GtRefLike, GtTarget } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
 import { SuggestInput } from '../../../SuggestInput.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
@@ -23,9 +23,15 @@ export function useRefGroups(ref: GtRefLike | undefined) {
 export function ObjInput({
   value,
   onChange,
+  part,
+  onTarget,
 }: {
   value: GtRefLike | undefined
   onChange: (v: GtRefLike | undefined) => void
+  /** 动作落点：现在的部件，面板结构栏里打开时选中它 */
+  part?: string
+  /** 动作落点：面板里连部件一起选，保存时交回对象 + 部件（不给时只交引用） */
+  onTarget?: (t: GtTarget) => void
 }) {
   const { ui } = h()
   const ctx = useEditCtx()
@@ -87,9 +93,12 @@ export function ObjInput({
           live={ctx.live}
           value={inline}
           objects={objects}
+          withPart={!!onTarget}
+          part={part}
           onClose={() => setDialog(false)}
-          onSave={(_, ref) => {
-            onChange(ref)
+          onSave={(_, ref, pt) => {
+            if (onTarget) onTarget(pt ? { obj: ref, part: pt } : { obj: ref })
+            else onChange(ref)
             setDialog(false)
           }}
         />

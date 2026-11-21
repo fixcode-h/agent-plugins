@@ -2783,7 +2783,7 @@
   "条目类": "Entry class",
   "列表条目的控件类，带不带 _C 都行": "Widget class of the list entry, with or without _C",
   "按什么认": "Match by",
-  "条件左边的写法，多个用逗号连（都要满足），如 Data.ItemId、@lua.cfgId、@text": "Left side of the condition; join several with commas (all must match), e.g. Data.ItemId, @lua.cfgId, @text",
+  "条件左边的属性，多个用逗号连（都要满足），如 @item.ItemId、@#cfgId、@:text": "Properties on the left of the condition; join several with commas (all must match), e.g. @item.ItemId, @#cfgId, @:text",
   "只管这个容器": "Only this container",
   "选择器前缀，如 WBP_Bag:Root/ItemList；不填 = 在哪个容器里都这样认": "Selector prefix such as WBP_Bag:Root/ItemList; empty = any container",
   "选左边的一条规则查看和修改": "Pick a rule on the left to view and edit it",
@@ -4468,9 +4468,6 @@
   "只在源码里看到，此刻实例表里没有值：{where}": "Only seen in source; the instance table has no value right now: {where}",
   "类型 {type} 要看运行时的值，开着游戏再选：{where}": "Type {type} depends on the runtime value; pick it while the game is running: {where}",
   "Lua 类型 {type} 不知道怎么比": "Don't know how to compare Lua type {type}",
-  "请升级 GameTest 到 2.0.0：编辑器里是 {v}，对象引用（控件树、属性树、描边）要 2.0.0 起；在 UE 页「UE 插件」升级并重新编译": "Please upgrade GameTest to 2.0.0: the editor has {v}, and object references (widget tree, property tree, highlight) need 2.0.0 or later. Upgrade it under UE page > UE Plugins and recompile",
-  "请升级 GameTest 到 2.0.0：编辑器里的 GameTest 不认这个操作；在 UE 页「UE 插件」升级并重新编译": "Please upgrade GameTest to 2.0.0: the GameTest in the editor doesn't know this operation. Upgrade it under UE page > UE Plugins and recompile",
-  "编辑器里没加载 GameTest：在 UE 页「UE 插件」装上 GameTest 2.0.0 并重新编译": "GameTest isn't loaded in the editor: install GameTest 2.0.0 under UE page > UE Plugins and recompile",
   "自己": "Self",
   "存在": "Exists",
   "在屏上": "On screen",
@@ -4665,5 +4662,12 @@
   "同类 {n} 个里各不相同": "Differs across all {n} of this class",
   "同类 {n} 个里都一样": "Same across all {n} of this class",
   "同类 {n} 个里 {d} 种": "{d} distinct values across {n} of this class",
-  "这里只看此刻的值；要改值在脚本里用 obj.set": "Values are read-only here; use obj.set in the script to change them"
+  "这里只看此刻的值；要改值在脚本里用 obj.set": "Values are read-only here; use obj.set in the script to change them",
+  "请升级 GameTest 到 {m}：编辑器里是 {v}，这个功能（控件树、属性树、类树、描边）要 {m} 起；在 UE 页「UE 插件」升级并重新编译": "Upgrade GameTest to {m}: the editor has {v}, and this feature (widget tree, property tree, class tree, highlight) needs {m} or later. Upgrade on the UE page under \"UE Plugins\" and recompile",
+  "请升级 GameTest 到 {m}：编辑器里的 GameTest 不认这个操作；在 UE 页「UE 插件」升级并重新编译": "Upgrade GameTest to {m}: the GameTest in the editor does not know this operation. Upgrade on the UE page under \"UE Plugins\" and recompile",
+  "编辑器里没加载 GameTest：在 UE 页「UE 插件」装上 GameTest {m} 并重新编译": "GameTest is not loaded in the editor: install GameTest {m} on the UE page under \"UE Plugins\" and recompile",
+  "点子控件选部件": "click a child widget to pick the part",
+  "以后抓 {c} 默认选这几项": "Use these by default when picking {c} from now on",
+  "按它分路": "Branch on it",
+  "Lua 函数只列出来看：调用用 obj.call": "Lua functions are listed for reference only; call them with obj.call"
 }

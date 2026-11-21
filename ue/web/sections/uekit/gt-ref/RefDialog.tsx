@@ -1,5 +1,13 @@
 import { useContext, useRef, useState } from 'react'
-import type { GtClassItem, GtIdentItem, GtPropItem, GtPropKind, GtRef } from '../../../../shared/gt-script/index.ts'
+import type {
+  GtClassItem,
+  GtIdentItem,
+  GtIdentRule,
+  GtPropItem,
+  GtPropKind,
+  GtRef,
+  GtTarget,
+} from '../../../../shared/gt-script/index.ts'
 import { Ctx } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
@@ -8,13 +16,14 @@ import { classShort, inText } from './describe.ts'
 import { highlight, useRefRpc } from './live.ts'
 import { ClassPicker } from './pick/ClassPicker.tsx'
 import { defaultSources, inOfSources, sourcesOfIn, type Source } from './pick/data.ts'
-import { DetailPane } from './pick/DetailPane.tsx'
+import { DetailPane, isTruncated } from './pick/DetailPane.tsx'
 import { IdentPane } from './pick/IdentPane.tsx'
 import { InstancePane } from './pick/InstancePane.tsx'
 import { SourceChips } from './pick/SourceChips.tsx'
 import { StructurePane } from './pick/StructurePane.tsx'
 import { Summary } from './pick/Summary.tsx'
 import { usePick } from './pick/use-pick.ts'
+import { patchRunConfig, upsertIdentRule } from './rules-io.ts'
 
 const NAME = /^[A-Za-z_]\w*$/
 
@@ -30,7 +39,9 @@ function useLiveFallback(live: boolean | undefined) {
  * 关卡 Actor / Lua 对象，多选，都不选 = 全部），下面四栏都能拖边、记住宽度：此刻实例 · 结构（Widget 树 / 组件树）·
  * 细节（属性 · 方法 · Lua · 运行状态，行尾准星加标识）· 唯一标识组。底栏写存进脚本的样子。
  * 存进脚本的只有类、在哪找和标识，运行时按它重新找，不存那个对象本身。
- * 不依赖编辑页的上下文：设置页、GM 面板也能直接用（live 不给时按 UE 页的项目状态判断）
+ * 不依赖编辑页的上下文：设置页、GM 面板也能直接用（live 不给时按 UE 页的项目状态判断）。
+ * withPart：动作落点用，结构栏里点的子控件 / 组件就是部件，保存时一起交出去（等于原来「连部件一起抓」）；
+ * onSplit：条件里用，底栏多一个「按它分路」，把所在的如果换成按状态分支
  */
 export function RefDialog({
   project,
@@ -40,6 +51,9 @@ export function RefDialog({
   objects,
   lockClass,
   live: liveProp,
+  withPart,
+  part: initialPart,
+  onSplit,
   onClose,
   onSave,
 }: {
@@ -54,8 +68,14 @@ export function RefDialog({
   lockClass?: string
   /** 连没连着游戏；不给时按 UE 页的项目状态判断 */
   live?: boolean
+  /** 结构栏选的子控件当部件交出去（onSave 的第三个参数，`Header.BtnClose`；对象自己时不给） */
+  withPart?: boolean
+  /** 打开时选中的部件（动作落点原来的） */
+  part?: string
+  /** 「按它分路」：落点（对象 + 选中的部件）和选中那一项的类名 */
+  onSplit?: (target: GtTarget, widgetClass?: string) => void
   onClose: () => void
-  onSave: (name: string, ref: GtRef) => void
+  onSave: (name: string, ref: GtRef, part?: string) => void
 }) {
   const { ui, cn } = h()
   const rpc = useRefRpc()
@@ -66,7 +86,10 @@ export function RefDialog({
   const [sources, setSources] = useState<Source[] | undefined>(() => sourcesOfIn(value?.in))
   // 用户没碰过开关、原来也没写 in 时，存的时候照旧不写（运行时按类自动）
   const [touched, setTouched] = useState(false)
-  const p = usePick({ project, live, ref, objects })
+  const p = usePick({ project, live, ref, objects, initialPart: initialPart?.split('.').join('/') })
+  // 「以后都按这个认」：勾上时保存对象的同时写进运行设置的 identRules
+  const [rule, setRule] = useState(false)
+  const [busy, setBusy] = useState(false)
   const ident = ref.ident ?? []
   const picked = new Set(ident.map((i) => i.prop))
 
@@ -90,7 +113,10 @@ export function RefDialog({
   }
   const onPick = (prop: string, kind: GtPropKind | undefined, v: unknown, item?: GtPropItem) => {
     const on = picked.has(prop)
-    const it = defaultIdent({ prop, kind: item?.kind ?? kind ?? 'string', value: v })
+    // 截过的长字符串不能拿去比「等于」：改成「开头是」前 200 字
+    const it = isTruncated(v)
+      ? { prop, op: 'startsWith', value: v.slice(0, -1) }
+      : defaultIdent({ prop, kind: item?.kind ?? kind ?? 'string', value: v })
     setIdent(p.toggleIdent(it, on))
   }
 
@@ -102,6 +128,31 @@ export function RefDialog({
   if (!out.ident?.length) delete out.ident
   if (!out.many || out.many === 'error') delete out.many
   const ok = (!withName || NAME.test(name.trim())) && !!out.class
+  // 部件写法用 . 连（validPart），结构栏里是 / 连
+  const outPart = (withPart || onSplit) && p.part ? p.part.split('/').join('.') : undefined
+
+  const save = async () => {
+    if (rule && out.ident?.length) {
+      setBusy(true)
+      try {
+        // 只有对象写法、@来源这种「哪里的」才进规则；屏上 / 关卡这类开关是找法，不属于这个类的标识
+        const ruleIn = sourcesOfIn(out.in) === undefined ? out.in : undefined
+        const next: GtIdentRule = {
+          class: out.class,
+          ...(ruleIn !== undefined ? { in: ruleIn as GtIdentRule['in'] } : {}),
+          ident: out.ident.map((i) => i.prop),
+        }
+        await patchRunConfig(project, (c) => {
+          c.identRules = upsertIdentRule(c.identRules, next)
+        })
+      } catch (e) {
+        h().toast.error(t('规则没存上：{e}', { e: (e as Error).message }))
+      } finally {
+        setBusy(false)
+      }
+    }
+    onSave(name.trim(), out, outPart)
+  }
 
   const structTitle =
     p.kind === 'actor' || p.kind === 'component'
@@ -109,6 +160,7 @@ export function RefDialog({
       : p.kind === 'umg'
         ? t('Widget 树 · {c}', { c: p.shown ?? classShort(p.cls) })
         : t('结构')
+  const structHead = withPart ? `${structTitle} · ${t('点子控件选部件')}` : structTitle
   const col = 'ue:relative ue:flex ue:min-h-48 ue:flex-col ue:lg:min-h-0'
 
   return (
@@ -119,13 +171,33 @@ export function RefDialog({
       title={t('选对象')}
       footer={
         <>
-          <span className="ue:min-w-0 ue:flex-1">
-            <Summary cls={out.class} inn={out.in} ident={ident} />
+          <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">
+            <Summary cls={out.class} inn={out.in} ident={ident} part={outPart} />
+            <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+              <input
+                type="checkbox"
+                className="ue:accent-accent"
+                checked={rule}
+                disabled={!ident.length}
+                onChange={(e) => setRule(e.target.checked)}
+              />
+              {t('以后抓 {c} 默认选这几项', { c: classShort(out.class) || t('这个类') })}
+              <span className="ue:text-subtle">{t('（存进运行设置的「对象与标识」）')}</span>
+            </label>
           </span>
           <ui.Button variant="secondary" onClick={onClose}>
             {t('取消')}
           </ui.Button>
-          <ui.Button disabled={!ok} onClick={() => onSave(name.trim(), out)}>
+          {onSplit && (
+            <ui.Button
+              variant="secondary"
+              disabled={!ok}
+              onClick={() => onSplit({ obj: out, ...(outPart ? { part: outPart } : {}) }, p.selectedNode?.class)}
+            >
+              {t('按它分路')}
+            </ui.Button>
+          )}
+          <ui.Button disabled={!ok || busy} onClick={() => void save()}>
             {t('保存对象')}
           </ui.Button>
         </>
@@ -199,7 +271,7 @@ export function RefDialog({
           </section>
           <section ref={treeRef} style={panes.tree.style('35%')} className={cn(PANE_FIXED, col)}>
             <StructurePane
-              title={structTitle}
+              title={structHead}
               nodes={p.structure}
               kind={p.kind}
               selected={p.part}

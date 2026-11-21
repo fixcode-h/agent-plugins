@@ -1,5 +1,5 @@
 import { AppWindow } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GtIdentItem, GtPropGroup, GtPropItem, GtRef, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
 import { classShort } from '../describe.ts'
 import { classOnly, useProps, useRefHits, useTree, type PropsArgs, type RefHits } from '../live.ts'
@@ -13,6 +13,8 @@ export interface PickInput {
   live: boolean
   ref: GtRef
   objects?: Record<string, unknown>
+  /** 打开时选中的子控件 / 组件（动作落点原来的部件，`Header/BtnClose`） */
+  initialPart?: string
 }
 
 /** 此刻实例名 → gt.tree 里的 UserWidget 节点（只有 UMG 有树；名字对得上才算） */
@@ -30,14 +32,17 @@ const ownItems = (groups: GtPropGroup[] | undefined, part?: string) =>
  * 选对象面板的数据（一页四栏共用）：类的种类、此刻实例（gt.resolve 推送）、结构（UMG 用 gt.tree 子树，其余按 gt.props 的部件组）、
  * 细节栏读哪个对象的属性（gt.props：选中的树节点 > 按引用找此刻的对象 > 只按类）。界面状态（选了哪个实例、哪个子项）也在这里
  */
-export function usePick({ project, live, ref, objects }: PickInput) {
+export function usePick({ project, live, ref, objects, initialPart }: PickInput) {
   const cls = ref.class.trim()
   const info = useClassInfo(project, cls)
   const kind: ClassKind | undefined = cls ? info?.kind : undefined
   const [inst, setInst] = useState<string>()
-  const [part, setPart] = useState('')
-  // 换类时清掉选中的实例和子项
+  const [part, setPart] = useState(initialPart ?? '')
+  // 换类时清掉选中的实例和子项（打开时那一次不清：要留着原来的部件）
+  const firstCls = useRef(cls)
   useEffect(() => {
+    if (cls === firstCls.current) return
+    firstCls.current = ''
     setInst(undefined)
     setPart('')
   }, [cls])
@@ -118,7 +123,8 @@ export function usePick({ project, live, ref, objects }: PickInput) {
     if (!groups) return []
     if (treeSel) return ownItems(groups, part || undefined)
     if (!part) return ownItems(groups)
-    if (partGroup?.items.length) return partGroup.items.map((it) => ({ ...it }))
+    // 带 part 读回来的 prop 相对部件：拼上 /部件（已经从外层写的不重复拼）
+    if (partGroup?.items.length) return itemsOf([partGroup], part)
     return itemsOf(partGroups[part], part)
   }, [groups, treeSel, part, partGroup, partGroups])
   const groupTitle = useMemo(() => {
@@ -165,6 +171,8 @@ export function usePick({ project, live, ref, objects }: PickInput) {
     structure,
     structureFromTree: !!tree,
     rootNode,
+    /** 结构栏选中的那一项（对象自己时是第一行） */
+    selectedNode: structure.find((n) => n.part === part) ?? structure[0],
     subError: sub.error,
     props,
     items,

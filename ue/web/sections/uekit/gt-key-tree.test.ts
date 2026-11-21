@@ -8,10 +8,10 @@ const has = (o: unknown, p: Record<string, unknown>) =>
 
 const labels = { any: '任何容器', noScreen: '没写屏' }
 const rules = [
-  { entry: 'WBP_BagSlot', container: 'WBP_Bag:Root/ItemList', by: ['Data.ItemId'] },
+  { entry: 'WBP_BagSlot', container: 'WBP_Bag:Root/ItemList', by: ['@item.ItemId'] },
   { entry: 'WBP_MailRow', container: 'WBP_Mail:Root/List', by: ['SentAt'] },
-  { entry: 'WBP_Cell', by: ['@self.SkillType', '@self.Level'] },
-  { entry: 'WBP_ShopGoods', container: 'WBP_Bag:Root/ItemList', by: ['@lua.cfgId'] },
+  { entry: 'WBP_Cell', by: ['@.SkillType', '@.Level'] },
+  { entry: 'WBP_ShopGoods', container: 'WBP_Bag:Root/ItemList', by: ['@#cfgId'] },
   { entry: 'WBP_Row', container: 'Root/Rows', by: ['Id'] },
 ]
 

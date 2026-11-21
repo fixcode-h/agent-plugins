@@ -11,6 +11,7 @@ import type {
 import { op } from '../../../api.ts'
 import { useLiveWatch } from '../gt-live/use-watch.ts'
 import { inlineRef } from './describe.ts'
+import { normalizeGroups } from './props-shape.ts'
 
 /**
  * GameTest 2.0 新操作（协议第 7 节）的前端调用：gt.props、gt.tree、gt.highlight、gt.refFor，
@@ -53,7 +54,7 @@ export function useProps(project: string, args: PropsArgs | undefined) {
     let off = false
     setLoading(true)
     rpc<PropsData>(project, 'gt.props', JSON.parse(key) as Record<string, unknown>)
-      .then((r) => !off && setData(r))
+      .then((r) => !off && setData({ ...r, groups: normalizeGroups(r) }))
       .catch((e: Error) => !off && setError(e.message))
       .finally(() => !off && setLoading(false))
     return () => {
@@ -63,7 +64,7 @@ export function useProps(project: string, args: PropsArgs | undefined) {
   const loadPart = async (part: string): Promise<GtPropGroup[] | undefined> => {
     if (!args) return undefined
     const r = await rpc<GtPropsResult>(project, 'gt.props', { ...args, part, siblings: true })
-    return r.groups
+    return normalizeGroups(r)
   }
   return { data, error, loading, loadPart }
 }

@@ -127,6 +127,8 @@ export interface GtPropItem {
   why?: string
   readOnly?: boolean
   note?: string
+  /** Lua 类的函数（gt.props class: "lua:模块" 的 functions 组）：只列出来看，不能当路径、不能当标识 */
+  luaFn?: { params: string[]; from?: string }
 }
 export interface GtPropGroup {
   id: string
@@ -194,9 +196,15 @@ export interface GtClassItem {
   asset?: string
   kids: number
   live?: number
+  /** Lua 类的源文件（相对项目，`Content/Script/UI/Shop.lua`） */
+  file?: string
 }
 export interface GtClassesResult {
   items: GtClassItem[]
   total: number
   hasMore: boolean
+  /** 还有下一页时从这里接着取 */
+  nextOffset?: number
+  /** 说明（例如 UnLua 没开、Lua 类只扫到一部分），原样显示 */
+  note?: string
 }

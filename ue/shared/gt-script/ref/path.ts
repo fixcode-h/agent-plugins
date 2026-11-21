@@ -1,6 +1,7 @@
 /**
  * 属性路径 v5（UEKit docs/game-test-ref.md 3.1）：从 `@`（对象自己）或 `@item`（列表条目的数据对象）出发，每段一个符号。
  * `/名字` 子控件或组件，`.名字` 反射属性，`.名字()` 无参取值函数，`#名字` Lua 字段，`:名字` 运行状态（只在最后），`[i]` / `["键"]` 下标。
+ * 进了 Lua 之后（`#a.b`）只有 Lua 表：`.b` 是表字段（解析成 lua 段），不能再接 `.f()`、`:状态`、`#`（和 C++ 一致，报 path_syntax）。
  * 底层存盘和匹配用它；界面上只显示成小块（web/path-chips），不出现这些符号。
  */
 export type GtPathSegKind = 'child' | 'prop' | 'fn' | 'lua' | 'state' | 'index'
@@ -50,6 +51,13 @@ export function parsePropPath(text: string): GtPathParsed | { error: string; at:
     while (j < s.length && !'/.#:['.includes(s[j])) j++
     let name = s.slice(i + 1, j)
     let kind: GtPathSegKind = c === '/' ? 'child' : c === '#' ? 'lua' : c === ':' ? 'state' : 'prop'
+    if (segs.some((x) => x.kind === 'lua')) {
+      // Lua 表里没有反射函数和算出状态；表字段用 . 接
+      if (c === ':') return { error: 'Lua 字段后面不能接运行状态', at: i }
+      if (c === '#') return { error: 'Lua 字段后面的表字段用 . 接', at: i }
+      if (name.endsWith('()')) return { error: 'Lua 字段后面不能调函数', at: i + 1 }
+      if (kind === 'prop') kind = 'lua'
+    }
     if (kind === 'prop' && name.endsWith('()')) {
       kind = 'fn'
       name = name.slice(0, -2)
@@ -66,10 +74,14 @@ export function parsePropPath(text: string): GtPathParsed | { error: string; at:
 /** 拼回文字（parsePropPath 的反操作） */
 export function formatPropPath(p: GtPathParsed): string {
   let out = p.root === 'item' ? '@item' : '@'
+  let lua = false
   for (const s of p.segs) {
-    if (s.kind === 'index') out += /^\d+$/.test(s.name) ? `[${s.name}]` : `["${s.name}"]`
+    // 第一个 Lua 段写 #，之后的表字段写 .
+    if (s.kind === 'lua') {
+      out += `${lua ? '.' : '#'}${s.name}`
+      lua = true
+    } else if (s.kind === 'index') out += /^\d+$/.test(s.name) ? `[${s.name}]` : `["${s.name}"]`
     else if (s.kind === 'child') out += `/${s.name}`
-    else if (s.kind === 'lua') out += `#${s.name}`
     else if (s.kind === 'state') out += `:${s.name}`
     else if (s.kind === 'fn') out += `.${s.name}()`
     else out += `.${s.name}`
@@ -123,11 +135,11 @@ export function childOfPath(text: string): string {
 
 /**
  * 把一个从对象自己写的路径挪到部件上：`rebasePath('@.Text', 'Header.TxtTitle')` → `@/Header/TxtTitle.Text`，
- * `rebasePath(':text', 'Btn')` → `@/Btn:text`。路径写法不对时原样返回（校验另外报）
+ * `rebasePath('@:text', 'Btn')` → `@/Btn:text`。路径写法不对时原样返回（校验另外报）
  */
 export function rebasePath(text: string, part: string | undefined): string {
   const s = text.trim()
-  const p = parsePropPath(s.startsWith(':') ? `@${s}` : s)
+  const p = parsePropPath(s)
   if ('error' in p) return text
   const extra = partSegs(part)
   if (!extra.length) return formatPropPath(p)
