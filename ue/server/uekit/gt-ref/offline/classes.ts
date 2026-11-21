@@ -181,14 +181,18 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
   let list: Node[]
   const q = args.q?.trim().toLowerCase()
   if (q) {
-    const want = new Set<string>()
-    for (const n of nodes.values()) {
-      // 名字里含 q 就算（用户 2026-11-21：不要只按开头），和 UE 侧 gt.classes 一致
-      if (!n.name.toLowerCase().includes(q)) continue
+    // 档次：开头对上的命中和它的祖先是 0，其余 1；分页截掉的是后面那档（和 UE 侧 gt.classes 一致）
+    const want = new Map<string, number>()
+    const hits = [...nodes.values()]
+      // 名字里含 q 就算（用户 2026-11-21：不要只按开头）
+      .filter((n) => n.name.toLowerCase().includes(q))
+      .map((n) => ({ n, rank: n.name.toLowerCase().startsWith(q) ? 0 : 1 }))
+      .sort((a, b) => a.rank - b.rank)
+    for (const { n, rank } of hits) {
       const seen = new Set<string>()
       for (let cur: string | undefined = n.name; cur && !seen.has(cur); cur = nodes.get(cur)?.parent) {
         seen.add(cur)
-        want.add(cur)
+        if (!want.has(cur)) want.set(cur, rank)
       }
     }
     const depth = (name: string) => {
@@ -197,11 +201,14 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
       for (let cur = nodes.get(name)?.parent; cur && !seen.has(cur); cur = nodes.get(cur)?.parent) (seen.add(cur), d++)
       return d
     }
-    // 祖先在前（按深度），同层按名字
-    list = [...want]
+    // 先按档次，同档里祖先在前（按深度），同层按名字
+    list = [...want.keys()]
       .map((x) => nodes.get(x)!)
       .filter(Boolean)
-      .sort((a, b) => depth(a.name) - depth(b.name) || a.name.localeCompare(b.name))
+      .sort(
+        (a, b) =>
+          want.get(a.name)! - want.get(b.name)! || depth(a.name) - depth(b.name) || a.name.localeCompare(b.name),
+      )
   } else {
     const parent = args.parent || rootName
     list = [...nodes.values()]
