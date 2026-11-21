@@ -50,7 +50,10 @@ export function useObjCallState(d: GmData, live: boolean) {
   const [sentArgs, setSentArgs] = useState<Record<string, unknown>>()
   const [running, setRunning] = useState(false)
   const [refEdit, setRefEdit] = useState<{ value?: GtRef; lockClass?: string; done: (ref: GtRef) => void }>()
-  const [saving, setSaving] = useState(false)
+  // 保存为 GM 弹窗：true 是存当前工作台的调用；from 是最近执行里一条自定义 GM 的那组参数（「存成 GM…」）
+  const [saving, setSaving] = useState<false | true | { c: GmCustom; args: Record<string, unknown> }>(false)
+  // 模块右键「在这个模块里新建 GM」记下的模块：下次保存为 GM 时默认选它
+  const [saveModule, setSaveModule] = useState<string>()
   const { hits } = useObjHits(
     project.id,
     live,
@@ -171,6 +174,12 @@ export function useObjCallState(d: GmData, live: boolean) {
         favs: { ...d.gm.favs, objcall: d.gm.favs.objcall.filter((f) => f.key !== `obj:${o.name}`) },
       })
     },
+    /** 对象右键「调函数」「取对象」：选上这个对象，右栏切过去，中栏跟着切到要用的那一页 */
+    onCall: (n: string, m: CallMode) => {
+      listProps.onPick(n)
+      setMode(m)
+      setTab(m === 'get' ? 'props' : 'fns')
+    },
     isFav: (n: string) => d.gm.favs.objcall.some((f) => f.key === `obj:${n}`),
     onFav: (n: string) => void d.saveGm(toggleFav(d.gm, 'objcall', { key: `obj:${n}` })),
   }
@@ -226,9 +235,41 @@ export function useObjCallState(d: GmData, live: boolean) {
           }}
         />
       )}
-      {saving && obj && (
+      {saving && typeof saving === 'object' && (
         <SaveGmDialog
-          init={{ name: fn ? `${obj.name} · ${fn.name}` : t('{n} · 取对象', { n: obj.name }) }}
+          init={{
+            name: saving.c.name,
+            note: saving.c.note,
+            module: saving.c.module,
+            editable: saving.c.editable,
+          }}
+          modules={allModules(d.gm, [])}
+          obj={{ name: saving.c.obj, o: saving.c.objects[saving.c.obj] ?? {} }}
+          fn={saving.c.kind === 'call' ? saving.c.function : undefined}
+          args={saving.c.kind === 'call' ? saving.args : {}}
+          props={saving.c.kind === 'get' ? saving.c.props : undefined}
+          onClose={() => setSaving(false)}
+          onSave={async (r) => {
+            const c = saving.c
+            try {
+              // 对象从这条 GM 自己的副本里取（对象列表里可能已经改了、删了）
+              const objs = Object.entries(c.objects).map(([name, o]) => ({ name, ...o }) as GmObject)
+              const res = addCustom(d.gm, { ...c, objects: objs, args: saving.args }, r)
+              await d.saveGm(res.g)
+              setSaving(false)
+              toast.success(t('已存成 GM「{n}」', { n: r.name }))
+            } catch (e) {
+              toast.error((e as Error).message)
+            }
+          }}
+        />
+      )}
+      {saving === true && obj && (
+        <SaveGmDialog
+          init={{
+            name: fn ? `${obj.name} · ${fn.name}` : t('{n} · 取对象', { n: obj.name }),
+            module: saveModule,
+          }}
           modules={allModules(d.gm, [])}
           obj={{ name: obj.name, o: obj }}
           fn={mode === 'call' ? fn?.name : undefined}
@@ -258,6 +299,10 @@ export function useObjCallState(d: GmData, live: boolean) {
     openCustom,
     /** 选对象面板改一条匹配规则（GM 页自定义 GM 的「改匹配规则」也用这一个弹窗） */
     editRef: (value: GtRef | undefined, done: (ref: GtRef) => void) => setRefEdit({ value, done }),
+    /** 最近执行里自定义 GM 的「存成 GM…」：用当时那组参数另存（名字不改就是更新这条） */
+    saveFrom: (c: GmCustom, args: Record<string, unknown>) => setSaving({ c, args }),
+    /** 模块右键「在这个模块里新建 GM」：之后保存为 GM 默认放进这个模块 */
+    preferModule: (id: string) => setSaveModule(id),
     bench: {
       tab,
       setTab,

@@ -10,6 +10,8 @@ interface AskOpts {
   danger?: boolean
   /** 输入框允许留空（例如留空取消绑定） */
   allowEmpty?: boolean
+  /** 确认框里标题下面的说明（例如删除时会一起影响到哪些东西） */
+  message?: string
 }
 
 /**
@@ -68,6 +70,8 @@ export function useAsk(): [ReactNode, (o: AskOpts) => Promise<string | undefined
             />
           </Field>
         </form>
+      ) : opts?.message ? (
+        <p className="ue:text-footnote ue:leading-relaxed ue:whitespace-pre-line ue:text-muted">{opts.message}</p>
       ) : null}
     </Modal>
   )

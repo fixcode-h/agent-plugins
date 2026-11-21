@@ -2,21 +2,15 @@ import { ArrowDown, ArrowUp, Check, CirclePlus, MessageSquarePlus, Pencil, Play,
 import { useState } from 'react'
 import { callText } from '../../../shared/gm/custom.ts'
 import { customKey, type GmMacro } from '../../../shared/gm/schema.ts'
-import { ppost } from '../../api.ts'
 import { useAsk } from '../../ask.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Badge } from '../../ui.tsx'
 import { cppLine, type GmEntry } from './data.ts'
-import { preview } from './run.ts'
+import { preview, runMacro, type MacroStepResult } from './run.ts'
 
 type Step = GmMacro['steps'][number]
-interface StepResult {
-  step: number
-  ok: boolean
-  output?: string[]
-  error?: string
-}
+type StepResult = MacroStepResult
 
 const listArgs = (a: Step['args']) => (Array.isArray(a) ? a : [])
 
@@ -72,10 +66,7 @@ export function MacroPane({
   const run = async () => {
     setBusy(true)
     try {
-      const r = await ppost<{ ok: boolean; failedAt?: number; steps: StepResult[] }>(project.id, 'macro', {
-        id: macro.id,
-        target,
-      })
+      const r = await runMacro(project.id, macro.id, target)
       setRes({
         macro: macro.id,
         steps: r.steps,

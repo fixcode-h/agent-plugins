@@ -1,5 +1,6 @@
 import { Wand2 } from 'lucide-react'
 import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
+import { deleteMacro } from '../../../shared/gm/item-ops.ts'
 import { placeOf } from '../../../shared/gm/modules.ts'
 import type { GmCat, GmCustom } from '../../../shared/gm/schema.ts'
 import { useUe } from '../../ctx.tsx'
@@ -60,15 +61,7 @@ export function GmMain(p: {
         macro={macro}
         find={p.find}
         onSave={(m) => d.saveGm({ ...d.gm, macros: d.gm.macros.map((x) => (x.id === m.id ? m : x)) })}
-        onDelete={() =>
-          void d
-            .saveGm({
-              ...d.gm,
-              macros: d.gm.macros.filter((x) => x.id !== macro.id),
-              favs: { ...d.gm.favs, macro: d.gm.favs.macro.filter((f) => f.key !== `macro:${macro.id}`) },
-            })
-            .then(p.onPickNone)
-        }
+        onDelete={() => void d.saveGm(deleteMacro(d.gm, macro.id)).then(p.onPickNone)}
         canRun={p.canRun}
         toChat={p.toChat}
       />
