@@ -284,16 +284,21 @@ export function GameTest() {
     if (dirty.current && selected) return setSwitchTo(p)
     go('gametest', p)
   }
-  // 进来时（或打开着的脚本被删、被挪走）直接打开上次看的脚本，没有就打开第一个：GameTest 页就是编辑器，不留空页
+  // 只在进页面时（列表第一次读回来）打开上次看的脚本，没有就打开第一个。之后点哪个打开哪个：
+  // 删掉打开着的脚本右边就空着，新建的脚本等列表重拉回来再选中，都不再自动跳去别的脚本
+  // （以前每次选中落空都自动打开上次那个，新建、删除后都跳回「冒烟」，用户 2026-11-21 报）
+  const autoOpened = useRef('')
   useEffect(() => {
-    if (!list || selected || rec?.recording) return
+    if (!list || autoOpened.current === project.id) return
+    autoOpened.current = project.id
+    if (selected || rec?.recording) return
     const all = list.scenarios.map((x) => x.relativePath).filter((x) => !/(^|\/)_[^/]*$/.test(x))
     if (!all.length) return
     const last = readLast(project.id)
     go('gametest', last && all.includes(last) ? last : all[0])
-    // 只在列表、当前选中变了时看一次；go 每次渲染都是新函数
+    // 每个项目只在列表第一次读回来时看一次；go 每次渲染都是新函数
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, selected, project.id])
+  }, [list, project.id])
   useEffect(() => {
     if (!selected) return
     dirty.current = false
@@ -419,7 +424,7 @@ export function GameTest() {
     scenarios: list?.scenarios ?? [],
     selected: selected?.relativePath,
     reload,
-    // 不给路径是打开着的脚本被删了：交给上面的自动打开
+    // 不给路径是打开着的脚本被删了：右边空着，不自动换去别的脚本
     open: (p) => (p ? open(p) : go('gametest', p)),
     recordIn: live
       ? (dir) => {
@@ -615,7 +620,12 @@ export function GameTest() {
             label={t('测试场景')}
             items={items}
             searching={!!q}
-            active={(recLeaf ?? (recording ? undefined : selected))?.relativePath.replace(/\.json$/i, '')}
+            // 树里只有一处选中：点了文件夹就只亮文件夹（右边仍是打开着的脚本），点脚本时清掉文件夹选中
+            active={
+              lib.activeFolder !== undefined && !recLeaf
+                ? undefined
+                : (recLeaf ?? (recording ? undefined : selected))?.relativePath.replace(/\.json$/i, '')
+            }
             onOpen={(_p, s) => {
               // 录制中右边是录制界面：不能换去别的脚本，先停止
               if (recording)
@@ -831,6 +841,10 @@ export function GameTest() {
                 {t('让 Agent 写')}
               </ui.Button>
             </div>
+          </div>
+        ) : list ? (
+          <div className="ue:flex ue:flex-1 ue:items-center ue:justify-center ue:p-8 ue:text-body ue:text-subtle">
+            {t('在左边选一个脚本打开')}
           </div>
         ) : (
           <div className="ue:flex ue:flex-1 ue:items-center ue:justify-center ue:p-8 ue:text-subtle">
