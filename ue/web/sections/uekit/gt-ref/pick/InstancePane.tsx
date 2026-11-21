@@ -56,7 +56,7 @@ export function InstancePane({
     <>
       <span className={cn(head, 'ue:flex ue:flex-wrap ue:items-center ue:gap-x-1.5')}>
         {t('此刻的 {c}', { c: classShort(cls) })}
-        {me && (
+        {typeof me?.count === 'number' && (
           <span
             className={cn(
               'ue:flex ue:items-center ue:gap-1 ue:font-normal',
@@ -93,10 +93,10 @@ export function InstancePane({
               <span
                 className={cn(
                   'ue:flex ue:max-w-full ue:items-center ue:gap-1 ue:text-caption',
-                  hit ? 'ue:text-success' : 'ue:text-subtle',
+                  hit && mine.size === 1 ? 'ue:text-success' : hit ? 'ue:text-warning' : 'ue:text-subtle',
                 )}
               >
-                {hit ? t('就是它') : t('被标识排除')}
+                {hit ? (mine.size === 1 ? t('就是它') : t('也命中：再加标识区分')) : t('被标识排除')}
                 {why && <PathChips path={why.prop} small />}
               </span>
             </button>

@@ -207,4 +207,6 @@ export interface GtClassesResult {
   nextOffset?: number
   /** 说明（例如 UnLua 没开、Lua 类只扫到一部分），原样显示 */
   note?: string
+  /** Lua 按目录列（参数 dir，GameTest 2.1.3）时第一页带：下一层子目录（name 是 / 连的完整目录）和其下的模块数 */
+  dirs?: { name: string; count: number }[]
 }

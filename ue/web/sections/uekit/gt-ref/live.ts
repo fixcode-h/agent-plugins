@@ -32,6 +32,7 @@ export type PropsArgs = (
   | { node: string; part?: string }
   | { target: GtTarget; part?: string }
   | { class: string; part?: string }
+  | { path: string; part?: string }
 ) & {
   /** 知道对象绑的 Lua 模块时传：UE 读不到也能列出 ---@field 声明的字段 */
   luaModule?: string
@@ -116,7 +117,8 @@ export const refFor = (project: string, node: string, level?: number, rpc: RefRp
 /** gt.resolve refs 的一项结果（协议 7.6） */
 export interface RefHits {
   count: number
-  candidates?: { name: string; ident?: { prop: string; actual: unknown }[] }[]
+  /** path：对象路径（GameTest 2.1.3 起），点了某个实例时拿它给 gt.props 读这一个 */
+  candidates?: { name: string; path?: string; ident?: { prop: string; actual: unknown }[] }[]
   error?: string
 }
 

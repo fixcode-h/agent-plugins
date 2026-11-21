@@ -71,6 +71,8 @@ export interface OfflineArgs {
   parent?: string
   q?: string
   lua?: boolean
+  /** Lua 按目录列（空 = 最顶层），协议 7.7 */
+  dir?: string
   offset?: number
   limit?: number
 }
@@ -166,6 +168,30 @@ async function luaNodes(p: UeProject): Promise<Map<string, Node>> {
   return nodes
 }
 
+const segs = (s: string) => s.replace(/\./g, '/').split('/').filter(Boolean)
+/** Lua 模块所在目录：按 / 和 . 切段去掉最后一段（和 UE 侧 gt.classes 一致） */
+export const luaFolderOf = (name: string) => segs(name).slice(0, -1).join('/')
+
+/** Lua 按目录：正好在 dir 下的模块 + 下一层子目录和其下模块数 */
+function pickDir(nodes: Map<string, Node>, rawDir: string) {
+  const dir = segs(rawDir).join('/')
+  const low = dir.toLowerCase()
+  const prefix = dir ? `${low}/` : ''
+  const list: Node[] = []
+  const dirs = new Map<string, number>()
+  for (const n of nodes.values()) {
+    const folder = luaFolderOf(n.name)
+    if (folder.toLowerCase() === low) list.push(n)
+    else if (!prefix || folder.toLowerCase().startsWith(prefix)) {
+      const head = folder.slice(prefix.length).split('/')[0]
+      const key = (dir ? `${dir}/` : '') + head
+      dirs.set(key, (dirs.get(key) ?? 0) + 1)
+    }
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name))
+  return { list, dirs: [...dirs].sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count })) }
+}
+
 /** 纯逻辑（单测用）：节点表按参数取一层或按名字搜，算 kids、分页、控制长度 */
 export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootName?: string): GtClassesResult {
   const kids = new Map<string, number>()
@@ -179,8 +205,13 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
     kids: kids.get(n.name) ?? 0,
   })
   let list: Node[]
+  let dirs: { name: string; count: number }[] | undefined
   const q = args.q?.trim().toLowerCase()
-  if (q) {
+  if (!q && args.lua && typeof args.dir === 'string') {
+    const r = pickDir(nodes, args.dir)
+    list = r.list
+    dirs = r.dirs
+  } else if (q) {
     // 档次：开头对上的命中和它的祖先是 0，其余 1；分页截掉的是后面那档（和 UE 侧 gt.classes 一致）
     const want = new Map<string, number>()
     const hits = [...nodes.values()]
@@ -231,6 +262,7 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
     total: list.length,
     hasMore: next < list.length,
     ...(next < list.length ? { nextOffset: next } : {}),
+    ...(dirs && !offset ? { dirs } : {}),
   }
 }
 
