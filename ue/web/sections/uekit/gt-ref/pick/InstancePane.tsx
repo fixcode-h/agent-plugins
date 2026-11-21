@@ -54,7 +54,10 @@ export function InstancePane({
   const rows = all?.candidates ?? []
   return (
     <>
-      <span className={cn(head, 'ue:flex ue:flex-wrap ue:items-center ue:gap-x-1.5')}>
+      <span
+        title={cls}
+        className={cn(head, 'ue:flex ue:min-w-0 ue:flex-wrap ue:items-center ue:gap-x-1.5 ue:break-all')}
+      >
         {t('此刻的 {c}', { c: classShort(cls) })}
         {typeof me?.count === 'number' && (
           <span

@@ -144,3 +144,34 @@ test('ue_gametest props：参数整理，逐项的 ops 收成 opsByKind', async 
   await gtProps(op, { object: 'shop', module: 'UI.Shop', limit: 999 })
   assert.deepEqual(calls[0], ['gt.props', { target: { obj: 'shop' }, luaModule: 'UI.Shop', offset: 0, limit: 400 }])
 })
+
+test('游戏没开：Lua 类的函数从源码读，顺着父类继承', async () => {
+  const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const path = await import('node:path')
+  const root = await mkdtemp(path.join(tmpdir(), 'lua-decl-'))
+  try {
+    await mkdir(path.join(root, 'UI'), { recursive: true })
+    await writeFile(
+      path.join(root, 'UI/Base.lua'),
+      'local M = {}\nfunction M:Open(a, b) end\nfunction M:Close() end\nreturn M\n',
+    )
+    await writeFile(
+      path.join(root, 'UI/Shop.lua'),
+      '---@class Shop\nlocal M = Class("UI.Base")\n---@field shopId integer\nfunction M:Open(id) end\nfunction M:Buy(item, n) end\nreturn M\n',
+    )
+    const { luaDeclared } = await import('./lua-props.ts')
+    const d = await luaDeclared(root, '/UI/Shop')
+    assert.ok(d)
+    assert.deepEqual(
+      d.functions.map((f) => [f.name, f.params.join(','), f.from ?? '']),
+      [
+        ['Open', 'id', ''],
+        ['Buy', 'item,n', ''],
+        ['Close', '', 'UI.Base'],
+      ],
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

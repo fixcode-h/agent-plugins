@@ -232,9 +232,11 @@ function RefDialogBody({
               />
             </ui.Field>
           )}
-          <ui.Field label={t('类')}>
+          {/* 不用 ui.Field：它是 <label>，点下拉里的行会把焦点送回输入框、把下拉又打开 */}
+          <div className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1.5">
+            <span className="ue:text-xs ue:text-muted">{t('类')}</span>
             <ClassPicker project={project} value={ref.class} kind={p.kind} lockClass={lockClass} onPick={pickClass} />
-          </ui.Field>
+          </div>
           {!lockClass && <FromBrowser project={project} onPick={pickClass} />}
           <ui.Button size="sm" variant="ghost" title={t('重新读类树、此刻实例和属性')} onClick={onRefresh}>
             <RefreshCw className="ue:h-3.5 ue:w-3.5" />

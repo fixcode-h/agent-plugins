@@ -79,7 +79,9 @@ export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtR
     if (failed) throw failed
     return res!
   }
-  const mod = String(res?.luaModule ?? luaModule ?? '')
+  // Lua 类（class: "lua:模块"）读不到 UE 时，模块就是类名本身：游戏没开也从源码列字段和函数（用户 2026-11-21）
+  const luaCls = typeof args.class === 'string' && args.class.startsWith('lua:') ? args.class.slice(4) : ''
+  const mod = String(res?.luaModule ?? luaModule ?? luaCls)
   // 不知道 Lua 模块又拿不到 UE 的结果：没有能给的
   if (failed && !mod) throw failed
   return withLua(deps.project, res ?? { class: args.class ?? '', groups: [] }, args, mod, failed?.message)
@@ -98,6 +100,8 @@ async function withLua(project: GtRefDeps<CardLike>['project'], res: A, args: A,
   })
   out.groups = merged.groups
   out.luaFile = decl.file
+  // UE 没给函数组（游戏没开、读的是实例）时用源码里的
+  if (!merged.groups.some((g) => g.id === 'functions') && decl.functions.length) out.functions = decl.functions
   // 超长时从补上的 Lua 声明尾部砍（UE 给的部分 UE 自己分过页），至少留一项
   const self = merged.groups.find((g) => g.id === 'self')
   let extra = merged.added

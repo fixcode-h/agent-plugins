@@ -6,6 +6,8 @@ import {
   CodeXml,
   Component,
   Folder,
+  Eye,
+  EyeOff,
   FolderOpen,
   X,
   type LucideIcon,
@@ -16,7 +18,9 @@ import { CornerHandle, useCornerSize } from '../../../../corner-resize.tsx'
 import { Checkbox } from '../../../../details/controls.tsx'
 import { h, t } from '../../../../host.ts'
 import { TreeList, type TreeLine } from '../../../../TreeList.tsx'
+import { openMenu } from '../../../../menu.tsx'
 import { useRefRpc } from '../live.ts'
+import { useLuaExclude } from './use-lua-exclude.ts'
 import { ScreenTree } from './ScreenTree.tsx'
 import type { ClassKind } from './data.ts'
 
@@ -71,6 +75,7 @@ export function ClassPicker({
   const box = useRef<HTMLDivElement>(null)
   // 下拉弹层右下角能拖大，记住大小（用户 2026-11-21）
   const pop = useCornerSize('gtref.classPicker', { w: 560, h: 420 }, { w: 360, h: 240 })
+  const ex = useLuaExclude(project)
   const lua = tab === 'lua'
   const screenTab = tab === 'screen'
   const choose = (cls: string, it: GtClassItem) => {
@@ -84,7 +89,11 @@ export function ClassPicker({
   // 点外面、Esc 关掉
   useEffect(() => {
     if (!open) return
-    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false)
+    // 右键菜单画在弹层外面：点菜单项不算点外面
+    const down = (e: MouseEvent) =>
+      !box.current?.contains(e.target as Node) &&
+      !(e.target as Element | null)?.closest?.('[role="menu"]') &&
+      setOpen(false)
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     document.addEventListener('mousedown', down)
     document.addEventListener('keydown', key)
@@ -102,12 +111,13 @@ export function ClassPicker({
 
   // Lua 不定类时从最顶层按目录列（dir），点开模块再按 parent 看子类
   const byDir = lua && !lockClass
-  const load = (parent: string, force = false, dir?: string) => {
-    const key = dir !== undefined ? `dir:${dir}` : `${lua ? 'lua' : 'cls'}:${parent}`
+  // asLua：打开下拉定位已选的类时页签可能还没切过来，按已选的类决定读哪棵树
+  const load = (parent: string, force = false, dir?: string, asLua = lua) => {
+    const key = dir !== undefined ? `dir:${dir}` : `${asLua ? 'lua' : 'cls'}:${parent}`
     if (kids[key] && !force) return
     rpc<GtClassesResult>(project, 'gt.classes', {
       ...(dir !== undefined ? { dir } : parent && parent !== ROOT ? { parent } : {}),
-      ...(lua ? { lua: true } : {}),
+      ...(asLua ? { lua: true } : {}),
       limit: 500,
     })
       .then((r) => {
@@ -116,6 +126,46 @@ export function ClassPicker({
       })
       .catch((e: Error) => setError(e.message))
   }
+
+  // 再次打开下拉时定位到已选的类（用户 2026-11-21）：切到它的页签，展开到它那一层，滚到它
+  const [revealSeq, setRevealSeq] = useState(0)
+  useEffect(() => {
+    if (!open || !value) return
+    const isLua = value.startsWith('lua:')
+    const name = value.replace(/^lua:/, '')
+    if (!lockClass) setTab(isLua ? 'lua' : 'class')
+    setRevealSeq((n) => n + 1)
+    if (isLua && !lockClass) {
+      // Lua 按目录：把所在目录一层层打开
+      const parts = name.split(/[/.]/).filter(Boolean).slice(0, -1)
+      const dirsUp = parts.map((_, i) => parts.slice(0, i + 1).join('/'))
+      for (const d of dirsUp) load('', false, d, true)
+      setOpenSet((s) => new Set([...s, ...dirsUp.map((d) => `dir:${d}`)]))
+      return
+    }
+    // 类树：搜一次拿到祖先链，祖先都打开
+    let off = false
+    rpc<GtClassesResult>(project, 'gt.classes', { q: name, ...(isLua ? { lua: true } : {}), limit: 500 })
+      .then((r) => {
+        if (off) return
+        const byName = new Map(r.items.map((x) => [x.name, x]))
+        const chain: string[] = []
+        const seen = new Set<string>()
+        for (let cur = byName.get(name)?.parent; cur && !seen.has(cur); cur = byName.get(cur)?.parent) {
+          seen.add(cur)
+          chain.push(cur)
+          if (cur === root) break
+        }
+        for (const c of chain) load(c, false, undefined, isLua)
+        setOpenSet((s) => new Set([...s, ...chain]))
+      })
+      .catch(() => undefined)
+    return () => {
+      off = true
+    }
+    // 只在打开下拉那一下定位；load 只依赖 kids
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   // 刷新（RefDialog 换了 rpc）：读过的类树作废
   useEffect(() => {
@@ -197,6 +247,84 @@ export function ClassPicker({
       })
     }
     const keep = (it: GtClassItem) => !onlyLive || !!it.live || it.kids > 0
+    const toggle = (id: string) =>
+      setOpenSet((s) => {
+        const x = new Set(s)
+        if (x.has(id)) x.delete(id)
+        else x.add(id)
+        return x
+      })
+    // Lua 按目录：先子目录（文件夹行），再这个目录下的模块（能点开看子类）
+    // 最下面的「排除」分类：排除的目录不在树里、不参与搜索，右键或点一下恢复
+    const excludedLines = () => {
+      if (!ex.dirs.length) return
+      const isOpen = openSet.has('excluded')
+      out.push({
+        key: 'excluded',
+        depth: 0,
+        icon: EyeOff,
+        label: <span className="ue:text-subtle">{t('排除')}</span>,
+        aside: String(ex.dirs.length),
+        title: t('排除的目录不在树里、不参与搜索'),
+        expandable: true,
+        open: isOpen,
+        selected: false,
+        onToggle: () => toggle('excluded'),
+        onSelect: () => toggle('excluded'),
+      })
+      if (isOpen)
+        for (const d of ex.dirs)
+          out.push({
+            key: `excluded:${d}`,
+            depth: 1,
+            icon: Folder,
+            label: <span className="ue:font-mono ue:opacity-55">{d}</span>,
+            aside: t('恢复'),
+            title: t('点一下恢复'),
+            expandable: false,
+            open: false,
+            selected: false,
+            onSelect: () => ex.remove(d),
+            onMenu: (e) => openMenu(e, [{ label: t('恢复这个目录'), icon: Eye, onClick: () => ex.remove(d) }]),
+          })
+    }
+    if (q && found && byDir) {
+      // Lua 搜索也按目录成树（用户 2026-11-21）：只留名字里含 q 的模块，所在目录全部展开
+      const needle = q.toLowerCase()
+      const hits = found.items.filter(
+        (it) => it.name.toLowerCase().includes(needle) && keep(it) && !ex.isExcluded(it.name),
+      )
+      const subDirs = new Map<string, Set<string>>()
+      const mods = new Map<string, GtClassItem[]>()
+      for (const it of hits) {
+        const parts = it.name.split(/[/.]/).filter(Boolean)
+        for (let i = 0; i < parts.length - 1; i++) {
+          const up = parts.slice(0, i).join('/')
+          subDirs.set(up, (subDirs.get(up) ?? new Set()).add(parts.slice(0, i + 1).join('/')))
+        }
+        const dir = parts.slice(0, -1).join('/')
+        mods.set(dir, [...(mods.get(dir) ?? []), it])
+      }
+      const walkHit = (dir: string, depth: number) => {
+        for (const d of [...(subDirs.get(dir) ?? [])].sort()) {
+          out.push({
+            key: `dir:${d}`,
+            depth,
+            icon: FolderOpen,
+            label: <span className="ue:font-mono">{luaLeaf(d)}</span>,
+            title: d,
+            expandable: false,
+            open: true,
+            selected: false,
+          })
+          walkHit(d, depth + 1)
+        }
+        for (const it of mods.get(dir) ?? []) row(it, depth, false, false)
+      }
+      walkHit('', 0)
+      excludedLines()
+      return out
+    }
     if (q && found) {
       // 搜索：命中的和它们的祖先摊成树，全部展开
       const byParent = new Map<string, GtClassItem[]>()
@@ -217,8 +345,12 @@ export function ClassPicker({
       walk('', 0, !lockClass)
       return out
     }
+    // 已经在这条路径上的不再往下走：回包里子类写成自己、父子成环时不至于无限递归把页面卡死
+    const onPath = new Set<string>()
     const walk = (parent: string, depth: number) => {
+      onPath.add(parent)
       for (const it of (kids[`${lua ? 'lua' : 'cls'}:${parent}`] ?? []).filter(keep)) {
+        if (onPath.has(it.name)) continue
         lockedIn.add(it.name)
         const isOpen = openSet.has(it.name)
         row(it, depth, it.kids > 0, isOpen, () => {
@@ -232,17 +364,11 @@ export function ClassPicker({
         })
         if (isOpen) walk(it.name, depth + 1)
       }
+      onPath.delete(parent)
     }
-    const toggle = (id: string) =>
-      setOpenSet((s) => {
-        const x = new Set(s)
-        if (x.has(id)) x.delete(id)
-        else x.add(id)
-        return x
-      })
-    // Lua 按目录：先子目录（文件夹行），再这个目录下的模块（能点开看子类）
     const walkDir = (dir: string, depth: number) => {
       for (const d of dirs[dir] ?? []) {
+        if (ex.isExcluded(d.name)) continue
         const id = `dir:${d.name}`
         const isOpen = openSet.has(id)
         out.push({
@@ -263,6 +389,7 @@ export function ClassPicker({
             if (!isOpen) load('', false, d.name)
             toggle(id)
           },
+          onMenu: (e) => openMenu(e, [{ label: t('排除这个目录'), icon: EyeOff, onClick: () => ex.add(d.name) }]),
         })
         if (isOpen) walkDir(d.name, depth + 1)
       }
@@ -275,8 +402,10 @@ export function ClassPicker({
         if (isOpen) walk(it.name, depth + 1)
       }
     }
-    if (byDir) walkDir('', 0)
-    else if (root) {
+    if (byDir) {
+      walkDir('', 0)
+      excludedLines()
+    } else if (root) {
       // 根（Object 或 lockClass）自己也是一行；lockClass 本身能选
       const self: GtClassItem = {
         name: root,
@@ -298,8 +427,9 @@ export function ClassPicker({
     return out
     // load 只依赖 kids
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, found, kids, dirs, byDir, openSet, onlyLive, lua, root, value, lockClass, lockLua, kind, cn])
+  }, [q, found, kids, dirs, byDir, ex.dirs, openSet, onlyLive, lua, root, value, lockClass, lockLua, kind, cn])
 
+  const revealKey = q ? undefined : lines.find((l) => l.selected)?.key
   const Icon = kind ? KIND_ICON[kind] : AppWindow
   const shown = value.replace(/^lua:/, '')
   return (
@@ -356,6 +486,11 @@ export function ClassPicker({
       {open && (
         <div
           style={{ width: `min(${pop.size.w}px, 90vw)`, height: pop.size.h }}
+          // 下拉常放在 <label>（ui.Field）里：点弹层里的行，label 会把焦点送回输入框、onFocus 又把下拉打开，
+          // 看起来就是「选了不关」（用户 2026-11-21 两次反馈）。点非输入框的地方时取消 label 的这个默认动作
+          onClick={(e) => {
+            if (!(e.target instanceof HTMLInputElement)) e.preventDefault()
+          }}
           className="ue:absolute ue:top-9 ue:left-0 ue:z-30 ue:flex ue:flex-col ue:overflow-hidden ue:rounded-lg ue:border ue:border-line-strong ue:bg-card ue:shadow-pop"
         >
           <div className="ue:px-2 ue:pt-2">
@@ -376,7 +511,11 @@ export function ClassPicker({
                   {q ? t('没有名字里含 {q} 的类', { q }) : t('读类树…')}
                 </p>
               )}
-              <TreeList lines={lines} label={t('类')} />
+              <TreeList
+                lines={lines}
+                label={t('类')}
+                reveal={revealKey ? { key: revealKey, seq: revealSeq } : undefined}
+              />
               {found?.note && (
                 <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-warning">
                   {found.note}

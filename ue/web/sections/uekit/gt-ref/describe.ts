@@ -23,7 +23,9 @@ import { t } from '../../../host.ts'
 const o = (objects?: unknown) => ({ t, objects })
 
 /** 类名显示用：去掉资源路径前缀、`_C` 后缀（`/Game/UI/WBP_Shop.WBP_Shop_C` → `WBP_Shop`） */
-export const classShort = (cls: string | undefined) => (cls ? shortClass(cls) : '')
+/** 界面上显示的类名：Lua 类只显示模块名最后一段（完整路径太长会把栏标题挤得重叠，用户 2026-11-21），完整的放悬停提示 */
+export const classShort = (cls: string | undefined) =>
+  cls ? (shortClass(cls).split(/[/.]/).filter(Boolean).at(-1) ?? shortClass(cls)) : ''
 
 /** 一条标识 / 判断的一句话：`TxtTitle 文字 = 杂货铺` */
 export const identText = (it: Partial<GtIdentItem>) => describeItem(it, o())

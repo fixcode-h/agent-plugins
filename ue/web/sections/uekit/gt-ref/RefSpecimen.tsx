@@ -208,14 +208,37 @@ const CLASSES = {
 }
 
 /** 假回包：只认选对象面板用到的几个操作，其余报错（和真桥接一样显示在界面上） */
+/** Lua 类：按目录（dir）或按名字搜，两个目录几个模块 */
+const LUA = ['UI.Shop.ShopPanel', 'UI.Shop.ShopItem', 'UI.Common.Tips', 'GDefine']
+function fakeLua(args: Record<string, unknown>) {
+  const item = (name: string) => ({ name, kind: 'lua', kids: 0 })
+  const q = String(args.q ?? '').toLowerCase()
+  if (q) {
+    const items = LUA.filter((n) => n.toLowerCase().includes(q)).map(item)
+    return { items, total: items.length, hasMore: false }
+  }
+  const dir = String(args.dir ?? '').replace(/\./g, '/')
+  const pre = dir ? `${dir}/` : ''
+  const items = LUA.filter((n) => n.split('.').slice(0, -1).join('/') === dir).map(item)
+  const sub = new Map<string, number>()
+  for (const n of LUA) {
+    const f = n.split('.').slice(0, -1).join('/')
+    if (f && f !== dir && f.startsWith(pre)) {
+      const k = pre + f.slice(pre.length).split('/')[0]
+      sub.set(k, (sub.get(k) ?? 0) + 1)
+    }
+  }
+  return { items, total: items.length, hasMore: false, dirs: [...sub].map(([name, count]) => ({ name, count })) }
+}
+
 export const fakeRpc: RefRpc = <T,>(_project: string, name: string, args: Record<string, unknown>) => {
-  // 类树：按 parent 给一层，按 q 给开头匹配的
+  // 类树：按 parent 给一层（省略 = Object，和 UE 一致），按 q 给名字里含它的
   const q = String(args?.q ?? '').toLowerCase()
   const cls = CLASSES.items.filter((c) =>
-    q ? c.name.toLowerCase().startsWith(q) : (c.parent ?? '') === String(args?.parent ?? ''),
+    q ? c.name.toLowerCase().includes(q) : (c.parent ?? '') === String(args?.parent ?? (args?.lua ? '' : 'Object')),
   )
   const r: Record<string, unknown> = {
-    'gt.classes': { items: args?.lua ? [] : cls, total: cls.length, hasMore: false },
+    'gt.classes': args?.lua ? fakeLua(args) : { items: cls, total: cls.length, hasMore: false },
     'gt.tree': { nodes: TREE, total: TREE.length },
     'gt.refFor': CHAIN,
     'gt.props': PROPS,
