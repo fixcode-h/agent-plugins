@@ -135,7 +135,7 @@ const REF: GtRef = {
 
 const TREE: GtTreeNode[] = [
   { id: 'n1', depth: 0, class: 'WBP_Shop_C', name: 'WBP_Shop', user: true, visible: true },
-  { id: 'n2', parent: 'n1', depth: 1, class: 'UTextBlock', name: 'TxtTitle', part: 'TxtTitle', text: '杂货铺' },
+  { id: 'n2', parent: 'n1', depth: 1, class: 'UTextBlock', name: 'TxtTitle', part: 'TxtTitle', text: '杂货铺', owner: 'n1', ownerClass: 'WBP_Shop_C' },
   {
     id: 'n3',
     parent: 'n1',
@@ -180,7 +180,7 @@ const CHAIN: GtRefForResult = {
 }
 
 /** 假回包：只认「从游戏里抓」用到的几个操作，其余报错（和真桥接一样显示在界面上） */
-const fakeRpc: RefRpc = <T,>(_project: string, name: string) => {
+export const fakeRpc: RefRpc = <T,>(_project: string, name: string) => {
   const r: Record<string, unknown> = {
     'gt.tree': { nodes: TREE, total: TREE.length },
     'gt.refFor': CHAIN,

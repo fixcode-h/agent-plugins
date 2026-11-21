@@ -86,6 +86,8 @@ export interface DetailsApi {
   isDefault?: (path: string) => boolean
   /** 重置箭头的意思是「重置为默认」（按配置改时）：照 UE 画成黄色的转圈箭头；不给是「恢复这次改之前的值」 */
   resetToDefault?: boolean
+  /** 行尾额外的按钮（GameTest 挑标识的准星），一直显示 */
+  action?: (n: Node, depth: number) => ReactNode
 }
 export const DetailsCtx = createContext<DetailsApi | null>(null)
 const useDetails = () => useContext(DetailsCtx)!
@@ -297,6 +299,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
               />
             </span>
           )}
+          {d.action?.(n, depth)}
           {!n.element && d.pin && !depth && (
             <span className="ue:opacity-0 ue:transition-opacity ue:group-hover:opacity-100 ue:focus-within:opacity-100">
               <ui.IconButton icon={Pin} label={t('固定到监视')} size="xs" onClick={() => d.pin!(n.path)} />

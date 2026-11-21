@@ -4663,5 +4663,17 @@
   "绑了 Lua 的类": "Classes bound to Lua",
   "绑了 Lua 的类（还没开始玩，没有实例）": "Classes bound to Lua (play hasn't started, no instances)",
   "点一行选中这条 GM 并填回参数": "Click a row to select that GM and fill its arguments back in",
-  "还没有执行过 GM，执行后列在这里": "No GM has run yet; runs are listed here"
+  "还没有执行过 GM，执行后列在这里": "No GM has run yet; runs are listed here",
+  "子控件 / 组件": "Child widget / component",
+  "方法（无参取值）": "Method (no-arg getter)",
+  "Lua 字段": "Lua field",
+  "第几项 / 键": "Index / key",
+  "条目数据": "Entry data",
+  "列表条目的数据对象": "Data object of the list entry",
+  "第 {n} 项": "Item {n}",
+  "选这个类 {c}": "Use this class {c}",
+  "不是 UserWidget": "Not a UserWidget",
+  "选它所在界面的类 {c}": "Use its screen class {c}",
+  "复制类名": "Copy class name",
+  "· 悬停在游戏画面上描边": "· Hover to outline it in the game view"
 }
