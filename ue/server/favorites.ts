@@ -1,13 +1,12 @@
 import { existsSync } from 'node:fs'
-import path from 'node:path'
 import { ueDocFile } from './doc-root.ts'
 import { patchLocal, readLocal } from './store.ts'
 import type { UeProject } from './types.ts'
 import { readJson, t, writeJson } from './util.ts'
 
 /**
- * 资源页收藏的文件夹（用户 2026-11-16：收藏存到项目的 docs 里某个文件夹，或项目的 .agent-panel 文件夹，设置里可选）。
- * 两处都在项目里，可以提交、团队共用；以前存在插件数据目录（store.ts 的 local.folders），第一次读时搬过来。
+ * 资源页收藏的文件夹：存在项目文档根里，可以提交、团队共用；以前存在插件数据目录（store.ts 的 local.folders），第一次读时搬过来。
+ * 以前设置里还能选存项目的 .agent-panel/ue，2026-11-21 用户定统一存文档根，选过的读项目时搬过去（doc-root.ts 的 adoptProjectStore）
  */
 export interface FavFile {
   folders: string[]
@@ -16,17 +15,13 @@ export interface FavFile {
 /** 最多收藏多少个：再多收藏夹就失去意义了 */
 const MAX = 100
 
-type P = Pick<UeProject, 'id' | 'root' | 'favStore'>
+type P = Pick<UeProject, 'id' | 'root'>
 
 /**
- * 收藏文件的位置：项目文档根（面板给的，见 doc-root.ts）的 AgentPanel/UE/favorites.json，
- * 或 .agent-panel/ue/favorites.json（和 GM 预设 gm.json 放一起）。read 是读的位置：升级前存在旧文档根的照样读得到
+ * 收藏文件的位置：项目文档根（面板给的，见 doc-root.ts）的 AgentPanel/UE/favorites.json。
+ * read 是读的位置：升级前存在旧文档根的照样读得到
  */
-export function favPaths(p: P) {
-  if (p.favStore !== 'project') return ueDocFile(p, 'favorites.json')
-  const f = path.join(p.root, '.agent-panel', 'ue', 'favorites.json')
-  return { read: f, write: f }
-}
+export const favPaths = (p: P) => ueDocFile(p, 'favorites.json')
 
 /** 收藏文件写在哪（设置页显示的位置） */
 export const favFile = (p: P) => favPaths(p).write
@@ -64,13 +59,4 @@ export async function editFavs(p: UeProject, b: { action?: unknown; path?: unkno
   const out = clean(next)
   await writeJson(file, { folders: out } satisfies FavFile)
   return { folders: out, file }
-}
-
-/** 设置里换了存放位置：新位置还没有文件就把现有的带过去，有了就两边合并（新位置的在前） */
-export async function moveFavs(from: UeProject, to: UeProject) {
-  if (favFile(from) === favFile(to)) return
-  const old = (await readFavs(from)).folders
-  const file = favFile(to)
-  const cur = existsSync(file) ? clean((await readJson<Partial<FavFile>>(file, {})).folders) : []
-  await writeJson(file, { folders: clean([...cur, ...old]) } satisfies FavFile)
 }

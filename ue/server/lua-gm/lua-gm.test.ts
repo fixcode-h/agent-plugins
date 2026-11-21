@@ -14,7 +14,7 @@ import { setDocsRootForTest } from '../doc-root.ts'
 import { normalize, scan, stopLuaGmWatch } from './scan.ts'
 
 let base = ''
-const proj = (id: string) => ({ id, root: path.join(base, id), favStore: 'project' }) as UeProject
+const proj = (id: string) => ({ id, root: path.join(base, id) }) as UeProject
 
 /** 手写的 GM 文件样例（用户还没给真实的）：GM 挂在 GM 表上，--- 注释写说明，@param 写类型和关联的表 */
 const GM_BAG = `local GM = require("GM.Base")
@@ -205,8 +205,8 @@ test('参数关联按键合并，null 表示去掉脚本给的关联，undefined
 
 test('P4 各分支共用文档根：旧规则位置的脚本搬过去，另一个分支直接复用', async () => {
   // 分支 Main 的 UE 项目：升级前脚本和设置按旧规则存在 Main/ProjectDoc/docs 下
-  const main = { id: 'main', root: path.join(base, 'p4', 'Main', 'Game'), favStore: 'docs' } as UeProject
-  const dev = { id: 'dev', root: path.join(base, 'p4', 'Dev', 'Game'), favStore: 'docs' } as UeProject
+  const main = { id: 'main', root: path.join(base, 'p4', 'Main', 'Game') } as UeProject
+  const dev = { id: 'dev', root: path.join(base, 'p4', 'Dev', 'Game') } as UeProject
   const shared = path.join(base, 'p4', 'Shared', 'ProjectDoc', 'docs')
   for (const p of [main, dev]) {
     await mkdir(path.join(p.root, 'Content/Script/GM'), { recursive: true })

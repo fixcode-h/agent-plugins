@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { copyFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { UeProject } from './types.ts'
 import { syncDocsHint } from './uekit/docs-hint.ts'
@@ -62,4 +63,22 @@ export function ueDocFile(p: P, name: string) {
   if (existsSync(cur)) return { read: cur, write: cur }
   const old = path.join(legacyDocsRoot(p.root), 'AgentPanel', 'UE', name)
   return { read: existsSync(old) ? old : cur, write: cur }
+}
+
+/** 以前设置里选「项目里 .agent-panel/ue」时写在那里的共用文件（gm.json 另有自己的设置，不在这里） */
+const PROJECT_STORE_FILES = ['favorites.json', 'lua-snippets.json', 'lua-gm.json', 'lua-gm-scan.mjs']
+
+/**
+ * 以前「收藏存哪」选了项目 .agent-panel/ue 的项目：那里的文件才是一直在用的那份，复制到文档根（盖掉文档根里可能留着的旧份）。
+ * 2026-11-21 用户定这些都统一存文档根、去掉这个选项。旧文件不删（可能已经提交进版本管理，删不删由用户定）
+ */
+export async function adoptProjectStore(p: P) {
+  const from = path.join(p.root, '.agent-panel', 'ue')
+  const to = path.join(docsRoot(p), 'AgentPanel', 'UE')
+  if (path.resolve(from) === path.resolve(to)) return
+  for (const name of PROJECT_STORE_FILES) {
+    if (!existsSync(path.join(from, name))) continue
+    await mkdir(to, { recursive: true })
+    await copyFile(path.join(from, name), path.join(to, name))
+  }
 }

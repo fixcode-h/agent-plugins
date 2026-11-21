@@ -6,7 +6,7 @@ import { c, now, readJson, t, writeJson } from '../util.ts'
 
 /**
  * Lua 页执行页签的「片段」（设计稿四.4「已批准的片段」）：常用代码存成有名字的片段，你批准过的 Agent 按名字执行时不再逐次确认。
- * - 片段本身存在项目里（和资源收藏同一个位置设置：docs/AgentPanel/UE/ 或 .agent-panel/ue/），可以提交、团队共用；
+ * - 片段本身存在项目里（和资源收藏同一个位置设置：项目文档根的 AgentPanel/UE/），可以提交、团队共用；
  * - 批准只记在本机插件数据目录里，记的是代码的哈希：别人改了仓库里的片段（或你自己改了），批准自动失效，
  *   不会因为拉了一次代码就让 Agent 免确认跑别人写的代码。
  */
@@ -28,11 +28,7 @@ const NAME_MAX = 60
 const MAX = 200
 
 /** 片段文件：read 是读的位置（升级前存在旧文档根的照样读得到），write 是写的位置（面板给的文档根，见 doc-root.ts） */
-export function snippetFile(p: Pick<UeProject, 'id' | 'root' | 'favStore'>) {
-  if (p.favStore !== 'project') return ueDocFile(p, 'lua-snippets.json')
-  const f = path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json')
-  return { read: f, write: f }
-}
+export const snippetFile = (p: Pick<UeProject, 'id' | 'root'>) => ueDocFile(p, 'lua-snippets.json')
 
 const approvedFile = (id: string) => path.join(c().dataDir, 'lua-approved', `${encodeURIComponent(id)}.json`)
 

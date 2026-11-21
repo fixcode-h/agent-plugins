@@ -1,4 +1,4 @@
-// Lua 片段：存放位置跟资源收藏的设置走、按动作改、批准只认代码哈希（代码或 self 改了自动失效）。
+// Lua 片段：存在项目文档根、按动作改、批准只认代码哈希（代码或 self 改了自动失效）。
 // 用法：node --test ue/server/lua-debug/snippets.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
@@ -11,8 +11,7 @@ import { setCtx } from '../util.ts'
 import { editSnippets, listSnippets, snippetFile } from './snippets.ts'
 
 let base = ''
-const proj = (id: string, favStore: UeProject['favStore'] = 'docs') =>
-  ({ id, root: path.join(base, id, 'Game'), favStore }) as UeProject
+const proj = (id: string) => ({ id, root: path.join(base, id, 'Game') }) as UeProject
 
 before(async () => {
   base = await mkdtemp(path.join(tmpdir(), 'ue-snippets-'))
@@ -23,10 +22,9 @@ before(async () => {
   } as unknown as PluginServerContext)
 })
 
-test('存放位置跟资源收藏的设置走：docs/AgentPanel/UE 或 .agent-panel/ue', () => {
+test('存在项目文档根的 AgentPanel/UE', () => {
   const p = proj('a')
   assert.equal(snippetFile(p).write, path.join(p.root, 'docs', 'AgentPanel', 'UE', 'lua-snippets.json'))
-  assert.equal(snippetFile(proj('a', 'project')).write, path.join(p.root, '.agent-panel', 'ue', 'lua-snippets.json'))
 })
 
 test('保存、批准、改名带着批准、删除', async () => {
