@@ -1,9 +1,10 @@
-import { CodeXml, Plus, SquareFunction, Variable, X } from 'lucide-react'
+import { CodeXml, Copy, Play, Plus, SquareFunction, Variable, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
 import { Details } from '../../../details/Details.tsx'
 import type { DetailsApi } from '../../../details/rows.tsx'
 import { h, t } from '../../../host.ts'
+import { copyText, openMenu } from '../../../menu.tsx'
 import { useProps } from '../../uekit/gt-ref/live.ts'
 import { useVars } from '../../uekit/gt-vars/model.ts'
 import { fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
@@ -87,14 +88,24 @@ export function MemberPane({
           {head && (
             <div className="ue:px-2 ue:pt-2 ue:pb-1 ue:text-caption ue:font-medium ue:text-muted">{f.owner}</div>
           )}
+          {/* 调不了的用 aria-disabled 而不是 disabled：disabled 的按钮收不到右键，「复制函数名」就用不了 */}
           <button
             type="button"
-            disabled={!f.callable}
+            aria-disabled={!f.callable}
             title={f.callable ? f.sig : f.why || t('这个函数调不了')}
-            onClick={() => onFn(f)}
+            onClick={() => f.callable && onFn(f)}
+            onContextMenu={(e) =>
+              openMenu(e, [
+                { label: t('调这个函数'), icon: Play, disabled: !f.callable, onClick: () => onFn(f) },
+                'sep',
+                { label: t('复制函数名'), icon: Copy, onClick: () => copyText(f.name) },
+                f.sig && { label: t('复制签名'), icon: Copy, onClick: () => copyText(`${f.name}${f.sig}`) },
+              ])
+            }
             className={cn(
-              'ue:flex ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:rounded-md ue:px-2 ue:py-1.5 ue:text-left ue:text-footnote ue:disabled:cursor-default ue:disabled:opacity-45',
-              fn === f.name ? 'ue:bg-sel' : 'ue:enabled:hover:bg-hover',
+              'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-md ue:px-2 ue:py-1.5 ue:text-left ue:text-footnote',
+              !f.callable ? 'ue:cursor-default ue:opacity-45' : 'ue:cursor-pointer',
+              fn === f.name ? 'ue:bg-sel' : f.callable && 'ue:hover:bg-hover',
             )}
           >
             <Icon className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
@@ -141,7 +152,13 @@ export function MemberPane({
           <>
             {fnList(luaFns)}
             {luaFields.map((f) => (
-              <div key={f.path} className="ue:flex ue:items-center ue:gap-2 ue:px-2 ue:py-1 ue:text-footnote">
+              <div
+                key={f.path}
+                onContextMenu={(e) =>
+                  openMenu(e, [{ label: t('复制属性名'), icon: Copy, onClick: () => copyText(f.name) }])
+                }
+                className="ue:flex ue:items-center ue:gap-2 ue:px-2 ue:py-1 ue:text-footnote"
+              >
                 <Variable className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
                 <span className="ue:font-mono ue:text-fg">{f.name}</span>
                 <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle">

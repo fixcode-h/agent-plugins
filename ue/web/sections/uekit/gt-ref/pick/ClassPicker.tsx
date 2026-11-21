@@ -1,10 +1,23 @@
-import { AppWindow, Box, Boxes, ChevronDown, CodeXml, Component, type LucideIcon } from 'lucide-react'
+import {
+  AppWindow,
+  Box,
+  Boxes,
+  ChevronDown,
+  CodeXml,
+  Component,
+  Folder,
+  FolderOpen,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GtClassItem, GtClassesResult } from '../../../../../shared/gt-script/index.ts'
+import { CornerHandle, useCornerSize } from '../../../../corner-resize.tsx'
 import { Checkbox } from '../../../../details/controls.tsx'
 import { h, t } from '../../../../host.ts'
 import { TreeList, type TreeLine } from '../../../../TreeList.tsx'
 import { useRefRpc } from '../live.ts'
+import { ScreenTree } from './ScreenTree.tsx'
 import type { ClassKind } from './data.ts'
 
 /** 类的图标：界面、Actor、组件、Lua 各一种，其余对象一种（类树、结构栏、实例栏一致） */
@@ -18,7 +31,9 @@ export const KIND_ICON: Record<ClassKind, LucideIcon> = {
 export const kindLabel = (k: ClassKind) =>
   ({ umg: 'UMG', actor: 'Actor', component: t('组件'), object: 'UObject', lua: t('Lua 类') })[k]
 
-type Tab = 'class' | 'lua'
+type Tab = 'class' | 'lua' | 'screen'
+/** Lua 模块名的最后一段（/ 和 . 都当分隔，和 gt.classes 的 dir 一致） */
+const luaLeaf = (name: string) => name.split(/[/.]/).filter(Boolean).pop() ?? name
 const ROOT = 'Object'
 
 /**
@@ -48,11 +63,21 @@ export function ClassPicker({
   const [q, setQ] = useState('')
   const [onlyLive, setOnlyLive] = useState(false)
   const [kids, setKids] = useState<Record<string, GtClassItem[]>>({})
+  // Lua 按目录成树（用户 2026-11-21）：目录 → 下一层子目录
+  const [dirs, setDirs] = useState<Record<string, { name: string; count: number }[]>>({})
   const [openSet, setOpenSet] = useState<Set<string>>(new Set())
   const [found, setFound] = useState<GtClassesResult>()
   const [error, setError] = useState('')
   const box = useRef<HTMLDivElement>(null)
+  // 下拉弹层右下角能拖大，记住大小（用户 2026-11-21）
+  const pop = useCornerSize('gtref.classPicker', { w: 560, h: 420 }, { w: 360, h: 240 })
   const lua = tab === 'lua'
+  const screenTab = tab === 'screen'
+  const choose = (cls: string, it: GtClassItem) => {
+    onPick(cls, it)
+    setOpen(false)
+    setText('')
+  }
   // 树从哪一层开始：定了类的从它开始；UObject 类树从 Object 开始；Lua 类没有公共的根
   const root = lockClass ? lockClass.replace(/^lua:/, '') : lua ? '' : ROOT
 
@@ -75,30 +100,45 @@ export function ClassPicker({
     return () => clearTimeout(id)
   }, [text])
 
-  const load = (parent: string) => {
-    const key = `${lua ? 'lua' : 'cls'}:${parent}`
-    if (kids[key]) return
+  // Lua 不定类时从最顶层按目录列（dir），点开模块再按 parent 看子类
+  const byDir = lua && !lockClass
+  const load = (parent: string, force = false, dir?: string) => {
+    const key = dir !== undefined ? `dir:${dir}` : `${lua ? 'lua' : 'cls'}:${parent}`
+    if (kids[key] && !force) return
     rpc<GtClassesResult>(project, 'gt.classes', {
-      ...(parent && parent !== ROOT ? { parent } : {}),
+      ...(dir !== undefined ? { dir } : parent && parent !== ROOT ? { parent } : {}),
       ...(lua ? { lua: true } : {}),
       limit: 500,
     })
-      .then((r) => setKids((m) => ({ ...m, [key]: r.items ?? [] })))
+      .then((r) => {
+        setKids((m) => ({ ...m, [key]: r.items ?? [] }))
+        if (dir !== undefined) setDirs((m) => ({ ...m, [dir]: r.dirs ?? [] }))
+      })
       .catch((e: Error) => setError(e.message))
   }
 
-  // 打开下拉、换页签时读第一层
+  // 刷新（RefDialog 换了 rpc）：读过的类树作废
   useEffect(() => {
-    if (!open || q) return
+    setKids({})
+    setDirs({})
+    setFound(undefined)
+    setOpenSet(new Set())
+  }, [rpc])
+
+  // 打开下拉、换页签、刷新时读第一层
+  useEffect(() => {
+    if (!open || q || screenTab) return
     setError('')
-    load(root)
+    // 强制读：刷新后 kids 刚清掉，这里拿到的还是旧的
+    if (byDir) load('', true, '')
+    else load(root, true)
     setOpenSet((s) => new Set([...s, root]))
     // load 只依赖 kids（读过就跳过），不放进依赖免得读回来又触发
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, q, lua, root])
+  }, [open, q, lua, root, rpc, screenTab])
 
   useEffect(() => {
-    if (!open || !q) return setFound(undefined)
+    if (!open || !q || screenTab) return setFound(undefined)
     let off = false
     setError('')
     rpc<GtClassesResult>(project, 'gt.classes', { q, ...(lua ? { lua: true } : {}), limit: 200 })
@@ -107,7 +147,7 @@ export function ClassPicker({
     return () => {
       off = true
     }
-  }, [project, open, q, lua, rpc])
+  }, [project, open, q, lua, rpc, screenTab])
 
   const lines = useMemo(() => {
     const out: TreeLine[] = []
@@ -118,8 +158,10 @@ export function ClassPicker({
       setText('')
     }
     const row = (it: GtClassItem, depth: number, expandable: boolean, isOpen: boolean, onToggle?: () => void) => {
+      // Lua 模块名是完整路径，树里已经按目录分好了，只显示最后一段（搜索时也一样，目录放悬停提示）
+      const name = it.kind === 'lua' ? luaLeaf(it.name) : it.name
       // 名字里含 q 就算命中（用户 2026-11-21：不要只按开头），把命中的那段标出来
-      const at = q ? it.name.toLowerCase().indexOf(q.toLowerCase()) : -1
+      const at = q ? name.toLowerCase().indexOf(q.toLowerCase()) : -1
       const engine = !it.asset && it.kind !== 'lua'
       const allowed = !lockClass || lockedIn.has(it.name)
       out.push({
@@ -131,12 +173,12 @@ export function ClassPicker({
           <span className={cn('ue:font-mono', (engine || !allowed) && 'ue:opacity-55')}>
             {at >= 0 ? (
               <>
-                {it.name.slice(0, at)}
-                <b className="ue:text-accent">{it.name.slice(at, at + q.length)}</b>
-                {it.name.slice(at + q.length)}
+                {name.slice(0, at)}
+                <b className="ue:text-accent">{name.slice(at, at + q.length)}</b>
+                {name.slice(at + q.length)}
               </>
             ) : (
-              it.name
+              name
             )}
           </span>
         ),
@@ -146,7 +188,7 @@ export function ClassPicker({
         ]
           .filter(Boolean)
           .join(' · '),
-        title: it.asset ?? it.file ?? it.name,
+        title: [it.name, it.asset ?? it.file].filter(Boolean).join('\n'),
         expandable,
         open: isOpen,
         selected: (lua ? `lua:${it.name}` : it.name) === value,
@@ -191,7 +233,50 @@ export function ClassPicker({
         if (isOpen) walk(it.name, depth + 1)
       }
     }
-    if (root) {
+    const toggle = (id: string) =>
+      setOpenSet((s) => {
+        const x = new Set(s)
+        if (x.has(id)) x.delete(id)
+        else x.add(id)
+        return x
+      })
+    // Lua 按目录：先子目录（文件夹行），再这个目录下的模块（能点开看子类）
+    const walkDir = (dir: string, depth: number) => {
+      for (const d of dirs[dir] ?? []) {
+        const id = `dir:${d.name}`
+        const isOpen = openSet.has(id)
+        out.push({
+          key: id,
+          depth,
+          icon: isOpen ? FolderOpen : Folder,
+          label: <span className="ue:font-mono">{luaLeaf(d.name)}</span>,
+          aside: String(d.count),
+          title: d.name,
+          expandable: true,
+          selected: false,
+          open: isOpen,
+          onToggle: () => {
+            if (!isOpen) load('', false, d.name)
+            toggle(id)
+          },
+          onSelect: () => {
+            if (!isOpen) load('', false, d.name)
+            toggle(id)
+          },
+        })
+        if (isOpen) walkDir(d.name, depth + 1)
+      }
+      for (const it of (kids[`dir:${dir}`] ?? []).filter(keep)) {
+        const isOpen = openSet.has(it.name)
+        row(it, depth, it.kids > 0, isOpen, () => {
+          if (!isOpen) load(it.name)
+          toggle(it.name)
+        })
+        if (isOpen) walk(it.name, depth + 1)
+      }
+    }
+    if (byDir) walkDir('', 0)
+    else if (root) {
       // 根（Object 或 lockClass）自己也是一行；lockClass 本身能选
       const self: GtClassItem = {
         name: root,
@@ -213,7 +298,7 @@ export function ClassPicker({
     return out
     // load 只依赖 kids
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, found, kids, openSet, onlyLive, lua, root, value, lockClass, lockLua, kind, cn])
+  }, [q, found, kids, dirs, byDir, openSet, onlyLive, lua, root, value, lockClass, lockLua, kind, cn])
 
   const Icon = kind ? KIND_ICON[kind] : AppWindow
   const shown = value.replace(/^lua:/, '')
@@ -242,6 +327,23 @@ export function ClassPicker({
             {kindLabel(kind)}
           </span>
         )}
+        {value && !lockClass && (
+          <button
+            type="button"
+            aria-label={t('清除类')}
+            title={t('清除类')}
+            onClick={(e) => {
+              // 在 label 里：不拦的话点一下会让输入框拿到焦点、把下拉打开
+              e.preventDefault()
+              onPick('')
+              setText('')
+              setOpen(false)
+            }}
+            className="ue:flex ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
+          >
+            <X className="ue:h-3.5 ue:w-3.5" />
+          </button>
+        )}
         <button
           type="button"
           aria-label={open ? t('收起') : t('展开')}
@@ -252,48 +354,61 @@ export function ClassPicker({
         </button>
       </label>
       {open && (
-        <div className="ue:absolute ue:top-9 ue:left-0 ue:z-30 ue:flex ue:h-[420px] ue:w-[min(560px,90vw)] ue:flex-col ue:overflow-hidden ue:rounded-lg ue:border ue:border-line-strong ue:bg-card ue:shadow-pop">
+        <div
+          style={{ width: `min(${pop.size.w}px, 90vw)`, height: pop.size.h }}
+          className="ue:absolute ue:top-9 ue:left-0 ue:z-30 ue:flex ue:flex-col ue:overflow-hidden ue:rounded-lg ue:border ue:border-line-strong ue:bg-card ue:shadow-pop"
+        >
           <div className="ue:px-2 ue:pt-2">
             <ClassTabs tab={tab} setTab={setTab} lock={lockClass ? (lockLua ? 'lua' : 'class') : undefined} />
           </div>
-          <div className="ue:flex ue:items-center ue:gap-1.5 ue:px-2.5 ue:py-1.5 ue:text-footnote ue:text-fg">
-            <Checkbox checked={onlyLive} label={t('只看此刻有实例的')} onChange={setOnlyLive} />
-            {t('只看此刻有实例的')}
-            <span className="ue:text-subtle">{t('· 引擎自带的类压灰')}</span>
-          </div>
-          {error && <p className="ue:px-3 ue:py-1 ue:text-footnote ue:text-danger">{error}</p>}
-          {!error && !lines.length && (
-            <p className="ue:px-3 ue:py-4 ue:text-center ue:text-footnote ue:text-subtle">
-              {q ? t('没有名字里含 {q} 的类', { q }) : t('读类树…')}
-            </p>
+          {screenTab ? (
+            <ScreenTree project={project} q={q} value={value} onPick={choose} />
+          ) : (
+            <>
+              <div className="ue:flex ue:items-center ue:gap-1.5 ue:px-2.5 ue:py-1.5 ue:text-footnote ue:text-fg">
+                <Checkbox checked={onlyLive} label={t('只看此刻有实例的')} onChange={setOnlyLive} />
+                {t('只看此刻有实例的')}
+                <span className="ue:text-subtle">{t('· 引擎自带的类压灰')}</span>
+              </div>
+              {error && <p className="ue:px-3 ue:py-1 ue:text-footnote ue:text-danger">{error}</p>}
+              {!error && !lines.length && (
+                <p className="ue:px-3 ue:py-4 ue:text-center ue:text-footnote ue:text-subtle">
+                  {q ? t('没有名字里含 {q} 的类', { q }) : t('读类树…')}
+                </p>
+              )}
+              <TreeList lines={lines} label={t('类')} />
+              {found?.note && (
+                <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-warning">
+                  {found.note}
+                </p>
+              )}
+              {found?.hasMore && (
+                <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-subtle">
+                  {t('只列了前 {n} 个，多打几个字缩小范围', { n: found.items.length })}
+                </p>
+              )}
+            </>
           )}
-          <TreeList lines={lines} label={t('类')} />
-          {found?.note && (
-            <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-warning">{found.note}</p>
-          )}
-          {found?.hasMore && (
-            <p className="ue:border-t ue:border-line ue:px-3 ue:py-1 ue:text-caption ue:text-subtle">
-              {t('只列了前 {n} 个，多打几个字缩小范围', { n: found.items.length })}
-            </p>
-          )}
+          <CornerHandle {...pop.handle} />
         </div>
       )}
     </div>
   )
 }
 
-/** 两个页签；类定死时只留它所在的那个能点 */
+/** 三个页签；类定死时只留它所在的那个能点 */
 function ClassTabs({ tab, setTab, lock }: { tab: Tab; setTab: (t: Tab) => void; lock?: Tab }) {
   const { ui } = h()
   return (
     <ui.Segmented
       size="sm"
-      label={t('类树 / Lua 类')}
+      label={t('类树 / Lua 类 / 屏幕上')}
       value={tab}
       onChange={(v: Tab) => setTab(v)}
       options={[
         { id: 'class' as const, label: t('UObject 类树'), disabled: lock === 'lua' },
         { id: 'lua' as const, label: t('Lua 类'), disabled: lock === 'class' },
+        { id: 'screen' as const, label: t('屏幕上'), disabled: lock === 'lua' },
       ]}
     />
   )

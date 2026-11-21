@@ -35,14 +35,16 @@ export function useGmRun(d: GmData) {
   const setCustomArg = (c: GmCustom, n: string, v: unknown) =>
     setCargs({ ...cargs, [c.id]: { ...valuesOf(c), [n]: v } })
 
-  const exec = async (e: GmEntry) => {
+  /** a：从收藏、最近执行、右键菜单直接执行时带的那组参数（state 里填的还没生效，不能等 fill 之后再读） */
+  const exec = async (e: GmEntry, a?: GmFav['args']) => {
     setRunning(true)
     if (e.custom) {
       const c = e.custom
       let full: Record<string, unknown> = c.args
       let r: CallOut
       try {
-        full = mergeArgs(c, overrides(c, valuesOf(c)))
+        const vals = a && !Array.isArray(a) ? { ...c.args, ...a } : valuesOf(c)
+        full = mergeArgs(c, overrides(c, vals))
         r = await runCall(project.id, c, full, target)
       } catch (err) {
         r = { ok: false, error: (err as Error).message, invoke: [], ms: 0, at: new Date().toISOString() }
@@ -58,13 +60,13 @@ export function useGmRun(d: GmData) {
         at: r.at,
       })
     } else {
-      const a = argsOf(e)
-      const r = await runEntry(project.id, e, a, target)
+      const list = Array.isArray(a) ? e.params.map((_, k) => a[k] ?? '') : argsOf(e)
+      const r = await runEntry(project.id, e, list, target)
       setOuts((o) => ({ ...o, [e.key]: r }))
       d.pushRecent({
         key: e.key,
         name: e.name,
-        args: a,
+        args: list,
         code: r.code,
         ok: r.ok,
         out: (r.ok ? r.lines.find(Boolean) : r.error) ?? '',
@@ -98,7 +100,7 @@ export function useGmRun(d: GmData) {
     setArg,
     setCustomArg,
     fill,
-    exec: (e: GmEntry) => void exec(e),
+    exec: (e: GmEntry, a?: GmFav['args']) => void exec(e, a),
     running,
     outOf: (e: GmEntry) => outs[e.key],
     coutOf: (c: GmCustom) => couts[c.id],

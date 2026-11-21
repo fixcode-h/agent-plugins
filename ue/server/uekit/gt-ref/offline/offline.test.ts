@@ -47,3 +47,21 @@ test('离线类树：取一层、包含匹配带祖先', () => {
   )
   assert.equal(found.hasMore, false)
 })
+
+test('离线 Lua 类：按目录列', () => {
+  const nodes = new Map(
+    ['/Module/A/X', '/Module/A/Sub/Y', '/Module/B/Z', 'Top'].map((name) => [name, { name, kind: 'lua' as const }]),
+  )
+  const root = pickClasses(nodes, { lua: true, dir: '' })
+  assert.deepEqual(
+    root.items.map((x) => x.name),
+    ['Top'],
+  )
+  assert.deepEqual(root.dirs, [{ name: 'Module', count: 3 }])
+  const a = pickClasses(nodes, { lua: true, dir: 'Module/A' })
+  assert.deepEqual(
+    a.items.map((x) => x.name),
+    ['/Module/A/X'],
+  )
+  assert.deepEqual(a.dirs, [{ name: 'Module/A/Sub', count: 1 }])
+})

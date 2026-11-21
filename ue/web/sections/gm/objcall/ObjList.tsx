@@ -1,14 +1,28 @@
-import { Copy, Crosshair, Pencil, Plus, Star, StarOff, Trash2, User, Cpu, CodeXml } from 'lucide-react'
+import {
+  Copy,
+  Crosshair,
+  Pencil,
+  Play,
+  Plus,
+  ScanSearch,
+  Star,
+  StarOff,
+  Trash2,
+  User,
+  Cpu,
+  CodeXml,
+} from 'lucide-react'
 import type { MouseEvent } from 'react'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu, openMenuAt } from '../../../menu.tsx'
+import { openMenu, openMenuAt, type MenuItem } from '../../../menu.tsx'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import { AgentBadge, HitBadge, ObjRule } from '../custom/ObjRule.tsx'
 
 /**
  * 对象调用的左栏（规格第 7 节、效果图 2）：对象列表，名字 + 匹配规则小块 + 命中个数（1 绿 / 多黄 / 0 灰，命中数走 gt.watch 推送）。
- * 「加对象」打开选对象面板；「加来源」加玩家、子系统、Lua 模块；右键改匹配规则、重命名、复制、删除、收藏
+ * 「加对象」打开选对象面板；「加来源」加玩家、子系统、Lua 模块；对象右键调函数、取对象、改匹配规则、重命名、复制、删除、收藏；
+ * 空白处右键也能加对象、加来源（列表空着的时候最常用）
  */
 export function ObjList({
   objects,
@@ -19,6 +33,7 @@ export function ObjList({
   onPick,
   onAdd,
   onAddSource,
+  onCall,
   onEdit,
   onRename,
   onCopy,
@@ -34,6 +49,7 @@ export function ObjList({
   onPick: (name: string) => void
   onAdd: () => void
   onAddSource: (kind: 'pawn' | 'sub' | 'luaMod') => void
+  onCall: (name: string, mode: 'call' | 'get') => void
   onEdit: (o: GmObject) => void
   onRename: (o: GmObject) => void
   onCopy: (o: GmObject) => void
@@ -46,9 +62,20 @@ export function ObjList({
   const shown = k
     ? objects.filter((o) => `${o.name} ${o.ref?.class ?? ''} ${o.src ?? ''}`.toLowerCase().includes(k))
     : objects
+  const sources: MenuItem[] = [
+    { label: t('玩家'), icon: User, hint: '@pawn', onClick: () => onAddSource('pawn') },
+    { label: t('子系统…'), icon: Cpu, hint: '@sub.X', onClick: () => onAddSource('sub') },
+    { label: t('Lua 模块…'), icon: CodeXml, hint: '@luaMod.X', onClick: () => onAddSource('luaMod') },
+  ]
+  // 空白处：菜单没有二级，「加来源」写成小标题、下面三项
+  const blankMenu = (e: MouseEvent) =>
+    openMenu(e, [{ label: t('加对象…'), icon: Plus, onClick: onAdd }, 'sep', { title: t('加来源') }, ...sources])
   const menu = (e: MouseEvent, o: GmObject) =>
     openMenu(e, [
-      o.ref && { label: t('改匹配规则'), icon: Crosshair, onClick: () => onEdit(o) },
+      { label: t('调函数'), icon: Play, onClick: () => onCall(o.name, 'call') },
+      { label: t('取对象'), icon: ScanSearch, onClick: () => onCall(o.name, 'get') },
+      'sep',
+      o.ref && { label: t('改匹配规则…'), icon: Crosshair, onClick: () => onEdit(o) },
       { label: t('重命名'), icon: Pencil, onClick: () => onRename(o) },
       { label: t('复制'), icon: Copy, onClick: () => onCopy(o) },
       {
@@ -70,18 +97,16 @@ export function ObjList({
         <ui.Button
           size="sm"
           variant="ghost"
-          onClick={(e: MouseEvent<HTMLElement>) =>
-            openMenuAt(e.currentTarget, [
-              { label: t('玩家'), icon: User, hint: '@pawn', onClick: () => onAddSource('pawn') },
-              { label: t('子系统…'), icon: Cpu, hint: '@sub.X', onClick: () => onAddSource('sub') },
-              { label: t('Lua 模块…'), icon: CodeXml, hint: '@luaMod.X', onClick: () => onAddSource('luaMod') },
-            ])
-          }
+          onClick={(e: MouseEvent<HTMLElement>) => openMenuAt(e.currentTarget, sources)}
         >
           {t('加来源')}
         </ui.Button>
       </div>
-      <div role="list" className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-0.5 ue:overflow-y-auto">
+      <div
+        role="list"
+        onContextMenu={blankMenu}
+        className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-0.5 ue:overflow-y-auto"
+      >
         {shown.map((o) => {
           const hit = hits[o.name]
           return (

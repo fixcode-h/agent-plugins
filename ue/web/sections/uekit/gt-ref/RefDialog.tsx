@@ -1,4 +1,5 @@
-import { useContext, useRef, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useContext, useMemo, useRef, useState, type ComponentProps } from 'react'
 import type {
   GtClassItem,
   GtIdentItem,
@@ -13,8 +14,9 @@ import { h, t } from '../../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
 import { defaultIdent } from './compare-table.ts'
 import { classShort, inText } from './describe.ts'
-import { highlight, useRefRpc } from './live.ts'
+import { highlight, RefRpcProvider, useRefRpc } from './live.ts'
 import { ClassPicker } from './pick/ClassPicker.tsx'
+import { FromBrowser } from './pick/FromBrowser.tsx'
 import { defaultSources, inOfSources, sourcesOfIn, type Source } from './pick/data.ts'
 import { DetailPane, isTruncated } from './pick/DetailPane.tsx'
 import { IdentPane } from './pick/IdentPane.tsx'
@@ -43,7 +45,19 @@ function useLiveFallback(live: boolean | undefined) {
  * withPart：动作落点用，结构栏里点的子控件 / 组件就是部件，保存时一起交出去（等于原来「连部件一起抓」）；
  * onSplit：条件里用，底栏多一个「按它分路」，把所在的如果换成按状态分支
  */
-export function RefDialog({
+export function RefDialog(props: Omit<ComponentProps<typeof RefDialogBody>, 'onRefresh'>) {
+  const base = useRefRpc()
+  const [nonce, setNonce] = useState(0)
+  // 刷新（用户 2026-11-21）：换一个新的 rpc 函数，类树、实例、结构、属性这些按 rpc 取数的都跟着重读；正在编辑的引用不动
+  const rpc = useMemo<typeof base>(() => (p, n, a) => base(p, n, a), [base, nonce])
+  return (
+    <RefRpcProvider value={rpc}>
+      <RefDialogBody {...props} onRefresh={() => setNonce((x) => x + 1)} />
+    </RefRpcProvider>
+  )
+}
+
+function RefDialogBody({
   project,
   name: initialName,
   withName,
@@ -54,9 +68,11 @@ export function RefDialog({
   withPart,
   part: initialPart,
   onSplit,
+  onRefresh,
   onClose,
   onSave,
 }: {
+  onRefresh: () => void
   project: string
   name?: string
   /** 命名对象（脚本设置里）要填名字；步骤里内联的不要 */
@@ -219,6 +235,11 @@ export function RefDialog({
           <ui.Field label={t('类')}>
             <ClassPicker project={project} value={ref.class} kind={p.kind} lockClass={lockClass} onPick={pickClass} />
           </ui.Field>
+          {!lockClass && <FromBrowser project={project} onPick={pickClass} />}
+          <ui.Button size="sm" variant="ghost" title={t('重新读类树、此刻实例和属性')} onClick={onRefresh}>
+            <RefreshCw className="ue:h-3.5 ue:w-3.5" />
+            {t('刷新')}
+          </ui.Button>
           <ui.Field label={t('在哪找')}>
             {sources === undefined ? (
               <div className="ue:flex ue:h-8 ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
@@ -289,7 +310,13 @@ export function RefDialog({
               noClass={!p.cls}
               items={p.items}
               loading={p.props.loading}
-              error={p.props.error && !p.props.data ? p.props.error : undefined}
+              error={
+                p.props.error && !p.props.data
+                  ? live
+                    ? p.props.error
+                    : t('UE 没在运行：类的属性要开着编辑器才读得到；类树、Lua 字段照样能看')
+                  : undefined
+              }
               note={p.props.data?.unavailable}
               siblings={p.props.data?.siblings}
               groupTitle={p.groupTitle}
