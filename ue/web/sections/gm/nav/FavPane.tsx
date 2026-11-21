@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Star, StarOff, type LucideIcon } from 'lucide-react
 import { useRef, type ReactNode } from 'react'
 import { Caret } from '../../../details/controls.tsx'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu, type MenuItem } from '../../../menu.tsx'
 import { SplitHandle, usePaneHeight } from '../../../split.tsx'
 
 export interface FavRow {
@@ -14,11 +14,13 @@ export interface FavRow {
   /** 收藏的东西已经不在了（GM 改名、宏删了）：淡显，只能取消收藏 */
   gone?: boolean
   onClick: () => void
+  /** 右键菜单前面这条自己的动作（执行、打开、填回参数……）；不在了的条目不给 */
+  menu?: () => (MenuItem | false | undefined | null | '')[]
 }
 
 /**
  * 左栏最下面的收藏（规格第 6 节）：每个分类一份，可以折起来；展开时上沿能拖、高度记在本机（每个分类共用一个高度）。
- * 右键：取消收藏、上移、下移
+ * 右键：这条自己的动作（GmNav 给：执行 / 打开 / 填回参数……），再是取消收藏、上移、下移
  */
 export function FavPane({
   rows,
@@ -78,6 +80,8 @@ export function FavPane({
                   }}
                   onContextMenu={(e) =>
                     openMenu(e, [
+                      ...(!r.gone && r.menu ? r.menu() : []),
+                      'sep',
                       { label: t('取消收藏'), icon: StarOff, onClick: () => onRemove(i) },
                       'sep',
                       { label: t('上移'), icon: ArrowUp, disabled: !i, onClick: () => onMove(i, i - 1) },

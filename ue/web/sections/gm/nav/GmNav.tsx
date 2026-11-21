@@ -13,6 +13,7 @@ import { ObjList } from '../objcall/ObjList.tsx'
 import type { ObjCallState } from '../objcall/use-objcall-state.tsx'
 import type { GmData } from '../use-gm.ts'
 import { FavPane, type FavRow } from './FavPane.tsx'
+import type { MenuList } from './use-gm-menus.ts'
 import { groupLines } from './group-lines.ts'
 import { useLocalPref } from './local.ts'
 import { allModules, type Mods } from './module-ops.ts'
@@ -61,6 +62,8 @@ export interface GmNavProps {
   onGmMenu: (e: MouseEvent, entry: GmEntry) => void
   onModuleMenu: (e: MouseEvent, id: string, count: number) => void
   onMacroMenu: (e: MouseEvent, id: string) => void
+  /** 收藏一条的右键动作（执行、打开、填回参数……） */
+  onFavMenu: (cat: GmCat, f: GmFav) => MenuList
   /** 对象调用分类的对象列表（GameTest 没装时不给，显示提示） */
   objList?: ObjCallState['listProps']
   footer?: ReactNode
@@ -130,53 +133,53 @@ export function GmNav(p: GmNavProps) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, shown, d.gm, mods, hits, open, selected, q])
 
-  const favRows = (): FavRow[] =>
-    d.gm.favs[cat].map((f) => {
-      if (cat === 'macro') {
-        const m = d.gm.macros.find((x) => `macro:${x.id}` === f.key)
-        return {
-          key: f.key,
-          icon: ListVideo,
-          label: m?.name ?? f.key.slice(6),
-          gone: !m,
-          selected: !!m && selected === f.key,
-          onClick: () => m && p.onPick({ kind: 'macro', id: m.id }),
-        }
-      }
-      if (cat === 'objcall') {
-        const name = f.key.slice(4)
-        const has = d.gm.objects.some((o) => o.name === name)
-        return {
-          key: f.key,
-          icon: Crosshair,
-          label: name,
-          gone: !has,
-          selected: p.objList?.selected === name,
-          onClick: () => p.objList?.onPick(name),
-        }
-      }
-      const e = byKey.get(f.key)
-      const a = argsText(f.args)
+  const favRows = (): FavRow[] => d.gm.favs[cat].map((f) => ({ ...favRow(f), menu: () => p.onFavMenu(cat, f) }))
+  const favRow = (f: GmFav): FavRow => {
+    if (cat === 'macro') {
+      const m = d.gm.macros.find((x) => `macro:${x.id}` === f.key)
       return {
         key: f.key,
-        icon: e ? ICON[e.src] : Wand2,
-        label: (
-          <>
-            <span className={e?.src === 'custom' ? undefined : 'ue:font-mono'}>
-              {e?.name ?? f.key.replace(/^[a-z]+:/, '')}
-            </span>
-            {a && <span className="ue:ml-1 ue:font-mono ue:text-muted">{a}</span>}
-          </>
-        ),
-        title: [e?.name, a, e?.desc].filter(Boolean).join('\n'),
-        // 控制台命令不在列表里（只列收藏和最近用过的）也能执行：只有 GM 改名、删了才算不在
-        gone: !e,
-        selected:
-          selected === `gm:${f.key}` &&
-          JSON.stringify(f.args ?? null) === JSON.stringify((p.pick as { args?: unknown })?.args ?? null),
-        onClick: () => p.onPick({ kind: 'gm', key: f.key, args: f.args }),
+        icon: ListVideo,
+        label: m?.name ?? f.key.slice(6),
+        gone: !m,
+        selected: !!m && selected === f.key,
+        onClick: () => m && p.onPick({ kind: 'macro', id: m.id }),
       }
-    })
+    }
+    if (cat === 'objcall') {
+      const name = f.key.slice(4)
+      const has = d.gm.objects.some((o) => o.name === name)
+      return {
+        key: f.key,
+        icon: Crosshair,
+        label: name,
+        gone: !has,
+        selected: p.objList?.selected === name,
+        onClick: () => p.objList?.onPick(name),
+      }
+    }
+    const e = byKey.get(f.key)
+    const a = argsText(f.args)
+    return {
+      key: f.key,
+      icon: e ? ICON[e.src] : Wand2,
+      label: (
+        <>
+          <span className={e?.src === 'custom' ? undefined : 'ue:font-mono'}>
+            {e?.name ?? f.key.replace(/^[a-z]+:/, '')}
+          </span>
+          {a && <span className="ue:ml-1 ue:font-mono ue:text-muted">{a}</span>}
+        </>
+      ),
+      title: [e?.name, a, e?.desc].filter(Boolean).join('\n'),
+      // 控制台命令不在列表里（只列收藏和最近用过的）也能执行：只有 GM 改名、删了才算不在
+      gone: !e,
+      selected:
+        selected === `gm:${f.key}` &&
+        JSON.stringify(f.args ?? null) === JSON.stringify((p.pick as { args?: unknown })?.args ?? null),
+      onClick: () => p.onPick({ kind: 'gm', key: f.key, args: f.args }),
+    }
+  }
 
   const CATS: { id: GmCat; label: string; n: number }[] = [
     { id: 'gm', label: 'GM', n: d.entries.filter((e) => inCat(e, 'gm')).length },

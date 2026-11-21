@@ -61,3 +61,14 @@ export function preview(e: GmEntry, args: string[]): { code: string; error?: str
     return { code: '', error: (err as Error).message }
   }
 }
+
+export interface MacroStepResult {
+  step: number
+  ok: boolean
+  output?: string[]
+  error?: string
+}
+
+/** 执行一个宏（服务端按步骤跑，任何一步失败就停）：宏编辑页的「执行全部」和左栏右键「执行」都走这里 */
+export const runMacro = (projectId: string, id: string, target?: Target) =>
+  ppost<{ ok: boolean; failedAt?: number; steps: MacroStepResult[] }>(projectId, 'macro', { id, target })

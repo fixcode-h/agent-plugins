@@ -66,10 +66,6 @@ export function GmPage() {
   const [setup, setSetup] = useState(false)
   const [bind, setBind] = useState<{ entry: GmEntry; p: GmParam; current?: LuaGmBinding }>()
   const [dialog, ask] = useAsk()
-  const menus = useGmMenus(d, ask, (id) => {
-    const m = picks.macro
-    if (m?.kind === 'macro' && m.id === id) setPickIn('macro', undefined)
-  })
   const nav = usePane('gm-tree', '380px', 260)
   const navRef = useRef<HTMLElement>(null)
   const recentPane = usePaneHeight('gm-recent', '14rem', 96)
@@ -129,6 +125,40 @@ export function GmPage() {
     })
   }
 
+  // 左栏、收藏、最近执行的右键菜单要用的页面动作（nav/use-gm-menus.ts）
+  const menus = useGmMenus({
+    d,
+    ask,
+    run,
+    canRun: (e) => (e.custom ? canRun || (!gt.live ? t('对象调用要 UE 在运行、项目装了 GameTest') : '') : canRun),
+    open: (p, c) => {
+      setCat(c)
+      choose(p, c)
+    },
+    addToMacro: (e) => void addToMacro(e),
+    editRule,
+    objcall: {
+      call: (n, m) => {
+        setCat('objcall')
+        s.listProps.onCall(n, m)
+      },
+      newIn: (id) => {
+        s.preferModule(id)
+        setCat('objcall')
+        toast.success(t('选好对象和函数后点「保存为 GM」，默认放进这个模块'))
+      },
+      saveFrom: s.saveFrom,
+    },
+    onMacroDeleted: (id) => {
+      const m = picks.macro
+      if (m?.kind === 'macro' && m.id === id) setPickIn('macro', undefined)
+    },
+    onCustomDeleted: (key) => {
+      const g = picks.gm
+      if (g?.kind === 'gm' && g.key === key) setPickIn('gm', undefined)
+    },
+  })
+
   const rescan = async () => {
     setScanning(true)
     try {
@@ -177,6 +207,7 @@ export function GmPage() {
         onGmMenu={menus.onGmMenu}
         onModuleMenu={menus.onModuleMenu}
         onMacroMenu={menus.onMacroMenu}
+        onFavMenu={menus.favMenu}
         objList={gt.known && !gt.installed ? undefined : s.listProps}
         footer={
           cat === 'gm' ? (
@@ -262,6 +293,7 @@ export function GmPage() {
             <RecentRuns
               items={recent.slice(0, 60)}
               selected=""
+              onMenu={menus.onRecentMenu}
               onPick={(_line, r) => {
                 // 点最近执行：切到它所在的分类再选中
                 const c: GmCat = r.entry.src === 'engine' || r.entry.src === 'console' ? 'engine' : 'gm'

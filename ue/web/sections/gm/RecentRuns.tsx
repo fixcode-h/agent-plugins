@@ -1,4 +1,5 @@
 import { Check, Crosshair, FileCode, History, SquareTerminal, Wand2, X } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import { argsText } from '../../../shared/gm/favs.ts'
 import type { GmRun } from '../../../server/store.ts'
 import { h, t } from '../../host.ts'
@@ -11,17 +12,20 @@ export interface RecentRun {
 
 /**
  * GM 页右侧下方的「最近执行」（用户 2026-11-21：不放左边树里，放到右边下方）。
- * 所有 GM 的执行按时间倒序列一张表，点一行选中那条 GM 并把当时的参数填回去；高度在 GmPage 里可拖、记在本机
+ * 所有 GM 的执行按时间倒序列一张表，点一行选中那条 GM 并把当时的参数填回去，右键能再执行、收藏这组参数；高度在 GmPage 里可拖、记在本机
  */
 export function RecentRuns({
   items,
   selected,
   onPick,
+  onMenu,
 }: {
   items: RecentRun[]
   /** 当前选中那一行（run:序号） */
   selected: string
   onPick: (line: string, r: RecentRun) => void
+  /** 右键：再执行一次、填回参数、收藏这组参数…… */
+  onMenu?: (e: MouseEvent, r: RecentRun) => void
 }) {
   const { cn } = h()
   return (
@@ -55,6 +59,7 @@ export function RecentRuns({
               key={line}
               type="button"
               onClick={() => onPick(line, r)}
+              onContextMenu={onMenu ? (e) => onMenu(e, r) : undefined}
               title={[r.run.code, r.run.out].filter(Boolean).join('\n')}
               className={cn(
                 'ue:flex ue:h-8 ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:px-4 ue:text-left ue:text-footnote',
