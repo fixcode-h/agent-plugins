@@ -23,6 +23,7 @@ import { TreeList, type TreeLine } from '../../../TreeList.tsx'
 import { ErrorText, SearchBox } from '../../../ui.tsx'
 import type { LeakItem } from '../debug-types.ts'
 import { StateDot, StateBadge, StateLegend, worldName } from './parts.tsx'
+import { pureLuaLines, usePureLua } from './pure-lua.tsx'
 import type { LuaSel, TreeData } from './tree-data.ts'
 import {
   filterState,
@@ -50,6 +51,7 @@ export function ObjectsTree({
   leaks,
   onSelect,
   onReload,
+  tick = 0,
   footer,
 }: {
   data?: TreeData
@@ -58,6 +60,8 @@ export function ObjectsTree({
   leaks?: LeakItem[]
   onSelect: (s: LuaSel) => void
   onReload: () => void
+  /** 改字段、调函数、刷新后加一：纯 Lua 实例一组跟着重找 */
+  tick?: number
   /** 树下面的东西（监视） */
   footer?: ReactNode
 }) {
@@ -74,6 +78,8 @@ export function ObjectsTree({
   const isOpen = (key: string, def: boolean) => open[key] ?? def
   const toggle = (key: string, def: boolean) => setOpen((o) => ({ ...o, [key]: !(o[key] ?? def) }))
   const problems = (data?.objs ?? []).filter((o) => stateOf(o) !== 'alive').length
+  // 纯 Lua 实例一组：展开时才走 Lua 堆（pure-lua.tsx）
+  const pure = usePureLua(isOpen('s:pure', false), tick)
 
   const openPath = (s: string) => {
     try {
@@ -158,7 +164,8 @@ export function ObjectsTree({
         ),
         title: n.name,
         selected: under('', ['package', 'loaded', n.name]),
-        onSelect: () => onSelect({ kind: 'root', root: { path: '', keys: ['package', 'loaded', n.name], label: n.name } }),
+        onSelect: () =>
+          onSelect({ kind: 'root', root: { path: '', keys: ['package', 'loaded', n.name], label: n.name } }),
       })
     } else {
       const group = n.kind === 'module' || n.kind === 'class'
@@ -249,17 +256,39 @@ export function ObjectsTree({
     // 类（UClass）单独一组：没开始玩时 UnLua 只给类建了表，混在「运行中的对象」里会被当成实例去调 UE 函数
     const insts = objs.filter((o) => !isClassObj(o))
     const classObjs = objs.filter(isClassObj)
-    if ((insts.length || !classObjs.length) && section('s:objects', Box, t('运行中的对象（{g}）', { g: groupLabel }), insts.length)) {
+    if (
+      (insts.length || !classObjs.length) &&
+      section('s:objects', Box, t('运行中的对象（{g}）', { g: groupLabel }), insts.length)
+    ) {
       const tree = groupObjects(insts, grouping)
       // 对象不多时全展开；多了只展开第一层分组，免得一打开就是几百行
       for (const n of tree) node(n, 1, insts.length <= 40)
     }
-    if (classObjs.length && section('s:classobjs', Component, insts.length ? t('绑了 Lua 的类') : t('绑了 Lua 的类（还没开始玩，没有实例）'), classObjs.length, !insts.length)) {
+    if (
+      classObjs.length &&
+      section(
+        's:classobjs',
+        Component,
+        insts.length ? t('绑了 Lua 的类') : t('绑了 Lua 的类（还没开始玩，没有实例）'),
+        classObjs.length,
+        !insts.length,
+      )
+    ) {
       const tree = groupObjects(classObjs, grouping === 'owner' ? 'module' : grouping)
       for (const n of tree) node(n, 1, classObjs.length <= 40)
     }
     if (data.globals.length && section('s:globals', Globe, t('全局（项目自己的）'), data.globals.length))
       for (const g of data.globals) leaf(`g:${g}`, Globe, g, { path: '', keys: [g] })
+    pureLuaLines({
+      pure,
+      lines,
+      section,
+      isOpen,
+      toggle,
+      under,
+      q,
+      onSelect: (root) => onSelect({ kind: 'root', root }),
+    })
     const idle = idleModules(data.modules, data.objs)
     if (idle.length && section('s:idle', FileCode2, t('只加载、没有对象的模块'), idle.length, false))
       for (const n of folderize(idle.map((m) => ({ key: `i:${m}`, kind: 'idle' as const, name: m, children: [] }))))

@@ -67,9 +67,7 @@ function Inspect() {
           { action: 'collect' },
           target,
         )
-        h().toast.success(
-          t('Lua 内存 {a} → {b}', { a: fmtKB(r.beforeKB), b: fmtKB(r.afterKB) }),
-        )
+        h().toast.success(t('Lua 内存 {a} → {b}', { a: fmtKB(r.beforeKB), b: fmtKB(r.afterKB) }))
         bump()
         if (thenScan) await scanLeaks()
       } catch (e) {
@@ -97,7 +95,10 @@ function Inspect() {
           </span>
         )}
         {!!meta?.stale && (
-          <span className="ue:text-warning" title={t('UnLua 的对象表里还记着、但 UObject 已经不在的项：UnLua 销毁对象时没删掉')}>
+          <span
+            className="ue:text-warning"
+            title={t('UnLua 的对象表里还记着、但 UObject 已经不在的项：UnLua 销毁对象时没删掉')}
+          >
             {t('对象表里的残留 {n}', { n: meta.stale })}
           </span>
         )}
@@ -125,6 +126,7 @@ function Inspect() {
             leaks={leaks?.items}
             onSelect={setSel}
             onReload={bump}
+            tick={tick}
             footer={
               <WatchList
                 items={watch}

@@ -62,9 +62,10 @@ export function InstancePane({
   const mine = new Set((me?.candidates ?? []).map((c) => c.name))
   const rows = all?.candidates ?? []
   // 按所属（对象路径里的外层）成树，默认全展开，点分组行收起
+  // 纯 Lua 实例（GameTest 2.2.0）没有外层对象：都归到「纯 Lua 实例」一组
   const tree = ownerRows(
     rows,
-    (c) => c.path,
+    (c) => (c.luaTable ? `${t('纯 Lua 实例')}.x` : c.path),
     (k) => !closed.has(k),
   )
   return (
@@ -88,7 +89,13 @@ export function InstancePane({
       </span>
       {error && <p className="ue:px-3 ue:text-caption ue:text-warning">{error}</p>}
       {!error && all && !rows.length && (
-        <p className="ue:px-3 ue:py-2 ue:text-footnote ue:text-subtle">{t('此刻一个也没有：先在游戏里打开它')}</p>
+        <p className="ue:px-3 ue:py-2 ue:text-footnote ue:text-subtle">
+          {cls.startsWith('lua:')
+            ? t(
+                '此刻一个也没有：绑了 UObject 的和纯 Lua 实例都没找到。纯 Lua 实例找不到时，到「权限与设置 → Lua」填类名字段或起点变量，点「试一下」看认没认出来',
+              )
+            : t('此刻一个也没有：先在游戏里打开它')}
+        </p>
       )}
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-0.5 ue:overflow-auto ue:px-2 ue:pb-2">
         {tree.map((r) => {
@@ -121,7 +128,7 @@ export function InstancePane({
             <button
               key={c.name}
               type="button"
-              title={c.path}
+              title={c.luaTable ? `${c.luaTable.module}\n${c.luaTable.path}` : c.path}
               onClick={() => onSelect(c.name)}
               style={{ marginLeft: r.depth * 14 }}
               className={cn(

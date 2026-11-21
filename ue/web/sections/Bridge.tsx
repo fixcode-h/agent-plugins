@@ -6,6 +6,7 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, Confirm, PageHead } from '../ui.tsx'
 import { LuaBuildSettings } from './lua/BuildSettings.tsx'
+import { LuaSettings } from './lua/LuaSettings.tsx'
 import { LayoutSettings } from '../inspect/layouts/settings/LayoutSettings.tsx'
 
 /**
@@ -176,6 +177,7 @@ export function Bridge() {
             </div>
           </form>
         </Card>
+        <LuaSettings />
         <LuaBuildSettings />
         {/* 资源页按资源类型用的布局、各区域的尺寸（本机记的，所有项目共用） */}
         <LayoutSettings />

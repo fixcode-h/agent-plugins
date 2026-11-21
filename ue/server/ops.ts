@@ -15,6 +15,7 @@ import { followJob } from './uekit/follow.ts'
 import { FORGE_DISK_OPS, forgeFromDisk } from './uekit/forge-disk.ts'
 import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
 import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
+import { ensureLuaConfig } from './lua/settings.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
 
@@ -446,6 +447,10 @@ function undoOf(op: string, args: Record<string, unknown>, res: Record<string, u
   return { noUndo: t('命令、GM 和函数调用不能自动撤回') }
 }
 
+/** Lua、GameTest 操作前把「权限与设置 → Lua」下发给这个进程（lua/settings.ts） */
+const luaReady = (ctx: OpCtx, card: Card, op: string) =>
+  ensureLuaConfig(ctx.project, card, op, (o, a) => rpc(card, o, a, 10000))
+
 export async function runOp(
   ctx: OpCtx,
   op: string,
@@ -482,7 +487,7 @@ export async function runOp(
       project: ctx.project,
       pick: () => chooseCard(ctx, op, args),
       send: async (card, a) => ({
-        ...(await rpc(card, op, a, timeoutMs)),
+        ...(await luaReady(ctx, card, op).then(() => rpc(card, op, a, timeoutMs))),
         instance: { pid: card.pid, kind: card.kind },
       }),
       offlineClasses: async (a, note) => ({ ...(await offlineClasses(ctx.project, a, note)) }),
@@ -497,6 +502,7 @@ export async function runOp(
   if (FORGE_DISK_OPS.has(op) && args.disk === true) return forgeFromDisk(ctx.project.root, op, args)
   delete args.disk
   const card = await chooseCard(ctx, op, args)
+  await luaReady(ctx, card, op)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world
   const added = op === 'asset.save' ? await checkout(ctx.project, card, (args.packages as string[]) ?? []) : []
