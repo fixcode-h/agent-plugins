@@ -36,11 +36,13 @@ function fnItem(f: LuaFnRaw): GtPropItem {
       : {
           comparable: false,
           why:
-            params.length > 0
-              ? t('有参数的函数不能当条件：调用用 obj.call')
-              : f.ret
-                ? t('这个函数不是 Pure 或 const，读值会改游戏，不能当条件')
-                : t('函数只列出来看：调用用 obj.call'),
+            src === 'lua'
+              ? t('Lua 函数写不进属性路径：调用用 obj.call')
+              : params.length > 0
+                ? t('参数只能写数字、文字、布尔、枚举的函数才能当条件（GameTest 2.1.6 起）：其余调用用 obj.call')
+                : f.ret
+                  ? t('这个函数不是 Pure 或 const，读值会改游戏，不能当条件')
+                  : t('函数只列出来看：调用用 obj.call'),
         }),
     luaFn: {
       params,

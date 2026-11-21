@@ -112,7 +112,7 @@ export function RefCard({
       {head}
       {ref && (
         <div className="ue:flex ue:flex-col ue:gap-1.5 ue:border-t ue:border-line/60 ue:px-2.5 ue:py-2">
-          <span className="ue:text-caption ue:text-subtle">{t('唯一标识组 · 都要满足')}</span>
+          <span className="ue:text-caption ue:text-subtle">{t('唯一标识 · 每组都要满足')}</span>
           {ids.length ? (
             <div className="ue:flex ue:flex-wrap ue:gap-1">
               {ids.map((it, i) => (

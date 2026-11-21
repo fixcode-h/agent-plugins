@@ -7,6 +7,7 @@
 export * from './types.ts'
 export * from './ref.ts'
 export * from './path.ts'
+export * from './ident-tree.ts'
 export * from './states.ts'
 export * from './compare/index.ts'
 export * from './describe.ts'

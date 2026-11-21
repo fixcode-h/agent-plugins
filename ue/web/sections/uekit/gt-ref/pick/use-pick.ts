@@ -1,6 +1,14 @@
 import { AppWindow } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GtIdentItem, GtPropGroup, GtPropItem, GtRef, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
+import {
+  identLeaves,
+  normalizeIdent,
+  toGroups,
+  type GtPropGroup,
+  type GtPropItem,
+  type GtRef,
+  type GtTreeNode,
+} from '../../../../../shared/gt-script/index.ts'
 import { classShort } from '../describe.ts'
 import { classOnly, useProps, useRefHits, useTree, type PropsArgs, type RefHits } from '../live.ts'
 import { KIND_ICON } from './ClassPicker.tsx'
@@ -49,19 +57,31 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
 
   // 此刻屏上的界面：没定类时按类分组列出来，UMG 的实例靠它找到树节点
   const screen = useTree(project, live && (!cls || kind === 'umg' || kind === 'lua'), {})
-  const ident = ref.ident ?? []
+  // 编辑中的标识是条件组（可能有空组）：发出去之前收拾成存盘的样子
+  const identGroups = toGroups(ref.ident)
+  const withIdent = (nodes: ReturnType<typeof normalizeIdent>): GtRef => {
+    const { ident: _ident, ...rest } = ref
+    return nodes.length ? { ...rest, ident: nodes } : rest
+  }
   const allowed = sourcesFor(kind)
   const hits = useRefHits(
     project,
     live && !!cls,
     [
-      { id: 'me', ref },
+      { id: 'me', ref: withIdent(normalizeIdent(identGroups)) },
       { id: 'all', ref: classOnly(ref) },
       // 三个开关各自能找到几个（开关上的数字）
       ...SOURCES.filter((s) => allowed.includes(s)).map((s) => ({ id: s, ref: { class: cls, in: s } as GtRef })),
+      // 条件组多于一个时，每组单独命中几个（卡片头上的数字）：只拿这一组当 ident 再问一次
+      ...(identGroups.length > 1
+        ? identGroups.flatMap((g, i) => {
+            const one = normalizeIdent([g])
+            return one.length ? [{ id: `g${i}`, ref: withIdent(one) }] : []
+          })
+        : []),
     ],
     objects,
-    ident.map((i) => i.prop),
+    identLeaves(ref.ident).map((i) => i.prop),
   )
   const me = hits.hits.me
   const all = hits.hits.all
@@ -164,8 +184,6 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
     if (hit) return hit.actual
     return seen[prop]?.value
   }
-  const toggleIdent = (it: GtIdentItem, on: boolean): GtIdentItem[] =>
-    on ? ident.filter((x) => x.prop !== it.prop) : [...ident, it]
 
   return {
     cls,
@@ -175,6 +193,8 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
     counts,
     screen,
     hits: { me, all, error: hits.error } as { me?: RefHits; all?: RefHits; error: string },
+    /** 每个条件组单独命中几个（只有一个组时就是 me） */
+    groupHits: identGroups.map((_, i) => (identGroups.length > 1 ? hits.hits[`g${i}`] : me)),
     shown,
     setInst,
     part,
@@ -190,6 +210,5 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
     groupTitle,
     known,
     actual,
-    toggleIdent,
   }
 }

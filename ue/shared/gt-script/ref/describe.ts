@@ -1,3 +1,4 @@
+import { isIdentGroup, joinOf, kidsOf } from './ident-tree.ts'
 import { parsePropPath } from './path.ts'
 import { inObj, namedRef, refForm, shortClass } from './ref.ts'
 import type { GtIdentItem, GtRef, GtRefLike } from './types.ts'
@@ -147,7 +148,7 @@ export function propLabel(prop: string, o: DescribeOptions = {}): string {
   for (const s of r.segs) {
     if (s.kind === 'state') state = s.name
     else if (s.kind === 'index') body += /^\d+$/.test(s.name) ? `[${s.name}]` : `["${s.name}"]`
-    else body += `${body ? '.' : ''}${s.name}${s.kind === 'fn' ? '()' : ''}`
+    else body += `${body ? '.' : ''}${s.name}${s.kind === 'fn' ? `(${s.args ?? ''})` : ''}`
   }
   if (!state) return body
   return body ? `${body} ${stateWord(state, t)}` : stateWord(state, t)
@@ -166,6 +167,27 @@ export function describeItem(item: Partial<GtIdentItem>, o: DescribeOptions = {}
 }
 
 /**
+ * 唯一标识（2.1.6 条件组）：顶层用「，」连（都要满足），组里用「且 / 或」，子组加括号，取反前面写「非」。
+ * 平铺写法读出来和以前一样：`ShopId = 1001，在屏上`
+ */
+export function describeIdent(nodes: readonly unknown[], o: DescribeOptions = {}): string {
+  const t = o.t ?? ((s: string) => s)
+  const one = (n: unknown, nested: boolean): string => {
+    if (!isObj(n)) return '?'
+    if (isIdentGroup(n)) {
+      const join = joinOf(n) === 'all' ? ` ${t('且')} ` : ` ${t('或')} `
+      const kids = kidsOf(n).map((k) => one(k, true))
+      const body = kids.length === 1 && !nested ? kids[0] : `（${kids.join(join)}）`
+      return n.not ? `${t('非')}${body}` : body
+    }
+    const leaf = n as GtIdentItem
+    const text = describeItem(leaf, o)
+    return leaf.not ? `${t('非')} ${text}` : text
+  }
+  return nodes.map((n) => one(n, false)).join('，')
+}
+
+/**
  * 一个引用：内联 → `WBP_Shop（ShopId = 1001）`；命名引用 → 名字（objects 里有定义时后面带类，`shop · WBP_Shop`）；
  * `$var` 原样。容器条目带上所在（`WBP_BagSlot（ItemId = 1001）· 在 WBP_Bag 的 ItemList 里`）
  */
@@ -181,7 +203,7 @@ export function describeRef(ref: GtRefLike | unknown, o: DescribeOptions = {}): 
   const r = ref as GtRef
   const ident = Array.isArray(r.ident) ? r.ident.filter(isObj) : []
   let s = shortClass(r.class)
-  if (ident.length) s += `（${ident.map((x) => describeItem(x as GtIdentItem, o)).join('，')}）`
+  if (ident.length) s += `（${describeIdent(ident, o)}）`
   if (r.many === 'first') s += ` · ${t('第一个')}`
   else if (r.many === 'last') s += ` · ${t('最上层的')}`
   else if (r.many === 'nearest') s += ` · ${t('最近的')}`

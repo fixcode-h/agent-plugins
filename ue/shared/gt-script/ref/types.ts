@@ -32,7 +32,22 @@ export interface GtIdentItem {
   ignoreCase?: boolean
   /** array 的 count 比较用 */
   cmp?: string
+  /** 取反（GameTest 2.1.6，只在引用的 ident 里认） */
+  not?: boolean
 }
+
+/**
+ * 条件组（协议 3.5，GameTest 2.1.6）：all 都满足 / any 任一满足，二选一；项是判断项或子组（最多 4 层），not 取反。
+ * 工具函数在 ident-tree.ts
+ */
+export interface GtIdentGroup {
+  all?: GtIdentNode[]
+  any?: GtIdentNode[]
+  not?: boolean
+}
+
+/** ident 里的一项：判断项或条件组 */
+export type GtIdentNode = GtIdentItem | GtIdentGroup
 
 /** 命中多个时（协议第 1 节） */
 export type GtMany = 'error' | 'first' | 'last' | 'nearest'
@@ -53,7 +68,8 @@ export type GtInWord = 'screen' | 'world' | 'lua' | 'all'
 export interface GtRef {
   class: string
   in?: GtInWord | GtInWord[] | string | GtRefIn
-  ident?: GtIdentItem[]
+  /** 唯一标识：每项都要满足；每项是判断项或条件组（2.1.6） */
+  ident?: GtIdentNode[]
   many?: GtMany
   near?: unknown
   client?: string | number | null

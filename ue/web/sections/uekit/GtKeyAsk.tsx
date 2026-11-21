@@ -1,6 +1,7 @@
 import { Check, LayoutGrid, MousePointerClick, Pause, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { GtIdentItem, GtPropItem } from '../../../shared/gt-script/ref/types.ts'
+import { identLeaves, isIdentGroup } from '../../../shared/gt-script/ref/ident-tree.ts'
 import { op, useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../split.tsx'
@@ -50,8 +51,10 @@ export function GtKeyAsk({
         : undefined
   const props = useProps(project, args)
   // 默认选推荐的：录制器给的引用里已有的标识，没有就用属性树的 suggest
-  const [ident, setIdent] = useState<GtIdentItem[]>(() => ref?.ident ?? [])
+  const [ident, setIdent] = useState<GtIdentItem[]>(() => identLeaves(ref?.ident))
   const seeded = useRef(!!ref?.ident?.length)
+  // 录制按平铺的标识改写这一步（gt.record.key 换算成录制内部的按字段认），条件组带不过去：先说清楚，要保留就去选对象面板改
+  const grouped = !!ref?.ident?.some(isIdentGroup) || !!ref?.ident?.some((x) => !isIdentGroup(x) && x.not)
   useEffect(() => {
     if (seeded.current || !props.data?.suggest?.length) return
     seeded.current = true
@@ -184,6 +187,13 @@ export function GtKeyAsk({
                 </span>
               )}
             </div>
+            {grouped && (
+              <Note>
+                {t(
+                  '这一步的标识写了条件组（且 / 或、取反），这里只能存成平铺的「都满足」；要保留条件组就关掉，到选对象面板里改',
+                )}
+              </Note>
+            )}
             <IdentList value={ident} onChange={setIdent} items={itemsOf(props.data?.groups)} />
             <label className="ue:flex ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
               <input

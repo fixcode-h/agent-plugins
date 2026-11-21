@@ -1,6 +1,6 @@
 /**
  * 属性路径 v5（UEKit docs/game-test-ref.md 3.1）：从 `@`（对象自己）或 `@item`（列表条目的数据对象）出发，每段一个符号。
- * `/名字` 子控件或组件，`.名字` 反射属性，`.名字()` 无参取值函数，`#名字` Lua 字段，`:名字` 运行状态（只在最后），`[i]` / `["键"]` 下标。
+ * `/名字` 子控件或组件，`.名字` 反射属性，`.名字()` / `.名字(1, "a")` 取值函数（2.1.6 起可带常量参数），`#名字` Lua 字段，`:名字` 运行状态（只在最后），`[i]` / `["键"]` 下标。
  * 进了 Lua 之后（`#a.b`）只有 Lua 表：`.b` 是表字段（解析成 lua 段），不能再接 `.f()`、`:状态`、`#`（和 C++ 一致，报 path_syntax）。
  * 底层存盘和匹配用它；界面上只显示成小块（web/path-chips），不出现这些符号。
  */
@@ -9,7 +9,69 @@ export type GtPathSegKind = 'child' | 'prop' | 'fn' | 'lua' | 'state' | 'index'
 export interface GtPathSeg {
   kind: GtPathSegKind
   name: string
+  /** fn 段括号里的原文（GameTest 2.1.6）：逗号分开的常量，没写参数时不给 */
+  args?: string
 }
+
+/** 从 `(` 起找配对的 `)`，引号里的不算；找不到返回 -1（和 C++ FindArgsClose 一致） */
+function argsClose(s: string, open: number): number {
+  let quote = ''
+  for (let i = open + 1; i < s.length; i++) {
+    const c = s[i]
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = ''
+    } else if (c === '"' || c === "'") quote = c
+    else if (c === ')') return i
+  }
+  return -1
+}
+
+/**
+ * 函数参数的原文 → 值（GameTest 2.1.6）：只认常量（数字、"文字" / '文字'、true / false / null），逗号分开。
+ * 写法不对返回 `{ error }`（和 C++ FGameTestPropPath::ParseArgs 一致）
+ */
+export function parseFnArgs(text: string): unknown[] | { error: string } {
+  const t = text.trim()
+  if (!t) return []
+  const parts: string[] = []
+  let cur = ''
+  let quote = ''
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]
+    if (quote) {
+      cur += c
+      if (c === '\\' && i + 1 < t.length) cur += t[++i]
+      else if (c === quote) quote = ''
+    } else if (c === '"' || c === "'") {
+      quote = c
+      cur += c
+    } else if (c === ',') {
+      parts.push(cur.trim())
+      cur = ''
+    } else cur += c
+  }
+  if (quote) return { error: '函数参数的引号不配对' }
+  parts.push(cur.trim())
+  const out: unknown[] = []
+  for (const [i, p] of parts.entries()) {
+    const q = p[0]
+    if (p.length >= 2 && (q === '"' || q === "'") && p.endsWith(q))
+      out.push(p.slice(1, -1).replace(/\\(["'\\])/g, '$1'))
+    else if (p === 'true' || p === 'false') out.push(p === 'true')
+    else if (p === 'null') out.push(null)
+    else if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(p)) out.push(Number(p))
+    else
+      return { error: `第 ${i + 1} 个参数「${p.slice(0, 40)}」不认识：函数参数只能写数字、"文字"、true / false / null` }
+  }
+  return out
+}
+
+/** 值 → 参数原文（parseFnArgs 的反操作，字符串用双引号） */
+export const formatFnArgs = (values: unknown[]) =>
+  values
+    .map((v) => (typeof v === 'string' ? JSON.stringify(v) : v === null || v === undefined ? 'null' : String(v)))
+    .join(', ')
 
 export interface GtPathParsed {
   /** self = `@`，item = `@item` */
@@ -48,24 +110,40 @@ export function parsePropPath(text: string): GtPathParsed | { error: string; at:
     }
     if (!'/.#:'.includes(c)) return { error: `「${c}」不认识：每段以 / . # : 开头`, at: i }
     let j = i + 1
-    while (j < s.length && !'/.#:['.includes(s[j])) j++
-    let name = s.slice(i + 1, j)
+    // 函数段的括号（2.1.6 起可以带参数）：括号里的 . / : 、引号里的字符不算分段
+    let open = -1
+    let close = -1
+    while (j < s.length && !'/.#:['.includes(s[j])) {
+      if (s[j] === '(') {
+        open = j
+        close = argsClose(s, j)
+        if (close < 0) return { error: '函数的括号不配对', at: j }
+        j = close + 1
+        break
+      }
+      j++
+    }
+    let name = s.slice(i + 1, open >= 0 ? open : j)
     let kind: GtPathSegKind = c === '/' ? 'child' : c === '#' ? 'lua' : c === ':' ? 'state' : 'prop'
     if (segs.some((x) => x.kind === 'lua')) {
       // Lua 表里没有反射函数和算出状态；表字段用 . 接
       if (c === ':') return { error: 'Lua 字段后面不能接运行状态', at: i }
       if (c === '#') return { error: 'Lua 字段后面的表字段用 . 接', at: i }
-      if (name.endsWith('()')) return { error: 'Lua 字段后面不能调函数', at: i + 1 }
+      if (open >= 0) return { error: 'Lua 字段后面不能调函数', at: i + 1 }
       if (kind === 'prop') kind = 'lua'
     }
-    if (kind === 'prop' && name.endsWith('()')) {
+    let args: string | undefined
+    if (open >= 0) {
+      if (kind !== 'prop') return { error: '只有 .函数() 能写括号', at: open }
       kind = 'fn'
-      name = name.slice(0, -2)
+      args = s.slice(open + 1, close).trim()
+      const parsed = parseFnArgs(args)
+      if ('error' in parsed) return { error: parsed.error, at: open + 1 }
     }
     if (!IDENT.test(name)) return { error: `「${name}」不是合法的名字`, at: i + 1 }
     if (kind === 'child' && segs.some((x) => x.kind !== 'child')) return { error: '子控件要写在属性前面', at: i }
     if (segs.length && segs[segs.length - 1].kind === 'state') return { error: '运行状态只能在最后', at: i }
-    segs.push({ kind, name })
+    segs.push(args ? { kind, name, args } : { kind, name })
     i = j
   }
   return { root, segs }
@@ -83,7 +161,7 @@ export function formatPropPath(p: GtPathParsed): string {
     } else if (s.kind === 'index') out += /^\d+$/.test(s.name) ? `[${s.name}]` : `["${s.name}"]`
     else if (s.kind === 'child') out += `/${s.name}`
     else if (s.kind === 'state') out += `:${s.name}`
-    else if (s.kind === 'fn') out += `.${s.name}()`
+    else if (s.kind === 'fn') out += `.${s.name}(${s.args ?? ''})`
     else out += `.${s.name}`
   }
   return out

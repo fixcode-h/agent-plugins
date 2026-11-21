@@ -6,6 +6,7 @@ import { getAt, pathStr } from '../path.ts'
 import type { GtPath, GtScript, GtStep } from '../types.ts'
 import { walk, walkGuards } from '../walk.ts'
 import { allOps, COUNT_CMPS, implicitOp, opDef, opsFor } from './compare/index.ts'
+import { IDENT_GROUP_DEPTH } from './ident-tree.ts'
 import { oldPathHint, parsePropPath } from './path.ts'
 import {
   findRefCycle,
@@ -191,6 +192,36 @@ export function checkItem(
   }
 }
 
+/**
+ * ident 里的一项（协议 3.5，GameTest 2.1.6）：判断项，或 {all|any: [...], not?} 条件组（递归，最多 IDENT_GROUP_DEPTH 层）
+ */
+function checkIdentNode(c: Ctx, node: unknown, at: GtPath, owner: GtPath | undefined, ref: unknown, depth: number) {
+  if (!isObj(node))
+    return add(c, at, owner, 'bad_type', '判断项要写成 {prop, op, value}，条件组写 {all: [...]} 或 {any: [...]}')
+  if (node.not !== undefined && typeof node.not !== 'boolean')
+    add(c, [...at, 'not'], owner, 'bad_type', 'not 要写 true 或 false')
+  const hasAll = 'all' in node
+  const hasAny = 'any' in node
+  if (!hasAll && !hasAny) return checkItem(c, node, at, owner, ref)
+  if (hasAll && hasAny)
+    return add(
+      c,
+      at,
+      owner,
+      'bad_type',
+      '条件组只能写 all 或 any 其中一个：都满足写 all，任一满足写 any，混着来就套子组',
+    )
+  for (const k of Object.keys(node))
+    if (!['all', 'any', 'not'].includes(k))
+      add(c, [...at, k], owner, 'unknown_field', `条件组只认 all / any / not，不认 ${k}`)
+  if (depth >= IDENT_GROUP_DEPTH) return add(c, at, owner, 'bad_type', `条件组最多套 ${IDENT_GROUP_DEPTH} 层`)
+  const key = hasAll ? 'all' : 'any'
+  const list = node[key]
+  if (!Array.isArray(list) || !list.length)
+    return add(c, [...at, key], owner, 'bad_type', `${key} 要写成非空数组：[判断项或子组…]`)
+  list.forEach((k, i) => checkIdentNode(c, k, [...at, key, i], owner, ref, depth + 1))
+}
+
 /** 不知道 kind 时按 op 名字取形状：同名 op 在各个 kind 里的 value 形状一样 */
 function firstDef(name: string) {
   for (const k of [
@@ -300,7 +331,7 @@ export function checkRef(c: Ctx, ref: unknown, at: GtPath, owner: GtPath | undef
   if (Array.isArray(ident)) {
     if (ident.length && cls && looksLikeSubsystem(cls))
       add(c, [...at, 'ident'], owner, 'bad_type', '子系统是单例，ident 要留空', 'warning')
-    ident.forEach((it, i) => checkItem(c, it, [...at, 'ident', i], owner, ref))
+    ident.forEach((it, i) => checkIdentNode(c, it, [...at, 'ident', i], owner, ref, 0))
   }
   if (r.many !== undefined && !MANY.includes(String(r.many)))
     add(c, [...at, 'many'], owner, 'bad_type', `many 只能是 ${MANY.join(' / ')}`)

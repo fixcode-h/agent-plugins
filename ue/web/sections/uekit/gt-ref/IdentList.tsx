@@ -1,6 +1,11 @@
 import { Crosshair, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import {
+  formatFnArgs,
+  formatPropPath,
   lastSegOf,
+  parseFnArgs,
+  parsePropPath,
   propLabel,
   type GtIdentItem,
   type GtPropGroup,
@@ -26,6 +31,86 @@ export function textKeyFor(items: GtPropItem[] | undefined, prop: string): strin
   return typeof v === 'string' && v ? v : undefined
 }
 
+/** 去掉 key 这一项（可选字段不写 undefined） */
+function withoutKey<T extends object>(v: T, key: keyof T): T {
+  const out = { ...v }
+  delete out[key]
+  return out
+}
+
+/** 最后一段是函数时去掉参数的写法：`@.GetCount(3)` → `@.GetCount()`；不是函数返回 undefined */
+function fnHead(prop: string): string | undefined {
+  const p = parsePropPath(prop)
+  if ('error' in p || p.segs.at(-1)?.kind !== 'fn') return undefined
+  return formatPropPath({
+    ...p,
+    segs: p.segs.map((x, i) => (i === p.segs.length - 1 ? { kind: x.kind, name: x.name } : x)),
+  })
+}
+const sameFn = (a: string, b: string) => {
+  const x = fnHead(a)
+  return !!x && x === fnHead(b)
+}
+
+/**
+ * 带参数的取值函数（GameTest 2.1.6，`@.GetCount(1001)`）：每个参数一个输入框，改了写回路径。
+ * 参数名取 gt.props 给的参数表（去掉输出参数）；只能写常量，写法不对标红不写回
+ */
+function FnArgs({
+  value,
+  item,
+  onChange,
+}: {
+  value: GtIdentItem
+  item?: GtPropItem
+  onChange: (v: GtIdentItem) => void
+}) {
+  const { ui, cn } = h()
+  const p = parsePropPath(value.prop)
+  const last = 'error' in p ? undefined : p.segs.at(-1)
+  const parsed = last?.kind === 'fn' && last.args ? parseFnArgs(last.args) : undefined
+  const names = (item?.luaFn?.params ?? []).filter((x) => !x.startsWith('out ')).map((x) => x.split(' ').at(-1) ?? x)
+  const [draft, setDraft] = useState<Record<number, string>>({})
+  if ('error' in p || !last || !parsed || 'error' in parsed || !parsed.length) return null
+  const put = (i: number, text: string) => {
+    setDraft((d) => ({ ...d, [i]: text }))
+    const v = argValue(text)
+    if (v === undefined) return
+    const next = parsed.map((x, k) => (k === i ? v : x))
+    const segs = p.segs.map((x, k) => (k === p.segs.length - 1 ? { ...x, args: formatFnArgs(next) } : x))
+    onChange({ ...value, prop: formatPropPath({ ...p, segs }) })
+  }
+  return (
+    <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-1.5 ue:pl-5">
+      <span className="ue:text-caption ue:text-subtle">{t('参数')}</span>
+      {parsed.map((v, i) => {
+        const text = draft[i] ?? (typeof v === 'string' ? JSON.stringify(v) : String(v))
+        return (
+          <label key={i} className="ue:flex ue:items-center ue:gap-1">
+            <span className="ue:font-mono ue:text-caption ue:text-muted">{names[i] ?? `#${i + 1}`}</span>
+            <ui.Input
+              size="sm"
+              className={cn('ue:w-24 ue:font-mono', argValue(text) === undefined && 'ue:border-danger')}
+              value={text}
+              onChange={(e: { target: { value: string } }) => put(i, e.target.value)}
+            />
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+/** 一个参数框的文字 → 值：写成常量（数字、"文字"、true / false / null）才认；没加引号的当文字 */
+function argValue(text: string): unknown {
+  const s = text.trim()
+  const r = parseFnArgs(s)
+  if (!('error' in r) && r.length === 1) return r[0]
+  // 没加引号又不是数字、布尔：当成文字（人在框里打字不想还要打引号）
+  if (s && !/[,"']/.test(s)) return s
+  return undefined
+}
+
 /** 运行状态的中文名（PathChips 用） */
 export const stateName = (name: string) => propLabel(`@:${name}`, { t })
 
@@ -39,21 +124,53 @@ export function IdentRow({
   onRemove,
   items,
   actual,
+  canNot,
+  flash,
 }: {
   value: GtIdentItem
   onChange: (v: GtIdentItem) => void
   onRemove?: () => void
   items?: GtPropItem[]
   actual?: unknown
+  /** 唯一标识的条件组里（2.1.6）：前面多一个「非」开关 */
+  canNot?: boolean
+  /** 刚从准星加进来：闪一下，让人看到它落在哪个组 */
+  flash?: boolean
 }) {
-  const { ui } = h()
-  const item = items?.find((i) => i.prop === value.prop)
-  const kind = kindOfProp(value.prop, items)
-  const now = actual !== undefined ? actual : item?.value
+  const { ui, cn } = h()
+  // 带参数的函数：按去掉参数的写法也认得属性树里那一项（参数改过之后路径就和列表里的不一样了）
+  const item = items?.find((i) => i.prop === value.prop) ?? items?.find((i) => sameFn(i.prop, value.prop))
+  const kind = kindOfProp(value.prop, items) ?? item?.kind
+  const now = actual !== undefined ? actual : item?.prop === value.prop ? item?.value : undefined
+  // 刚加进来的那条滚到看得见的地方（目标组可能在栏的下面）
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (flash) box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [flash])
   return (
-    <div className="ue:flex ue:flex-col ue:gap-1.5 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:bg-card ue:p-2">
+    <div
+      ref={box}
+      className={cn(
+        'ue:flex ue:flex-col ue:gap-1.5 ue:rounded-(--c-row-radius) ue:border ue:bg-card ue:p-2 ue:transition-shadow',
+        flash ? 'ue:border-accent ue:ring-2 ue:ring-accent/40' : 'ue:border-line',
+      )}
+    >
       <div className="ue:flex ue:min-w-0 ue:items-start ue:gap-1.5">
-        <Crosshair className="ue:mt-1 ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-accent" />
+        {canNot ? (
+          <button
+            type="button"
+            title={value.not ? t('取反：不满足这条才算（点一下取消）') : t('点一下取反：不满足这条才算')}
+            onClick={() => onChange(value.not ? withoutKey(value, 'not') : { ...value, not: true })}
+            className={cn(
+              'ue:mt-px ue:h-5 ue:shrink-0 ue:rounded-sm ue:px-1 ue:text-caption',
+              value.not ? 'ue:bg-warning/15 ue:font-medium ue:text-warning' : 'ue:text-subtle ue:hover:bg-hover',
+            )}
+          >
+            {t('非')}
+          </button>
+        ) : (
+          <Crosshair className="ue:mt-1 ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-accent" />
+        )}
         <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-0.5">
           <PathChips path={value.prop} small stateName={stateName} />
           <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
@@ -75,6 +192,7 @@ export function IdentRow({
           </ui.IconButton>
         )}
       </div>
+      <FnArgs value={value} item={item} onChange={onChange} />
       <CompareEditor
         value={value}
         onChange={onChange}
