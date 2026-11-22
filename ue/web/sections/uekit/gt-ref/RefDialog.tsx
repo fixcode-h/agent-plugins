@@ -208,7 +208,7 @@ function RefDialogBody({
   }
 
   const structTitle =
-    p.kind === 'actor' || p.kind === 'component'
+    p.kind === 'actor' || p.kind === 'component' || p.comps
       ? t('组件树 · {c}', { c: p.shown ?? classShort(p.cls) })
       : p.kind === 'umg'
         ? t('Widget 树 · {c}', { c: p.shown ?? classShort(p.cls) })
@@ -333,6 +333,8 @@ function RefDialogBody({
             <StructurePane
               title={structHead}
               nodes={p.structure}
+              comps={p.comps}
+              owner={p.shown ?? classShort(p.cls)}
               kind={p.kind}
               selected={p.part}
               onSelect={(n) => p.setPart(n.part)}

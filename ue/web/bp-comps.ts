@@ -9,7 +9,11 @@ interface ScsNode {
 }
 
 /** 旧桥接猜不出 SCS 组件是不是场景组件（bp.outline 不给），按类名认常见的非场景组件，其余当场景组件 */
-const NOT_SCENE = /Movement|InputComponent|Perception|PawnNoise|^ActorComponent$/i
+export const NOT_SCENE = /Movement|InputComponent|Perception|PawnNoise|^ActorComponent$/i
+
+/** 取数的函数：资源页直接调桥接；GameTest 选对象弹窗传它自己的 rpc（演示和「刷新」按它换） */
+export type CompRpc = <T>(project: string, name: string, args: Record<string, unknown>) => Promise<T>
+const slowOp: CompRpc = (project, name, args) => op(project, name, args, undefined, 120000)
 
 /**
  * 蓝图资源的组件树：UELink 2.2.0 起 `components` 直接给全（C++ 组件 + 蓝图组件列表，带挂接关系，回包有 scs）。
@@ -17,9 +21,13 @@ const NOT_SCENE = /Movement|InputComponent|Perception|PawnNoise|^ActorComponent$
  * 没写父组件的照 UE 的规矩挂到根组件上（父蓝图加的组件和显式指定的父组件旧桥接拿不到，升级桥接后才准）。
  * 不是 Actor 蓝图（控件蓝图、函数库）时返回 null，资源页就不显示组件栏
  */
-export async function loadBlueprintComps(project: string, path: string): Promise<Comp[] | null> {
+export async function loadBlueprintComps(
+  project: string,
+  path: string,
+  call: CompRpc = slowOp,
+): Promise<Comp[] | null> {
   type R = { items: Comp[]; scs?: boolean }
-  const read = () => op<R>(project, 'components', { path }, undefined, 120000)
+  const read = () => call<R>(project, 'components', { path })
   let r: R
   try {
     r = await read()
@@ -28,16 +36,14 @@ export async function loadBlueprintComps(project: string, path: string): Promise
     // 和右边属性同时发出去时也会抢在属性加载它之前。先用属性读取（会加载，筛一个不存在的名字，几乎不回内容）把资源加载进来再读一次；
     // 再失败才算不是 Actor 蓝图（控件蓝图、函数库）
     try {
-      await op(project, 'props', { path, filter: '__agent_panel_load__', maxChars: 1 }, undefined, 120000)
+      await call(project, 'props', { path, filter: '__agent_panel_load__', maxChars: 1 })
       r = await read()
     } catch {
       return null
     }
   }
   if (r.scs) return r.items
-  const outline = await op<{ components?: ScsNode[] }>(project, 'bp.outline', { path }, undefined, 120000).catch(
-    () => null,
-  )
+  const outline = await call<{ components?: ScsNode[] }>(project, 'bp.outline', { path }).catch(() => null)
   const items = [...r.items]
   let root = items.find((c) => c.root)?.path ?? ''
   const add = (n: ScsNode, parent: string) => {
