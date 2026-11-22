@@ -1,4 +1,5 @@
 import { Check, History, ListPlus, MessageSquarePlus, Package, Play, RotateCcw, Star, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../server/lua-gm/types.ts'
 import type { GmRun } from '../../../server/store.ts'
 import type { GmStore } from '../../../shared/gm/schema.ts'
@@ -30,6 +31,7 @@ export function GmDetail({
   onMacro,
   toChat,
   onEditBinding,
+  presets,
 }: {
   entry: GmEntry
   /** 归在哪个模块（GM 分类）；引擎的没有 */
@@ -50,6 +52,8 @@ export function GmDetail({
   onMacro: () => void
   toChat?: (text: string) => void
   onEditBinding: (p: GmParam, current?: LuaGmBinding) => void
+  /** 参数预设条（ArgPresets），有参数时才给 */
+  presets?: ReactNode
 }) {
   const { ui, cn } = h()
   const pv = preview(entry, args)
@@ -88,6 +92,7 @@ export function GmDetail({
             }}
           >
             {entry.desc && <p className="ue:text-body ue:text-muted">{entry.desc}</p>}
+            {presets}
             {entry.params.map((p, i) => (
               <ParamField
                 key={p.name}

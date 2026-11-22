@@ -69,6 +69,9 @@ export interface MacroStepResult {
   error?: string
 }
 
-/** 执行一个宏（服务端按步骤跑，任何一步失败就停）：宏编辑页的「执行全部」和左栏右键「执行」都走这里 */
+/** 执行一个宏（服务端按步骤跑，某步失败按宏的 onFail 停下或跳过）：宏编辑页的「执行全部」和左栏右键「执行」都走这里 */
 export const runMacro = (projectId: string, id: string, target?: Target) =>
-  ppost<{ ok: boolean; failedAt?: number; steps: MacroStepResult[] }>(projectId, 'macro', { id, target })
+  ppost<{ ok: boolean; failedAt?: number; failed?: number[]; steps: MacroStepResult[] }>(projectId, 'macro', {
+    id,
+    target,
+  })

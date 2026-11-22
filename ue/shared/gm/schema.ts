@@ -69,9 +69,11 @@ export const GmCustom = z.object({
 export type GmCustom = z.infer<typeof GmCustom>
 export type GmCustomInput = z.input<typeof GmCustom>
 
-/** 宏的一步：C++ GM（gm）、Lua GM（lua）、控制台命令（console）、自定义 GM（custom，args 按参数名） */
+/** 宏的一步：C++ GM（gm）、Lua GM（lua）、控制台命令（console）、自定义 GM（custom，args 按参数名）、等几秒（wait，GM 页梳理 F5） */
 export const GmMacroStep = z.object({
   gm: z.string().optional(),
+  /** 等这么多秒再做下一步（等加载、等动画）；最多 600 秒 */
+  wait: z.number().min(0).max(600).optional(),
   lua: z.string().optional(),
   console: z.string().optional(),
   custom: z.string().optional(),
@@ -79,7 +81,13 @@ export const GmMacroStep = z.object({
 })
 export type GmMacroStep = z.infer<typeof GmMacroStep>
 
-export const GmMacro = z.object({ id: z.string(), name: z.string(), steps: z.array(GmMacroStep) })
+export const GmMacro = z.object({
+  id: z.string(),
+  name: z.string(),
+  steps: z.array(GmMacroStep),
+  /** 某步失败时：停下（默认）或跳过接着做后面的 */
+  onFail: z.enum(['stop', 'skip']).optional(),
+})
 export type GmMacro = z.infer<typeof GmMacro>
 
 /**
@@ -107,6 +115,13 @@ export const GmFav = z.object({
 })
 export type GmFav = z.infer<typeof GmFav>
 
+/** 一组起了名字的参数（参数预设）：扫描出来的 GM 按顺序，自定义 GM 按参数名 */
+export const GmArgPreset = z.object({
+  name: z.string().min(1),
+  args: z.union([z.array(z.string()), z.record(z.string(), z.unknown())]),
+})
+export type GmArgPreset = z.infer<typeof GmArgPreset>
+
 /** GM 页左栏的分类（常用 · GM · 引擎命令 · 宏 · 对象调用） */
 export const GM_CATS = ['common', 'gm', 'engine', 'macro', 'objcall'] as const
 export type GmCat = (typeof GM_CATS)[number]
@@ -128,6 +143,8 @@ export const GmStore = z.object({
   /** 常用里的分组（含空的；有条目的分组按条目的 group 推出来） */
   commonGroups: z.array(z.string()).default([]),
   macros: z.array(GmMacro).default([]),
+  /** 参数预设（GM 页梳理 F7）：条目键 → 起了名字的几组参数，详情表单上方一点就填好 */
+  argPresets: z.record(z.string(), z.array(GmArgPreset)).default({}),
   /** 旧的 C++ GM 参数绑 DataTable：键 <GM 名>.<参数名>，值是 DataTable 路径 */
   bindings: z.record(z.string(), z.string()).optional(),
   /** C++ GM 参数关联表格的列：键 <GM 名>.<参数名> */

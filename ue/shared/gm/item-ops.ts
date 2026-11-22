@@ -1,3 +1,4 @@
+import { movePresets } from './presets.ts'
 import { newCustomId } from './custom.ts'
 import { customKey, type GmMacro, type GmStore } from './schema.ts'
 
@@ -49,7 +50,7 @@ export function deleteCustom(g: GmStore, id: string): GmStore {
   const key = customKey(id)
   const moduleOf = Object.fromEntries(Object.entries(g.moduleOf).filter(([k]) => k !== key))
   return {
-    ...g,
+    ...movePresets(g, key),
     custom: g.custom.filter((c) => c.id !== id),
     moduleOf,
     common: g.common.filter((f) => f.key !== key),

@@ -1,8 +1,8 @@
-import { Plus, X } from 'lucide-react'
-import type { Prop } from '../../../details/model.ts'
-import { Details } from '../../../details/Details.tsx'
-import type { DetailsApi, Node } from '../../../details/rows.tsx'
-import { t } from '../../../host.ts'
+import { Pin, Plus, X } from 'lucide-react'
+import type { Prop } from '../details/model.ts'
+import { Details } from '../details/Details.tsx'
+import type { DetailsApi, Node } from '../details/rows.tsx'
+import { h, t } from '../host.ts'
 
 /** 中栏选中的一个变量（UE 属性或 Lua 字段）：右栏「改变量」按它抓取值、写回 */
 export interface VarSel {
@@ -60,6 +60,8 @@ export function VarList({
   picking,
   picked,
   onTogglePick,
+  pinned,
+  onTogglePin,
 }: {
   list: Prop[]
   lua: boolean
@@ -69,7 +71,11 @@ export function VarList({
   picking: boolean
   picked: string[]
   onTogglePick: (prop: string) => void
+  /** 钉住的属性（F4）：行尾图钉，钉住的值在头卡下面实时显示；不给就没有图钉 */
+  pinned?: string[]
+  onTogglePin?: (prop: string) => void
 }) {
+  const { cn } = h()
   const api: Omit<DetailsApi, 'q'> = {
     busy: '',
     version: 0,
@@ -101,7 +107,31 @@ export function VarList({
             </button>
           )
         }
-      : undefined,
+      : onTogglePin
+        ? (n, depth) => {
+            if (depth > 0) return null
+            const on = !!pinned?.includes(n.path)
+            return (
+              <button
+                type="button"
+                title={on ? t('取消钉住') : t('钉住：在头卡下面实时看它的值')}
+                aria-label={on ? t('取消钉住') : t('钉住')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin(n.path)
+                }}
+                className={cn(
+                  'ue:grid ue:h-6 ue:w-6 ue:cursor-pointer ue:place-items-center ue:rounded-md ue:hover:bg-hover',
+                  on
+                    ? 'ue:text-accent-text'
+                    : 'ue:text-subtle ue:opacity-0 ue:group-hover:opacity-100 ue:hover:text-fg',
+                )}
+              >
+                <Pin className={cn('ue:h-3.5 ue:w-3.5', on && 'ue:fill-current')} />
+              </button>
+            )
+          }
+        : undefined,
   }
   return <Details props={list} api={api} query={q} flatSingle={lua} />
 }

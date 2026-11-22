@@ -1,9 +1,9 @@
 import { Check, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { isObjArg } from '../../../../shared/gm/custom.ts'
-import { h, t } from '../../../host.ts'
-import type { CallOut } from './run-custom.ts'
-import { ValueBrief, ValueTree } from '../../uekit/value/ValueTree.tsx'
+import { isObjArg } from '../../shared/gm/custom.ts'
+import { h, t } from '../host.ts'
+import type { CallOut } from '../sections/gm/custom/run-custom.ts'
+import { ValueBrief, ValueTree } from '../sections/uekit/value/ValueTree.tsx'
 
 const fmt = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
 

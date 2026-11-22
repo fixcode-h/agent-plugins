@@ -1,13 +1,16 @@
 import { useRef } from 'react'
 import type { LuaGmBinding } from '../../../../server/lua-gm/types.ts'
+import { useConnState } from '../../../conn/ConnPill.tsx'
 import { useUe } from '../../../ctx.tsx'
 import { t } from '../../../host.ts'
 import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../../split.tsx'
 import type { GmEntry, GmParam } from '../data.ts'
 import type { GmData } from '../use-gm.ts'
 import { CallPane } from './CallPane.tsx'
+import { InstancePick } from '../../../obj-kit/InstancePick.tsx'
+import { Pins } from '../../../obj-kit/Pins.tsx'
 import { ObjHead } from './ObjHead.tsx'
-import { MemberPane } from './MemberPane.tsx'
+import { MemberPane } from '../../../obj-kit/MemberPane.tsx'
 import type { ObjCallState } from './use-objcall-state.tsx'
 
 /**
@@ -33,6 +36,9 @@ export function ObjCall({
   const midRef = useRef<HTMLElement>(null)
   const b = s.bench
   const obj = s.obj
+  // 编辑器连着、游戏没开（F3）：成员按类列出来能先填参数，调用和改值要等开 PIE
+  const conn = useConnState().state
+  const why = canRun || (live && conn === 'editor' ? t('游戏没在运行：先开 PIE（右上角）再调，参数可以先填好') : '')
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       {!obj ? (
@@ -57,6 +63,14 @@ export function ObjCall({
             onCopy={() => void s.listProps.onCopy(obj)}
             onDelete={() => void s.listProps.onDelete(obj)}
           />
+          {obj.ref && live && <InstancePick hit={b.hits[obj.name]} only={b.only} onOnly={b.setOnly} />}
+          <Pins
+            project={project.id}
+            game={live && conn === 'game'}
+            obj={b.target ?? obj}
+            pins={b.pins}
+            onUnpin={b.togglePin}
+          />
           <div className={SPLIT_ROW}>
             <section
               ref={midRef}
@@ -79,12 +93,14 @@ export function ObjCall({
                 varSel={b.mode === 'set' ? b.varSel?.prop : undefined}
                 onVar={b.pickVar}
                 rev={b.varRev}
+                pinned={b.pins}
+                onTogglePin={b.togglePin}
               />
             </section>
             <SplitHandle pane={mid} paneRef={midRef} reserve={() => 360} />
             <section className={`ue:flex ue:min-h-0 ue:flex-col ${PANE_FILL}`}>
               <CallPane
-                obj={obj}
+                obj={b.target ?? obj}
                 hit={b.hits[obj.name]}
                 mode={b.mode}
                 varSel={b.varSel}
@@ -100,7 +116,7 @@ export function ObjCall({
                 hits={b.hits}
                 live={live}
                 running={b.running}
-                canRun={canRun}
+                canRun={why}
                 out={b.out}
                 sentArgs={b.sentArgs}
                 onRun={b.run}

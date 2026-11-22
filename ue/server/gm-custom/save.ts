@@ -5,6 +5,7 @@ import { AGENT_FOLDER, normFolder } from '../../shared/gm/obj-folders.ts'
 import { GmCustom, GmObject, type GmCustomObj, type GmStore } from '../../shared/gm/schema.ts'
 import { runOp, type OpCtx } from '../ops.ts'
 import { gmFile, readGm, writeGm } from '../store.ts'
+import { saveMacro } from './save-macro.ts'
 
 /**
  * ue_gm action=save（规格第 9 节）：kind=gm 存一条自定义 GM，kind=object 存进对象列表；写法同 gm.json。
@@ -129,7 +130,7 @@ export async function saveGmDef(ctx: OpCtx, a: Obj) {
   const def = a.def && typeof a.def === 'object' && !Array.isArray(a.def) ? (a.def as Obj) : undefined
   if (!def)
     throw new Error(
-      'save 要写 def：kind=gm 写一条自定义 GM（写法同 gm.json 的 custom），kind=object 写 {name, ref} 或 {name, src}',
+      'save 要写 def：kind=gm 写一条自定义 GM（写法同 gm.json 的 custom），kind=object 写 {name, ref} 或 {name, src}，kind=macro 写 {name, steps, onFail}',
     )
   const g = await readGm(ctx.project)
   const agent = ctx.actor.kind !== 'user'
@@ -139,7 +140,9 @@ export async function saveGmDef(ctx: OpCtx, a: Obj) {
       ? await saveObject(ctx, g, def, dryRun, agent)
       : a.kind === 'gm'
         ? await saveCustom(ctx, g, def, dryRun, agent)
-        : undefined
-  if (!r) throw new Error('save 的 kind 写 gm（自定义 GM）或 object（对象列表）')
+        : a.kind === 'macro'
+          ? await saveMacro(ctx, g, def, dryRun)
+          : undefined
+  if (!r) throw new Error('save 的 kind 写 gm（自定义 GM）、object（对象列表）或 macro（宏）')
   return { ...r, file: gmFile(ctx.project) }
 }

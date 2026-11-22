@@ -98,13 +98,13 @@ const DEFS = [
   ),
   tool(
     'ue_gm',
-    'GM：action=list 列出 GM（参数类型、说明、所在模块），filter 按名字前缀筛。source 不写列项目的 C++（Exec 函数、UAgentPanelGMLibrary，要 UE 在运行）、Lua（扫描脚本列出，UE 没开也能列；参数的 table 是关联的配置表列，填值前可用 table.query 查）和自定义 GM；source=lua 只列 Lua 并重扫；source=engine 列引擎自带的；source=custom 列自定义 GM、对象列表和模块名。' +
-      'action=run 执行 name：args 按顺序给参数；Lua 写 source=lua，C++ 同名多处用 owner 指定类；source=custom 执行自定义 GM，args 写 {参数名: 值}，只能改它的 editable。action=macro 按名字执行存的宏。' +
-      'action=save 存进团队共用的 gm.json（同名就改）：kind=gm 时 def 写一条自定义 GM {name, module（模块名，没有就新建）, obj, objects: {对象名: {ref: 匹配规则} 或 {src: "@pawn"}}, function, args（对象参数写 {"$obj": 对象名}）, editable, many: error/first/each, kind: call/get, props（get 时读的属性路径）, note}；kind=object 时 def 写对象列表的一项 {name, ref} 或 {name, src}，folder 写放进哪个文件夹（a/b 分层，没有就新建；不写时新对象放进 Agent）。存前用 gt.validate 校验，有错不存；dryRun=true 只看结果。action=remove 删 kind + name，返回里列出还在用它的宏。',
+    'GM：action=list 列出 GM（参数类型、说明、所在模块），filter 按名字前缀筛。source 不写列项目的 C++（Exec 函数、UAgentPanelGMLibrary，要 UE 在运行）、Lua（扫描脚本列出，UE 没开也能列；参数的 table 是关联的配置表列，填值前可用 table.query 查）和自定义 GM；source=lua 只列 Lua 并重扫；source=engine 列引擎自带的；source=custom 列自定义 GM、对象列表和模块名；source=macro 列存的宏和步骤；source=recent 列用户在 GM 页最近执行的 20 条（参数、成功没有、输出）。' +
+      'action=run 执行 name：args 按顺序给参数；Lua 写 source=lua，C++ 同名多处用 owner 指定类；source=custom 执行自定义 GM，args 写 {参数名: 值}，只能改它的 editable。action=macro 按名字执行存的宏（步骤可以是 {wait: 秒}；宏的 onFail=skip 时失败的步跳过接着做）。' +
+      'action=save 存进团队共用的 gm.json（同名就改）：kind=gm 时 def 写一条自定义 GM {name, module（模块名，没有就新建）, obj, objects: {对象名: {ref: 匹配规则} 或 {src: "@pawn"}}, function, args（对象参数写 {"$obj": 对象名}）, editable, many: error/first/each, kind: call/get, props（get 时读的属性路径）, note}；kind=object 时 def 写对象列表的一项 {name, ref} 或 {name, src}，folder 写放进哪个文件夹（a/b 分层，没有就新建；不写时新对象放进 Agent）；kind=macro 时 def 写 {name, steps: [{gm|lua|console|custom: 名字, args} 或 {wait: 秒}], onFail: stop/skip}。存前用 gt.validate 校验，有错不存；dryRun=true 只看结果。action=remove 删 kind + name，返回里列出还在用它的宏。',
     {
       action: { type: 'string', enum: ['list', 'run', 'macro', 'save', 'remove'] },
-      source: { type: 'string', enum: ['cpp', 'lua', 'custom', 'engine'] },
-      kind: { type: 'string', enum: ['gm', 'object'] },
+      source: { type: 'string', enum: ['cpp', 'lua', 'custom', 'engine', 'macro', 'recent'] },
+      kind: { type: 'string', enum: ['gm', 'object', 'macro'] },
       name: { type: 'string' },
       owner: { type: 'string' },
       args: { type: ['array', 'object'] },

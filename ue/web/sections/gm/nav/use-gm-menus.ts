@@ -1,5 +1,6 @@
 import {
   ArrowDown,
+  Braces,
   ArrowUp,
   Check,
   Copy,
@@ -19,6 +20,7 @@ import type { MouseEvent } from 'react'
 import { inCommon, toggleCommon } from '../../../../shared/gm/common.ts'
 import { copyCustom, deleteCustom, macrosUsing, renameCustom } from '../../../../shared/gm/item-ops.ts'
 import { materialize, placeOf } from '../../../../shared/gm/modules.ts'
+import { shareCustom, shareModule } from '../../../../shared/gm/share.ts'
 import type { GmCat, GmCustom, GmStore } from '../../../../shared/gm/schema.ts'
 import type { useAsk } from '../../../ask.tsx'
 import { h, t } from '../../../host.ts'
@@ -110,6 +112,12 @@ export function useGmMenus(ctx: GmMenuCtx) {
           ctx.objcall.newIn(id)
         },
       },
+      {
+        label: t('复制为 JSON'),
+        icon: Braces,
+        hint: t('带上里面的自定义 GM'),
+        onClick: () => copyText(shareModule(d.gm, m)),
+      },
       'sep',
       {
         label: t('改名'),
@@ -181,6 +189,7 @@ export function useGmMenus(ctx: GmMenuCtx) {
         ctx.open({ kind: 'gm', key: `custom:${r.id}` }, 'gm')
       },
     },
+    { label: t('复制为 JSON'), icon: Braces, onClick: () => copyText(shareCustom(d.gm, c.id, modsOf(d)) ?? '') },
   ]
 
   const deleteItem = (c: GmCustom): MenuItem => ({

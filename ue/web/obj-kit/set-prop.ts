@@ -1,8 +1,8 @@
-import { gtNames, objArg, objValue, stepOk } from '../../../../shared/gm/custom.ts'
-import type { GmObject } from '../../../../shared/gm/schema.ts'
-import { op } from '../../../api.ts'
-import { runCall } from '../custom/run-custom.ts'
-import type { Target } from '../../../../server/types.ts'
+import { gtNames, objArg, objValue, stepOk } from '../../shared/gm/custom.ts'
+import type { GmObject } from '../../shared/gm/schema.ts'
+import { op } from '../api.ts'
+import { runCall } from '../sections/gm/custom/run-custom.ts'
+import type { Target } from '../../server/types.ts'
 
 /**
  * 对象调用中栏直接改值（用户 2026-11-22：Lua 变量、属性都能直接改）：跑一步 GameTest 的 obj.set，
