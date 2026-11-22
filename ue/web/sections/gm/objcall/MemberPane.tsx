@@ -1,5 +1,5 @@
 import { CodeXml, Copy, Play, SquareFunction } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
 import type { Prop } from '../../../details/model.ts'
 import { h, t } from '../../../host.ts'
@@ -24,6 +24,8 @@ export function MemberPane({
   onTab,
   fn,
   onFn,
+  needSig,
+  onSig,
   picking,
   picked,
   onTogglePick,
@@ -38,6 +40,9 @@ export function MemberPane({
   onTab: (t: MemberTab) => void
   fn?: string
   onFn: (f: FnInfo) => void
+  /** 选中的函数只有名字（打开自定义 GM、从调用记录填回）：列出函数后按名字找到它补签名（B5） */
+  needSig?: boolean
+  onSig?: (f: FnInfo) => void
   /** 正在「取对象」：属性行尾出 ＋ / × */
   picking: boolean
   picked: string[]
@@ -49,7 +54,15 @@ export function MemberPane({
   rev?: number
 }) {
   const { ui, cn } = h()
-  const [q, setQ] = useState('')
+  // 搜索按页签各记各的，换对象清空（L8：以前共用一个，切页签像是列表空了）
+  const [qs, setQs] = useState<Partial<Record<MemberTab, string>>>({})
+  const [qObj, setQObj] = useState(obj.name)
+  if (qObj !== obj.name) {
+    setQObj(obj.name)
+    setQs({})
+  }
+  const q = qs[tab] ?? ''
+  const setQ = (v: string) => setQs((m) => ({ ...m, [tab]: v }))
   const vars = useVars(project, scopeOf(obj), live)
   const props = useProps(project, obj.ref && live ? { target: { obj: obj.ref as { class: string } } } : undefined, rev)
   const groups = vars.data?.groups ?? []
@@ -74,6 +87,13 @@ export function MemberPane({
     [luaFields, obj.ref],
   )
   const luaVars = luaProps.length ? luaProps : luaDecl
+  useEffect(() => {
+    if (!needSig || !fn) return
+    const f = [...fns, ...luaFns].find((x) => x.name === fn)
+    if (f) onSig?.(f)
+    // 只在函数列表到了、或换了要补的函数时找一次
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [needSig, fn, fns, luaFns])
   const varList = (list: Prop[], lua: boolean) => (
     <VarList
       list={list}
@@ -133,7 +153,7 @@ export function MemberPane({
     </div>
   )
   const note = (s: string) => <p className="ue:p-3 ue:text-footnote ue:text-subtle">{s}</p>
-  const offline = !live ? note(t('游戏没在运行：连上编辑器、开着 PIE 才列得出这个对象的成员')) : null
+  const offline = !live ? note(t('UE 没连上：连上编辑器才列得出这个对象的成员，值要游戏在跑才读得到')) : null
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-2">
@@ -179,7 +199,10 @@ export function MemberPane({
                 )}
               </>
             )}
-            {!luaFns.length && !luaVars.length && note(t('这个对象没绑 Lua，或 Lua 文件里没有声明'))}
+            {/* B7：离线时读不到不等于没绑 Lua，先说是没连上 */}
+            {!luaFns.length &&
+              !luaVars.length &&
+              (offline ?? note(vars.loading ? t('读取中…') : t('这个对象没绑 Lua，或 Lua 文件里没有声明')))}
           </>
         )}
         {(tab === 'props' || tab === 'states') &&

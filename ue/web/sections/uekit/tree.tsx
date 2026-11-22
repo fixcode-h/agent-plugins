@@ -50,7 +50,7 @@ function dirPaths<T>(nodes: Node<T>[], out: string[] = []) {
   return out
 }
 
-function build<T>(items: TreeLeaf<T>[], folders: string[] = []): Node<T>[] {
+function build<T>(items: TreeLeaf<T>[], folders: string[] = [], keepOrder = false): Node<T>[] {
   const root: Node<T> = { path: '', name: '', children: [], leaves: [] }
   const dirs = new Map<string, Node<T>>([['', root]])
   // 磁盘上的空文件夹（GameTest 场景库新建的）：没有叶子也要有一行，先把这些目录建出来
@@ -85,9 +85,13 @@ function build<T>(items: TreeLeaf<T>[], folders: string[] = []): Node<T>[] {
     }
     parent.children.push({ path: it.path, name: parts.at(-1) ?? it.path, leaf: it.data, children: [], leaves: [] })
   }
-  // 文件夹在前，各自按名字排
+  // 文件夹在前，各自按名字排；keepOrder 时叶子按传进来的顺序（GM 页「常用」由用户排）
   const sort = (n: Node<T>) => {
-    n.children.sort((a, b) => Number(!!a.leaf) - Number(!!b.leaf) || a.name.localeCompare(b.name))
+    n.children.sort(
+      (a, b) =>
+        Number(a.leaf !== undefined) - Number(b.leaf !== undefined) ||
+        (keepOrder && a.leaf !== undefined ? 0 : a.name.localeCompare(b.name)),
+    )
     n.children.forEach(sort)
   }
   sort(root)
@@ -103,6 +107,8 @@ export function FileTree<T>({
   leafRight,
   leafSub,
   leafDim,
+  leafLabel,
+  keepOrder,
   folderRight,
   onLeafMenu,
   onFolderMenu,
@@ -129,6 +135,10 @@ export function FileTree<T>({
   leafSub?: (d: T) => ReactNode
   /** 变灰的行（没有配置的资产） */
   leafDim?: (d: T) => boolean
+  /** 叶子显示的名字（不写就是路径最后一段）：路径里放的是编号这类不给人看的键时用 */
+  leafLabel?: (d: T) => ReactNode
+  /** 叶子不按名字排，按 items 的顺序 */
+  keepOrder?: boolean
   folderRight?: (leaves: T[]) => ReactNode
   /** 右键一行（GameTest 场景的运行、改名、删除……）：文件夹给 path 和下面的全部叶子 */
   onLeafMenu?: (e: MouseEvent, path: string, data: T) => void
@@ -158,7 +168,7 @@ export function FileTree<T>({
   empty: ReactNode
 }) {
   const { cn } = h()
-  const tree = useMemo(() => build(items, folders), [items, folders])
+  const tree = useMemo(() => build(items, folders, keepOrder), [items, folders, keepOrder])
   const [opened, setOpened] = useState<Set<string>>(() => new Set())
   const dnd = useTreeDnd(onMove, (dir) => setOpened((s) => (s.has(dir) ? s : new Set(s).add(dir))), dragData)
   // 只有一个顶层目录时展开它；选中项的上级目录跟着展开（从别处跳过来时看得到它在哪）
@@ -255,7 +265,9 @@ export function FileTree<T>({
               leaf !== undefined && leafDim?.(leaf) && 'ue:opacity-50',
             )}
           />
-          <span className="ue:min-w-0 ue:flex-1 ue:truncate">{custom?.label ?? n.name}</span>
+          <span className="ue:min-w-0 ue:flex-1 ue:truncate">
+            {custom?.label ?? (leaf !== undefined && leafLabel ? leafLabel(leaf) : n.name)}
+          </span>
           <span className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:text-caption ue:font-normal ue:text-subtle ue:tabular-nums">
             {leaf !== undefined ? leafRight?.(leaf) : folderRight ? folderRight(n.leaves) : n.leaves.length}
           </span>

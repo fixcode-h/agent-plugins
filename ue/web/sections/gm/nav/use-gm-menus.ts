@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { MouseEvent } from 'react'
-import { hasFav, toggleFav } from '../../../../shared/gm/favs.ts'
+import { inCommon, toggleCommon } from '../../../../shared/gm/common.ts'
 import { copyCustom, deleteCustom, macrosUsing, renameCustom } from '../../../../shared/gm/item-ops.ts'
 import { materialize, placeOf } from '../../../../shared/gm/modules.ts'
 import type { GmCat, GmCustom, GmStore } from '../../../../shared/gm/schema.ts'
@@ -42,7 +42,7 @@ export interface GmMenuCtx {
   run: GmRunState
   /** 这条 GM 现在执行不了的原因（UE 没开、自定义 GM 要 GameTest）；空串是能执行 */
   canRun: (e: GmEntry) => string
-  /** 切到分类 c 并选中 p（带参数时把参数填回去） */
+  /** 切到分类 c 并选中 p（带参数时把参数填回去）；从常用打开时 c 是 common */
   open: (p: GmPick, c: GmCat) => void
   addToMacro: (e: GmEntry) => void
   editRule: (c: GmCustom) => void
@@ -67,8 +67,8 @@ export function commandOf(e: GmEntry, args: string[]) {
 
 /**
  * 左栏的右键菜单和模块操作（规格第 6 节）：模块 改名 / 上移 / 下移 / 删除（只能删空的）/ 在这个模块里新建 GM；
- * GM 打开 / 执行 / 加到宏 / 复制命令 / 移到模块… / 收藏，自定义 GM 再加改匹配规则、重命名、复制一份、删除。
- * 宏、收藏、最近执行的菜单在 item-menus.ts。都是改 gm.json 再整份存回去（服务端校验后推 gm 事件，别的窗口跟着刷新）
+ * GM 打开 / 执行 / 加到宏 / 复制命令 / 移到模块… / 加到常用，自定义 GM 再加改匹配规则、重命名、复制一份、删除。
+ * 宏、常用、最近执行的菜单在 item-menus.ts。都是改 gm.json 再整份存回去（服务端校验后推 gm 事件，别的窗口跟着刷新）
  */
 export function useGmMenus(ctx: GmMenuCtx) {
   const { d, ask } = ctx
@@ -193,7 +193,7 @@ export function useGmMenus(ctx: GmMenuCtx) {
         title: t('删除自定义 GM「{n}」？', { n: c.name }),
         message: used.length
           ? t('宏 {m} 里有调它的步骤，这些步骤会一起删掉。', { m: used.join('、') })
-          : t('删了收不回；收藏里的这条也一起去掉。'),
+          : t('删了收不回；常用里的这条也一起去掉。'),
         okText: t('删除'),
         danger: true,
       })
@@ -206,7 +206,7 @@ export function useGmMenus(ctx: GmMenuCtx) {
   /** GM 的右键（GM 分类和引擎分类共用）：引擎分类没有模块，自定义 GM 多几项 */
   const onGmMenu = (e: MouseEvent, entry: GmEntry) => {
     const cat = catOf(entry)
-    const fav = hasFav(d.gm, cat, { key: entry.key })
+    const fav = inCommon(d.gm, { key: entry.key })
     const why = ctx.canRun(entry)
     const pick: GmPick = { kind: 'gm', key: entry.key }
     openMenu(e, [
@@ -232,9 +232,9 @@ export function useGmMenus(ctx: GmMenuCtx) {
       ...(cat === 'gm' ? moveItems(entry) : []),
       'sep',
       {
-        label: fav ? t('取消收藏') : t('收藏'),
+        label: fav ? t('移出常用') : t('加到常用'),
         icon: fav ? StarOff : Star,
-        onClick: () => void save(toggleFav(d.gm, cat, { key: entry.key })),
+        onClick: () => void save(toggleCommon(d.gm, { key: entry.key })),
       },
       entry.custom && 'sep',
       entry.custom && deleteItem(entry.custom),

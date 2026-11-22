@@ -4,7 +4,7 @@ import type { LuaGmConfig, LuaGmScan } from '../../../server/lua-gm/types.ts'
 import type { GmRun, LocalState } from '../../../server/store.ts'
 import type { GmStore } from '../../../server/types.ts'
 import type { TableBase } from '../../../server/gm-custom/table-base.ts'
-import { consoleFavs } from '../../../shared/gm/favs.ts'
+import { consoleFavs } from '../../../shared/gm/common.ts'
 import { emptyGm } from '../../../shared/gm/schema.ts'
 import { op, pget, ppost, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -48,7 +48,7 @@ registerJumpSource({
 })
 
 /**
- * GM 页的数据：C++ GM（要 UE 在运行）、Lua GM（扫描结果，UE 没开也有）、gm.json v2（模块、自定义 GM、对象列表、收藏、宏、表格关联）、
+ * GM 页的数据：C++ GM（要 UE 在运行）、Lua GM（扫描结果，UE 没开也有）、gm.json v2（模块、自定义 GM、对象列表、常用、宏、表格关联）、
  * 本机的最近执行和控制台历史。Lua 扫描结果变了服务端推 lua-gm 事件、gm.json 变了（含 Agent 改的、别人提交拉下来的）推 gm 事件，
  * 这里收到再取，不轮询
  */
@@ -94,7 +94,7 @@ export function useGm(nonce: number) {
   const gm = store.data ?? EMPTY
   const consoleCmds = useMemo(
     () => [
-      ...consoleFavs(gm).map((cmd) => ({ cmd, group: t('收藏的命令') })),
+      ...consoleFavs(gm).map((cmd) => ({ cmd, group: t('常用的命令') })),
       ...[...(local.data?.console ?? [])]
         .reverse()
         .filter((c) => !consoleFavs(gm).includes(c))
@@ -124,10 +124,15 @@ export function useGm(nonce: number) {
     }
   }
   const recent = local.data?.gmRecent ?? []
+  /**
+   * 记一次执行：本地先插到最前面（马上看得到），服务端只追加这一条（B3：以前整份写回，连着两次执行会丢一条）；
+   * 服务端返回的是追加后的整份，以它为准
+   */
   const pushRecent = (r: GmRun) => {
-    const next = [r, ...recent].slice(0, 60)
-    local.setData({ ...(local.data as LocalState), gmRecent: next })
-    void ppost(project.id, 'local', { gmRecent: next })
+    local.setData((s) => (s ? { ...s, gmRecent: [r, ...(s.gmRecent ?? [])].slice(0, 60) } : s))
+    void ppost<LocalState>(project.id, 'local/gm-recent', r)
+      .then((s) => local.setData(s))
+      .catch((e: Error) => h().toast.error(e.message))
   }
   return { inst, cpp, lua, entries, gm, saveGm, recent, pushRecent, file: info.data?.file }
 }

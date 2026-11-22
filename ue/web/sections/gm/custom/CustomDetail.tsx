@@ -58,7 +58,7 @@ function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
 
 /**
  * GM 页右边：选中一条自定义 GM（规格第 6 节、效果图 1）。说明 → 对象卡（名字 + 匹配规则 + 命中几个 + 改匹配规则）→
- * 调用（签名 + 参数表单，只有「执行时可改」的能改）→ 会执行 → 执行、收藏这组参数、加到宏、在对象调用里打开、发给对话；
+ * 调用（签名 + 参数表单，只有「执行时可改」的能改）→ 会执行 → 执行、这组参数加到常用、加到宏、在对象调用里打开、发给对话；
  * 右半边输出和这条 GM 最近的执行
  */
 export function CustomDetail(p: {
@@ -79,6 +79,8 @@ export function CustomDetail(p: {
   onFav: () => void
   onMacro: () => void
   onEditRule: () => void
+  /** 对象列表里同名对象的规则和这条 GM 的副本不一样时给：把列表里的规则抄过来（B11） */
+  onSyncRule?: () => void
   onOpenObjCall: () => void
   toChat?: (text: string) => void
   gm: GmStore
@@ -123,6 +125,18 @@ export function CustomDetail(p: {
                   </ui.Button>
                 )}
               </div>
+              {target?.ref && (
+                <p className="ue:mt-1.5 ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:text-caption ue:text-subtle">
+                  {p.onSyncRule
+                    ? t('这条 GM 用的是保存时的那份规则，对象列表里的「{n}」后来改过', { n: c.obj })
+                    : t('这条 GM 用自己的一份规则，改对象列表里的不影响它')}
+                  {p.onSyncRule && (
+                    <ui.Button size="sm" variant="ghost" onClick={p.onSyncRule}>
+                      {t('从对象列表同步')}
+                    </ui.Button>
+                  )}
+                </p>
+              )}
             </Section>
             {c.kind === 'call' && (
               <Section
@@ -155,7 +169,7 @@ export function CustomDetail(p: {
               </ui.Button>
               <ui.Button size="sm" variant="secondary" onClick={p.onFav}>
                 <Star className={cn('ue:h-3.5 ue:w-3.5', p.fav && 'ue:fill-current ue:text-warning')} />
-                {p.fav ? t('取消收藏') : t('收藏这组参数')}
+                {p.fav ? t('移出常用') : t('这组参数加到常用')}
               </ui.Button>
               <ui.Button size="sm" variant="secondary" onClick={p.onMacro}>
                 <ListPlus className="ue:h-3.5 ue:w-3.5" />

@@ -9,7 +9,7 @@ import { ParamField } from './ParamField.tsx'
 import { preview, type RunOut } from './run.ts'
 
 /**
- * 右边选中那条 GM 的详情（效果图 1）：参数表单、「会执行」预览、执行 / 收藏这组参数 / 加到宏 / 发给对话，
+ * 右边选中那条 GM 的详情（效果图 1）：参数表单、「会执行」预览、执行 / 这组参数加到常用 / 加到宏 / 发给对话，
  * 下面是这条 GM 最近几次执行，点一行把当时的参数填回去
  */
 export function GmDetail({
@@ -124,7 +124,7 @@ export function GmDetail({
               </ui.Button>
               <ui.Button size="sm" variant="secondary" onClick={onFav}>
                 <Star className={cn('ue:h-3.5 ue:w-3.5', fav && 'ue:fill-current ue:text-warning')} />
-                {fav ? t('取消收藏') : t('收藏这组参数')}
+                {fav ? t('移出常用') : t('这组参数加到常用')}
               </ui.Button>
               <ui.Button size="sm" variant="secondary" onClick={onMacro}>
                 <ListPlus className="ue:h-3.5 ue:w-3.5" /> {t('加到宏')}

@@ -1,4 +1,3 @@
-import { RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import type { LuaGmBinding, LuaGmConfig, LuaGmScan } from '../../../server/lua-gm/types.ts'
 import type { GmCat, GmCustom, GmCustomObj, GmMacro } from '../../../shared/gm/schema.ts'
@@ -21,7 +20,8 @@ import {
   usePane,
   usePaneHeight,
 } from '../../split.tsx'
-import { ErrorText, PageHead } from '../../ui.tsx'
+import { ErrorText } from '../../ui.tsx'
+import { GmBar } from './bar/GmBar.tsx'
 import type { GmEntry, GmParam } from './data.ts'
 import { GmMain } from './GmMain.tsx'
 import { LuaSetup } from './LuaSetup.tsx'
@@ -39,15 +39,16 @@ import { useGmRun } from './use-gm-run.ts'
 import { MenuHost } from '../../menu.tsx'
 
 /**
- * GM 页（规格第 6、7 节，效果图 designs/GM页重设计-对象调用-效果图）。左栏顶上分类 GM · 引擎 · 宏 · 对象调用：
+ * GM 页（规格第 6、7 节；2026-11-22 梳理，效果图 designs/GM页梳理与扩展-效果图）。顶上工具条：面包屑 + 连接状态 + 刷新 + ⋯。
+ * 左栏顶上分类行 常用 · GM · 引擎命令 · 宏 · 对象调用：常用是各处「加到常用」的 GM、宏、对象（可分组、排序，取代以前每个分类一份的收藏）；
  * GM 按模块分（扫描出来的默认归分组第一段，没分组的进「未归模块」；自定义 GM 在模块下的「自定义」文件夹），
- * 引擎是引擎自带 GM 和控制台命令，对象调用是对象列表；收藏在左栏最下面、每个分类一份。
- * 右边上面是选中的详情 / 宏 / 对象调用工作台，下面是最近执行（用户 2026-11-21），上下分界能拖、记在本机。
+ * 引擎是引擎自带 GM 和控制台命令，对象调用是对象列表。
+ * 右边上面是选中的详情 / 宏 / 对象调用工作台，下面是最近执行（对象调用里是调用记录），上下分界能拖、记在本机。
  * Lua GM 不需要 UE 在运行就能列出来（扫描只读本机文件），执行才要；gm.json 由服务端推 gm 事件刷新
  */
 export function GmPage() {
   const { project } = useUe()
-  const { toast, ui } = h()
+  const { toast } = h()
   const [nonce, setNonce] = useState(0)
   const d = useGm(nonce)
   const chat = useToChat()
@@ -75,14 +76,16 @@ export function GmPage() {
   const all = d.entries
   const byKey = useMemo(() => new Map(all.map((e) => [e.key, e])), [all])
   const find = (k: string) => byKey.get(k)
+  // 找不到条目的也列出来、灰显（B2）；对象调用的调用记录单独一张表（键 objcall:）
   const recent = useMemo<RecentRun[]>(
-    () => d.recent.flatMap((r) => (byKey.has(r.key) ? [{ entry: byKey.get(r.key)!, run: r }] : [])),
+    () => d.recent.filter((r) => !r.call).map((r) => ({ entry: byKey.get(r.key), run: r })),
     [d.recent, byKey],
   )
+  const calls = useMemo<RecentRun[]>(() => d.recent.filter((r) => r.call).map((r) => ({ run: r })), [d.recent])
   const entry = pick?.kind === 'gm' ? byKey.get(pick.key) : undefined
   const choose = (p: GmPick, c: GmCat = cat) => {
     setPickIn(c, p)
-    // 从收藏、最近执行点进来：连那组参数一起填好
+    // 从常用、最近执行点进来：连那组参数一起填好
     const e = p.kind === 'gm' ? byKey.get(p.key) : undefined
     if (e && p.kind === 'gm' && p.args) run.fill(e, p.args)
   }
@@ -126,7 +129,7 @@ export function GmPage() {
     })
   }
 
-  // 左栏、收藏、最近执行的右键菜单要用的页面动作（nav/use-gm-menus.ts）
+  // 左栏、常用、最近执行的右键菜单要用的页面动作（nav/use-gm-menus.ts）
   const menus = useGmMenus({
     d,
     ask,
@@ -191,6 +194,21 @@ export function GmPage() {
     if (note !== undefined) void askAi('fix', note)
   }
 
+  const CAT_NAMES: Record<GmCat, string> = {
+    common: t('常用'),
+    gm: 'GM',
+    engine: t('引擎命令'),
+    macro: t('宏'),
+    objcall: t('对象调用'),
+  }
+  const pickName =
+    cat === 'objcall'
+      ? s.obj?.name
+      : pick?.kind === 'macro'
+        ? d.gm.macros.find((m) => m.id === pick.id)?.name
+        : entry?.name
+  const crumbs = ['GM', CAT_NAMES[cat], pickName].filter(Boolean)
+
   const tree = () => (
     <>
       <GmNav
@@ -209,6 +227,12 @@ export function GmPage() {
         onModuleMenu={menus.onModuleMenu}
         onMacroMenu={menus.onMacroMenu}
         onFavMenu={menus.favMenu}
+        ask={ask}
+        offline={!d.inst}
+        onOpenObj={(name) => {
+          setCat('objcall')
+          s.listProps.onCall(name, 'call')
+        }}
         objList={gt.known && !gt.installed ? undefined : s.listProps}
         footer={
           cat === 'gm' ? (
@@ -232,24 +256,23 @@ export function GmPage() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      {/* GM 页的右键菜单（对象列表、模块树、收藏）都靠它画；同一页挂了几个时只有第一个画 */}
+      {/* GM 页的右键菜单（对象列表、模块树、常用）都靠它画；同一页挂了几个时只有第一个画 */}
       <MenuHost />
       {dialog}
       {chat.dialog}
       {s.dialogs}
-      <PageHead
-        title="GM"
-        desc={t('项目的 GM 按模块放；对象调用能直接调游戏里对象的函数，常用的存成 GM。都存在 {file}（团队共用）', {
-          file: d.file ?? 'gm.json',
-        })}
-      >
-        <ui.Button size="sm" variant="secondary" onClick={() => setNonce((n) => n + 1)}>
-          <RefreshCw className="ue:h-3.5 ue:w-3.5" /> {t('刷新')}
-        </ui.Button>
-        <ui.Button size="sm" variant="ghost" onClick={() => setSetup(true)}>
-          <SlidersHorizontal className="ue:h-3.5 ue:w-3.5" /> {t('Lua GM 扫描设置')}
-        </ui.Button>
-      </PageHead>
+      <GmBar
+        crumbs={crumbs}
+        help={t(
+          '项目的 GM 按模块放；常用里放最常点的 GM、宏和对象；对象调用能直接调游戏里对象的函数，常用的存成 GM。都存在 {file}（团队共用）',
+          {
+            file: d.file ?? 'gm.json',
+          },
+        )}
+        file={d.file}
+        onRefresh={() => setNonce((n) => n + 1)}
+        onLuaSetup={() => setSetup(true)}
+      />
       <ErrorText>{d.cpp.error || d.lua.error}</ErrorText>
       <div className={SPLIT_ROW}>
         {/* GM 树整栏放进左边二级面板（用户 2026-11-18 定）；面板太旧或二级面板收起时照旧是页里左边一栏 */}
@@ -293,17 +316,28 @@ export function GmPage() {
             className={`ue:flex ue:flex-col ${PANE_FIXED_H}`}
             style={recentPane.style('calc(100% - 200px)')}
           >
-            <RecentRuns
-              items={recent.slice(0, 60)}
-              selected=""
-              onMenu={menus.onRecentMenu}
-              onPick={(_line, r) => {
-                // 点最近执行：切到它所在的分类再选中
-                const c: GmCat = r.entry.src === 'engine' || r.entry.src === 'console' ? 'engine' : 'gm'
-                setCat(c)
-                choose({ kind: 'gm', key: r.entry.key, args: r.run.args }, c)
-              }}
-            />
+            {cat === 'objcall' ? (
+              <RecentRuns items={calls} objcall onPick={(r) => s.restore(r.run)} />
+            ) : (
+              <RecentRuns
+                items={recent.slice(0, 60)}
+                selected={entry?.key}
+                offlineWhy={t('找不到这条 GM：UE 没在运行时列不出 C++ GM，或者它已经改名、删掉了')}
+                onMenu={menus.onRecentMenu}
+                onPick={(r) => {
+                  if (!r.entry) return
+                  // 点最近执行：在常用里就留在常用，否则切到它所在的分类再选中
+                  const c: GmCat =
+                    cat === 'common'
+                      ? 'common'
+                      : r.entry.src === 'engine' || r.entry.src === 'console'
+                        ? 'engine'
+                        : 'gm'
+                  setCat(c)
+                  choose({ kind: 'gm', key: r.entry.key, args: r.run.args }, c)
+                }}
+              />
+            )}
           </div>
         </section>
       </div>

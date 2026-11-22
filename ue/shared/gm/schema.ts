@@ -82,15 +82,6 @@ export type GmMacroStep = z.infer<typeof GmMacroStep>
 export const GmMacro = z.object({ id: z.string(), name: z.string(), steps: z.array(GmMacroStep) })
 export type GmMacro = z.infer<typeof GmMacro>
 
-export const GmPreset = z.object({
-  id: z.string(),
-  name: z.string(),
-  gm: z.string().optional(),
-  console: z.string().optional(),
-  args: z.array(z.string()).optional(),
-})
-export type GmPreset = z.infer<typeof GmPreset>
-
 /**
  * 参数关联的表格列。table 存相对路径（正斜杠）：项目在版本管理里时相对版本管理根（.git / .svn / .hg / .plastic / P4 工作区根），
  * 不在时相对 UE 项目根；表格在这个根之外时存绝对路径。读时按同样的根拼回去，旧数据里的绝对路径照样能用（table-path.ts）
@@ -104,19 +95,24 @@ export const GmTableBinding = z.object({
 })
 export type GmTableBinding = z.infer<typeof GmTableBinding>
 
-/** 收藏的一条：条目键 + 那组参数（宏、对象调用只有键：`macro:<id>`、`obj:<对象名>`） */
+/**
+ * 「常用」里的一条（用户 2026-11-22：四个分类的收藏合成一份）：条目键 + 那组参数 + 所在分组。
+ * 键：`lua:<名>`、`cpp:<类>.<函数>`、`custom:<id>`、`console:<命令>`、`macro:<id>`、`obj:<对象名>`；宏和对象只有键
+ */
 export const GmFav = z.object({
   key: z.string().min(1),
   args: z.union([z.array(z.string()), z.record(z.string(), z.unknown())]).optional(),
+  /** 分组名（「常用」树里的文件夹，/ 分层）；不写放最外层 */
+  group: z.string().optional(),
 })
 export type GmFav = z.infer<typeof GmFav>
 
-export const GM_CATS = ['gm', 'engine', 'macro', 'objcall'] as const
+/** GM 页左栏的分类（常用 · GM · 引擎命令 · 宏 · 对象调用） */
+export const GM_CATS = ['common', 'gm', 'engine', 'macro', 'objcall'] as const
 export type GmCat = (typeof GM_CATS)[number]
 
 export const GmStore = z.object({
   version: z.literal(GM_VERSION),
-  presets: z.array(GmPreset).default([]),
   modules: z.array(GmModule).default([]),
   /** 手动移过模块的 GM：条目键 → 模块 id（没移过的按分组第一段归模块） */
   moduleOf: z.record(z.string(), z.string()).default({}),
@@ -124,15 +120,13 @@ export const GmStore = z.object({
   /** 对象列表的文件夹（含空的；有对象的文件夹不一定在这里，按对象的 folder 推出来） */
   objFolders: z.array(z.string()).default([]),
   custom: z.array(GmCustom).default([]),
-  /** 每个分类一份收藏（GM 页左栏最下面） */
-  favs: z
-    .object({
-      gm: z.array(GmFav).default([]),
-      engine: z.array(GmFav).default([]),
-      macro: z.array(GmFav).default([]),
-      objcall: z.array(GmFav).default([]),
-    })
-    .default({ gm: [], engine: [], macro: [], objcall: [] }),
+  /**
+   * 常用（GM 页左栏「常用」分类、概览「常用」、控制台页的星标、双击 Shift 都读这一份）。
+   * 2026-11-22 取代按分类分开的 favs 和没用上的 presets：旧数据按用户说的不处理，读时整段丢掉
+   */
+  common: z.array(GmFav).default([]),
+  /** 常用里的分组（含空的；有条目的分组按条目的 group 推出来） */
+  commonGroups: z.array(z.string()).default([]),
   macros: z.array(GmMacro).default([]),
   /** 旧的 C++ GM 参数绑 DataTable：键 <GM 名>.<参数名>，值是 DataTable 路径 */
   bindings: z.record(z.string(), z.string()).optional(),

@@ -49,6 +49,17 @@ export function GmMain(p: {
   const live = p.gt.live
   const ch = useObjHits(project.id, live && !!c, objs)
 
+  /** 对象列表里同名对象的规则和这条 GM 的副本不一样：给「从对象列表同步」（B11） */
+  const syncRule = (g: GmCustom) => {
+    const mine = g.objects[g.obj]?.ref
+    const listed = d.gm.objects.find((o) => o.name === g.obj)?.ref
+    if (!mine || !listed || JSON.stringify(mine) === JSON.stringify(listed)) return undefined
+    return () => {
+      const objects = { ...g.objects, [g.obj]: { ...g.objects[g.obj], ref: listed } as GmCustom['objects'][string] }
+      void d.saveGm({ ...d.gm, custom: d.gm.custom.map((x) => (x.id === g.id ? { ...x, objects } : x)) })
+    }
+  }
+
   if (p.cat === 'objcall') {
     if (p.gt.known && !p.gt.installed) return <NotInstalled name="GameTest" desc={NEED_GT()} />
     return <ObjCall s={p.obj} d={d} live={live} canRun={p.canRun} onEditBinding={p.onEditBinding} />
@@ -87,6 +98,7 @@ export function GmMain(p: {
         onFav={() => run.toggleFav(entry)}
         onMacro={() => p.onMacro(entry)}
         onEditRule={() => p.onEditRule(c)}
+        onSyncRule={syncRule(c)}
         onOpenObjCall={() => p.onOpenObjCall(c)}
         toChat={p.toChat}
         gm={d.gm}
@@ -122,7 +134,11 @@ export function GmMain(p: {
   return (
     <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-8 ue:text-center ue:text-footnote ue:text-subtle">
       <Wand2 className="ue:h-6 ue:w-6" />
-      {p.cat === 'macro' ? t('在左边选一个宏，或新建一个') : t('在左边的树里选一条 GM，在这里填参数、执行')}
+      {p.cat === 'macro'
+        ? t('在左边选一个宏，或新建一个')
+        : p.cat === 'common'
+          ? t('在左边选一条常用的；GM、宏、对象上右键「加到常用」就会放到这里')
+          : t('在左边的树里选一条 GM，在这里填参数、执行')}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
 import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
 import { Badge, Card, Confirm, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
-import { consoleFavs, consoleKey, toggleFav as toggleFav_ } from '../../shared/gm/favs.ts'
+import { consoleFavs, consoleKey, toggleCommon } from '../../shared/gm/common.ts'
 
 interface CVar {
   name: string
@@ -103,11 +103,11 @@ export function Console() {
   }
 
   const favs = consoleFavs(gm.data)
-  // 控制台命令收藏在 gm.json 的 favs.engine（GM 页「引擎」分类的收藏是同一份，规格第 6 节）；先重读一次，别把别人刚改的盖掉
+  // 控制台命令的星标就是 gm.json 的「常用」（GM 页常用分类同一份）；先重读一次，别把别人刚改的盖掉
   const toggleFav = (cmd: string) =>
     run('fav', async () => {
       const g = await pget<GmStore>(project.id, 'gm')
-      const next = await ppost<GmStore>(project.id, 'gm', toggleFav_(g, 'engine', { key: consoleKey(cmd) }))
+      const next = await ppost<GmStore>(project.id, 'gm', toggleCommon(g, { key: consoleKey(cmd) }))
       gm.setData(next)
     })
 
@@ -138,7 +138,7 @@ export function Console() {
                   {e.world && <span className="ue:text-term-subtle">· {e.world}</span>}
                   <button
                     type="button"
-                    title={t('收藏')}
+                    title={favs.includes(e.cmd) ? t('移出常用') : t('加到常用')}
                     onClick={() => void toggleFav(e.cmd)}
                     className="ue:ml-auto ue:cursor-pointer ue:text-term-subtle ue:opacity-0 ue:group-hover:opacity-100 ue:hover:text-term-fg"
                   >

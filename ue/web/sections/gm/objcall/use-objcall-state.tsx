@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { GmRun } from '../../../../server/store.ts'
+import { argsText, dropCommon, inCommon, objKey, renameCommonKey, toggleCommon } from '../../../../shared/gm/common.ts'
+import { callText } from '../../../../shared/gm/custom.ts'
 import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import type { GmCustom, GmCustomObj, GmMany, GmObject } from '../../../../shared/gm/schema.ts'
-import { toggleFav } from '../../../../shared/gm/favs.ts'
 import { allModules } from '../../../../shared/gm/modules.ts'
 import { CUSTOM_FOLDER } from '../../../../shared/gm/obj-folders.ts'
 import { useAsk } from '../../../ask.tsx'
@@ -12,7 +14,7 @@ import { RefDialog } from '../../uekit/gt-ref/RefDialog.tsx'
 import type { GmData } from '../use-gm.ts'
 import { addCustom } from '../custom/build-custom.ts'
 import { argValue, type CallParam } from '../custom/CallForm.tsx'
-import { runCall, type CallOut } from '../custom/run-custom.ts'
+import { outLine, runCall, type CallOut } from '../custom/run-custom.ts'
 import { SaveGmDialog } from '../custom/SaveGmDialog.tsx'
 import type { CallMode } from './CallPane.tsx'
 import type { FnInfo } from './members.ts'
@@ -65,6 +67,28 @@ export function useObjCallState(d: GmData, live: boolean) {
     objects.map((o) => ({ name: o.name, o })),
   )
   const obj = objects.find((o) => o.name === sel) ?? objects[0]
+  // 打开自定义 GM 时只知道函数名、不知道签名：中栏列出函数后按名字补上（B5）
+  const [fnNeedsSig, setFnNeedsSig] = useState(false)
+
+  // 对象变了（不管是点了别的、删了当前的落到第一个、还是改名）都清掉工作台（B6：以前只有点别的对象才清，
+  // 删掉当前对象后右栏还留着上一个对象的函数和参数，点调用会调到新对象上）
+  const lastObj = useRef(obj?.name)
+  const keepBench = useRef(false)
+  useEffect(() => {
+    if (lastObj.current === obj?.name) return
+    lastObj.current = obj?.name
+    // 打开自定义 GM、从记录填回：先选对象再填函数，这一次不清
+    if (keepBench.current) {
+      keepBench.current = false
+      return
+    }
+    setFn(undefined)
+    setFnNeedsSig(false)
+    setVarSel(undefined)
+    setOut(undefined)
+    setPicked([])
+    setMode('call')
+  }, [obj?.name])
 
   const save = (next: GmObject[]) => d.saveGm({ ...d.gm, objects: next })
   const fold = useObjFolders(d)
@@ -107,13 +131,62 @@ export function useObjCallState(d: GmData, live: boolean) {
       props: picked,
     }
   }
+  /** 记进调用记录（对象调用页底栏，B1 / F1）：和 GM 的最近执行同一份本机数据，key 是 objcall:<对象名> */
+  const record = (r: Omit<GmRun, 'key' | 'at'> & { at?: string }) =>
+    d.pushRecent({ ...r, key: `objcall:${r.call?.obj ?? ''}`, at: r.at ?? new Date().toISOString() })
   const run = async () => {
     if (!obj) return
     const x = def()
     setRunning(true)
     setSentArgs(x.args)
-    setOut(await runCall(project.id, x, x.args, target))
+    const r = await runCall(project.id, x, x.args, target)
+    setOut(r)
     setRunning(false)
+    record({
+      name:
+        x.kind === 'get'
+          ? t('读取 {p}', { p: picked.join(', ') || t('命中的实例') })
+          : `${fn?.name ?? ''}(${argsText(x.args).split(' ').join(', ')})`,
+      args: x.args,
+      code: callText({ obj: obj.name, function: fn?.name, kind: x.kind, props: picked }, x.args),
+      ok: r.ok,
+      out: outLine(r),
+      at: r.at,
+      call: { obj: obj.name, mode: x.kind, fn: fn?.name, props: x.kind === 'get' ? picked : undefined, many },
+    })
+  }
+
+  /** 调用记录里点一行：选上那个对象，函数 / 读取的属性和参数填回去（函数签名等中栏列出来再补，B5 同一套） */
+  const restore = (r: GmRun) => {
+    const c = r.call
+    if (!c || !objects.some((o) => o.name === c.obj)) return
+    keepBench.current = c.obj !== obj?.name
+    setSel(c.obj)
+    setOut(undefined)
+    if (c.mode === 'get') {
+      setMode('get')
+      setTab('props')
+      setPicked(c.props ?? [])
+      return
+    }
+    if (c.mode === 'set') {
+      setTab('props')
+      return
+    }
+    setMode('call')
+    setTab('fns')
+    if (c.many) setMany(c.many as GmMany)
+    const args = Array.isArray(r.args) ? {} : r.args
+    setValues(args)
+    setFn({
+      name: c.fn ?? '',
+      sig: '',
+      src: 'cpp',
+      owner: '',
+      params: Object.keys(args).map((n) => ({ name: n, type: '' })),
+      callable: true,
+    })
+    setFnNeedsSig(true)
   }
 
   const listProps = {
@@ -121,15 +194,7 @@ export function useObjCallState(d: GmData, live: boolean) {
     hits,
     live,
     selected: obj?.name ?? '',
-    onPick: (n: string) => {
-      if (n !== obj?.name) {
-        setFn(undefined)
-        setVarSel(undefined)
-        setOut(undefined)
-        setPicked([])
-      }
-      setSel(n)
-    },
+    onPick: (n: string) => setSel(n),
     ...fold.actions,
     onAdd: (folder?: string) =>
       setRefEdit({
@@ -164,13 +229,17 @@ export function useObjCallState(d: GmData, live: boolean) {
     onRename: async (o: GmObject) => {
       const n = (await fold.askObj({ title: t('重命名对象'), name: o.name, self: o.name, noFolder: true }))?.name
       if (!n || n === o.name) return
-      const favs = d.gm.favs.objcall.map((f) => (f.key === `obj:${o.name}` ? { key: `obj:${n}` } : f))
-      await d.saveGm({
-        ...d.gm,
-        objects: objects.map((x) => (x.name === o.name ? { ...x, name: n } : x)),
-        favs: { ...d.gm.favs, objcall: favs },
-      })
-      if (sel === o.name) setSel(n)
+      await d.saveGm(
+        renameCommonKey(
+          { ...d.gm, objects: objects.map((x) => (x.name === o.name ? { ...x, name: n } : x)) },
+          objKey(o.name),
+          objKey(n),
+        ),
+      )
+      if (obj?.name === o.name) {
+        keepBench.current = true
+        setSel(n)
+      }
     },
     onCopy: async (o: GmObject) => {
       const { name: _n, by: _b, folder, ...rest } = o
@@ -179,20 +248,17 @@ export function useObjCallState(d: GmData, live: boolean) {
     onDelete: async (o: GmObject) => {
       const ok = await ask({ title: t('删除对象「{n}」？', { n: o.name }), okText: t('删除'), danger: true })
       if (ok === undefined) return
-      await d.saveGm({
-        ...d.gm,
-        objects: objects.filter((x) => x.name !== o.name),
-        favs: { ...d.gm.favs, objcall: d.gm.favs.objcall.filter((f) => f.key !== `obj:${o.name}`) },
-      })
+      await d.saveGm(dropCommon({ ...d.gm, objects: objects.filter((x) => x.name !== o.name) }, [objKey(o.name)]))
     },
-    /** 对象右键「调函数」「取对象」：选上这个对象，右栏切过去，中栏跟着切到要用的那一页 */
+    /** 对象右键「调函数」「读取…」：选上这个对象，中栏切到要用的那一页（读取时属性行出勾选） */
     onCall: (n: string, m: CallMode) => {
-      listProps.onPick(n)
+      if (n !== obj?.name) keepBench.current = false
+      setSel(n)
       setMode(m)
       setTab(m === 'get' ? 'props' : 'fns')
     },
-    isFav: (n: string) => d.gm.favs.objcall.some((f) => f.key === `obj:${n}`),
-    onFav: (n: string) => void d.saveGm(toggleFav(d.gm, 'objcall', { key: `obj:${n}` })),
+    isFav: (n: string) => inCommon(d.gm, { key: objKey(n) }),
+    onFav: (n: string) => void d.saveGm(toggleCommon(d.gm, { key: objKey(n) })),
   }
 
   /** 对象参数「新的匹配规则…」：选对象面板的类定成参数类型，保存后进对象列表并选上 */
@@ -208,16 +274,41 @@ export function useObjCallState(d: GmData, live: boolean) {
 
   /** GM 页自定义 GM 的「在对象调用里打开」：对象列表里没有的对象先加进来（同名的不覆盖），再填好函数和参数 */
   const openCustom = async (c: GmCustom) => {
-    const add = Object.entries(c.objects)
-      .filter(([n]) => !objects.some((o) => o.name === n))
+    // 对象列表里有同名对象但规则不一样（B4）：不拿列表里的冒充，加一个「名字 (2)」用这条 GM 自己的规则，参数里的引用跟着换
+    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+    const taken = new Set(objects.map((o) => o.name))
+    const rename = new Map<string, string>()
+    const add: GmObject[] = []
+    for (const [name, o] of Object.entries(c.objects)) {
+      const have = objects.find((x) => x.name === name)
+      if (have && same(have.ref, o.ref) && same(have.src, o.src)) continue
+      let n = name
+      for (let i = 2; have && taken.has(n); i++) n = `${name} (${i})`
+      taken.add(n)
+      if (n !== name) rename.set(name, n)
       // 对象都要在文件夹里：自动加进来的放「来自自定义 GM」
-      .map(([name, o]) => ({ name, ...o, folder: CUSTOM_FOLDER }) as GmObject)
+      add.push({ name: n, ...o, folder: CUSTOM_FOLDER } as GmObject)
+    }
     if (add.length) await save([...objects, ...add])
-    setSel(c.obj)
+    if (rename.size)
+      toast.success(
+        t('对象列表里已有同名但规则不同的对象，这条 GM 的规则另存成了：{n}', { n: [...rename.values()].join('、') }),
+      )
+    const nm = (n: string) => rename.get(n) ?? n
+    keepBench.current = nm(c.obj) !== obj?.name
+    setSel(nm(c.obj))
     setMode(c.kind)
+    setTab(c.kind === 'get' ? 'props' : 'fns')
     setMany(c.many)
     setPicked(c.props ?? [])
-    setValues(c.args)
+    setValues(
+      Object.fromEntries(
+        Object.entries(c.args).map(([k, v]) =>
+          v && typeof v === 'object' && '$obj' in v ? [k, { $obj: nm(String((v as { $obj: string }).$obj)) }] : [k, v],
+        ),
+      ),
+    )
+    setFnNeedsSig(!!c.function)
     setFn(
       c.function
         ? {
@@ -314,12 +405,24 @@ export function useObjCallState(d: GmData, live: boolean) {
     editRef: (value: GtRef | undefined, done: (ref: GtRef) => void) => setRefEdit({ value, done }),
     /** 最近执行里自定义 GM 的「存成 GM…」：用当时那组参数另存（名字不改就是更新这条） */
     saveFrom: (c: GmCustom, args: Record<string, unknown>) => setSaving({ c, args }),
+    restore,
     /** 模块右键「在这个模块里新建 GM」：之后保存为 GM 默认放进这个模块 */
     preferModule: (id: string) => setSaveModule(id),
     bench: {
       varSel,
       varRev,
-      varChanged: () => setVarRev((r) => r + 1),
+      varChanged: (r: { ok: boolean; value: string; error?: string }) => {
+        if (r.ok) setVarRev((x) => x + 1)
+        if (obj && varSel)
+          record({
+            name: `${varSel.name} = ${r.value}`,
+            args: { [varSel.prop]: r.value },
+            code: t('在 {o} 上改 {p} = {v}', { o: obj.name, p: varSel.prop, v: r.value }),
+            ok: r.ok,
+            out: r.error ?? '',
+            call: { obj: obj.name, mode: 'set', fn: varSel.prop },
+          })
+      },
       /** 中栏点了变量：右栏切到「改变量」 */
       pickVar: (v: VarSel) => {
         setVarSel(v)
@@ -330,7 +433,16 @@ export function useObjCallState(d: GmData, live: boolean) {
       mode,
       setMode,
       fn,
-      pickFn,
+      fnNeedsSig,
+      /** 中栏列出函数了：补上签名（打开自定义 GM、从记录填回时只有名字） */
+      fillSig: (f: FnInfo) => {
+        setFnNeedsSig(false)
+        pickFn(f)
+      },
+      pickFn: (f: FnInfo) => {
+        setFnNeedsSig(false)
+        pickFn(f)
+      },
       values,
       setValue: (n: string, v: unknown) => setValues((x) => ({ ...x, [n]: v })),
       many,

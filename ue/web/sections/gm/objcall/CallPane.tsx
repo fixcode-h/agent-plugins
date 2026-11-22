@@ -1,4 +1,4 @@
-import { Play, Save, X } from 'lucide-react'
+import { Play, Save, ScanSearch, SquareFunction, Variable, X } from 'lucide-react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../../server/lua-gm/types.ts'
 import type { GmMany, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
@@ -7,7 +7,6 @@ import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import type { GmEntry, GmParam } from '../data.ts'
 import { CallForm, SigCard, type CallParam } from '../custom/CallForm.tsx'
 import { CallOutput, Section } from '../custom/CallOutput.tsx'
-import { ObjName } from '../custom/ObjRule.tsx'
 import type { CallOut } from '../custom/run-custom.ts'
 import type { FnInfo } from './members.ts'
 import type { ParamClass } from './use-objcall.ts'
@@ -19,8 +18,8 @@ export type CallMode = 'call' | 'get' | 'set'
 const srcLabel = (s: FnInfo['src']) => (s === 'bp' ? t('蓝图') : s === 'lua' ? 'Lua' : 'C++')
 
 /**
- * 对象调用右栏（规格第 7 节、效果图 2、3）：调函数 / 取对象 / 改变量（SetVarPane，用户 2026-11-22）。调函数：签名卡、参数表单（对象参数出对象下拉）、
- * 命中多个时三选一（报错 / 只调第一个 / 对每个都调）、调用、保存为 GM、输出。取对象：要读的属性（中栏属性行尾 ＋ 加）、取、保存为 GM
+ * 对象调用右栏（用户 2026-11-22 重排）：跟着中栏选的走——选函数是调用（签名卡、参数表单、命中多个时怎么办、调用、保存为 GM、输出），
+ * 选属性是改值（SetVarPane），对象头卡点「读取…」是读取（要读的属性、读取、保存为 GM）
  */
 export function CallPane(p: {
   obj: GmObject
@@ -28,8 +27,7 @@ export function CallPane(p: {
   mode: CallMode
   /** 改变量：中栏点的那个 */
   varSel?: VarSel
-  onVarChanged: () => void
-  onMode: (m: CallMode) => void
+  onVarChanged: (r: { ok: boolean; value: string; error?: string }) => void
   fn?: FnInfo
   values: Record<string, unknown>
   onValue: (name: string, v: unknown) => void
@@ -56,20 +54,19 @@ export function CallPane(p: {
   const ready = p.mode === 'get' || (!!p.fn && p.fn.callable)
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-4 ue:overflow-auto ue:p-4">
-      <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-        <ui.Segmented
-          size="sm"
-          label={t('调函数 / 取对象 / 改变量')}
-          value={p.mode}
-          onChange={p.onMode}
-          options={[
-            { id: 'call' as const, label: t('调函数') },
-            { id: 'get' as const, label: t('取对象') },
-            { id: 'set' as const, label: t('改变量') },
-          ]}
-        />
-        <span className="ue:text-caption ue:text-subtle">{t('对象')}</span>
-        <ObjName name={p.obj.name} />
+      {/* 选什么做什么（L5）：没有三选一的分段了，标题说清现在是调用、改值还是读取 */}
+      <div className="ue:flex ue:items-center ue:gap-2 ue:text-footnote ue:font-medium ue:text-muted">
+        {p.mode === 'set' ? (
+          <Variable className="ue:h-3.5 ue:w-3.5" />
+        ) : p.mode === 'get' ? (
+          <ScanSearch className="ue:h-3.5 ue:w-3.5" />
+        ) : (
+          <SquareFunction className="ue:h-3.5 ue:w-3.5" />
+        )}
+        {p.mode === 'set' ? t('改值') : p.mode === 'get' ? t('读取') : t('调用')}
+        <span className="ue:ml-auto ue:text-caption ue:font-normal ue:text-subtle">
+          {p.mode === 'get' ? t('在中间「属性」行尾勾要读的') : t('中间选函数就是调用，选属性就是改值')}
+        </span>
       </div>
       {p.mode === 'set' ? (
         <SetVarPane obj={p.obj} v={p.varSel} live={p.live} canRun={p.canRun} onChanged={p.onVarChanged} />
@@ -92,10 +89,12 @@ export function CallPane(p: {
             />
           </>
         ) : (
-          <p className="ue:text-footnote ue:text-subtle">{t('在中间「方法」里选一个函数')}</p>
+          <p className="ue:rounded-lg ue:border ue:border-dashed ue:border-line ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">
+            {t('在中间选一个函数来调用，或选一个属性改值')}
+          </p>
         )
       ) : (
-        <Section title={t('要读的属性')} aside={t('在中间「属性」行尾点 ＋ 加')}>
+        <Section title={t('要读的属性')} aside={t('点「读取」读出每个命中实例此刻的值')}>
           <div className="ue:flex ue:flex-wrap ue:gap-1.5">
             {p.picked.map((x) => (
               <span
@@ -141,7 +140,7 @@ export function CallPane(p: {
             onClick={p.onRun}
           >
             <Play className="ue:h-3.5 ue:w-3.5" />
-            {p.mode === 'call' ? t('调用') : t('取')}
+            {p.mode === 'call' ? t('调用') : t('读取')}
           </ui.Button>
           <ui.Button size="sm" variant="secondary" disabled={!ready} onClick={p.onSave}>
             <Save className="ue:h-3.5 ue:w-3.5" />

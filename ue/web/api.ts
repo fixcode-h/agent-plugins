@@ -41,10 +41,14 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], interval = 0
   })
   const keySig = useRef(sig)
   keySig.current = sig
+  // 也收函数（按上一份算新的）：几次更新挨得很近时不会拿到旧的那份（GM 页最近执行连着追加）
   const setData = useCallback(
-    (d: T | undefined) => {
-      setDataRaw(d)
-      if (keepKey) keep(keepKey, d === undefined ? undefined : { sig: keySig.current, data: d })
+    (d: T | undefined | ((prev: T | undefined) => T | undefined)) => {
+      setDataRaw((prev) => {
+        const next = typeof d === 'function' ? (d as (p: T | undefined) => T | undefined)(prev) : d
+        if (keepKey) keep(keepKey, next === undefined ? undefined : { sig: keySig.current, data: next })
+        return next
+      })
     },
     [keepKey],
   )
