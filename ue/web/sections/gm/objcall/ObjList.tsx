@@ -33,7 +33,7 @@ const pathOf = (o: GmObject) => (o.folder ? `${o.folder}/${seg(o.name)}` : seg(o
  * 对象调用的左栏（规格第 7 节、效果图 2）：对象列表按文件夹排成树（和 GameTest 场景库同一棵 FileTree），
  * 每个对象一行名字 + 命中个数（1 绿 / 多黄 / 0 灰，走 gt.watch 推送），下面一行匹配规则。
  * 用户 2026-11-22：能建文件夹、整块右键菜单、新增对象必须选文件夹；对象和文件夹都能拖进别的文件夹。
- * 右键对象：调函数、取对象、改匹配规则、重命名、复制、移到文件夹、收藏、删除；右键文件夹：在这里加对象 / 来源、
+ * 右键对象：调函数、取对象、改匹配规则、重命名、复制、移到文件夹、加到常用、删除；右键文件夹：在这里加对象 / 来源、
  * 新建子文件夹、重命名、删除；空白处：加对象、新建文件夹、加来源
  */
 export function ObjList({
@@ -125,14 +125,14 @@ export function ObjList({
     e.stopPropagation()
     openMenu(e, [
       { label: t('调函数'), icon: Play, onClick: () => onCall(o.name, 'call') },
-      { label: t('取对象'), icon: ScanSearch, onClick: () => onCall(o.name, 'get') },
+      { label: t('读取…'), icon: ScanSearch, onClick: () => onCall(o.name, 'get') },
       'sep',
       o.ref && { label: t('改匹配规则…'), icon: Crosshair, onClick: () => onEdit(o) },
       { label: t('重命名'), icon: Pencil, onClick: () => onRename(o) },
       { label: t('复制'), icon: Copy, onClick: () => onCopy(o) },
       { label: t('移到文件夹…'), icon: FolderInput, onClick: () => onMoveTo(o) },
       {
-        label: isFav(o.name) ? t('取消收藏') : t('收藏'),
+        label: isFav(o.name) ? t('移出常用') : t('加到常用'),
         icon: isFav(o.name) ? StarOff : Star,
         onClick: () => onFav(o.name),
       },
@@ -144,18 +144,22 @@ export function ObjList({
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:gap-1 ue:p-2">
       <div className="ue:flex ue:items-center ue:gap-1 ue:px-1">
         <span className="ue:text-caption ue:font-medium ue:text-muted">{t('对象列表 {n}', { n: objects.length })}</span>
-        <ui.Button size="sm" variant="ghost" className="ue:ml-auto" onClick={() => onAdd(here)}>
-          <Plus className="ue:h-3.5 ue:w-3.5" />
-          {t('加对象')}
-        </ui.Button>
-        <ui.Button
+        {/* 三个按钮合成一个「＋」下拉（L7），和资源页、场景库的树头一样 */}
+        <ui.IconButton
+          icon={Plus}
           size="sm"
-          variant="ghost"
-          onClick={(e: MouseEvent<HTMLElement>) => openMenuAt(e.currentTarget, sources(here))}
-        >
-          {t('加来源')}
-        </ui.Button>
-        <ui.IconButton icon={FolderPlus} size="sm" label={t('新建文件夹')} onClick={() => onNewFolder('')} />
+          className="ue:ml-auto"
+          label={t('加对象、加来源、新建文件夹')}
+          onClick={(e: MouseEvent<HTMLElement>) =>
+            openMenuAt(e.currentTarget, [
+              { label: t('加对象…'), icon: Plus, hint: t('选对象面板'), onClick: () => onAdd(here) },
+              { label: t('新建文件夹…'), icon: FolderPlus, onClick: () => onNewFolder('') },
+              'sep',
+              { title: t('加来源') },
+              ...sources(here),
+            ])
+          }
+        />
       </div>
       <div onContextMenu={blankMenu} className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto">
         <FileTree<GmObject>
@@ -186,14 +190,15 @@ export function ObjList({
           onMove={onMove}
           empty={
             <p className="ue:px-2 ue:py-2 ue:text-footnote ue:text-subtle">
-              {k ? t('没有名字或类里含「{q}」的对象', { q }) : t('还没有对象：先新建一个文件夹，再「加对象」')}
+              {k
+                ? t('没有名字或类里含「{q}」的对象', { q })
+                : t(
+                    '还没有对象：点上面的 ＋「加对象」，在选对象面板里定类和唯一标识。存的是匹配规则，每次用时按规则现找',
+                  )}
             </p>
           }
         />
       </div>
-      <p className="ue:px-1 ue:text-caption ue:leading-relaxed ue:text-subtle">
-        {t('「加对象」打开选对象面板定类和唯一标识。存的是匹配规则，每次用时按规则现找。')}
-      </p>
     </div>
   )
 }

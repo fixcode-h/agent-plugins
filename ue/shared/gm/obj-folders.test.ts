@@ -12,7 +12,7 @@ const g0 = () =>
       { name: '玩家', src: '@pawn' },
     ],
     objFolders: ['空的'],
-    favs: { gm: [], engine: [], macro: [], objcall: [{ key: 'obj:商店' }] },
+    common: [{ key: 'obj:商店' }],
   })
 
 test('文件夹：规范路径、含上级和空文件夹', () => {
@@ -32,7 +32,7 @@ test('文件夹改名带着对象走，删文件夹连同对象和收藏', () =>
     d.g.objects.map((o) => o.name),
     ['玩家'],
   )
-  assert.deepEqual(d.g.favs.objcall, [])
+  assert.deepEqual(d.g.common, [])
 })
 
 test('对象挪文件夹：原来的文件夹空了也留着', () => {

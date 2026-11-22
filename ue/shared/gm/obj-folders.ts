@@ -69,7 +69,7 @@ export function deleteObjFolder(g: GmStore, folder: string): { g: GmStore; remov
       ...g,
       objects: g.objects.filter((o) => !gone.has(o.name)),
       objFolders: g.objFolders.filter((f) => !inside(f, folder)),
-      favs: { ...g.favs, objcall: g.favs.objcall.filter((f) => !gone.has(f.key.replace(/^obj:/, ''))) },
+      common: g.common.filter((f) => !(f.key.startsWith('obj:') && gone.has(f.key.slice(4)))),
     }),
   }
 }

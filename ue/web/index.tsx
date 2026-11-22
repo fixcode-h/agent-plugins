@@ -32,6 +32,7 @@ import { DiagSpecimen } from './sections/uekit/LinkDiagnose.tsx'
 import { PluginCardSpecimen } from './sections/uekit/plugins/Specimen.tsx'
 import { ConfigKeySpecimen } from './sections/config/parts.tsx'
 import { LaunchButtonSpecimen } from './launch-progress/LaunchButton.tsx'
+import { ConnPillSpecimen } from './conn/ConnPill.tsx'
 import { OverviewSpecimen } from './sections/overview/Specimen.tsx'
 import { LuaDebugSpecimen } from './sections/lua/DebugSpecimen.tsx'
 import { LuaObjectsSpecimen } from './sections/lua/objects-tree/Specimen.tsx'
@@ -135,6 +136,7 @@ const activate: ActivateWeb = (host) => {
       { id: 'folder-table', label: t('资源 · 文件夹内容表'), tune: ['badge', 'row'], Specimen: FolderTableSpecimen },
       // 启动编辑器按钮上的启动进度：跟面板「按钮」「进度条」的调节项
       { id: 'launch-button', label: 'UE · LaunchButton', tune: ['button', 'progress'], Specimen: LaunchButtonSpecimen },
+      { id: 'conn-pill', label: 'UE · ConnPill', tune: ['button'], Specimen: ConnPillSpecimen },
       // 概览的读数、「需要你处理」、时间线，跳转弹窗的行和左栏入口：跟面板「行」「徽标」「按钮」的调节项
       {
         id: 'overview-parts',

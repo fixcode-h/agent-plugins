@@ -21,7 +21,17 @@ import { luaRoute } from './lua/api.ts'
 import { precheck } from './precheck.ts'
 import { luaDebugRoute } from './lua-debug/api.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
-import { gmFile, patchLocal, pushConsoleHistory, readGm, readLocal, writeGm, type LocalState } from './store.ts'
+import {
+  gmFile,
+  patchLocal,
+  pushConsoleHistory,
+  pushGmRecent,
+  readGm,
+  readLocal,
+  writeGm,
+  type GmRun,
+  type LocalState,
+} from './store.ts'
 import { tableBase } from './gm-custom/table-base.ts'
 import { followGm } from './gm-custom/watch.ts'
 import { runCustom } from './gm-custom/run.ts'
@@ -200,7 +210,7 @@ export async function handle(req: Request): Promise<Response> {
         // 存在哪（设置页显示），和参数关联表格存相对路径用的根（shared/gm/table-path.ts）
         return json({ file: gmFile(project), table: await tableBase(project) })
       case 'POST gm/custom':
-        // 概览「常用」里收藏的自定义 GM：和 ue_gm run source=custom 同一份执行（gm-custom/run.ts）
+        // 概览「常用」里的自定义 GM：和 ue_gm run source=custom 同一份执行（gm-custom/run.ts）
         return json(
           await runCustom(
             ctx,
@@ -222,6 +232,8 @@ export async function handle(req: Request): Promise<Response> {
         return json(await editLuaExclude(project, b))
       case 'POST local':
         return json(await patchLocal(project.id, b as Partial<LocalState>))
+      case 'POST local/gm-recent':
+        return json(await pushGmRecent(project.id, b as unknown as GmRun))
       case 'POST logs':
         return json(await logTail(ctx, b))
       case 'GET logs/targets':

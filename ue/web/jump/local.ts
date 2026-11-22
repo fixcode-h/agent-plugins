@@ -3,7 +3,7 @@ import type { GmStore } from '../../server/types.ts'
 import type { GmItem } from '../sections/Gm.tsx'
 import { t } from '../host.ts'
 import { setPending } from '../pending.ts'
-import { consoleFavs } from '../../shared/gm/favs.ts'
+import { consoleFavs } from '../../shared/gm/common.ts'
 
 /**
  * 跳转弹窗里「本页已有的列表里匹配」（设计稿 designs/UE插件优化与扩展-设计稿.md 三.2）：只在网页里已经有的列表里筛，

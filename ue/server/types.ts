@@ -210,7 +210,7 @@ export interface HistoryItem {
 }
 
 /** gm.json（v2）的形状：契约在 shared/gm/schema.ts，网页和服务端共用 */
-export type { GmMacro, GmPreset, GmStore } from '../shared/gm/schema.ts'
+export type { GmMacro, GmStore } from '../shared/gm/schema.ts'
 
 export interface Job {
   id: string

@@ -29,7 +29,9 @@ test('没有 version 2 的按空的新格式，旧 favGm / favConsole 不读', (
   const g = parseGm({ version: 2, custom: [buy] })
   assert.equal(g.custom[0].kind, 'call')
   assert.equal(g.custom[0].many, 'error')
-  assert.deepEqual(g.favs, { gm: [], engine: [], macro: [], objcall: [] })
+  assert.deepEqual(g.common, [])
+  // 旧的按分类收藏（2026-11-22 前）读时整段丢掉，不迁移
+  assert.equal('favs' in parseGm({ version: 2, favs: { gm: [{ key: 'lua:X' }] } }), false)
   assert.throws(() => parseGm({ version: 2, objects: [{ name: '玩家' }] }), /ref 和 src/)
   assert.throws(
     () => parseGm({ version: 2, objects: [{ name: '玩家', src: '@pawn', ref: { class: 'X' } }] }),

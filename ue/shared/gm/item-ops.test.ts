@@ -22,7 +22,7 @@ const g = GmStore.parse({
     { id: 'c2', name: '卖商品', module: 'shop', obj: '商店界面', objects: { 商店界面: { src: '@pawn' } } },
   ],
   moduleOf: { 'custom:c1': 'shop', 'lua:X': 'shop' },
-  favs: { gm: [{ key: 'custom:c1' }, { key: 'lua:X' }], macro: [{ key: 'macro:m1' }] },
+  common: [{ key: 'custom:c1' }, { key: 'lua:X' }, { key: 'macro:m1' }],
   macros: [
     { id: 'm1', name: '开店', steps: [{ custom: 'c1' }, { console: 'stat fps' }] },
     { id: 'm2', name: '别的', steps: [{ lua: 'X' }] },
@@ -65,7 +65,7 @@ test('删自定义 GM：收藏、moduleOf、宏里调它的步骤一起去掉', 
     n.custom.map((c) => c.id),
     ['c2'],
   )
-  assert.deepEqual(n.favs.gm, [{ key: 'lua:X' }])
+  assert.deepEqual(n.common, [{ key: 'lua:X' }, { key: 'macro:m1' }])
   assert.deepEqual(n.moduleOf, { 'lua:X': 'shop' })
   assert.deepEqual(n.macros[0].steps, [{ console: 'stat fps' }])
   assert.equal(n.macros[1], g.macros[1])
@@ -83,5 +83,8 @@ test('宏复制一份、删除', () => {
     n.macros.map((m) => m.id),
     ['m2'],
   )
-  assert.deepEqual(n.favs.macro, [])
+  assert.equal(
+    n.common.some((f) => f.key === 'macro:m1'),
+    false,
+  )
 })

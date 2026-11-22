@@ -41,7 +41,8 @@ export function SetVarPane({
   live: boolean
   canRun: string
   /** 改成功了：中栏列表重读一次 */
-  onChanged: () => void
+  /** 写完（成功或失败）：进调用记录；成功时中栏重读。value 是写进去的文字 */
+  onChanged: (r: { ok: boolean; value: string; error?: string }) => void
 }) {
   const { ui } = h()
   const { project, target } = useUe()
@@ -84,10 +85,11 @@ export function SetVarPane({
       if (objTaken?.rule) await setObjProp(project.id, target, obj, v.prop, '@obj.__take', { __take: objTaken.rule })
       else await setObjProp(project.id, target, obj, v.prop, v.lua ? luaValue(v.type, text) : ueValue(text))
       setBusy('')
-      onChanged()
+      onChanged({ ok: true, value: objTaken?.rule ? t('（对象）') : text })
       if (await grab(false)) setMsg({ ok: true, text: t('已修改') })
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message })
+      onChanged({ ok: false, value: text, error: (e as Error).message })
     } finally {
       setBusy('')
     }

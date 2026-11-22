@@ -128,7 +128,7 @@ function TableField({
     [legacy],
   )
   const b = resolved.data
-  // 从收藏、最近执行填回来的值：补上描述
+  // 从常用、最近执行填回来的值：补上描述
   useEffect(() => {
     if (!b || !value || label) return
     labelOf(project.id, b, value).then(setLabel, () => undefined)

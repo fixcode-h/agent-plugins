@@ -52,7 +52,7 @@ export function deleteCustom(g: GmStore, id: string): GmStore {
     ...g,
     custom: g.custom.filter((c) => c.id !== id),
     moduleOf,
-    favs: { ...g.favs, gm: g.favs.gm.filter((f) => f.key !== key) },
+    common: g.common.filter((f) => f.key !== key),
     macros: g.macros.map((m) =>
       m.steps.some((s) => s.custom === id) ? { ...m, steps: m.steps.filter((s) => s.custom !== id) } : m,
     ),
@@ -82,6 +82,6 @@ export function deleteMacro(g: GmStore, id: string): GmStore {
   return {
     ...g,
     macros: g.macros.filter((x) => x.id !== id),
-    favs: { ...g.favs, macro: g.favs.macro.filter((f) => f.key !== `macro:${id}`) },
+    common: g.common.filter((f) => f.key !== `macro:${id}`),
   }
 }
