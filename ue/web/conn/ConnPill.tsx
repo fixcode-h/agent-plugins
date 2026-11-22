@@ -1,11 +1,13 @@
-import { MonitorPlay } from 'lucide-react'
+import { ChevronDown, Gamepad2, MonitorPlay } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import type { LaunchProgress } from '../../server/types.ts'
 import { op, useAction } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { useLaunch } from '../launch.ts'
 import { LaunchButton } from '../launch-progress/LaunchButton.tsx'
-import { useTargetInfo } from '../ui.tsx'
+import { openMenuAt } from '../menu.tsx'
+import { kindLabel, useTargetInfo, worldLabel } from '../ui.tsx'
 
 /** 三态：游戏在跑（PIE 或独立游戏进程）/ 编辑器连着但游戏没开 / UE 没在运行 */
 export type ConnState = 'game' | 'editor' | 'off'
@@ -28,7 +30,8 @@ export function useConnState(): { state: ConnState; label: string } {
  * 各面板就不用再各写一句原因，只把按钮置灰、悬停写短原因
  */
 export function ConnPill() {
-  const { project, reload } = useUe()
+  const { project, reload, target, setTarget } = useUe()
+  const { list } = useTargetInfo()
   const { busy, run } = useAction()
   const launch = useLaunch()
   const c = useConnState()
@@ -37,9 +40,28 @@ export function ConnPill() {
       await op(project.id, 'pie', { action: 'start', players: 1, netMode: 'standalone' }, { instance: 'editor' })
       setTimeout(reload, 800)
     })
+  // 选执行目标（F10）：有多个进程或世界时点胶囊选，和 UE 页顶上的目标同一份
+  const choices = list.flatMap((i) => [
+    { pid: i.pid, kind: i.kind, world: '', label: `${kindLabel(i.kind)} · PID ${i.pid}` },
+    ...i.worlds.map((w) => ({ pid: i.pid, kind: i.kind, world: w.id, label: `　${worldLabel(w)}` })),
+  ])
+  const onPick =
+    choices.length > 1
+      ? (e: MouseEvent<HTMLElement>) =>
+          openMenuAt(e.currentTarget, [
+            { title: t('在哪执行') },
+            ...choices.map((x) => ({
+              label: x.label,
+              icon: x.world ? undefined : Gamepad2,
+              checked: target.instance === x.pid && (target.world ?? '') === x.world,
+              onClick: () => setTarget(x.pid, x.kind, x.world),
+            })),
+          ])
+      : undefined
   return (
     <ConnPillView
       {...c}
+      onPick={onPick}
       pieBusy={busy === 'pie'}
       onPie={startPie}
       launch={{ progress: launch.progress, busy: launch.busy, start: () => void launch.start(false) }}
@@ -54,19 +76,28 @@ export function ConnPillView({
   pieBusy,
   onPie,
   launch,
+  onPick,
 }: {
   state: ConnState
   label: string
   pieBusy?: boolean
   onPie: () => void
   launch: { progress?: LaunchProgress; busy?: boolean; start: () => void }
+  /** 有多个进程 / 世界时给：点胶囊选在哪执行 */
+  onPick?: (e: MouseEvent<HTMLElement>) => void
 }) {
   const { ui, cn } = h()
   return (
     <div className="ue:flex ue:items-center ue:gap-2">
-      <span
-        className="ue:inline-flex ue:h-7 ue:max-w-80 ue:items-center ue:gap-1.5 ue:rounded-full ue:border ue:border-line ue:bg-card ue:px-2.5 ue:text-footnote ue:text-fg"
-        title={label}
+      <button
+        type="button"
+        disabled={!onPick}
+        onClick={onPick}
+        className={cn(
+          'ue:inline-flex ue:h-7 ue:max-w-80 ue:items-center ue:gap-1.5 ue:rounded-full ue:border ue:border-line ue:bg-card ue:px-2.5 ue:text-footnote ue:text-fg',
+          onPick ? 'ue:cursor-pointer ue:hover:bg-hover' : 'ue:cursor-default',
+        )}
+        title={onPick ? t('{l}（点一下选在哪执行）', { l: label }) : label}
       >
         <span
           className={cn(
@@ -75,7 +106,8 @@ export function ConnPillView({
           )}
         />
         <span className="ue:truncate">{label}</span>
-      </span>
+        {onPick && <ChevronDown className="ue:h-3 ue:w-3 ue:shrink-0 ue:text-subtle" />}
+      </button>
       {state === 'editor' && (
         <ui.Button size="sm" disabled={pieBusy} onClick={onPie}>
           <MonitorPlay className="ue:h-3.5 ue:w-3.5" /> {t('开始 PIE')}
@@ -99,6 +131,7 @@ export function ConnPillSpecimen() {
         label={t('PIE 运行中 · {map}', { map: 'Lobby' })}
         onPie={noop}
         launch={{ start: noop }}
+        onPick={noop}
       />
       <ConnPillView state="editor" label={t('编辑器已连接 · 游戏没运行')} onPie={noop} launch={{ start: noop }} />
       <ConnPillView state="off" label={t('UE 没在运行')} onPie={noop} launch={{ start: noop }} />

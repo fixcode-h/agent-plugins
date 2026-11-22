@@ -2,7 +2,7 @@ import { isEngineOwner } from '../../shared/gm/engine.ts'
 import { allModules, findModule, placeOf } from '../../shared/gm/modules.ts'
 import { customKey, type GmStore } from '../../shared/gm/schema.ts'
 import { runOp, type OpCtx } from '../ops.ts'
-import { readGm } from '../store.ts'
+import { readGm, readLocal } from '../store.ts'
 import { current } from './scan.ts'
 
 /** 模块 id → 名字（自动的模块名字就是 id） */
@@ -74,6 +74,22 @@ export async function listGm(ctx: OpCtx, source: string, filter: string) {
       res.modules = allModules(g, []).map((m) => m.name)
     }
   }
-  if (!source) res.note = '引擎自带的 GM 用 source=engine 列；自定义 GM 的对象列表和模块名用 source=custom 看'
+  // 宏和最近执行（GM 页梳理 F9）：只在点名要时列，不混进默认的列表
+  if (source === 'macro')
+    res.macros = g.macros
+      .filter((m) => hit(m.name))
+      .map((m) => ({ name: m.name, steps: m.steps, ...(m.onFail ? { onFail: m.onFail } : {}) }))
+  if (source === 'recent')
+    res.recent = ((await readLocal(ctx.project.id)).gmRecent ?? []).slice(0, 20).map((r) => ({
+      name: r.call ? `${r.call.obj}.${r.call.fn ?? r.call.mode}` : r.name,
+      key: r.key,
+      ...(r.args && (Array.isArray(r.args) ? r.args.length : Object.keys(r.args).length) ? { args: r.args } : {}),
+      ok: r.ok,
+      ...(r.out ? { out: r.out.slice(0, 200) } : {}),
+      at: new Date(r.at).toISOString(),
+    }))
+  if (!source)
+    res.note =
+      '引擎自带的 GM 用 source=engine 列；自定义 GM 的对象列表和模块名用 source=custom 看；宏用 source=macro，用户最近执行过的用 source=recent'
   return res
 }

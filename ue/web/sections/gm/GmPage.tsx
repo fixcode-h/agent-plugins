@@ -22,6 +22,9 @@ import {
 } from '../../split.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { GmBar } from './bar/GmBar.tsx'
+import { QuickRun } from './quick/QuickRun.tsx'
+import { useQuickTargets } from './quick/use-quick-targets.ts'
+import { importShare } from '../../../shared/gm/share.ts'
 import type { GmEntry, GmParam } from './data.ts'
 import { GmMain } from './GmMain.tsx'
 import { LuaSetup } from './LuaSetup.tsx'
@@ -194,6 +197,33 @@ export function GmPage() {
     if (note !== undefined) void askAi('fix', note)
   }
 
+  /** 从剪贴板导入（GM 页梳理 F8）：浏览器不让读剪贴板时弹框让用户粘贴 */
+  const importGm = async () => {
+    let text = ''
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      // 没给剪贴板权限：下面弹框粘贴
+    }
+    if (!text.includes('agentPanelGm'))
+      text =
+        (await ask({ title: t('从剪贴板导入'), label: t('把别人「复制为 JSON」的内容粘贴到这里'), init: '' })) ?? ''
+    if (!text.trim()) return
+    try {
+      const r = importShare(d.gm, text)
+      if (!r.added.length && !r.renamed.length) return void toast.success(t('都已经有了，没有要加的'))
+      await d.saveGm(r.g)
+      const parts = [...r.added, ...r.renamed.map(([a, b]) => t('「{a}」重名，另存为「{b}」', { a, b }))]
+      toast.success(t('已导入：{list}', { list: parts.join('、') }))
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  // 快速执行栏（F6）：只在常用、GM、引擎命令里出现，收起记在本机
+  const [quickOpen, setQuickOpen] = useLocalPref('quick-open', true)
+  const quickTargets = useQuickTargets(d, run, menus.execMacro)
+
   const CAT_NAMES: Record<GmCat, string> = {
     common: t('常用'),
     gm: 'GM',
@@ -272,6 +302,7 @@ export function GmPage() {
         file={d.file}
         onRefresh={() => setNonce((n) => n + 1)}
         onLuaSetup={() => setSetup(true)}
+        onImport={() => void importGm()}
       />
       <ErrorText>{d.cpp.error || d.lua.error}</ErrorText>
       <div className={SPLIT_ROW}>
@@ -289,6 +320,17 @@ export function GmPage() {
         />
         <section className={`ue:flex ue:min-h-0 ue:flex-col ue:divide-y ue:divide-line ue:lg:divide-y-0 ${PANE_FILL}`}>
           <div className={`ue:flex ue:min-h-80 ue:flex-col ue:lg:min-h-0 ${PANE_FILL_H}`}>
+            {(cat === 'common' || cat === 'gm' || cat === 'engine') && (
+              <QuickRun
+                targets={quickTargets}
+                canRun={canRun}
+                open={quickOpen}
+                onOpen={setQuickOpen}
+                onConsole={(line) =>
+                  run.exec({ key: `console:${line}`, src: 'console', name: line, group: '', desc: '', params: [] })
+                }
+              />
+            )}
             <GmMain
               d={d}
               cat={cat}
@@ -308,6 +350,7 @@ export function GmPage() {
               }}
               onEditRule={editRule}
               onPickNone={() => setPick(undefined)}
+              ask={ask}
             />
           </div>
           <SplitHandle pane={recentPane} paneRef={recentRef} side="right" reserve={() => 200} />

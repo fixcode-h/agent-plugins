@@ -187,13 +187,22 @@ export async function clearLogs(ctx: OpCtx, pids: number[] | undefined, backup: 
   return { cleared }
 }
 
-/** 宏：按顺序执行，任何一步失败就停下并说是哪一步（设计文档 4.3）；一步可以是自定义 GM（custom，args 按参数名，规格第 6 节） */
+/**
+ * 宏：按顺序执行（设计文档 4.3）；一步可以是自定义 GM（custom，args 按参数名，规格第 6 节）或等几秒（wait）。
+ * 某步失败默认停下并说是哪一步；宏设了 onFail=skip 时记下失败接着做，最后 ok=false、failed 列出失败的步
+ */
 export async function runMacro(ctx: OpCtx, id: string) {
   const gm = await readGm(ctx.project)
   const m = gm.macros.find((x) => x.id === id || x.name === id)
   if (!m) throw new BridgeError(t('没有这个宏：{id}', { id }))
   const steps: { step: number; ok: boolean; output?: unknown; error?: string }[] = []
+  const failed: number[] = []
   for (const [i, s] of m.steps.entries()) {
+    if (s.wait !== undefined) {
+      await new Promise((r) => setTimeout(r, Math.min(s.wait!, 600) * 1000))
+      steps.push({ step: i + 1, ok: true, output: [t('等了 {n} 秒', { n: s.wait })] })
+      continue
+    }
     try {
       const list = Array.isArray(s.args) ? s.args : []
       const res: Record<string, unknown> = s.console
@@ -206,10 +215,11 @@ export async function runMacro(ctx: OpCtx, id: string) {
       steps.push({ step: i + 1, ok: true, output: res.output ?? (s.custom ? res.invoke : undefined) })
     } catch (e) {
       steps.push({ step: i + 1, ok: false, error: (e as Error).message })
-      return { ok: false, macro: m.name, failedAt: i + 1, steps }
+      if (m.onFail !== 'skip') return { ok: false, macro: m.name, failedAt: i + 1, steps }
+      failed.push(i + 1)
     }
   }
-  return { ok: true, macro: m.name, steps }
+  return failed.length ? { ok: false, macro: m.name, failed, steps } : { ok: true, macro: m.name, steps }
 }
 
 /** 截图：直接用桥接，结果给网页显示或回给 Agent */

@@ -1,8 +1,8 @@
-import type { GmObject } from '../../../../shared/gm/schema.ts'
-import type { Prop } from '../../../details/model.ts'
-import type { PropsData } from '../../uekit/gt-ref/live.ts'
-import type { VarGroup, VarItem, VarScope } from '../../uekit/gt-vars/model.ts'
-import type { CallParam } from '../custom/CallForm.tsx'
+import type { GmObject } from '../../shared/gm/schema.ts'
+import type { Prop } from '../details/model.ts'
+import type { PropsData } from '../sections/uekit/gt-ref/live.ts'
+import type { VarGroup, VarItem, VarScope } from '../sections/uekit/gt-vars/model.ts'
+import type { CallParam } from './CallForm.tsx'
 
 /**
  * 对象调用中栏的数据（规格第 7 节）：方法 = gt.vars scope=object 的函数（按声明类分组），Lua = Lua 组，

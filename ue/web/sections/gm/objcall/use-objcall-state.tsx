@@ -6,20 +6,22 @@ import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import type { GmCustom, GmCustomObj, GmMany, GmObject } from '../../../../shared/gm/schema.ts'
 import { allModules } from '../../../../shared/gm/modules.ts'
 import { CUSTOM_FOLDER } from '../../../../shared/gm/obj-folders.ts'
+import { narrowMany, narrowRef } from '../../../../shared/gm/pick.ts'
 import { useAsk } from '../../../ask.tsx'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { useKept } from '../../../keep.ts'
+import { useLocalPref } from '../nav/local.ts'
 import { RefDialog } from '../../uekit/gt-ref/RefDialog.tsx'
 import type { GmData } from '../use-gm.ts'
 import { addCustom } from '../custom/build-custom.ts'
-import { argValue, type CallParam } from '../custom/CallForm.tsx'
+import { argValue, type CallParam } from '../../../obj-kit/CallForm.tsx'
 import { outLine, runCall, type CallOut } from '../custom/run-custom.ts'
 import { SaveGmDialog } from '../custom/SaveGmDialog.tsx'
 import type { CallMode } from './CallPane.tsx'
-import type { FnInfo } from './members.ts'
-import type { MemberTab } from './MemberPane.tsx'
-import type { VarSel } from './VarList.tsx'
+import type { FnInfo } from '../../../obj-kit/members.ts'
+import type { MemberTab } from '../../../obj-kit/MemberPane.tsx'
+import type { VarSel } from '../../../obj-kit/VarList.tsx'
 import { useObjFolders } from './use-obj-folders.tsx'
 import { useObjHits, type ParamClass } from './use-objcall.ts'
 
@@ -53,6 +55,10 @@ export function useObjCallState(d: GmData, live: boolean) {
   const [values, setValues] = useState<Record<string, unknown>>({})
   const [many, setMany] = useState<GmMany>('error')
   const [picked, setPicked] = useState<string[]>([])
+  // 挑实例（F2）：命中多个时只对勾的这几个生效（对象名），换对象清空
+  const [only, setOnly] = useState<string[]>([])
+  // 钉住的属性（F4）：对象名 → 属性路径，记在本机
+  const [pinMap, setPinMap] = useLocalPref<Record<string, string[]>>(`pins/${project.id}`, {})
   const [out, setOut] = useState<CallOut>()
   const [sentArgs, setSentArgs] = useState<Record<string, unknown>>()
   const [running, setRunning] = useState(false)
@@ -87,6 +93,7 @@ export function useObjCallState(d: GmData, live: boolean) {
     setVarSel(undefined)
     setOut(undefined)
     setPicked([])
+    setOnly([])
     setMode('call')
   }, [obj?.name])
 
@@ -106,8 +113,10 @@ export function useObjCallState(d: GmData, live: boolean) {
     setValues((v) => Object.fromEntries(f.params.map((p) => [p.name, v[p.name] ?? (p.obj ? undefined : '')])))
   }
 
-  /** 这次调用的定义：参数按类型转好，空的普通参数不传（用函数的默认值） */
-  const def = () => {
+  /** 挑了实例时，当前对象的规则收窄到勾的那几个（只用于这次执行） */
+  const narrowed = (o: GmObject): GmObject => (o.ref && only.length ? { ...o, ref: narrowRef(o.ref, only) } : o)
+  /** 这次调用的定义：参数按类型转好，空的普通参数不传（用函数的默认值）；narrow 时带上挑的实例（保存为 GM 时不带） */
+  const def = (narrow = false) => {
     const args: Record<string, unknown> = {}
     for (const p of fn?.params ?? []) {
       const v = values[p.name]
@@ -121,13 +130,14 @@ export function useObjCallState(d: GmData, live: boolean) {
         v && typeof v === 'object' && '$obj' in v ? [String((v as { $obj: string }).$obj)] : [],
       ),
     ]
+    const list = narrow ? objects.map((o) => (o.name === obj!.name ? narrowed(o) : o)) : objects
     return {
       kind: mode === 'get' ? ('get' as const) : ('call' as const),
       obj: obj!.name,
-      objects: objectsFor(objects, names),
+      objects: objectsFor(list, names),
       function: fn?.name,
       args,
-      many,
+      many: narrow ? narrowMany(only, many) : many,
       props: picked,
     }
   }
@@ -136,7 +146,7 @@ export function useObjCallState(d: GmData, live: boolean) {
     d.pushRecent({ ...r, key: `objcall:${r.call?.obj ?? ''}`, at: r.at ?? new Date().toISOString() })
   const run = async () => {
     if (!obj) return
-    const x = def()
+    const x = def(true)
     setRunning(true)
     setSentArgs(x.args)
     const r = await runCall(project.id, x, x.args, target)
@@ -456,6 +466,19 @@ export function useObjCallState(d: GmData, live: boolean) {
       save: () => setSaving(true),
       onNewRule,
       hits,
+      only,
+      setOnly,
+      pins: obj ? (pinMap[obj.name] ?? []) : [],
+      togglePin: (p: string) => {
+        if (!obj) return
+        const cur = pinMap[obj.name] ?? []
+        const next = cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]
+        const m = { ...pinMap, [obj.name]: next }
+        if (!next.length) delete m[obj.name]
+        setPinMap(m)
+      },
+      /** 改值时用的对象：挑了实例就是收窄后的 */
+      target: obj ? narrowed(obj) : undefined,
     },
   }
 }

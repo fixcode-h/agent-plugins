@@ -1,4 +1,4 @@
-import { ChevronRight, Copy, Ellipsis, RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { ChevronRight, ClipboardPaste, Copy, Ellipsis, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { Fragment, type MouseEvent, type ReactNode } from 'react'
 import { ConnPill } from '../../../conn/ConnPill.tsx'
 import { HelpTip } from '../../../HelpTip.tsx'
@@ -15,6 +15,7 @@ export function GmBar({
   file,
   onRefresh,
   onLuaSetup,
+  onImport,
 }: {
   crumbs: ReactNode[]
   help: ReactNode
@@ -22,6 +23,8 @@ export function GmBar({
   file?: string
   onRefresh: () => void
   onLuaSetup: () => void
+  /** 从剪贴板导入别人「复制为 JSON」的宏、对象、自定义 GM、模块 */
+  onImport: () => void
 }) {
   const { ui } = h()
   return (
@@ -48,6 +51,7 @@ export function GmBar({
         label={t('更多')}
         onClick={(e: MouseEvent<HTMLElement>) =>
           openMenuAt(e.currentTarget, [
+            { label: t('从剪贴板导入…'), icon: ClipboardPaste, hint: t('别人复制的宏、对象、GM'), onClick: onImport },
             { label: t('Lua GM 扫描设置…'), icon: SlidersHorizontal, onClick: onLuaSetup },
             file && 'sep',
             file && { title: t('数据存在 {f}（团队共用）', { f: file }) },

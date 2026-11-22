@@ -2,7 +2,10 @@ import { Wand2 } from 'lucide-react'
 import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
 import { deleteMacro } from '../../../shared/gm/item-ops.ts'
 import { placeOf } from '../../../shared/gm/modules.ts'
-import type { GmCat, GmCustom } from '../../../shared/gm/schema.ts'
+import { dropPreset, presetsOf, renamePreset, savePreset } from '../../../shared/gm/presets.ts'
+import type { GmArgPreset, GmCat, GmCustom } from '../../../shared/gm/schema.ts'
+import type { useAsk } from '../../ask.tsx'
+import { ArgPresets } from './presets/ArgPresets.tsx'
 import { useUe } from '../../ctx.tsx'
 import { t } from '../../host.ts'
 import { NotInstalled } from '../uekit/NotInstalled.tsx'
@@ -40,6 +43,7 @@ export function GmMain(p: {
   onOpenObjCall: (c: GmCustom) => void
   onEditRule: (c: GmCustom) => void
   onPickNone: () => void
+  ask: ReturnType<typeof useAsk>[1]
 }) {
   const { d, entry, run } = p
   // 自定义 GM 的对象此刻命中几个（gt.watch 推送）；没选自定义 GM 时不订阅
@@ -59,6 +63,19 @@ export function GmMain(p: {
       void d.saveGm({ ...d.gm, custom: d.gm.custom.map((x) => (x.id === g.id ? { ...x, objects } : x)) })
     }
   }
+
+  /** 参数预设条：存取 gm.json 的 argPresets（shared/gm/presets.ts） */
+  const presetBar = (key: string, current: GmArgPreset['args'], apply: (a: GmArgPreset['args']) => void) => (
+    <ArgPresets
+      presets={presetsOf(d.gm, key)}
+      current={current}
+      ask={p.ask}
+      onApply={apply}
+      onSave={(name) => void d.saveGm(savePreset(d.gm, key, name, current))}
+      onRename={(from, to) => void d.saveGm(renamePreset(d.gm, key, from, to))}
+      onDelete={(name) => void d.saveGm(dropPreset(d.gm, key, name))}
+    />
+  )
 
   if (p.cat === 'objcall') {
     if (p.gt.known && !p.gt.installed) return <NotInstalled name="GameTest" desc={NEED_GT()} />
@@ -99,6 +116,15 @@ export function GmMain(p: {
         onMacro={() => p.onMacro(entry)}
         onEditRule={() => p.onEditRule(c)}
         onSyncRule={syncRule(c)}
+        presets={
+          c.editable.length
+            ? presetBar(
+                entry.key,
+                Object.fromEntries(c.editable.map((n) => [n, run.valuesOf(c)[n]])),
+                (a) => !Array.isArray(a) && run.fill(entry, a),
+              )
+            : undefined
+        }
         onOpenObjCall={() => p.onOpenObjCall(c)}
         toChat={p.toChat}
         gm={d.gm}
@@ -128,6 +154,11 @@ export function GmMain(p: {
         onMacro={() => p.onMacro(entry)}
         toChat={p.toChat}
         onEditBinding={(prm, current) => p.onEditBinding(entry, prm, current)}
+        presets={
+          entry.params.length
+            ? presetBar(entry.key, run.argsOf(entry), (a) => Array.isArray(a) && run.fill(entry, a))
+            : undefined
+        }
       />
     )
   }

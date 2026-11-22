@@ -1,4 +1,5 @@
 import {
+  Braces,
   Copy,
   CopyPlus,
   FolderOpen,
@@ -14,6 +15,7 @@ import {
 import type { MouseEvent } from 'react'
 import { argsText, inCommon, macroKey, toggleCommon } from '../../../../shared/gm/common.ts'
 import { copyMacro, deleteMacro } from '../../../../shared/gm/item-ops.ts'
+import { shareMacro } from '../../../../shared/gm/share.ts'
 import type { GmFav, GmStore } from '../../../../shared/gm/schema.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
@@ -22,6 +24,7 @@ import { overrides } from '../custom/run-custom.ts'
 import type { GmEntry } from '../data.ts'
 import type { RecentRun } from '../RecentRuns.tsx'
 import { runMacro } from '../run.ts'
+import { modsOf } from './GmNav.tsx'
 import { catOf, type GmMenuCtx, type MenuList } from './use-gm-menus.ts'
 
 /**
@@ -37,10 +40,11 @@ export function useItemMenus(ctx: GmMenuCtx, save: (g: GmStore) => Promise<void>
   const macroWhy = d.inst ? '' : t('UE 没在运行：GM 要在运行中的编辑器或游戏里执行')
 
   /** 从菜单执行宏：结果只弹提示（每一步的输出在宏编辑页里执行才看得到），所以同时打开这个宏 */
-  const execMacro = async (id: string) => {
+  /** 执行宏；open=false 时不切到宏分类（快速执行栏里执行，留在原地） */
+  const execMacro = async (id: string, open = true) => {
     const m = d.gm.macros.find((x) => x.id === id)
     if (!m) return
-    ctx.open({ kind: 'macro', id }, 'macro')
+    if (open) ctx.open({ kind: 'macro', id }, 'macro')
     try {
       const r = await runMacro(project.id, id, target)
       if (r.ok) toast.success(t('宏「{n}」执行完了（{k} 步）', { n: m.name, k: r.steps.length }))
@@ -85,6 +89,12 @@ export function useItemMenus(ctx: GmMenuCtx, save: (g: GmStore) => Promise<void>
           await save(r.g)
           ctx.open({ kind: 'macro', id: r.id }, 'macro')
         },
+      },
+      {
+        label: t('复制为 JSON'),
+        icon: Braces,
+        hint: t('带上它调的自定义 GM'),
+        onClick: () => copyText(shareMacro(d.gm, id, modsOf(d)) ?? ''),
       },
       {
         label: fav ? t('移出常用') : t('加到常用'),
@@ -182,5 +192,5 @@ export function useItemMenus(ctx: GmMenuCtx, save: (g: GmStore) => Promise<void>
     ])
   }
 
-  return { onMacroMenu, favMenu, onRecentMenu }
+  return { onMacroMenu, favMenu, onRecentMenu, execMacro }
 }

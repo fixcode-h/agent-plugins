@@ -5,7 +5,7 @@ import type { GmModule } from '../../../../shared/gm/schema.ts'
 import { useAsk } from '../../../ask.tsx'
 import { Checkbox } from '../../../details/controls.tsx'
 import { h, t } from '../../../host.ts'
-import { argText } from './CallForm.tsx'
+import { argText } from '../../../obj-kit/CallForm.tsx'
 import { ObjName, ObjRule, type ObjLike } from './ObjRule.tsx'
 
 const NEW = '§new'

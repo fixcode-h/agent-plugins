@@ -1,4 +1,15 @@
-import { ArrowDown, ArrowUp, Check, CirclePlus, MessageSquarePlus, Pencil, Play, Trash2, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  CirclePlus,
+  Hourglass,
+  MessageSquarePlus,
+  Pencil,
+  Play,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
 import { callText } from '../../../shared/gm/custom.ts'
 import { customKey, type GmMacro } from '../../../shared/gm/schema.ts'
@@ -16,6 +27,7 @@ const listArgs = (a: Step['args']) => (Array.isArray(a) ? a : [])
 
 /** 一步怎么显示：Lua 按扫描结果拼出调用代码，C++ 是控制台写法，自定义 GM 是「在 对象 上调 函数(参数)」 */
 export function stepText(s: Step, find: (key: string) => GmEntry | undefined) {
+  if (s.wait !== undefined) return t('等 {n} 秒', { n: s.wait })
   if (s.console) return s.console
   if (s.custom) {
     const c = find(customKey(s.custom))?.custom
@@ -70,7 +82,11 @@ export function MacroPane({
       setRes({
         macro: macro.id,
         steps: r.steps,
-        error: r.ok ? undefined : t('第 {n} 步失败，后面的没执行', { n: r.failedAt ?? 0 }),
+        error: r.ok
+          ? undefined
+          : r.failed?.length
+            ? t('第 {n} 步失败，跳过接着执行完了', { n: r.failed.join('、') })
+            : t('第 {n} 步失败，后面的没执行', { n: r.failedAt ?? 0 }),
       })
     } catch (e) {
       setRes({ macro: macro.id, steps: [], error: (e as Error).message })
@@ -110,7 +126,15 @@ export function MacroPane({
               >
                 <span className="ue:w-4 ue:shrink-0 ue:text-caption ue:text-subtle">{i + 1}</span>
                 <Badge tone={s.lua || s.custom ? 'accent' : 'muted'}>
-                  {s.console ? t('命令') : s.custom ? t('自定义') : s.lua ? 'Lua' : 'C++'}
+                  {s.wait !== undefined
+                    ? t('等待')
+                    : s.console
+                      ? t('命令')
+                      : s.custom
+                        ? t('自定义')
+                        : s.lua
+                          ? 'Lua'
+                          : 'C++'}
                 </Badge>
                 <code className="ue:min-w-0 ue:flex-1 ue:truncate ue:font-mono ue:text-footnote ue:text-fg">
                   {stepText(s, find)}
@@ -187,6 +211,31 @@ export function MacroPane({
             onChange={(e: { target: { value: string } }) => setCmd(e.target.value)}
           />
         </form>
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2 ue:text-footnote ue:text-subtle">
+          <ui.Button
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              const v = await ask({ title: t('加一步等待'), label: t('等几秒（最多 600）'), init: '1' })
+              const n = Number(v)
+              if (v === undefined || !Number.isFinite(n) || n < 0) return
+              set([...steps, { wait: Math.min(n, 600) }])
+            }}
+          >
+            <Hourglass className="ue:h-3.5 ue:w-3.5" /> {t('加一步等待…')}
+          </ui.Button>
+          <span className="ue:ml-auto">{t('某步失败时')}</span>
+          <ui.Segmented
+            size="sm"
+            label={t('某步失败时')}
+            value={macro.onFail ?? 'stop'}
+            onChange={(v: 'stop' | 'skip') => void onSave({ ...macro, onFail: v === 'stop' ? undefined : v })}
+            options={[
+              { id: 'stop' as const, label: t('停下') },
+              { id: 'skip' as const, label: t('跳过继续') },
+            ]}
+          />
+        </div>
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
           <ui.Button
             size="sm"
@@ -201,7 +250,12 @@ export function MacroPane({
               <MessageSquarePlus className="ue:h-3.5 ue:w-3.5" /> {t('发给对话')}
             </ui.Button>
           )}
-          <span className="ue:text-caption ue:text-subtle">{canRun || t('任何一步失败就停下，标出是哪一步')}</span>
+          <span className="ue:text-caption ue:text-subtle">
+            {canRun ||
+              (macro.onFail === 'skip'
+                ? t('某步失败时跳过接着做，最后标出失败的步')
+                : t('任何一步失败就停下，标出是哪一步'))}
+          </span>
           <ui.Button size="sm" variant="ghost" className="ue:ml-auto ue:text-danger" onClick={onDelete}>
             <Trash2 className="ue:h-3.5 ue:w-3.5" /> {t('删除宏')}
           </ui.Button>

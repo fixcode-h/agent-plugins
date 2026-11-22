@@ -1,4 +1,5 @@
 import { Check, Crosshair, History, ListPlus, MessageSquarePlus, Package, Play, Star, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../../server/lua-gm/types.ts'
 import type { GmRun } from '../../../../server/store.ts'
 import { callText, isObjArg } from '../../../../shared/gm/custom.ts'
@@ -7,8 +8,8 @@ import { h, t } from '../../../host.ts'
 import { Badge } from '../../../ui.tsx'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import type { GmEntry, GmParam } from '../data.ts'
-import { CallForm, SigCard, type CallParam } from './CallForm.tsx'
-import { CallOutput, Section } from './CallOutput.tsx'
+import { CallForm, SigCard, type CallParam } from '../../../obj-kit/CallForm.tsx'
+import { CallOutput, Section } from '../../../obj-kit/CallOutput.tsx'
 import { AgentBadge, HitBadge, ObjName, ObjRule } from './ObjRule.tsx'
 import type { CallOut } from './run-custom.ts'
 
@@ -81,6 +82,8 @@ export function CustomDetail(p: {
   onEditRule: () => void
   /** 对象列表里同名对象的规则和这条 GM 的副本不一样时给：把列表里的规则抄过来（B11） */
   onSyncRule?: () => void
+  /** 参数预设条（ArgPresets），有可改的参数时才给 */
+  presets?: ReactNode
   onOpenObjCall: () => void
   toChat?: (text: string) => void
   gm: GmStore
@@ -144,6 +147,7 @@ export function CustomDetail(p: {
                 aside={c.editable.length ? t('只有「执行时可改」的参数能改') : t('参数都是存好的')}
               >
                 <SigCard sig={{ name: c.function ?? '', sig }} />
+                {p.presets}
                 <CallForm
                   fn={c.function ?? ''}
                   params={customParams(c)}

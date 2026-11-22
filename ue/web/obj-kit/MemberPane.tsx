@@ -1,11 +1,12 @@
 import { CodeXml, Copy, Play, SquareFunction } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { GmObject } from '../../../../shared/gm/schema.ts'
-import type { Prop } from '../../../details/model.ts'
-import { h, t } from '../../../host.ts'
-import { copyText, openMenu } from '../../../menu.tsx'
-import { useProps } from '../../uekit/gt-ref/live.ts'
-import { useVars } from '../../uekit/gt-vars/model.ts'
+import type { GmObject } from '../../shared/gm/schema.ts'
+import type { Prop } from '../details/model.ts'
+import { h, t } from '../host.ts'
+import { copyText, openMenu } from '../menu.tsx'
+import { useConnState } from '../conn/ConnPill.tsx'
+import { useProps } from '../sections/uekit/gt-ref/live.ts'
+import { useVars } from '../sections/uekit/gt-vars/model.ts'
 import { fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
 import { VarList, type VarSel } from './VarList.tsx'
 
@@ -32,6 +33,8 @@ export function MemberPane({
   varSel,
   onVar,
   rev = 0,
+  pinned,
+  onTogglePin,
 }: {
   project: string
   obj: GmObject
@@ -52,6 +55,9 @@ export function MemberPane({
   onVar: (v: VarSel) => void
   /** 改完变量加一：重读属性 */
   rev?: number
+  /** 钉住的属性（F4） */
+  pinned?: string[]
+  onTogglePin?: (prop: string) => void
 }) {
   const { ui, cn } = h()
   // 搜索按页签各记各的，换对象清空（L8：以前共用一个，切页签像是列表空了）
@@ -63,8 +69,17 @@ export function MemberPane({
   }
   const q = qs[tab] ?? ''
   const setQ = (v: string) => setQs((m) => ({ ...m, [tab]: v }))
-  const vars = useVars(project, scopeOf(obj), live)
-  const props = useProps(project, obj.ref && live ? { target: { obj: obj.ref as { class: string } } } : undefined, rev)
+  // 游戏没在跑时按类列成员（F3）：函数用 gt.vars scope=class，属性用 gt.props 的 class 模式给类默认值，
+  // 能先看清有什么、填好参数，开 PIE 后再调；游戏开着时照旧读命中的实例
+  const game = useConnState().state === 'game'
+  const cls = (obj.ref as { class?: string } | undefined)?.class
+  const byClass = !game && !!cls
+  const vars = useVars(project, byClass ? { scope: 'class', name: cls! } : scopeOf(obj), live)
+  const props = useProps(
+    project,
+    obj.ref && live ? (game ? { target: { obj: obj.ref as { class: string } } } : { class: cls! }) : undefined,
+    rev,
+  )
   const groups = vars.data?.groups ?? []
   const fns = useMemo(() => fnsOf(groups.filter((g) => g.src !== 'lua')), [groups])
   const luaFns = useMemo(() => fnsOf(groups.filter((g) => g.src === 'lua')), [groups])
@@ -104,6 +119,8 @@ export function MemberPane({
       picking={picking}
       picked={picked}
       onTogglePick={onTogglePick}
+      pinned={pinned}
+      onTogglePin={obj.ref ? onTogglePin : undefined}
     />
   )
   const k = q.trim().toLowerCase()
@@ -154,6 +171,14 @@ export function MemberPane({
   )
   const note = (s: string) => <p className="ue:p-3 ue:text-footnote ue:text-subtle">{s}</p>
   const offline = !live ? note(t('UE 没连上：连上编辑器才列得出这个对象的成员，值要游戏在跑才读得到')) : null
+  const defaults =
+    live && byClass && (tab === 'props' || tab === 'states') ? (
+      <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
+        {tab === 'props'
+          ? t('游戏没在运行：这里是类的默认值，开 PIE 后读命中实例此刻的值')
+          : t('游戏没在运行：运行状态要开 PIE 后才有')}
+      </p>
+    ) : null
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-2">
@@ -179,6 +204,7 @@ export function MemberPane({
         )}
       </div>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:p-1">
+        {defaults}
         {(vars.error || props.error) && (
           <p className="ue:p-2 ue:text-footnote ue:text-danger">{vars.error || props.error}</p>
         )}

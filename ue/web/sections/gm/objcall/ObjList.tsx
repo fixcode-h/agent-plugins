@@ -1,4 +1,5 @@
 import {
+  Braces,
   Copy,
   Crosshair,
   FolderInput,
@@ -16,8 +17,9 @@ import {
 } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
+import { shareObject } from '../../../../shared/gm/share.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu, openMenuAt, type MenuItem } from '../../../menu.tsx'
+import { copyText, openMenu, openMenuAt, type MenuItem } from '../../../menu.tsx'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import { FileTree, type TreeLeaf } from '../../uekit/tree.tsx'
 import type { DragSrc } from '../../uekit/tree-dnd.ts'
@@ -131,6 +133,7 @@ export function ObjList({
       { label: t('重命名'), icon: Pencil, onClick: () => onRename(o) },
       { label: t('复制'), icon: Copy, onClick: () => onCopy(o) },
       { label: t('移到文件夹…'), icon: FolderInput, onClick: () => onMoveTo(o) },
+      { label: t('复制为 JSON'), icon: Braces, onClick: () => copyText(shareObject(o)) },
       {
         label: isFav(o.name) ? t('移出常用') : t('加到常用'),
         icon: isFav(o.name) ? StarOff : Star,
