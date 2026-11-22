@@ -6,6 +6,8 @@ export interface Prop {
   type: string
   category?: string
   tooltip?: string
+  /** 名字后面圆底问号里的说明（名字只放短名，用户 2026-11-22） */
+  help?: string
   replicated?: boolean
   readOnly?: boolean
   /** 不能改的原因（桥接给的：EditConst、内部状态、只能在默认值 / 实例上改…） */

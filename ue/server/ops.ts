@@ -491,6 +491,12 @@ export async function runOp(
         instance: { pid: card.pid, kind: card.kind },
       }),
       offlineClasses: async (a, note) => ({ ...(await offlineClasses(ctx.project, a, note)) }),
+      // 只读实例表这一层、不列函数；旧 UELink、没装 UnLua 时出错就不补（gtRefOp 吞掉）
+      luaFields: async (card, path) =>
+        (await rpc(card, 'lua.get', { path, keys: [], functions: false, limit: 1000 }, timeoutMs)) as Record<
+          string,
+          unknown
+        >,
     })
   // GameTest 的只读操作：编辑器没开（或网页说它正忙、要磁盘上的）时直接读场景、报告和历史文件（uekit/gt-disk.ts）
   if (

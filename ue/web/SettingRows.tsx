@@ -1,4 +1,5 @@
-import { CircleHelp, Plus, type LucideIcon } from 'lucide-react'
+import { Plus, type LucideIcon } from 'lucide-react'
+import { HelpTip } from './HelpTip.tsx'
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { h, t } from './host.ts'
 
@@ -100,26 +101,8 @@ export function SettingsPage({ children, scrollKey }: { children: ReactNode; scr
   )
 }
 
-/** 标题旁的问号：悬停或聚焦时显示详细说明（边界情况、原理、需要哪个版本） */
-export function HelpTip({ children }: { children: ReactNode }) {
-  return (
-    <span className="ue:group/tip ue:relative ue:inline-flex ue:items-center">
-      <button
-        type="button"
-        aria-label={t('说明')}
-        className="ue:inline-flex ue:cursor-help ue:text-subtle ue:transition-colors ue:hover:text-fg ue:focus-visible:text-fg ue:focus-visible:outline-none"
-      >
-        <CircleHelp className="ue:h-3.5 ue:w-3.5" />
-      </button>
-      <span
-        role="tooltip"
-        className="ue:pointer-events-none ue:invisible ue:absolute ue:top-full ue:left-1/2 ue:z-30 ue:mt-1.5 ue:w-72 ue:-translate-x-1/2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:bg-card ue:px-3 ue:py-2 ue:text-footnote ue:leading-relaxed ue:font-normal ue:text-muted ue:opacity-0 ue:shadow-lg ue:transition-opacity ue:group-hover/tip:visible ue:group-hover/tip:opacity-100 ue:group-focus-within/tip:visible ue:group-focus-within/tip:opacity-100"
-      >
-        {children}
-      </span>
-    </span>
-  )
-}
+/** 标题旁的问号：共用组件在 HelpTip.tsx（属性树、判断条件也用） */
+export { HelpTip }
 
 /** 卡片底色：和面板 .settings-card 一样是前景色 3.5% 叠在背景上 */
 const CARD = 'ue:flex ue:flex-col ue:rounded-(--panel-radius,0) ue:bg-fg/[3.5%]'

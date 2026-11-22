@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import type { PluginServerContext } from '../../../../sdk/server.ts'
+import type { GtPropItem } from '../../../shared/gt-script/ref/types.ts'
 import { setCtx } from '../../util.ts'
 import { gameTestTooOld, gtRefOp } from './ops.ts'
 import { luaKind, mergeLuaProps } from './lua-props.ts'
@@ -69,8 +70,10 @@ test('Lua 声明合进 self 组：UE 给了的保留值，只有声明的带 not
   assert.ok(id.ops?.includes('eq'))
   assert.match(id.note ?? '', /商店编号/)
   assert.match(id.declAt ?? '', /UI\/Shop\.lua:3/)
+  // 类型要运行时才知道的 self 变量也能加进判断（用户 2026-11-22），按文字比
   const owner = items.find((x) => x.name === 'owner')!
-  assert.equal(owner.comparable, false)
+  assert.notEqual(owner.comparable, false)
+  assert.equal(owner.kind, 'string')
   assert.equal(mergeLuaProps([], decl, { selfTitle: '自己', filter: 'shop' }).groups[0].items.length, 1)
 })
 
@@ -219,4 +222,96 @@ test('注解里带空格的类型不切断（table<number, Foo>|nil）', async (
   assert.deepEqual(splitType('table<number, Foo>|nil 当前索引'), { type: 'table<number, Foo>|nil', note: '当前索引' })
   assert.deepEqual(splitType('number | string 名字'), { type: 'number | string', note: '名字' })
   assert.deepEqual(splitType('boolean'), { type: 'boolean', note: '' })
+})
+
+test('gt.props：游戏开着、选了实例时按实例表补 UE 没给的 Lua 字段此刻的值，nil 的说清原因', async () => {
+  await mkdir(path.join(proj, 'Content', 'Script', 'Player'), { recursive: true })
+  await writeFile(
+    path.join(proj, 'Content', 'Script', 'Player', 'Hero.lua'),
+    'local M = {}\nfunction M:ReceiveBeginPlay()\n  self.DefaultFOV = self.Camera.FieldOfView\n  self.Later = nil\nend\nreturn M\n',
+  )
+  let asked: unknown
+  const deps = {
+    project: { root: proj },
+    pick: async () => ({}),
+    send: async () => ({ class: 'BP_Hero_C', luaModule: 'Player.Hero', groups: [] }),
+    luaFields: async (_c: unknown, p: string) => {
+      asked = p
+      return {
+        value: { t: 'table' },
+        fields: [
+          { k: 'DefaultFOV', kt: 'string', t: 'number', v: 90 },
+          { k: 'Bag', kt: 'string', t: 'table', v: 'table: 0x1' },
+          { k: 'Tick', kt: 'string', t: 'function' },
+          { k: 'Mode', kt: 'string', t: 'string', v: 'run' },
+        ],
+      }
+    },
+  }
+  const r = await gtRefOp('gt.props', { path: '/Game/Map.Map:Hero_1' }, deps)
+  assert.equal(asked, '/Game/Map.Map:Hero_1')
+  const items = (r.groups as { id: string; items: GtPropItem[] }[]).find((g) => g.id === 'self')!.items
+  const fov = items.find((x) => x.name === 'DefaultFOV')!
+  assert.equal(fov.value, 90)
+  assert.equal(fov.kind, 'float')
+  assert.equal(fov.fromSource, undefined)
+  assert.match(fov.declAt ?? '', /Player\/Hero\.lua:3/)
+  const later = items.find((x) => x.name === 'Later')!
+  assert.equal(later.fromSource, true)
+  assert.match(later.srcWhy ?? '', /nil/)
+  // 源码里没认出来的也列出来；函数不算字段，表不能直接比
+  assert.equal(items.find((x) => x.name === 'Mode')?.value, 'run')
+  assert.equal(
+    items.find((x) => x.name === 'Tick'),
+    undefined,
+  )
+  assert.equal(items.find((x) => x.name === 'Bag')?.value, undefined)
+  // 只按类读（没选实例）：说没选实例，不说游戏没开
+  const cls = await gtRefOp('gt.props', { class: 'BP_Hero_C' }, deps)
+  const one = (cls.groups as { id: string; items: GtPropItem[] }[])[0].items.find((x) => x.name === 'DefaultFOV')!
+  assert.match(one.srcWhy ?? '', /没选实例/)
+})
+
+test('gt.classes lua：类树按磁盘源码列，UE 只补此刻实例数；磁盘读不到时用 UE 的', async () => {
+  const ue = {
+    items: [
+      { name: 'BP_Game_C', kind: 'lua', kids: 0, live: 1 },
+      { name: 'UnLua', kind: 'lua', kids: 0, live: 0 },
+    ],
+    dirs: [{ name: 'UnLua', count: 2 }],
+    total: 2,
+    hasMore: false,
+  }
+  const disk = {
+    items: [
+      { name: 'BP_CharacterBase_C', kind: 'lua', kids: 0 },
+      { name: 'BP_Game_C', kind: 'lua', kids: 0 },
+    ],
+    dirs: [{ name: 'Tests', count: 3 }],
+    total: 2,
+    hasMore: false,
+    note: '',
+  }
+  const deps = (d: typeof disk | undefined) => ({
+    project: { root: proj },
+    pick: async () => ({}),
+    send: async () => ue,
+    offlineClasses: async () => {
+      if (!d) throw new Error('no index')
+      return d
+    },
+  })
+  const r = await gtRefOp('gt.classes', { lua: true, dir: '' }, deps(disk))
+  assert.deepEqual(
+    (r.items as { name: string; live?: number }[]).map((x) => [x.name, x.live]),
+    [
+      ['BP_CharacterBase_C', undefined],
+      ['BP_Game_C', 1],
+    ],
+  )
+  assert.deepEqual(r.dirs, [{ name: 'Tests', count: 3 }])
+  assert.equal(r.note, undefined)
+  assert.equal((await gtRefOp('gt.classes', { lua: true, dir: '' }, deps(undefined))).total, 2)
+  // UE 类树（不是 lua）照旧用 UE 的
+  assert.equal((await gtRefOp('gt.classes', {}, deps(disk))).dirs, ue.dirs)
 })

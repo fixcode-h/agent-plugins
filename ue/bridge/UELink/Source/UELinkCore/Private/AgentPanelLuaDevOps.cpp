@@ -38,6 +38,8 @@ void AgentPanelRegisterLuaDevOps(FAgentPanelBridge&) {}
 #include "Internationalization/Regex.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "UObject/Class.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace AgentPanelLuaDev
 {
@@ -396,7 +398,8 @@ namespace AgentPanelLuaDev
 	/** 脚本根目录：参数给的（相对项目目录），默认 Content/Script（UnLua 的默认位置） */
 	FString ScriptRoot(const TSharedPtr<FJsonObject>& A)
 	{
-		const FString Root = Str(A, TEXT("root"));
+		// 请求没给时用面板下发的 Lua 设置（lua.config）里的脚本根
+		const FString Root = Str(A, TEXT("root"), LuaConfig().ScriptRoot);
 		if (Root.IsEmpty())
 		{
 			return FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() / TEXT("Script"));
@@ -657,7 +660,8 @@ namespace AgentPanelLuaDev
 	}
 
 	/** 一张表里的函数加进列表（同名的只留第一次见到的：自己的盖住继承的）；From 是第几层 */
-	void CollectFunctions(lua_State* L, int T, int32 From, TSet<FString>& Seen, TArray<TSharedPtr<FJsonValue>>& Out)
+	/** CCache 不为空时 C 函数不进 Out、放进 CCache（自己那层用：那是 UnLua 第一次调 UE 函数时缓存到表上的包装，归 UE 那层） */
+	void CollectFunctions(lua_State* L, int T, int32 From, TSet<FString>& Seen, TArray<TSharedPtr<FJsonValue>>& Out, TArray<TSharedPtr<FJsonObject>>* CCache = nullptr)
 	{
 		lua_pushnil(L);
 		while (lua_next(L, T))
@@ -667,7 +671,14 @@ namespace AgentPanelLuaDev
 				size_t N = 0;
 				const char* S = lua_tolstring(L, -2, &N);
 				const FString Name = FromUtf8(S, N);
-				if (!Seen.Contains(Name) && !(From > 0 && Name.StartsWith(TEXT("__"))))
+				if (CCache && lua_iscfunction(L, -1) && !Name.StartsWith(TEXT("__")))
+				{
+					TSharedPtr<FJsonObject> F = MakeShared<FJsonObject>();
+					F->SetStringField(TEXT("name"), Name);
+					DescribeFunction(L, -1, F);
+					CCache->Add(F);
+				}
+				else if (!Seen.Contains(Name) && !(From > 0 && Name.StartsWith(TEXT("__"))))
 				{
 					Seen.Add(Name);
 					TSharedPtr<FJsonObject> F = MakeShared<FJsonObject>();
@@ -835,6 +846,38 @@ namespace AgentPanelLuaDev
 			lua_rawset(L, G);
 		}
 	};
+}
+
+namespace AgentPanelLuaChain
+{
+	/**
+	 * 元表链上 UnLua 给 UE 类建的那层，注册表里的名字可能是「AActor」这种类名，也可能是
+	 * 「/Game/.../ABP_X.ABP_X_C」这种路径（用户的 UnLua 分支就是路径）。两种都认，找不到返回 nullptr
+	 */
+	static UStruct* Resolve(const FString& Name)
+	{
+		if (Name.IsEmpty())
+		{
+			return nullptr;
+		}
+		if (Name.StartsWith(TEXT("/")))
+		{
+			return FindObject<UStruct>(nullptr, *Name);
+		}
+		UStruct* S = FindFirstObject<UStruct>(*Name, EFindFirstObjectOptions::NativeFirst);
+		// UnLua 的名字带 U / A / F 前缀，反射里的名字不带
+		if (!S && Name.Len() > 1 && (Name[0] == TEXT('U') || Name[0] == TEXT('A') || Name[0] == TEXT('F')))
+		{
+			S = FindFirstObject<UStruct>(*Name.Mid(1), EFindFirstObjectOptions::NativeFirst);
+		}
+		return S;
+	}
+
+	/** 显示用的短名：C++ 类带前缀（AActor），蓝图类用生成类名（ABP_X_C） */
+	static FString ShortName(const UStruct* S)
+	{
+		return S->IsNative() ? FString(S->GetPrefixCPP()) + S->GetName() : S->GetName();
+	}
 }
 
 void FAgentPanelLua::CaptureError(lua_State* L, const FString& Message)
@@ -1157,20 +1200,32 @@ void AgentPanelRegisterLuaDevOps(FAgentPanelBridge& B)
 		}
 		TSet<FString> Seen;
 		TArray<TSharedPtr<FJsonValue>> Fns;
+		TArray<TSharedPtr<FJsonObject>> OwnC;
+		int32 FirstUe = 0;
 		TSet<FString> UpSeen;
 		TArray<TSharedPtr<FJsonValue>> Ups;
 		if (Type == LUA_TTABLE)
 		{
 			ListOwnFields(C, V, FMath::Max(0, Int(A, TEXT("offset"), 0)), FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 1000), Out);
-			CollectFunctions(L, V, 0, Seen, Fns);
+			CollectFunctions(L, V, 0, Seen, Fns, &OwnC);
 			CollectUpvalues(C, V, UpSeen, Ups);
 		}
-		// 元表链：每层取 __index（是表时）或元表本身，最多 6 层
+		// 元表链：每层取 __index（是表时）或元表本身，最多 16 层（UE 类一路到 UObject 常有十层上下，2.18 及以前只走 6 层）。
+		// 走过的表记下来：UnLua 给 UE 类建的元表常是自己的元表（__index 是函数），2.19.0 没防这个，同一层会重复到 16 次
 		TArray<TSharedPtr<FJsonValue>> Chain;
+		TSet<const void*> Visited;
+		TSet<FString> ChainNames;
+		FString LastUe;
+		Visited.Add(lua_topointer(L, V));
 		lua_pushvalue(L, V);
-		for (int32 Depth = 1; Depth <= 6 && lua_getmetatable(L, -1); ++Depth)
+		for (int32 Depth = 1; Depth <= 16 && lua_getmetatable(L, -1); ++Depth)
 		{
 			const int MT = lua_gettop(L);
+			if (Visited.Contains(lua_topointer(L, MT)))
+			{
+				break;
+			}
+			Visited.Add(lua_topointer(L, MT));
 			lua_pushstring(L, "__index");
 			lua_rawget(L, MT);
 			const int Src = lua_istable(L, -1) ? lua_gettop(L) : MT;
@@ -1180,7 +1235,38 @@ void AgentPanelRegisterLuaDevOps(FAgentPanelBridge& B)
 			{
 				Name = C.ModuleOfTable(lua_topointer(L, MT));
 			}
+			if (Name.IsEmpty())
+			{
+				Name = C.ModuleFromSource(Src);
+			}
+			// 是模块就是 Lua 写的那一层；不是模块时去注册表按名字反查，查到的是 UnLua 给 UE 类建的元表
+			FString Kind = Name.IsEmpty() ? FString() : TEXT("lua");
+			if (Name.IsEmpty())
+			{
+				Name = C.RegistryNameOf(lua_topointer(L, MT));
+				if (Name.IsEmpty() && Src != MT)
+				{
+					Name = C.RegistryNameOf(lua_topointer(L, Src));
+				}
+				Kind = Name.IsEmpty() ? FString() : TEXT("ue");
+			}
+			if (Kind == TEXT("ue"))
+			{
+				LastUe = Name;
+				FirstUe = FirstUe ? FirstUe : Depth;
+				// 路径名只留类名显示，完整路径放 path
+				if (const UStruct* S = AgentPanelLuaChain::Resolve(Name))
+				{
+					Layer->SetStringField(TEXT("path"), Name);
+					Name = AgentPanelLuaChain::ShortName(S);
+				}
+			}
+			ChainNames.Add(Name);
 			Layer->SetStringField(TEXT("name"), Name);
+			if (!Kind.IsEmpty())
+			{
+				Layer->SetStringField(TEXT("kind"), Kind);
+			}
 			const int32 Before = Fns.Num();
 			CollectFunctions(L, Src, Depth, Seen, Fns);
 			if (Fns.Num() > Before)
@@ -1198,9 +1284,42 @@ void AgentPanelRegisterLuaDevOps(FAgentPanelBridge& B)
 			{
 				CollectUpvalues(C, Src, UpSeen, Ups);
 			}
+			if (Src != MT)
+			{
+				Visited.Add(lua_topointer(L, Src));
+			}
 			lua_settop(L, Src);
 		}
 		lua_settop(L, V);
+		// 自己表上的 C 函数是调过一次的 UE 函数（UnLua 缓存的包装）：归到第一层 UE 类，免得调一次就从 UE 那组跳到「自己的」
+		for (const TSharedPtr<FJsonObject>& F : OwnC)
+		{
+			const FString Name = F->GetStringField(TEXT("name"));
+			if (!Seen.Contains(Name))
+			{
+				Seen.Add(Name);
+				F->SetNumberField(TEXT("from"), FirstUe);
+				Fns.Add(MakeShared<FJsonValueObject>(F));
+			}
+		}
+		// 元表链走到 UE 类那层就断了（UnLua 分支不一定把父类元表挂成元表）：按反射把真实父类补到 UObject，没函数，只显示
+		if (const UStruct* S = AgentPanelLuaChain::Resolve(LastUe))
+		{
+			for (const UStruct* Super = S->GetSuperStruct(); Super; Super = Super->GetSuperStruct())
+			{
+				const FString N = AgentPanelLuaChain::ShortName(Super);
+				if (ChainNames.Contains(N))
+				{
+					continue;
+				}
+				ChainNames.Add(N);
+				TSharedPtr<FJsonObject> Layer = MakeShared<FJsonObject>();
+				Layer->SetStringField(TEXT("name"), N);
+				Layer->SetStringField(TEXT("kind"), TEXT("ue"));
+				Layer->SetBoolField(TEXT("reflected"), true);
+				Chain.Add(MakeShared<FJsonValueObject>(Layer));
+			}
+		}
 		Out->SetArrayField(TEXT("chain"), Chain);
 		Out->SetArrayField(TEXT("functions"), Fns);
 		Out->SetArrayField(TEXT("upvalues"), Ups);

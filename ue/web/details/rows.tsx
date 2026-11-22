@@ -2,6 +2,7 @@ import { Copy, CopyPlus, ListPlus, Pin, RotateCcw, Trash2, Undo2 } from 'lucide-
 import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { usePropAnim, usePropMark } from './marks.ts'
 import { show } from '../api.ts'
+import { HelpTip } from '../HelpTip.tsx'
 import { h, t } from '../host.ts'
 import {
   Caret,
@@ -31,6 +32,7 @@ export interface Node {
   readOnly?: boolean
   readOnlyWhy?: string
   tooltip?: string
+  help?: string
   replicated?: boolean
   container?: 'array' | 'set' | 'map'
   count?: number
@@ -55,6 +57,7 @@ export function nodeOf(p: Prop): Node {
     readOnly: p.readOnly,
     readOnlyWhy: p.readOnlyWhy,
     tooltip: p.tooltip,
+    help: p.help,
     replicated: p.replicated,
     // 旧桥接没有 container：数组只显示个数，不给加删按钮（旧桥接不认 array 参数）
     container: p.container,
@@ -242,6 +245,7 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
           <span className={cn('ue:truncate ue:text-footnote', ro || dim ? 'ue:text-muted' : 'ue:text-fg')}>
             <Hl text={n.label} q={depth ? '' : d.q} />
           </span>
+          {n.help && <HelpTip>{n.help}</HelpTip>}
           {anim && (
             // 被动画驱动：照 UE 细节面板的菱形关键帧标记
             <span

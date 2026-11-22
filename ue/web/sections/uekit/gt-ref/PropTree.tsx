@@ -2,15 +2,19 @@ import { ChevronRight, Crosshair, Loader2, Search } from 'lucide-react'
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   comparable,
+  propLabel,
   type GtPropGroup,
   type GtPropItem,
   type GtPropsResult,
 } from '../../../../shared/gt-script/index.ts'
 import { show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
+import { HelpTip } from '../../../HelpTip.tsx'
 import { stateHint, stateOfProp } from './compare-table.ts'
 import { classShort } from './describe.ts'
 import { useColWidths, usePrefs } from './prefs.ts'
+
+const stateName = (name: string) => propLabel(`@:${name}`, { t })
 
 /** 两种用法：标识（多选，点行尾准星加进标识组 / 再点移出）、判断（单选，点准星选要判断的那个属性）；点行本身不选 */
 export type PropTreeMode = 'ident' | 'judge'
@@ -138,7 +142,7 @@ export function PropTree({
         key={key}
         role="row"
         aria-selected={on}
-        title={!ok ? (it.why ?? t('这种类型不能比')) : state ? stateHint(state) : it.note}
+        title={!ok ? (it.why ?? t('这种类型不能比')) : state ? undefined : it.note}
         style={gridStyle}
         // 只有行尾的准星加 / 移出（用户 2026-11-20 定）：点行本身不动标识组，免得浏览、选值时误加
         className={cn(
@@ -148,7 +152,9 @@ export function PropTree({
         )}
       >
         <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5" style={{ paddingLeft: 10 + depth * 14 }}>
-          <span className="ue:truncate ue:font-mono ue:text-fg">{it.name}</span>
+          {/* 运行状态只放短名，UE 给的那句说明进问号（用户 2026-11-22：命名杂乱） */}
+          <span className="ue:truncate ue:font-mono ue:text-fg">{state ? stateName(state) : it.name}</span>
+          {state && <HelpTip>{it.name !== stateName(state) ? it.name : stateHint(state)}</HelpTip>}
           {it.src !== 'state' && depth === 0 && <SrcTag src={it.src} />}
         </span>
         <span className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={it.type}>
