@@ -31,6 +31,8 @@ bool FAgentPanelLua::IsCompiledIn()
 
 void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 {
+	AgentPanelRegisterLuaObjectOps(B);
+	AgentPanelRegisterLuaInstanceOps(B);
 	AgentPanelRegisterLuaDevOps(B);
 	AgentPanelRegisterLuaDebugOps(B);
 	AgentPanelRegisterEmmyValues();
@@ -398,6 +400,10 @@ namespace AgentPanelLuaImpl
 		{
 			lua_pushglobaltable(C.L);
 			return true;
+		}
+		if (IsLuaRef(Path))
+		{
+			return PushLuaRef(C.L, Path, Error);
 		}
 		if (!C.Map)
 		{
@@ -811,7 +817,8 @@ namespace AgentPanelLuaImpl
 	{
 		const FString Path = Str(A, TEXT("path"));
 		Obj = nullptr;
-		if (!Path.IsEmpty())
+		// luaref:<编号> 是纯 Lua 实例（lua.instances 给的），不是对象路径：按目标世界选 Lua 环境
+		if (!Path.IsEmpty() && !IsLuaRef(Path))
 		{
 			Obj = FindObjectByPath(Path, false, Error);
 			if (!Obj)
@@ -922,99 +929,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 		return true;
 	});
 
-	// 找绑了 Lua 的对象：遍历对象表里值是实例表的项（绑定的对象通常几百到几千个，不用扫全部 UObject）
-	B.AddOp(TEXT("lua.objects"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
-	{
-		FLuaCtx C;
-		if (!C.Open(WorldContext(A), Error))
-		{
-			return false;
-		}
-		FTop Guard(C.L);
-		if (!C.Map)
-		{
-			Error = TEXT("Lua 注册表里没找到 UnLua 的对象表（这个 UnLua 分支可能改了存法）");
-			return false;
-		}
-		UWorld* World = nullptr;
-		if (!Str(A, TEXT("world")).IsEmpty())
-		{
-			World = FAgentPanelBridge::ResolveWorld(Str(A, TEXT("world")), Error);
-			if (!World)
-			{
-				return false;
-			}
-		}
-		const FString ClassName = Str(A, TEXT("class"));
-		UClass* Cls = nullptr;
-		if (!ClassName.IsEmpty())
-		{
-			Cls = ClassName.StartsWith(TEXT("/")) ? FindObject<UClass>(nullptr, *ClassName) : FindFirstObject<UClass>(*ClassName, EFindFirstObjectOptions::NativeFirst);
-			if (!Cls && !ClassName.EndsWith(TEXT("_C")))
-			{
-				Cls = FindFirstObject<UClass>(*(ClassName + TEXT("_C")), EFindFirstObjectOptions::None);
-			}
-			if (!Cls)
-			{
-				Error = FString::Printf(TEXT("找不到类 %s"), *ClassName);
-				return false;
-			}
-		}
-		const FString Prefix = Str(A, TEXT("prefix"));
-		const FString Module = Str(A, TEXT("module"));
-		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 200), 1, 1000);
-		lua_State* L = C.L;
-		// 先把绑定对象的指针收出来再逐个处理：取模块名时 GetModuleName 可能跑进 Lua、往对象表里加东西，
-		// 遍历中改表 lua_next 的行为是未定义的
-		TArray<void*> Ptrs;
-		lua_pushnil(L);
-		while (lua_next(L, C.Map))
-		{
-			if (lua_type(L, -2) == LUA_TLIGHTUSERDATA && lua_istable(L, -1))
-			{
-				Ptrs.Add(lua_touserdata(L, -2));
-			}
-			lua_pop(L, 1);
-		}
-		const int32 Bound = Ptrs.Num();
-		TArray<TSharedPtr<FJsonValue>> Items;
-		bool bMore = false;
-		for (void* P : Ptrs)
-		{
-			UObject* Obj = LiveObject(P);
-			if (!Obj || Obj->HasAnyFlags(RF_ClassDefaultObject) || (Cls && !Obj->IsA(Cls)) || !StartsWithNoCase(Obj->GetName(), Prefix) ||
-				(World && Obj->GetWorld() && Obj->GetWorld() != World))
-			{
-				continue;
-			}
-			FString Mod = InterfaceModule(Obj);
-			if (Mod.IsEmpty())
-			{
-				lua_rawgetp(L, C.Map, Obj);
-				if (lua_istable(L, -1))
-				{
-					Mod = C.ModuleOf(lua_gettop(L));
-				}
-				lua_pop(L, 1);
-			}
-			if (!Module.IsEmpty() && !Mod.Contains(Module, ESearchCase::IgnoreCase))
-			{
-				continue;
-			}
-			if (Items.Num() >= Limit)
-			{
-				bMore = true;
-				break;
-			}
-			TSharedPtr<FJsonObject> O = Brief(Obj);
-			O->SetStringField(TEXT("module"), Mod);
-			Items.Add(MakeShared<FJsonValueObject>(O));
-		}
-		Out->SetArrayField(TEXT("items"), Items);
-		Out->SetBoolField(TEXT("more"), bMore);
-		Out->SetNumberField(TEXT("bound"), Bound);
-		return true;
-	});
+	// lua.objects、lua.gc 在 AgentPanelLuaObjects.cpp（2.19 起）
 
 	// 读：对象的实例表 / 全局表，沿 keys 往下走；表列一层（分页），标量直接给值
 	B.AddOp(TEXT("lua.get"), [](const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
@@ -1178,7 +1093,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 				return false;
 			}
 		}
-		if (Obj)
+		if (Obj || IsLuaRef(Str(A, TEXT("path"))))
 		{
 			if (!PushRoot(C, Str(A, TEXT("path")), Obj, Error))
 			{
@@ -1256,6 +1171,8 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 	});
 
 	// 2.4 起的各组 Lua 操作各在自己的文件里登记
+	AgentPanelRegisterLuaObjectOps(B);
+	AgentPanelRegisterLuaInstanceOps(B);
 	AgentPanelRegisterLuaDevOps(B);
 	AgentPanelRegisterLuaDebugOps(B);
 	AgentPanelRegisterEmmyValues();

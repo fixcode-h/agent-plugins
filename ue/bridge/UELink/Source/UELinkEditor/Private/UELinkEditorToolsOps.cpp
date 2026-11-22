@@ -28,7 +28,7 @@ using namespace AgentPanelEd;
 // 不用匿名命名空间：单体编译时和 AgentPanelAssetOps.cpp 的同名小函数（Registry 等）会撞
 namespace UELinkEditorTools
 {
-	IAssetRegistry& Registry()
+	IAssetRegistry& ToolsRegistry()
 	{
 		return FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 	}
@@ -78,7 +78,7 @@ namespace UELinkEditorTools
 		Filter.bRecursivePaths = true;
 		Filter.ClassPaths.Add(UObjectRedirector::StaticClass()->GetClassPathName());
 		TArray<FAssetData> Found;
-		Registry().GetAssets(Filter, Found);
+		ToolsRegistry().GetAssets(Filter, Found);
 		Found.Sort([](const FAssetData& L, const FAssetData& R) { return L.PackageName.LexicalLess(R.PackageName); });
 		Total = Found.Num();
 		TArray<FRedirectorRow> Rows;
@@ -97,7 +97,7 @@ namespace UELinkEditorTools
 			{
 				Row.Target = R->DestinationObject ? R->DestinationObject->GetPathName() : FString();
 			}
-			Registry().GetReferencers(D.PackageName, Row.Referencers, UE::AssetRegistry::EDependencyCategory::Package);
+			ToolsRegistry().GetReferencers(D.PackageName, Row.Referencers, UE::AssetRegistry::EDependencyCategory::Package);
 			Rows.Add(MoveTemp(Row));
 		}
 		return Rows;

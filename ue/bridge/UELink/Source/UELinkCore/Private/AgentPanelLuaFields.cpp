@@ -50,7 +50,13 @@ namespace AgentPanelLuaFields
 		return false;
 	}
 
-	/** 栈上 T 位置的表 → JSON 对象（递归 Depth 层），字段预算用完就停 */
+	void ReadPass(lua_State* L, int T, int32 Depth, bool bTables, const TSharedPtr<FJsonObject>& Out, FBudget& Budget);
+
+	/**
+	 * 栈上 T 位置的表 → JSON 对象（递归 Depth 层），字段预算用完就停。
+	 * 分两遍：先收这一层的数、字符串、布尔，再进子表。一遍走时碰到大子表会先把预算吃光，
+	 * 后面同层的简单字段（如角色表上的 self.DefaultFOV）就读不到了（用户 2026-11-22）
+	 */
 	TSharedPtr<FJsonObject> ReadTable(lua_State* L, int T, int32 Depth, FBudget& Budget)
 	{
 		T = lua_absindex(L, T);
@@ -59,10 +65,27 @@ namespace AgentPanelLuaFields
 		{
 			return Out;
 		}
+		// 只读一层时子表本来就不进，不用走第二遍
+		for (int32 Pass = 0; Pass < (Depth > 1 ? 2 : 1) && Budget.Left > 0; ++Pass)
+		{
+			ReadPass(L, T, Depth, Pass == 1, Out, Budget);
+		}
+		return Out;
+	}
+
+	/** ReadTable 的一遍：bTables 为 false 时只收简单值，为 true 时只进子表 */
+	void ReadPass(lua_State* L, int T, int32 Depth, bool bTables, const TSharedPtr<FJsonObject>& Out, FBudget& Budget)
+	{
 		lua_pushnil(L);
 		while (lua_next(L, T))
 		{
 			// 栈：… 键 值
+			const bool bIsTable = lua_type(L, -1) == LUA_TTABLE;
+			if (bIsTable != bTables)
+			{
+				lua_pop(L, 1);
+				continue;
+			}
 			if (Budget.Left <= 0)
 			{
 				Budget.bMore = true;
@@ -104,7 +127,6 @@ namespace AgentPanelLuaFields
 			}
 			lua_pop(L, 1);
 		}
-		return Out;
 	}
 }
 

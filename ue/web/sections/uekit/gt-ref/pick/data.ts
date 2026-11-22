@@ -3,6 +3,7 @@ import {
   classKey,
   lastSegOf,
   luaClassOf,
+  propLabel,
   rebasePath,
   shortClass,
   type GtClassItem,
@@ -162,6 +163,18 @@ function noteOf(it: GtPropItem, siblings?: number): string | undefined {
   return parts.length ? parts.join(' · ') : undefined
 }
 
+const isState = (it: GtPropItem) => it.src === 'state' || lastSegOf(it.prop)?.kind === 'state'
+
+/** 问号里的说明：运行状态是 UE 给的那句话；Lua 字段是在哪声明的、值为什么是源码里的 */
+function helpOf(it: GtPropItem): string | undefined {
+  if (isState(it)) return it.name !== propLabel(it.prop, { t }) ? it.name : undefined
+  const lines = [
+    it.declAt && t('声明在 {at}', { at: it.declAt }),
+    it.fromSource && (it.srcWhy ?? t('游戏没开：值是源码里的初始值')),
+  ]
+  return lines.filter(Boolean).join('\n') || undefined
+}
+
 /**
  * gt.props 的项 → 细节面板的行。name 用属性路径本身：细节面板展开结构体、数组时子行的路径是「父路径 + .成员 / [i]」，
  * 正好是 v5 的写法，准星加标识时直接用。分组按 UE 的 Category（cat），没有时按 gt.props 的组名
@@ -169,16 +182,17 @@ function noteOf(it: GtPropItem, siblings?: number): string | undefined {
 export function toDetailProps(items: GtPropItem[], groupTitle: (it: GtPropItem) => string, siblings?: number): Prop[] {
   return items.map((it) => ({
     name: it.prop,
-    displayName: it.name,
+    // 名字只放短名，说明进名字后面的问号（用户 2026-11-22：命名杂乱）。运行状态的 name 是 UE 给的一整句说明，名字改用短名
+    displayName: isState(it) ? propLabel(it.prop, { t }) : it.name,
+    ...(helpOf(it) ? { help: helpOf(it) } : {}),
     type: it.type,
     category: it.cat || groupTitle(it),
     // 只在源码里看到的 Lua 字段（游戏没开）：有字面量初始值就是它；没有时显示源码里写的或类型，不留空框（用户 2026-11-21）
     value: it.value !== undefined || !it.fromSource ? it.value : (it.srcInit ?? `<${it.type}>`),
-    ...(it.declAt ? { tooltip: it.declAt } : {}),
     ...(it.members?.length ? { enum: it.members } : {}),
     readOnly: true,
     readOnlyWhy: it.fromSource
-      ? t('游戏没开：值是源码里的初始值（{at}）', { at: it.declAt ?? '' })
+      ? (it.srcWhy ?? t('游戏没开：值是源码里的初始值'))
       : t('这里只看此刻的值；要改值在脚本里用 obj.set'),
     edit: true,
     note: noteOf(it, siblings),
