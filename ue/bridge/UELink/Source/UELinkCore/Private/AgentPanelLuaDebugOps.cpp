@@ -725,37 +725,7 @@ namespace AgentPanelLuaDebug
 
 	// ---------- 持有的已销毁 UObject ----------
 
-	bool IsLiveWorld(const UWorld* W)
-	{
-		if (!W || W->bIsTearingDown || !GEngine)
-		{
-			return false;
-		}
-		for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
-		{
-			if (Ctx.World() == W)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * 现在活着的全部 UObject 的地址。对象表里要找的恰恰是「已经销毁」的项，它们的地址可能已经被释放：
-	 * 不能像 GUObjectArray.IsValid 那样先读对象自己的内存（读已释放的内存可能直接崩），
-	 * 先拿地址在这张表里查，查到了才当成对象去读。只在这个排查操作里建一次，几十万个对象也只是一次遍历。
-	 */
-	TSet<const UObjectBase*> CollectLiveObjects()
-	{
-		TSet<const UObjectBase*> Live;
-		Live.Reserve(GUObjectArray.GetObjectArrayNumMinusAvailable());
-		for (TObjectIterator<UObject> It(RF_NoFlags); It; ++It)
-		{
-			Live.Add(*It);
-		}
-		return Live;
-	}
+	// IsLiveWorld、CollectLiveObjects 2.19 起挪到 AgentPanelLuaObjects.cpp（lua.objects 也要用），声明在 AgentPanelLuaShared.h
 
 	/** 对象表里的一项有没有问题：已经不在了、已标记销毁、所在的世界没了（只看 Actor、组件、UMG 控件） */
 	const TCHAR* MapEntryProblem(const void* P, const TSet<const UObjectBase*>& InLive, FString& OutPath, FString& OutClass)
@@ -786,6 +756,11 @@ namespace AgentPanelLuaDebug
 		return nullptr;
 	}
 
+}
+
+// 2.20：走 Lua 堆的几样（FHeapWalk 在 AgentPanelLuaShared.h）给 lua.instances 共用，放进 AgentPanelLuaImpl
+namespace AgentPanelLuaImpl
+{
 	/** 引用链上的一段：字符串键写成 .name，别的写成 [值]，upvalue、元表写成 <...> */
 	FString KeySeg(lua_State* L, int K)
 	{
@@ -813,73 +788,6 @@ namespace AgentPanelLuaDebug
 		return FString::Printf(TEXT("[<%s>]"), UTF8_TO_TCHAR(lua_typename(L, T)));
 	}
 
-	/** 从 _G 和注册表出发广度优先走一遍 Lua 堆，记下每个表 / 函数第一次是从哪条路走到的 */
-	struct FHeapWalk
-	{
-		lua_State* L = nullptr;
-		int Q = 0;
-		int Seen = 0;
-		int32 Max = 200000;
-		int32 Count = 0;
-		bool bTruncated = false;
-		TArray<int32> Parent;
-		TArray<FString> Seg;
-
-		/** 栈顶的值没见过就排进队列（值留在栈上不动） */
-		void Visit(int32 From, const FString& Key)
-		{
-			const int T = lua_type(L, -1);
-			if (T != LUA_TTABLE && T != LUA_TFUNCTION)
-			{
-				return;
-			}
-			lua_pushvalue(L, -1);
-			lua_rawget(L, Seen);
-			const bool bSeen = !lua_isnil(L, -1);
-			lua_pop(L, 1);
-			if (bSeen)
-			{
-				return;
-			}
-			if (Count >= Max)
-			{
-				bTruncated = true;
-				return;
-			}
-			++Count;
-			lua_pushvalue(L, -1);
-			lua_pushinteger(L, Count);
-			lua_rawset(L, Seen);
-			lua_pushvalue(L, -1);
-			lua_rawseti(L, Q, Count);
-			Parent.Add(From);
-			Seg.Add(Key);
-		}
-
-		/** 不算引用来源的表（对象表本身）：先记成见过，不往里走 */
-		void Block(int Idx)
-		{
-			lua_pushvalue(L, Idx);
-			lua_pushinteger(L, 0);
-			lua_rawset(L, Seen);
-		}
-
-		FString PathOf(int32 I) const
-		{
-			TArray<const FString*> Parts;
-			for (int32 Cur = I; Cur >= 1 && Parts.Num() < 40; Cur = Parent[Cur - 1])
-			{
-				Parts.Add(&Seg[Cur - 1]);
-			}
-			FString Out;
-			for (int32 K = Parts.Num() - 1; K >= 0; --K)
-			{
-				Out += *Parts[K];
-			}
-			return Out;
-		}
-	};
-
 	FString WeakMode(lua_State* L, int T)
 	{
 		FString Mode;
@@ -895,6 +803,12 @@ namespace AgentPanelLuaDebug
 		}
 		return Mode;
 	}
+}
+
+namespace AgentPanelLuaDebug
+{
+	using namespace AgentPanel;
+	using namespace AgentPanelLuaImpl;
 
 	bool LeaksOp(const TSharedPtr<FJsonObject>& A, TSharedPtr<FJsonObject>& Out, FString& Error)
 	{
@@ -912,7 +826,7 @@ namespace AgentPanelLuaDebug
 		}
 		lua_checkstack(L, 64);
 		const int32 Limit = FMath::Clamp(Int(A, TEXT("limit"), 100), 1, 500);
-		const FString ObjKey = Str(A, TEXT("objectKey"), TEXT("Object"));
+		const FString ObjKey = Str(A, TEXT("objectKey"), LuaConfig().ObjectKey.IsEmpty() ? FString(TEXT("Object")) : LuaConfig().ObjectKey);
 		FTCHARToUTF8 ObjKeyUtf8(*ObjKey);
 		const double Begin = NowSec();
 

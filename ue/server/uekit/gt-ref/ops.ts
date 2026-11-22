@@ -3,6 +3,7 @@ import { luaRoot } from '../gt-author/lua-files.ts'
 import { cmpVersion } from '../../semver.ts'
 import type { UeProject } from '../../types.ts'
 import { t } from '../../util.ts'
+import { liveMap, type LuaLive } from './lua-live.ts'
 import { luaDeclared, mergeLuaProps } from './lua-props.ts'
 
 /**
@@ -55,14 +56,17 @@ export interface GtRefDeps<C extends CardLike> {
   send: (card: C, args: A) => Promise<A>
   /** gt.classes 连不上 UE（没开、GameTest 太旧）时改从磁盘读类树（offline/classes.ts）；note 是给界面看的原因 */
   offlineClasses?: (args: A, note: string) => Promise<A>
+  /** 读对象实例表这一层（UELink lua.get，回 {fields}）：gt.props 按对象路径读时补 UE 没给的 Lua 字段此刻的值 */
+  luaFields?: (card: C, path: string) => Promise<A>
 }
 
 export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtRefDeps<C>): Promise<A> {
   const { luaModule, ...fwd } = args
   let res: A | undefined
   let failed: Error | undefined
+  let card: C | undefined
   try {
-    const card = await deps.pick()
+    card = await deps.pick()
     const old = gameTestTooOld(card, gtRefMinOf(op))
     if (old) throw new Error(old)
     res = await deps.send(card, fwd)
@@ -75,6 +79,13 @@ export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtR
       fwd,
       t('UE 没在运行，类树从项目文件读，没有此刻实例数（{why}）', { why: failed.message }),
     )
+  // Lua 类树以磁盘上的源码为准（用户 2026-11-22「为什么对不上」）：UE 只认 package.loaded 里已经 require 过的模块，
+  // 没加载的源文件看不到，UnLua 自己的框架模块倒列了出来。目录和文件按脚本根扫，UE 只拿来补此刻的实例数
+  if (op === 'gt.classes' && args.lua && !failed && res && deps.offlineClasses) {
+    const disk = await deps.offlineClasses(fwd, '').catch(() => undefined)
+    if (disk && (Number(disk.total) > 0 || (disk.dirs as unknown[] | undefined)?.length))
+      return withLiveCounts(disk, res)
+  }
   if (op !== 'gt.props') {
     if (failed) throw failed
     return res!
@@ -84,22 +95,67 @@ export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtR
   const mod = String(res?.luaModule ?? luaModule ?? luaCls)
   // 不知道 Lua 模块又拿不到 UE 的结果：没有能给的
   if (failed && !mod) throw failed
-  return withLua(deps.project, res ?? { class: args.class ?? '', groups: [] }, args, mod, failed?.message)
+  // 游戏开着、读的是某个实例：直接读它的实例表这一层，UE 名额外的字段也有此刻的值（用户 2026-11-22：DefaultFOV 显示「游戏没开」）
+  let live: LuaLive | undefined
+  const path = typeof args.path === 'string' ? args.path : ''
+  if (!failed && card && path && mod && deps.luaFields && !args.part && !Number(args.offset ?? 0))
+    live = await deps.luaFields(card, path).then(
+      // 没绑 Lua 的对象（value 不是表）不算读到，免得把字段都说成「此刻是 nil」
+      (r) => ((r.value as { t?: string } | undefined)?.t === 'table' ? liveMap(r.fields) : undefined),
+      () => undefined,
+    )
+  const srcWhy = failed
+    ? undefined
+    : live
+      ? t('这个实例上此刻是 nil（还没赋值）：值是源码里的写法')
+      : path || args.target || args.node
+        ? undefined
+        : t('没选实例：值是源码里的写法；在实例列表里点一个看此刻的值')
+  return withLua(deps.project, res ?? { class: args.class ?? '', groups: [] }, args, mod, {
+    unavailable: failed?.message,
+    live,
+    srcWhy,
+  })
+}
+
+/** 磁盘上的 Lua 类树补上 UE 给的此刻实例数（按模块名对，大小写和 / . 不敏感） */
+function withLiveCounts(disk: A, live: A): A {
+  const norm = (s: string) => s.replace(/[/\\]/g, '.').toLowerCase()
+  const counts = new Map<string, number>()
+  for (const x of (live.items as { name: string; live?: number }[] | undefined) ?? [])
+    if (typeof x.live === 'number') counts.set(norm(x.name), x.live)
+  const items = ((disk.items as { name: string; live?: number }[] | undefined) ?? []).map((x) => {
+    const n = counts.get(norm(x.name))
+    return n === undefined ? x : { ...x, live: n }
+  })
+  const { note, ...rest } = disk
+  return { ...rest, items, ...(note ? { note } : {}), ...(live.note ? { note: live.note } : {}) }
 }
 
 /** gt.props 的结果补 Lua 声明字段；看的是部件（part）或翻到后面几页时不补（Lua 字段属于对象本身，在第一页的 self 组） */
-async function withLua(project: GtRefDeps<CardLike>['project'], res: A, args: A, mod: string, unavailable?: string) {
+async function withLua(
+  project: GtRefDeps<CardLike>['project'],
+  res: A,
+  args: A,
+  mod: string,
+  o: { unavailable?: string; live?: LuaLive; srcWhy?: string },
+) {
+  const { unavailable } = o
   const out: A = { ...res, ...(mod ? { luaModule: mod } : {}), ...(unavailable ? { unavailable } : {}) }
   if (!mod || args.part || Number(args.offset ?? 0) > 0) return out
-  const decl = await luaDeclared(luaRoot(project), mod)
+  // 没有源文件（模块不在脚本根里）时只按实例表补
+  const decl =
+    (await luaDeclared(luaRoot(project), mod)) ?? (o.live?.size ? { file: '', fields: [], functions: [] } : undefined)
   if (!decl) return out
   const groups = Array.isArray(res.groups) ? (res.groups as GtPropGroup[]) : []
   const merged = mergeLuaProps(groups, decl, {
     filter: typeof args.filter === 'string' ? args.filter : '',
     selfTitle: t('自己'),
+    live: o.live,
+    srcWhy: o.srcWhy,
   })
   out.groups = merged.groups
-  out.luaFile = decl.file
+  if (decl.file) out.luaFile = decl.file
   // Lua 函数：UE 给过（lua: 类在游戏里读的 functions 组，项没有 src）就按名字补上源码里的返回类型；
   // 没给（游戏没开、读的是 UE 实例，GameTest 2.1.5 起 functions 组是 UE 函数）时单独一组用源码里的
   const fnRet = new Map(decl.functions.filter((f) => f.ret).map((f) => [f.name, f.ret!]))

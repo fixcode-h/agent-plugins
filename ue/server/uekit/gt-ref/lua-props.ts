@@ -5,6 +5,7 @@ import { parseLuaModule, type LuaField } from '../gt-author/lua-parse.ts'
 import { moduleFile, readLua, relToRoot } from '../gt-author/lua-files.ts'
 import { parseLuaHead } from './offline/lua-parents.ts'
 import { t } from '../../util.ts'
+import { liveItem, type LuaLive } from './lua-live.ts'
 
 /**
  * gt.props 的 Lua 字段（协议 game-test-ref 7.3、7.5）：UE 只按实例表给此刻有值的 Lua 字段，
@@ -120,7 +121,17 @@ export function initValue(init: string | undefined, kind: GtPropKind | undefined
 
 /** 一个声明 → 属性树的一项：值取源码里的初始赋值，说明只留注释，来源和行号放悬停提示（用户 2026-11-21：值是空的、说明挤） */
 function declaredItem(f: LuaField, file: string): GtPropItem {
-  const kind = luaKind(f.type)
+  // 类型写的是 any、类名时看初始值是不是字面量（self.Count = 0）
+  const lit = initValue(f.init, undefined)
+  const kind =
+    luaKind(f.type) ??
+    (typeof lit === 'number'
+      ? 'float'
+      : typeof lit === 'boolean'
+        ? 'bool'
+        : typeof lit === 'string'
+          ? 'string'
+          : undefined)
   const item: GtPropItem = {
     prop: `@#${f.name}`,
     name: f.name,
@@ -135,9 +146,14 @@ function declaredItem(f: LuaField, file: string): GtPropItem {
   else if (f.init !== undefined) item.srcInit = f.init
   if (f.note) item.note = f.note
   if (kind && comparable(kind)) item.ops = opsFor(kind)
-  else {
+  else if (kind) {
     item.comparable = false
-    item.why = kind ? whyNotComparable(kind) : t('Lua 类型 {type} 不知道怎么比', { type: f.type })
+    item.why = whyNotComparable(kind)
+  } else {
+    // 类型要运行时才知道（any、类名、联合类型）：self 上的变量都能加进判断（用户 2026-11-22），
+    // 先按文字比；UE 比较时类型不同按文本比（1 和 "1" 算相等），实际是数、布尔照样比得对
+    item.kind = 'string'
+    item.ops = opsFor('string')
   }
   return item
 }
@@ -150,7 +166,14 @@ function declaredItem(f: LuaField, file: string): GtPropItem {
 export function mergeLuaProps(
   groups: GtPropGroup[],
   decl: Pick<LuaDeclared, 'file' | 'fields'>,
-  o: { filter?: string; selfTitle: string },
+  o: {
+    filter?: string
+    selfTitle: string
+    /** 选中实例的实例表这一层（lua-live.ts）：UE 没给的字段按它补此刻的值 */
+    live?: LuaLive
+    /** 只在源码里看到的字段为什么没有此刻的值（游戏没开 / 没选实例 / 实例上是 nil） */
+    srcWhy?: string
+  },
 ): { groups: GtPropGroup[]; added: number } {
   const f = (o.filter ?? '').toLowerCase()
   const out = groups.map((g) => ({ ...g, items: g.items.map((x) => ({ ...x })) }))
@@ -170,7 +193,24 @@ export function mergeLuaProps(
       if (!live.type || live.type === 'any') live.type = d.type
       continue
     }
-    self.items.push(declaredItem(d, decl.file))
+    const at = `${decl.file}:${d.line}（${srcNote(d.kind)}）`
+    const now = o.live?.get(d.name)
+    const item = now ? liveItem(d.name, now, { type: d.type, declAt: at, note: d.note }) : undefined
+    if (item) self.items.push(item)
+    else {
+      const src = declaredItem(d, decl.file)
+      if (o.srcWhy) src.srcWhy = o.srcWhy
+      self.items.push(src)
+    }
+    added++
+  }
+  // 实例表上有、源码里没认出来（动态加的、写法 lua-parse 不认）、UE 也没给的：照样列出来，self 上的变量都能选
+  for (const [name, field] of o.live ?? []) {
+    if (seen.has(name) || have.has(name) || name.startsWith('__') || (f && !name.toLowerCase().includes(f))) continue
+    const item = liveItem(name, field, {})
+    if (!item) continue
+    seen.add(name)
+    self.items.push(item)
     added++
   }
   return { groups: out, added }

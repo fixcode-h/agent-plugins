@@ -12,6 +12,8 @@
 #include "lua.hpp"
 
 class UObject;
+class UObjectBase;
+class UWorld;
 
 namespace AgentPanelLuaImpl
 {
@@ -36,6 +38,13 @@ namespace AgentPanelLuaImpl
 	UObject* LiveObject(const void* P);
 	/** 按对象（或目标世界的 GameInstance）选 Lua 环境：项目的 SetStateProvider 优先，再按 UnLua 的接口自动选 */
 	lua_State* StateFor(UObject* Context, FString& Error);
+	/** 世界还在引擎的世界列表里、没在拆（AgentPanelLuaObjects.cpp） */
+	bool IsLiveWorld(const UWorld* W);
+	/**
+	 * 现在活着的全部 UObject 的地址（AgentPanelLuaObjects.cpp）。对象表里的键可能是已经释放的地址：
+	 * 先在这张表里查到了才当成对象去读，不能直接调 GUObjectArray.IsValid（它会先读对象自己的内存）
+	 */
+	TSet<const UObjectBase*> CollectLiveObjects();
 	/** 请求里 world 指的世界的 GameInstance */
 	UObject* WorldContext(const TSharedPtr<FJsonObject>& A);
 	/** 找到的对象表在注册表里的键，按 lua_State 记住 */
@@ -77,6 +86,35 @@ namespace AgentPanelLuaImpl
 				Map = lua_gettop(L);
 			}
 			return true;
+		}
+
+		bool bRegNames = false;
+		TMap<const void*, FString> RegNames;
+
+		/**
+		 * 注册表里「字符串键 → 表」的反查（2.19）：UnLua 给 UE 类建的元表按类名放在注册表里（luaL_newmetatable），
+		 * 元表链上不是模块的那几层靠它认出是哪个 UE 类。只读注册表，不碰 UnLua 的内部结构
+		 */
+		FString RegistryNameOf(const void* P)
+		{
+			if (!bRegNames)
+			{
+				bRegNames = true;
+				FTop Guard(L);
+				lua_pushnil(L);
+				while (lua_next(L, LUA_REGISTRYINDEX))
+				{
+					if (lua_type(L, -2) == LUA_TSTRING && lua_istable(L, -1))
+					{
+						size_t N = 0;
+						const char* S = lua_tolstring(L, -2, &N);
+						RegNames.Add(lua_topointer(L, -1), FromUtf8(S, N));
+					}
+					lua_pop(L, 1);
+				}
+			}
+			const FString* Name = RegNames.Find(P);
+			return Name ? *Name : FString();
 		}
 
 		/** 表 / userdata 是哪个 UObject 的（对象表里反查） */
@@ -159,8 +197,59 @@ namespace AgentPanelLuaImpl
 			if (Name.IsEmpty() && lua_getmetatable(L, MT))
 			{
 				Name = ModuleOfTable(lua_topointer(L, -1));
+				lua_pop(L, 1);
+			}
+			// UnLua 2.x 绑定时给类建的元表不一定就是 package.loaded 里那张（实测官方 2.x 的 TPS 示例就对不上）：按里面 Lua 函数的文件推模块名
+			if (Name.IsEmpty())
+			{
+				Name = ModuleFromSource(MT);
 			}
 			return Name;
+		}
+
+		/**
+		 * 表里第一个 Lua 函数定义在哪个文件，按文件推模块名：.../Script/AI/BP_X_C.lua → AI.BP_X_C（UnLua 默认的脚本根是 Content/Script）。
+		 * 没有 Lua 函数（UE 类的元表全是 C 函数）或者路径里没有 Script 目录时返回空
+		 */
+		FString ModuleFromSource(int T)
+		{
+			FTop Guard(L);
+			const int Abs = lua_absindex(L, T);
+			FString Src;
+			lua_pushnil(L);
+			while (Src.IsEmpty() && lua_next(L, Abs))
+			{
+				if (lua_isfunction(L, -1) && !lua_iscfunction(L, -1))
+				{
+					lua_Debug Ar;
+					lua_pushvalue(L, -1);
+					if (lua_getinfo(L, ">S", &Ar) && Ar.source)
+					{
+						Src = UTF8_TO_TCHAR(Ar.source);
+					}
+				}
+				lua_pop(L, 1);
+			}
+			if (Src.IsEmpty())
+			{
+				return FString();
+			}
+			Src.RemoveFromStart(TEXT("@"));
+			Src.ReplaceInline(TEXT("\\"), TEXT("/"));
+			int32 At = Src.Find(TEXT("/Script/"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+			int32 Skip = 8;
+			if (At == INDEX_NONE)
+			{
+				At = Src.Find(TEXT("/Scripts/"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+				Skip = 9;
+			}
+			if (At == INDEX_NONE || !Src.EndsWith(TEXT(".lua"), ESearchCase::IgnoreCase))
+			{
+				return FString();
+			}
+			FString Mod = Src.Mid(At + Skip, Src.Len() - At - Skip - 4);
+			Mod.ReplaceInline(TEXT("/"), TEXT("."));
+			return Mod;
 		}
 	};
 
@@ -204,6 +293,105 @@ namespace AgentPanelLuaImpl
 	extern TArray<FString>* GPrintSink;
 	int PrintFn(lua_State* L);
 	int TracebackFn(lua_State* L);
+
+	// 走 Lua 堆（2.20 起 lua.leaks、lua.instances 共用；KeySeg、WeakMode 定义在 AgentPanelLuaDebugOps.cpp）
+	/** 引用链上的一段：字符串键写成 .name，别的写成 [值]，upvalue、元表写成 <...> */
+	FString KeySeg(lua_State* L, int K);
+	/** 表的 __mode（弱表）；不是弱表为空 */
+	FString WeakMode(lua_State* L, int T);
+
+	/** 从 _G 和注册表出发广度优先走一遍 Lua 堆，记下每个表 / 函数第一次是从哪条路走到的 */
+	struct FHeapWalk
+	{
+		lua_State* L = nullptr;
+		int Q = 0;
+		int Seen = 0;
+		int32 Max = 200000;
+		int32 Count = 0;
+		bool bTruncated = false;
+		TArray<int32> Parent;
+		TArray<FString> Seg;
+
+		/** 栈顶的值没见过就排进队列（值留在栈上不动） */
+		void Visit(int32 From, const FString& Key)
+		{
+			const int T = lua_type(L, -1);
+			if (T != LUA_TTABLE && T != LUA_TFUNCTION)
+			{
+				return;
+			}
+			lua_pushvalue(L, -1);
+			lua_rawget(L, Seen);
+			const bool bSeen = !lua_isnil(L, -1);
+			lua_pop(L, 1);
+			if (bSeen)
+			{
+				return;
+			}
+			if (Count >= Max)
+			{
+				bTruncated = true;
+				return;
+			}
+			++Count;
+			lua_pushvalue(L, -1);
+			lua_pushinteger(L, Count);
+			lua_rawset(L, Seen);
+			lua_pushvalue(L, -1);
+			lua_rawseti(L, Q, Count);
+			Parent.Add(From);
+			Seg.Add(Key);
+		}
+
+		/** 不算引用来源的表（对象表本身）：先记成见过，不往里走 */
+		void Block(int Idx)
+		{
+			lua_pushvalue(L, Idx);
+			lua_pushinteger(L, 0);
+			lua_rawset(L, Seen);
+		}
+
+		FString PathOf(int32 I) const
+		{
+			TArray<const FString*> Parts;
+			for (int32 Cur = I; Cur >= 1 && Parts.Num() < 40; Cur = Parent[Cur - 1])
+			{
+				Parts.Add(&Seg[Cur - 1]);
+			}
+			FString Out;
+			for (int32 K = Parts.Num() - 1; K >= 0; --K)
+			{
+				Out += *Parts[K];
+			}
+			return Out;
+		}
+	};
+
+	// 纯 Lua 实例（2.20，AgentPanelLuaInstances.cpp）
+	/** 对象路径写成 luaref:<编号> 时指的是 lua.instances 找到的纯 Lua 表，不是 UObject */
+	bool IsLuaRef(const FString& Path);
+	/** 把 luaref 指的表压栈；表已经被回收时返回 false 并写清原因 */
+	bool PushLuaRef(lua_State* L, const FString& Path, FString& Error);
+	/** 给栈上 Idx 处的表发一个 luaref（同一张表总是同一个编号；弱引用，不挡回收） */
+	FString LuaRefOf(lua_State* L, int Idx);
+
+	/** 面板下发的 Lua 设置（lua.config，存 Saved/UELink/lua-config.json）：各项留空 = 自动 */
+	struct FLuaConfig
+	{
+		/** 脚本根（相对项目目录或绝对路径）；空 = Content/Script */
+		FString ScriptRoot;
+		/** UnLua 实例表里放 UObject 的字段名；空 = Object */
+		FString ObjectKey;
+		/** 纯 Lua 实例上写着自己类（模块路径）的字段，如 SubModulePath */
+		TArray<FString> ClassFields;
+		/** 从哪些变量开始找纯 Lua 实例（_G.GameApp 这种点路径）；空 = 从 _G 和注册表走整个堆 */
+		TArray<FString> Roots;
+		/** 纯 Lua 实例的显示名字段，如 SubModuleName */
+		TArray<FString> NameFields;
+		/** 走堆最多看多少个表 / 函数 */
+		int32 MaxVisit = 200000;
+	};
+	const FLuaConfig& LuaConfig();
 }
 
 #endif

@@ -4459,7 +4459,6 @@
   "---@field 声明": "---@field declaration",
   "方法里的 self 赋值": "self assignment in a method",
   "模块表字段": "module table field",
-  "Lua 类型 {type} 不知道怎么比": "Don't know how to compare Lua type {type}",
   "自己": "Self",
   "存在": "Exists",
   "在屏上": "On screen",
@@ -4822,7 +4821,6 @@
   "定义在 {cls}": "Defined in {cls}",
   "这个函数不是 Pure 或 const，读值会改游戏，不能当条件": "This function is neither Pure nor const; reading it could change the game, so it can't be a condition",
   "函数只列出来看：调用用 obj.call": "Functions are listed for reference; call them with obj.call",
-  "游戏没开：值是源码里的初始值（{at}）": "Game not running: the value is the initial value in source ({at})",
   "取反：不满足这条才算（点一下取消）": "Negated: only counts when this is false (click to undo)",
   "点一下取反：不满足这条才算": "Click to negate: only counts when this is false",
   "非": "NOT",
@@ -4876,5 +4874,10 @@
   "正在走 Lua 堆找…": "Walking the Lua heap…",
   "没找到：到「权限与设置 → Lua」填类名字段或起点变量，点「试一下」": "None found: set a class field or start variables in \"Permissions & settings → Lua\" and click \"Try it\"",
   "此刻一个也没有：绑了 UObject 的和纯 Lua 实例都没找到。纯 Lua 实例找不到时，到「权限与设置 → Lua」填类名字段或起点变量，点「试一下」看认没认出来": "None right now: no UObject-bound objects and no pure Lua instances found. If pure Lua instances are missing, set a class field or start variables in \"Permissions & settings → Lua\" and click \"Try it\" to check",
-  "Lua": "Lua"
+  "Lua": "Lua",
+  "Lua 里是 {type}，读不出能比的值": "It's a {type} in Lua; no comparable value",
+  "这个实例上此刻是 nil（还没赋值）：值是源码里的写法": "It's nil on this instance right now (not assigned yet); the value shown is from the source",
+  "没选实例：值是源码里的写法；在实例列表里点一个看此刻的值": "No instance selected; the value shown is from the source. Click an instance to see its current value",
+  "声明在 {at}": "Declared at {at}",
+  "游戏没开：值是源码里的初始值": "Game not running; the value is the initial value in the source"
 }
