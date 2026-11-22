@@ -4,7 +4,7 @@ import { parsePath, type GtPath, type GtScript } from '../../../../shared/gt-scr
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { collectTargets } from '../gt-rows/check.ts'
-import type { GtResolveItem } from '../GtStepDetail.tsx'
+import type { GtResolveItem } from '../gt-run/step-parts.tsx'
 
 interface Missing {
   key: string

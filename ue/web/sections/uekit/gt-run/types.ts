@@ -1,12 +1,12 @@
 import { op, ppost } from '../../../api.ts'
 import type { GtBatch } from '../GtBatch.tsx'
-import type { GtStep, StepDef } from '../GtStepDetail.tsx'
+import type { GtStep, StepDef } from './step-parts.tsx'
 
 /**
  * GameTest 运行相关的数据形状（gt.job、gt.runs、场景文件）和读报告。
  * 原来写在运行结果页 GtRun.tsx 里；那一页取消、功能并进整页编辑器后（设计稿 designs/GameTest整页编辑器与蓝图画布-设计稿.md），挪到这里共用
  */
-export type { GtStep } from '../GtStepDetail.tsx'
+export type { GtStep } from './step-parts.tsx'
 
 export interface GtJob {
   runId?: string

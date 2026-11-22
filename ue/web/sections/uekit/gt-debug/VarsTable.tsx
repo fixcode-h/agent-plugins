@@ -1,11 +1,6 @@
 import type { GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-
-/** 值的一行显示：字符串带引号，对象压成一行 JSON，太长截断（全文在悬停提示里） */
-export const valueText = (v: unknown) => {
-  const s = typeof v === 'string' ? JSON.stringify(v) : v === undefined ? '' : JSON.stringify(v)
-  return s.length > 120 ? `${s.slice(0, 120)}…` : s
-}
+import { ValueTree } from '../value/ValueTree.tsx'
 
 /**
  * 报告里一步的 payload.vars（GameTest 1.11.2）：这一步用到、写到的变量在这一步结束时的值。
@@ -18,12 +13,6 @@ export function stepVars(payload?: Record<string, unknown>) {
   if (!Object.keys(vars).length) return undefined
   return { vars, truncated: _truncated === true }
 }
-
-/** 一行写下这一步的变量：`$a = 1 · $b = "x"`，给报告列表用 */
-export const varsLine = (vars: Record<string, unknown>) =>
-  Object.entries(vars)
-    .map(([k, v]) => `$${k} = ${valueText(v)}`)
-    .join(' · ')
 
 /**
  * 变量表（效果图 6 右下「此刻的变量」、「变量」页）：名字 | 值。
@@ -55,18 +44,14 @@ export function VarsTable({ doc, vars, full }: { doc?: GtScript; vars?: Record<s
     <dl className="ue:grid ue:grid-cols-[minmax(80px,auto)_1fr] ue:gap-x-4 ue:gap-y-1 ue:px-4 ue:py-2">
       {rows.map((r) => (
         <div key={r.name} className="ue:contents">
-          <dt className="ue:flex ue:min-w-0 ue:items-baseline ue:gap-1.5 ue:font-mono ue:text-footnote ue:text-muted">
+          <dt className="ue:flex ue:min-h-6 ue:min-w-0 ue:items-center ue:gap-1.5 ue:self-start ue:font-mono ue:text-footnote ue:text-muted">
             <span className="ue:truncate">{r.name}</span>
             {r.kind && <span className="ue:shrink-0 ue:font-sans ue:text-caption ue:text-subtle">{r.kind}</span>}
           </dt>
-          <dd
-            title={JSON.stringify(r.value)}
-            className={cn(
-              'ue:min-w-0 ue:truncate ue:font-mono ue:text-footnote',
-              r.live ? 'ue:text-fg' : 'ue:text-subtle',
-            )}
-          >
-            {valueText(r.value)}
+          {/* 值按值树画（和 GM 调函数的输出同一套）：对象、数组、结构体能点开看，对象还能展开成员；
+              没在跑时显示的是默认值，整格调淡 */}
+          <dd className={cn('ue:min-w-0', !r.live && 'ue:opacity-60')}>
+            <ValueTree value={r.value} collapsed />
           </dd>
         </div>
       ))}

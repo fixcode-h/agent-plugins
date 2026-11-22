@@ -4,13 +4,14 @@ import type { GtPath, GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { ErrorText } from '../../../ui.tsx'
 import { loadReport } from '../gt-run/types.ts'
-import { ms, StepIcon, type GtStep as ReportStep } from '../GtStepDetail.tsx'
+import { ms, StepIcon, type GtStep as ReportStep } from '../gt-run/step-parts.tsx'
 import { titleOfKey } from './lookup.ts'
-import { stepVars, varsLine } from './VarsTable.tsx'
+import { ReportValues } from './ReportValues.tsx'
 
 /**
  * 「报告」页：这次运行跑完后读 gt.report（协议第 11 节：每步带 id、path，块结束记一条 block），
- * 按执行顺序列出，失败的写原因、每步下面一行写这一步用到的变量当时的值（payload.vars，GameTest 1.11.2 起）；
+ * 按执行顺序列出，失败的写原因、每步下面列调函数的返回值和这一步用到的变量当时的值（payload.vars，GameTest 1.11.2 起），
+ * 按值树画、点开看（以前压成一行文字，对象和表看不全）；
  * 点一行选中那一步。跑着时不读（报告还没写完）
  */
 export function RunReport({
@@ -72,8 +73,6 @@ export function RunReport({
           const key = String((s as { id?: unknown }).id ?? (s as { path?: unknown }).path ?? '')
           const info = titleOfKey(doc, key)
           const block = (s as { block?: unknown }).block === true
-          const sv = stepVars(s.payload)
-          const line = sv && varsLine(sv.vars) + (sv.truncated ? ' …' : '')
           return (
             <li key={i}>
               <button
@@ -96,15 +95,10 @@ export function RunReport({
                   {s.status === 'failed' && s.message && (
                     <span className="ue:text-caption ue:break-words ue:text-danger">{s.message}</span>
                   )}
-                  {/* 一行放不下截断，悬停看全部 */}
-                  {line && (
-                    <span title={line} className="ue:truncate ue:font-mono ue:text-caption ue:text-subtle">
-                      {line}
-                    </span>
-                  )}
                 </span>
                 <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">{ms(s.durationMs)}</span>
               </button>
+              <ReportValues project={project} payload={s.payload} />
             </li>
           )
         })}

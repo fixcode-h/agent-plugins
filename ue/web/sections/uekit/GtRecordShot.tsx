@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { h, t } from '../../host.ts'
 import type { GtHint } from './gt-steps.ts'
 import { patchStep } from './gt-step-patch.ts'
-import type { StepDef } from './GtStepDetail.tsx'
+import type { StepDef } from './gt-run/step-parts.tsx'
 
 /**
  * 步骤详情里「录制时」一块（GameTest 1.3.2 录制截图）：被点控件那一块截图（红框是被点的控件），

@@ -1,7 +1,7 @@
 import { PauseCircle, Repeat, ShieldCheck } from 'lucide-react'
 import type { GtPath, GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { ms, StepIcon } from '../GtStepDetail.tsx'
+import { ms, StepIcon } from '../gt-run/step-parts.tsx'
 import { guardTitle, titleOfKey } from './lookup.ts'
 import { clock, type LogEntry } from './run-log.ts'
 

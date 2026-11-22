@@ -1,6 +1,6 @@
 import { CircleCheck, CircleDashed, CircleMinus, CircleStop, CircleX, Layers, Loader2, X } from 'lucide-react'
 import { h, t } from '../../host.ts'
-import { ms } from './GtStepDetail.tsx'
+import { ms } from './gt-run/step-parts.tsx'
 
 /** 批量运行（gt.run tag= / scenarios=）的进度和结果：作业状态和 gt.job 事件里的 batch */
 export interface GtBatchItem {

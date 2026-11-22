@@ -3,14 +3,11 @@ import { GtBatchBar, type GtBatch } from './GtBatch.tsx'
 import { GtEvidence } from './GtEvidence.tsx'
 import { GtRecordShot } from './GtRecordShot.tsx'
 import { GtHistoryBar } from './GtHistoryBar.tsx'
-import { GtStepRow } from './GtStepRow.tsx'
 import { GtStepHistory } from './GtStepHistory.tsx'
 import { GtStepExec } from './GtStepExec.tsx'
-import type { StepRow } from './GtStepDetail.tsx'
-import { placeRows } from './gt-rows/rows.ts'
 
 /**
- * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤列表的行、步骤详情里的最近几次、执行方式、失败证据、录制截图。
+ * 设置 →「组件」里 GameTest 页共用部件的示例：场景列表上的历史条、批量运行条、步骤的最近几次、执行方式、失败证据、录制截图。
  * 全是假数据，不连 UE（设置页里没有 UE 页的上下文），所以证据的截图不显示、「看前后日志」是灰的
  */
 const BATCH: GtBatch = {
@@ -36,40 +33,6 @@ const BATCH: GtBatch = {
   ],
 }
 
-/** 步骤列表：有 note 的、按 hint 生成的、等待 / 光标 / 按键、跑失败的、正在跑的、还没轮到的；后几步装在录制段里（缩进、序号 3.1） */
-const DEFS = [
-  { action: 'pie.start', map: '/Game/Maps/Lobby' },
-  { action: 'click', target: 'WBP_Main:Root/#GMEntrance', note: '点击 GM 入口按钮' },
-  {
-    action: 'group',
-    name: '录制段',
-    recorded: true,
-    do: [
-      {
-        action: 'click',
-        target: 'WBP_Main:Root/#GMItem#4/Button_Event',
-        hint: { class: 'SPButton', text: '常用', ambiguous: '同一界面有 6 个 GMItem' },
-      },
-      { action: 'wait', until: 'seconds', seconds: 0.55 },
-      { action: 'input.cursor', x: 0.034, y: 0.548 },
-      { action: 'key', key: 'LeftMouseButton', phase: 'tap' },
-    ],
-  },
-]
-const RES: Record<string, StepRow['res']> = {
-  'steps.0': { index: 0, action: 'pie.start', status: 'succeeded', durationMs: 2100 },
-  'steps.1': { index: 1, action: 'click', status: 'succeeded', durationMs: 135 },
-  'steps.2.do.0': {
-    index: 0,
-    path: 'steps.2.do.0',
-    action: 'click',
-    status: 'failed',
-    message: '点到的是 GMItem#3',
-    durationMs: 412,
-  },
-}
-const STEPS: StepRow[] = placeRows(DEFS).map((p) => ({ ...p, res: RES[p.key] }))
-
 export function GtSpecimen() {
   const noop = () => undefined
   return (
@@ -84,18 +47,6 @@ export function GtSpecimen() {
         <span className="ue:flex ue:items-center ue:gap-2">
           <GtHistoryBar /> {t('还没跑过')}
         </span>
-      </div>
-      <div className="ue:overflow-hidden ue:rounded-lg ue:border ue:border-line">
-        {STEPS.map((r) => (
-          <GtStepRow
-            key={r.key}
-            row={r}
-            selected={r.key === 'steps.1'}
-            live={r.key === 'steps.2.do.1'}
-            dim={r.key > 'steps.2.do.1'}
-            onClick={noop}
-          />
-        ))}
       </div>
       <div className="ue:grid ue:gap-4 ue:rounded-lg ue:border ue:border-line ue:p-4 ue:text-footnote ue:md:grid-cols-2">
         <GtStepHistory

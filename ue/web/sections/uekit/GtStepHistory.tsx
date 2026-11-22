@@ -1,6 +1,6 @@
 import { h, t } from '../../host.ts'
 import { fmtTime } from '../../ui.tsx'
-import { ms } from './GtStepDetail.tsx'
+import { ms } from './gt-run/step-parts.tsx'
 import { stepMark, type GtHistoryRun, type Mark, type MarkPlace } from './gt-step-history.ts'
 
 export type { GtHistoryRun } from './gt-step-history.ts'

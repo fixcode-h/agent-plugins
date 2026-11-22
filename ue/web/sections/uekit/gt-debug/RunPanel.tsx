@@ -6,13 +6,16 @@ import type { GtHistoryRun } from '../gt-step-history.ts'
 import { RunHistory } from './RunHistory.tsx'
 import { RunLogList } from './RunLogList.tsx'
 import { RunReport } from './RunReport.tsx'
+import type { StepTry } from './step-try.ts'
+import { StepResult } from './StepResult.tsx'
 import type { DebugApi } from './use-debug.ts'
 import { VarsTable } from './VarsTable.tsx'
 
-type Tab = 'log' | 'vars' | 'report' | 'history'
+type Tab = 'step' | 'log' | 'vars' | 'report' | 'history'
 
 /**
- * 编辑页右栏的运行面板（效果图 6）：「运行记录 / 变量 / 报告 / 历史」四页，底下贴一块「此刻的变量」（暂停时才有值）。
+ * 编辑页右栏的运行面板（效果图 6）：「这一步 / 运行记录 / 变量 / 报告 / 历史」五页，底下贴一块「此刻的变量」（暂停时才有值）。
+ * 「这一步」是检查器里「只做这一步」的结果（测试页梳理效果图 3），点一次就切过来
  * 开跑时外壳把右栏切到它，跑完留着看报告；历史页列这个脚本最近几次运行，点一次看那次的报告
  * （GameTest 页左栏「最近运行」里点一次，也是打开这个脚本并在这里看那次的报告）
  */
@@ -25,6 +28,7 @@ export function RunPanel({
   history,
   open,
   disk,
+  step,
 }: {
   project: string
   doc?: GtScript
@@ -36,9 +40,11 @@ export function RunPanel({
   /** 外面要看的那次运行（左栏「最近运行」里点的）：n 每点一次加 1，同一次再点也会切过来 */
   open?: { runId: string; n: number }
   disk?: boolean
+  /** 「只做这一步」的结果；n 每做一次加 1，切到「这一步」页 */
+  step?: { res?: StepTry; busy?: boolean; n: number }
 }) {
   const { ui } = h()
-  const [tab, setTab] = useState<Tab>(open ? 'report' : 'log')
+  const [tab, setTab] = useState<Tab>(open ? 'report' : step?.n ? 'step' : 'log')
   // 报告页看的哪一次：没挑过就是这次编辑里最近跑的那次，再没有就是历史里最新的
   const [picked, setPicked] = useState(open?.runId)
   const { flow } = debug
@@ -47,6 +53,9 @@ export function RunPanel({
     setPicked(open.runId)
     setTab('report')
   }, [open])
+  useEffect(() => {
+    if (step?.n) setTab('step')
+  }, [step?.n])
   // 开跑了：报告换回这次
   useEffect(() => {
     if (flow.active) setPicked(undefined)
@@ -61,6 +70,7 @@ export function RunPanel({
           value={tab}
           onChange={(v: string) => setTab(v as Tab)}
           options={[
+            { id: 'step', label: t('这一步') },
             { id: 'log', label: t('运行记录') },
             { id: 'vars', label: t('变量') },
             { id: 'report', label: t('报告') },
@@ -70,6 +80,9 @@ export function RunPanel({
         <ui.IconButton icon={X} size="sm" className="ue:ml-auto" label={t('回到检查器')} onClick={onClose} />
       </div>
       <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
+        {tab === 'step' && (
+          <StepResult project={project} doc={doc} res={step?.res} busy={step?.busy} onSelect={onSelect} />
+        )}
         {tab === 'log' && <RunLogList doc={doc} entries={debug.log.entries} onSelect={onSelect} />}
         {tab === 'vars' && <VarsTable doc={doc} vars={debug.vars} full />}
         {tab === 'report' && (
