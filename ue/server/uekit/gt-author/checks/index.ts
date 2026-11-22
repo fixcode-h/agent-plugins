@@ -6,6 +6,7 @@ import { ids } from './ids.ts'
 import { lua } from './lua.ts'
 import { refs } from './refs.ts'
 import { shape } from './shape.ts'
+import { unsupported } from './unsupported.ts'
 import type { Check } from './types.ts'
 import { vars } from './vars.ts'
 
@@ -22,6 +23,7 @@ const table: { check: Check; panelOnly?: boolean }[] = [
   { check: vars },
   { check: exprs },
   { check: apis },
+  { check: unsupported },
   { check: lua, panelOnly: true },
 ]
 

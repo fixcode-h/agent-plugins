@@ -15,7 +15,7 @@ import {
 } from '../../../server/uekit/gt-tidy-plan.ts'
 import { diffSteps } from './gt-tidy-diff.ts'
 import { ShotImage } from './GtRecordShot.tsx'
-import { rowSummary, type StepDef } from './GtStepDetail.tsx'
+import { rowSummary, type StepDef } from './gt-run/step-parts.tsx'
 import type { TidySource } from './gt-tidy-prompt.ts'
 
 /**

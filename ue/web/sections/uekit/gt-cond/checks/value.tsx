@@ -1,5 +1,6 @@
 import type { CondNode } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
+import { sourceText } from '../../gt-ref/describe.ts'
 import { CompareEdit, compareText } from '../compare.tsx'
 import type { CheckKind } from './registry.ts'
 
@@ -14,7 +15,7 @@ function Editor({ value, onChange }: { value: CondNode; onChange: (c: CondNode) 
       <ui.Input
         size="sm"
         className="ue:font-mono"
-        placeholder={t('@sub.UQuestSubsystem.DailyLeft、@ps.Gold、$skipped')}
+        placeholder={t('$变量，或点「从代码选」')}
         value={String(value.value ?? '')}
         onChange={(e: { target: { value: string } }) => onChange({ ...value, value: e.target.value })}
       />
@@ -38,6 +39,6 @@ export const valueCheck: CheckKind = {
   badge: (c) => valueBadge(String(c.value ?? '')),
   match: (c) => typeof c.value === 'string' && !('target' in c),
   make: () => ({ value: '', equals: true }),
-  summary: (c) => `${String(c.value)} ${compareText(c)}`.trim(),
+  summary: (c) => `${sourceText(String(c.value ?? ''))} ${compareText(c)}`.trim(),
   Editor,
 }

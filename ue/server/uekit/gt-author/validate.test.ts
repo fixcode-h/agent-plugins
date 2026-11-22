@@ -109,3 +109,19 @@ test('常见写错的地方都按错误码报出来', async () => {
   // $y 写在有语法错的表达式里：语法错先报，变量检查照样按文字认出来
   assert.ok(r.errors.some((x) => x.code === 'var_undefined' && x.message.includes('$y')))
 })
+
+test('引用写了 client（GameTest 还没做）给警告，不当错误', async () => {
+  const { scen, lua } = await setup()
+  const doc = {
+    kind: 'gametest-scenario',
+    schemaVersion: 5,
+    objects: { npc: { class: 'BP_Npc_C', client: 1 } },
+    steps: [
+      { id: 's1', action: 'obj.call', obj: { class: 'BP_Shop_C', client: 0 }, function: 'Open' },
+      { id: 's2', action: 'group', do: [{ id: 's3', action: 'obj.call', obj: 'npc', function: 'Talk' }] },
+    ],
+  }
+  const r = await runChecks(offlineChecks(), makeEnv(doc, 'x.json', scen, lua))
+  assert.deepEqual(codes(r), { errors: [], warnings: ['not_supported', 'not_supported'] })
+  assert.deepEqual(r.warnings.map((w) => w.path).sort(), ['objects.npc', 'steps.0'])
+})

@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  objOfVar,
+  pathOfStep,
   duplicate,
   ensureIds,
   findPath,
@@ -246,4 +248,23 @@ test('能用的 $名字：参数、变量、set、saveAs、循环条目', async 
     names.map((n) => n.name),
     ['account', 'skipped', 'gold0', 'index', 'item', 'npc'],
   )
+})
+
+test('$变量的对象：取前面最近一次「找对象」存进它的对象，后面没有就取全文最后一个', () => {
+  const call = { action: 'obj.call', obj: '$shop', function: '' }
+  const doc = {
+    kind: 'GameTestScenario',
+    schemaVersion: 5,
+    name: 's',
+    steps: [
+      { action: 'obj.find', obj: '商店A', saveAs: 'shop' },
+      { action: 'group', do: [{ action: 'obj.find', obj: { class: 'WBP_Shop' }, saveAs: 'shop' }, call] },
+      { action: 'obj.find', obj: '商店C', saveAs: 'shop' },
+    ],
+  } as never
+  const at = pathOfStep(doc, call as never)
+  assert.deepEqual(at, ['steps', 1, 'do', 1])
+  assert.deepEqual(objOfVar(doc, '$shop', at), { class: 'WBP_Shop' })
+  assert.equal(objOfVar(doc, 'shop', ['steps', 0]), '商店C')
+  assert.equal(objOfVar(doc, '$none'), undefined)
 })

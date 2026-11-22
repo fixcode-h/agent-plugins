@@ -3,7 +3,6 @@ import {
   ChevronDown,
   CircleDot,
   FlaskConical,
-  Gamepad2,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -13,7 +12,7 @@ import {
 } from 'lucide-react'
 import { h, t } from '../../../host.ts'
 import { openMenuAt, type MenuItem } from '../../../menu.tsx'
-import { kindLabel, useTargetInfo, worldLabel } from '../../../ui.tsx'
+import { ConnPill } from '../../../conn/ConnPill.tsx'
 import type { ViewDef } from './views.ts'
 
 /** 面包屑里的一级：名字和点了去哪 */
@@ -109,9 +108,6 @@ export function EditorHeader({
   running: boolean
 }) {
   const { ui, cn } = h()
-  const { inst, world } = useTargetInfo()
-  const w = world ?? inst?.worlds.find((x) => x.type === 'PIE') ?? inst?.worlds[0]
-  const target = inst ? (w ? worldLabel(w) : kindLabel(inst.kind)) : t('编辑器没连上')
   return (
     <header className="ue:flex ue:min-h-12 ue:flex-wrap ue:items-center ue:gap-x-3 ue:gap-y-2 ue:border-b ue:border-line ue:px-4 ue:py-2">
       <nav aria-label={t('位置')} className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-body">
@@ -189,14 +185,9 @@ export function EditorHeader({
           onChange={onView}
           options={views.map((v) => ({ id: v.id, label: v.label(), icon: v.icon }))}
         />
-        <span
-          title={t('跑脚本、试节点用的目标（左边栏的「目标」里换）')}
-          className="ue:flex ue:h-7 ue:shrink-0 ue:items-center ue:gap-1.5 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-2 ue:font-mono ue:text-footnote ue:text-muted"
-        >
-          <Gamepad2 className="ue:h-3.5 ue:w-3.5" />
-          {target}
-          <span className={cn('ue:h-1.5 ue:w-1.5 ue:rounded-full', inst ? 'ue:bg-success' : 'ue:bg-subtle')} />
-        </span>
+        {/* 连接状态和 GM 页同一个胶囊（分析文档 U6）：绿 游戏在跑、黄 只连着编辑器（给「开始 PIE」）、灰 UE 没在运行（给「启动编辑器」），
+            点它换执行目标；以前这里只写目标名，没连上的原因和启动按钮在页顶另一条里 */}
+        <ConnPill />
         {dirty ? (
           <ui.Button size="sm" variant="secondary" disabled={saving} onClick={onSave} title={t('保存（Ctrl+S）')}>
             {saving && <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />}

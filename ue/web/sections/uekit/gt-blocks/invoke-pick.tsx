@@ -1,6 +1,6 @@
 import { ListTree } from 'lucide-react'
 import { useState } from 'react'
-import type { GtStep } from '../../../../shared/gt-script/index.ts'
+import { objOfVar, pathOfStep, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { FieldGroups, itemKey } from '../gt-vars/FieldGroups.tsx'
@@ -11,11 +11,17 @@ const PLAYERS = new Set(['gi', 'gs', 'gm', 'ps', 'pc', 'pawn', 'hud'])
 
 /**
  * obj.call 的「对象」→ gt.vars 的范围（协议 game-test-ref 5.3、7.6）：命名对象 / 内联引用按引用列，
- * 取值来源 `@sub.X`、玩家几件套、`@luaMod.路径` 照旧；`$变量` 编写时不知道是什么类，列不出来（返回 why）。
- * 静态函数省略 obj，function 写「类名.函数」
+ * 取值来源 `@sub.X`、玩家几件套、`@luaMod.路径` 照旧；`$变量` 按前面给它赋值的「找对象」那一步的对象列（B4），
+ * 找不到那一步才说要跑起来才知道。静态函数省略 obj，function 写「类名.函数」
  */
-export function scopeOfInvoke(step: GtStep, objects: Record<string, unknown> | undefined): VarScope | { why: string } {
+export function scopeOfInvoke(step: GtStep, doc: GtScript | undefined): VarScope | { why: string } {
+  const objects = doc?.objects as Record<string, unknown> | undefined
   const obj = step.obj
+  if (doc && typeof obj === 'string' && obj.trim().startsWith('$')) {
+    const src = objOfVar(doc, obj.trim(), pathOfStep(doc, step))
+    // 来源还是 $变量时不再往下追：免得 $a = 找($b)、$b = 找($a) 绕圈
+    if (src !== undefined && !(typeof src === 'string' && src.startsWith('$'))) return scopeOfInvoke({ ...step, obj: src }, doc)
+  }
   if (isRefObj(obj)) return { scope: 'object', ref: inlineRef(obj, objects) }
   const s = typeof obj === 'string' ? obj.trim() : ''
   if (s && !s.startsWith('@') && !s.startsWith('$')) {
@@ -32,7 +38,11 @@ export function scopeOfInvoke(step: GtStep, objects: Record<string, unknown> | u
   if (m && m[1] === 'sub' && m[2]) return { scope: 'subsystem', name: m[2] }
   if (m && PLAYERS.has(m[1]) && !m[2]) return { scope: 'player', which: m[1] as 'pc' }
   if (m && m[1] === 'luaMod' && m[2]) return { scope: 'lua', module: m[2] }
-  return { why: t('{o} 要跑起来才知道是什么类：函数名直接写', { o: s }) }
+  return {
+    why: s.startsWith('$')
+      ? t('前面没有把对象存进 {o} 的「找对象」：要跑起来才知道是什么类，函数名直接写', { o: s })
+      : t('{o} 要跑起来才知道是什么类：函数名直接写', { o: s }),
+  }
 }
 
 /** 选中的函数 → 步骤：函数名，参数按函数要的列出来（已经填过的留着；输出参数、自动参数不用填） */
@@ -77,7 +87,7 @@ export function InvokeFnPick({ step, onChange }: { step: GtStep; onChange: (s: G
 function FnDialog({ step, onClose, onPick }: { step: GtStep; onClose: () => void; onPick: (s: GtStep) => void }) {
   const { ui } = h()
   const ctx = useEditCtx()
-  const scope = scopeOfInvoke(step, ctx.doc?.objects as Record<string, unknown> | undefined)
+  const scope = scopeOfInvoke(step, ctx.doc)
   const ok = !('why' in scope)
   const vars = useVars(ctx.project, ok ? scope : undefined, ctx.live)
   const groups = (vars.data?.groups ?? [])

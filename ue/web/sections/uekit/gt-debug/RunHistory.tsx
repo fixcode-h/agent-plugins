@@ -2,7 +2,7 @@ import { CircleCheck, CircleX } from 'lucide-react'
 import { h, t } from '../../../host.ts'
 import { fmtTime } from '../../../ui.tsx'
 import type { GtHistoryRun } from '../gt-step-history.ts'
-import { ms } from '../GtStepDetail.tsx'
+import { ms } from '../gt-run/step-parts.tsx'
 
 /**
  * 运行面板的「历史」页：这个脚本最近几次运行（gt.history，跨编辑器会话，最新在前）。

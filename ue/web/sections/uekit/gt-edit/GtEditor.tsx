@@ -12,6 +12,7 @@ import { RunControls } from '../gt-debug/RunControls.tsx'
 import { RunPanel } from '../gt-debug/RunPanel.tsx'
 import { RunParams } from '../gt-debug/RunParams.tsx'
 import { useDebug } from '../gt-debug/use-debug.ts'
+import { useStepTry } from '../gt-debug/use-step-try.ts'
 import { stepKey } from '../gt-flow/layout.ts'
 import { guardsSupported, GUARD_MIN_VERSION } from '../gt-guards/model.ts'
 import type { CmdCtx } from './commands.ts'
@@ -155,27 +156,19 @@ export function GtEditor({
       .catch(() => setAliases([]))
   }, [project, root])
 
+  // 只做这一步：结果在右栏「运行 → 这一步」页（分析文档 B1、B2）
+  const stepTry = useStepTry(project, s.doc, !live)
+  const [stepTab, setStepTab] = useState(0)
+  const runTry = stepTry.run
   const tryStep = useCallback(
     async (path: GtPath) => {
       const step = s.doc && (getAt(s.doc, path) as GtStep | undefined)
       if (!step) return
-      try {
-        const r = await op<{ ok?: boolean; succeeded?: boolean; message?: string; runId?: string }>(
-          project,
-          'gt.step',
-          {
-            step,
-            ...(s.doc?.vars ? { vars: s.doc.vars } : {}),
-          },
-        )
-        if (r.runId) h().toast.success(t('块在后台跑了，结果看「最近运行」'))
-        else if (r.ok === false || r.succeeded === false) h().toast.error(r.message || t('这一步没通过'))
-        else h().toast.success(r.message || t('这一步通过了'))
-      } catch (e) {
-        h().toast.error((e as Error).message)
-      }
+      setPanel(true)
+      setStepTab((n) => n + 1)
+      await runTry(path, step)
     },
-    [project, s.doc],
+    [s.doc, runTry],
   )
 
   const save = async () => {
@@ -455,6 +448,7 @@ export function GtEditor({
                     history={history}
                     open={reportReq ?? openRun}
                     disk={!live}
+                    step={{ res: stepTry.res, busy: stepTry.busy, n: stepTab }}
                   />
                 ) : s.selected.length && cmdCtx ? (
                   <Inspector

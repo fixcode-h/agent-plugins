@@ -110,7 +110,7 @@ function CallInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep)
   const { groups } = useRefGroups(step.obj as GtRefLike | undefined)
   return (
     <div className="ue:flex ue:flex-col ue:gap-2.5">
-      <Row label={t('对象')} hint={t('命名对象、$变量、@sub.UQuestSubsystem、@luaMod.路径；调静态函数时不填')}>
+      <Row label={t('对象')} hint={t('脚本里的对象名，或前面「找对象」存的 $变量；调静态函数时不填')}>
         <ObjInput value={step.obj as GtRefLike | undefined} onChange={(o) => onChange(patch(step, 'obj', o))} />
       </Row>
       {isRefObj(step.obj) || (typeof step.obj === 'string' && /^[A-Za-z_]/.test(step.obj)) ? (

@@ -235,17 +235,20 @@ export function ValueTree({
   type,
   project,
   collapsed,
+  name,
 }: {
   value: unknown
   type?: string
   project?: string
+  /** 根行前面写的名字（变量名、回包字段名）：和子项的写法一样，不另起一行 */
+  name?: string
   /** 根行先收起（改变量的当前值：对象展开太高，会把「修改」挤出去） */
   collapsed?: boolean
 }) {
   const ue = useContext(Ctx)
   return (
     <div className="ue:flex ue:flex-col ue:font-mono ue:text-footnote">
-      <Row project={project ?? ue?.project.id} v={value} type={type} depth={0} open={!collapsed} />
+      <Row project={project ?? ue?.project.id} k={name} v={value} type={type} depth={0} open={!collapsed} />
     </div>
   )
 }

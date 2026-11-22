@@ -1,5 +1,5 @@
 import { ppost } from '../../api.ts'
-import type { StepDef } from './GtStepDetail.tsx'
+import type { StepDef } from './gt-run/step-parts.tsx'
 
 /**
  * 改场景里的一步：把 patch 合进原步骤（值是 undefined 的字段删掉），走 ext/gt/file replace。

@@ -82,6 +82,11 @@ test('报告：invoke 单个和 each 的数组统一成数组；成败只看 ok 
   assert.equal(invokesOf({ payload: { invoke: [{}, {}] } }).length, 2)
   assert.equal(stepOk({ ok: true, status: 'passed' }), true)
   assert.equal(stepOk({ ok: false, status: 'failed', message: 'ok' }), false)
+  // UELink 对操作成功的回包一律 ok=true：步骤没通过要看 succeeded / status
+  assert.equal(stepOk({ ok: true, succeeded: false, status: 'failed' }), false)
+  assert.equal(stepOk({ ok: true, status: 'failed' }), false)
+  assert.equal(stepOk({ ok: true, succeeded: true, status: 'succeeded' }), true)
+  assert.equal(stepOk({ ok: true, status: 'already' }), true)
   assert.equal(callText(buy, buy.args), '在 商店界面 上调 BuyItem(2003, 1, 店主)')
 })
 

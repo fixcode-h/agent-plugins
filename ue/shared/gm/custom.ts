@@ -123,10 +123,19 @@ export function invokesOf(res: unknown): InvokeReport[] {
   return (Array.isArray(inv) ? inv : [inv]) as InvokeReport[]
 }
 
-/** gt.step 成功与否只看它自己的 ok / status（规格第 7 节：不按文字判断） */
+/**
+ * gt.step 成功与否只看结构化字段（规格第 7 节：不按文字判断）。顶层的 ok 不能用：UELink 的 Dispatch
+ * 对操作本身成功的回包一律把 ok 写成 true，步骤没通过（断言不过、找不到对象）也是 ok=true，
+ * 这一步的结论在 GameTest 的 succeeded（整次临时运行）和 status（最后一步：succeeded / already / failed…）。
+ * 两个都没有（旧版、假桥接）才退回看 ok
+ */
+const PASSED = new Set(['passed', 'succeeded', 'already'])
 export const stepOk = (res: unknown) => {
-  const r = res as { ok?: boolean; status?: string } | undefined
-  return !!r && (r.ok === true || (r.ok === undefined && r.status === 'passed'))
+  const r = res as { ok?: boolean; status?: string; succeeded?: boolean } | undefined
+  if (!r) return false
+  if (typeof r.succeeded === 'boolean') return r.succeeded
+  if (typeof r.status === 'string' && r.status) return PASSED.has(r.status)
+  return r.ok === true
 }
 
 /** 「会执行」的一句话：在 商店界面 上调 BuyItem(2003, 1, 店主) */

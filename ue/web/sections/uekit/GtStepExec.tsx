@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
 import { patchStep, waitsForWidget } from './gt-step-patch.ts'
-import type { StepDef } from './GtStepDetail.tsx'
+import type { StepDef } from './gt-run/step-parts.tsx'
 
 type Via = 'inherit' | string
 
