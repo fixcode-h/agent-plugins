@@ -96,6 +96,11 @@ export async function ensureLuaConfig(
   const cfg = await uelinkLuaConfig(p)
   const text = JSON.stringify(cfg)
   if (pushed.get(card.pid) === text) return
-  pushed.set(card.pid, text)
-  await send('lua.config', { set: cfg }).catch(() => undefined)
+  // 发成功才记下；UE 正忙这类一时的失败下次操作再发（#227 评审）。报「不支持 lua.config」的是旧 UELink，记下不再试
+  await send('lua.config', { set: cfg }).then(
+    () => pushed.set(card.pid, text),
+    (e: Error) => {
+      if (/lua\.config/.test(e.message)) pushed.set(card.pid, text)
+    },
+  )
 }
