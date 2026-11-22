@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isObjArg, newCustomId, objValue } from '../../shared/gm/custom.ts'
 import { findModule, newModuleId } from '../../shared/gm/modules.ts'
+import { AGENT_FOLDER, normFolder } from '../../shared/gm/obj-folders.ts'
 import { GmCustom, GmObject, type GmCustomObj, type GmStore } from '../../shared/gm/schema.ts'
 import { runOp, type OpCtx } from '../ops.ts'
 import { gmFile, readGm, writeGm } from '../store.ts'
@@ -102,12 +103,16 @@ async function saveCustom(ctx: OpCtx, g: GmStore, def: Obj, dryRun: boolean, age
 
 async function saveObject(ctx: OpCtx, g: GmStore, def: Obj, dryRun: boolean, agent: boolean) {
   let o: GmObject
+  const name = String(def.name ?? '').trim()
+  // 对象都要在文件夹里（用户 2026-11-22）：没写 folder 时改的沿用原来的文件夹，新加的放进「Agent」
+  const prev = g.objects.find((x) => x.name === name)
+  const folder = normFolder(typeof def.folder === 'string' ? def.folder : '') || prev?.folder || AGENT_FOLDER
   try {
-    o = GmObject.parse({ ...def, name: String(def.name ?? '').trim(), ...(agent ? { by: 'agent' } : {}) })
+    o = GmObject.parse({ ...def, name, folder, ...(agent ? { by: 'agent' } : {}) })
   } catch (e) {
-    throw new Error(`def 不合对象列表的写法（{name, ref} 或 {name, src}）：${errText(e)}`)
+    throw new Error(`def 不合对象列表的写法（{name, ref} 或 {name, src}，可加 folder）：${errText(e)}`)
   }
-  const old = g.objects.some((x) => x.name === o.name)
+  const old = !!prev
   const hits = o.ref ? await hitCounts(ctx, { [o.name]: { ref: o.ref } }) : undefined
   const base = { object: o.name, ...(old ? { updated: true } : { added: true }), ...(hits ? { hits } : {}) }
   if (dryRun) return { dryRun: true, ...base, def: o }

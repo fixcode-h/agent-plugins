@@ -25,9 +25,14 @@ const objFields = {
 const oneOf = (o: { ref?: unknown; src?: string }) => !!o.ref !== !!o.src
 const ONE_OF = { message: 'ref 和 src 要写一个且只写一个' }
 
-/** 对象列表里的一项（对象调用左栏） */
+/** 对象列表里的一项（对象调用左栏）。folder 是放在哪个文件夹（用 / 分层）；没有的是加文件夹之前存的，显示在最外层 */
 export const GmObject = z
-  .object({ name: z.string().min(1), ...objFields, by: z.literal('agent').optional() })
+  .object({
+    name: z.string().min(1),
+    ...objFields,
+    folder: z.string().optional(),
+    by: z.literal('agent').optional(),
+  })
   .refine(oneOf, ONE_OF)
 export type GmObject = z.infer<typeof GmObject>
 
@@ -116,6 +121,8 @@ export const GmStore = z.object({
   /** 手动移过模块的 GM：条目键 → 模块 id（没移过的按分组第一段归模块） */
   moduleOf: z.record(z.string(), z.string()).default({}),
   objects: z.array(GmObject).default([]),
+  /** 对象列表的文件夹（含空的；有对象的文件夹不一定在这里，按对象的 folder 推出来） */
+  objFolders: z.array(z.string()).default([]),
   custom: z.array(GmCustom).default([]),
   /** 每个分类一份收藏（GM 页左栏最下面） */
   favs: z
