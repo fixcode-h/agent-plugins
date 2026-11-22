@@ -18,6 +18,7 @@ import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
 import { ensureLuaConfig } from './lua/settings.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
+import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
 
 /**
  * 所有对 UE 的操作都走这里（网页和 Agent 工具共用）：选目标进程、按权限放行或请你确认、危险命令确认、
@@ -478,6 +479,9 @@ export async function runOp(
     }
   }
   await checkPerms(ctx, op, kind, args)
+  // 「执行 GM」节点：跑场景前按 GM 库重新展开（GM 库在上次存盘后改过也跟上）
+  if (op === 'gt.run') await refreshGmBeforeRun(ctx.project, args)
+  await expandInline(ctx.project, op, args)
   // 文件夹树：自己挑进程，没有编辑器或桥接旧时扫磁盘；不进 ASSET_OPS，免得为列目录启动后台编辑器（asset-folders.ts）
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
   // GameTest 对象引用：几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）。gt.migrate 随 v5 删掉（旧脚本不迁移）

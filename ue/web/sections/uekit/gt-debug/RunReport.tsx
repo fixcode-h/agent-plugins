@@ -61,18 +61,24 @@ export function RunReport({
         <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
       </div>
     )
-  const failed = steps.filter((s) => s.status === 'failed').length
+  // 附带 GM 外面包的那层（<路径>#hooks）不列：主步骤和每条附带 GM 各有一条记录
+  const list = steps.filter((s) => !String(s.path ?? '').endsWith('#hooks'))
+  const failed = list.filter((s) => s.status === 'failed' && !s.warn).length
+  const warned = list.filter((s) => s.warn).length
   return (
     <div className="ue:flex ue:flex-col">
       <p className={cn('ue:px-4 ue:py-2 ue:text-footnote', failed ? 'ue:text-danger' : 'ue:text-success')}>
         {failed ? t('{n} 步失败', { n: failed }) : t('全部通过')}
-        <span className="ue:ml-2 ue:text-subtle">{t('共 {n} 条记录', { n: steps.length })}</span>
+        {warned > 0 && <span className="ue:ml-2 ue:text-warning">{t('{n} 条附带 GM 出错', { n: warned })}</span>}
+        <span className="ue:ml-2 ue:text-subtle">{t('共 {n} 条记录', { n: list.length })}</span>
       </p>
       <ol className="ue:flex ue:flex-col">
-        {steps.map((s, i) => {
+        {list.map((s, i) => {
           const key = String((s as { id?: unknown }).id ?? (s as { path?: unknown }).path ?? '')
           const info = titleOfKey(doc, key)
           const block = (s as { block?: unknown }).block === true
+          // 附带 GM（<路径>.hooks.<组>.<序号>）缩在它那一步底下
+          const hook = String(s.path ?? '').includes('.hooks.')
           return (
             <li key={i}>
               <button
@@ -80,12 +86,13 @@ export function RunReport({
                 disabled={!info.path}
                 onClick={() => info.path && onSelect(info.path)}
                 className={cn(
-                  'ue:flex ue:w-full ue:items-start ue:gap-2 ue:px-4 ue:py-1.5 ue:text-left',
+                  'ue:flex ue:w-full ue:items-start ue:gap-2 ue:py-1.5 ue:pr-4 ue:text-left',
+                  hook ? 'ue:pl-9' : 'ue:pl-4',
                   info.path && 'ue:cursor-pointer ue:hover:bg-hover',
                 )}
               >
                 <span className="ue:mt-0.5 ue:shrink-0">
-                  <StepIcon s={s.status} />
+                  <StepIcon s={s.warn ? 'warned' : s.status} />
                 </span>
                 <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">
                   <span className={cn('ue:truncate ue:text-footnote', block ? 'ue:text-muted' : 'ue:text-fg')}>
@@ -93,7 +100,9 @@ export function RunReport({
                     {block && ` · ${t('整块')}`}
                   </span>
                   {s.status === 'failed' && s.message && (
-                    <span className="ue:text-caption ue:break-words ue:text-danger">{s.message}</span>
+                    <span className={cn('ue:text-caption ue:break-words', s.warn ? 'ue:text-warning' : 'ue:text-danger')}>
+                      {s.message}
+                    </span>
                   )}
                 </span>
                 <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">{ms(s.durationMs)}</span>

@@ -1,5 +1,22 @@
 import { allBlocks, REMOVED_ACTIONS } from '../../../../shared/gt-script/index.ts'
-import { issue, type Check, type Issue } from './types.ts'
+import { isGmRef } from '../../../../shared/gt-script/gm/expand.ts'
+import { issue, type Check, type Issue, type StepRef } from './types.ts'
+
+/** 附带 GM（GameTest 2.3.0）：{before, after, fail}，每组是步骤数组；每项的 onError 只认 note / fail */
+function hookIssues(s: StepRef, hooks: unknown): Issue[] {
+  if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks))
+    return [issue(s, 'bad_type', 'hooks 要写成 {before, after, fail}，每组是步骤数组')]
+  const out: Issue[] = []
+  for (const [k, v] of Object.entries(hooks)) {
+    if (!['before', 'after', 'fail'].includes(k)) out.push(issue(s, 'unknown_field', `hooks 不认识 ${k}（可用：before, after, fail）`))
+    else if (!Array.isArray(v)) out.push(issue(s, 'bad_type', `hooks.${k} 要写成步骤数组`))
+    else
+      for (const it of v as Record<string, unknown>[])
+        if (it?.onError !== undefined && it.onError !== 'note' && it.onError !== 'fail')
+          out.push(issue(s, 'bad_type', `hooks.${k} 里的 onError 只能是 note（只记一笔）或 fail（这一步算失败）`))
+  }
+  return out
+}
 
 /**
  * 动作名和块的必填字段。编辑器没开时拿不到 gt.actions，按协议文档列的动作认（game-test.md 动作表 + 脚本协议第 2 节的块），
@@ -97,6 +114,9 @@ export const actions: Check = {
       if (setVar && !has(o, 'var')) need('var', '变量名')
       if (setVar && !has(o, 'value') && !has(o, 'from')) out.push(issue(s, 'param_missing', 'set 要写 value 或 from'))
       if (a === 'api') need('api', '接口名，如 Object.Find、项目.QuestTest.AcceptQuest')
+      if (a === 'gm.run' && !isGmRef(o.gm))
+        out.push(issue(s, 'param_missing', 'gm.run 缺 gm：{kind: cpp/lua/console/custom/macro, name}，run 由面板存盘时按 GM 库生成'))
+      if (o.hooks !== undefined) out.push(...hookIssues(s, o.hooks))
       if (a === 'editor.open' && !has(o, 'asset') && !has(o, 'map'))
         out.push(issue(s, 'param_missing', 'editor.open 要写 asset（资源路径）或 map（关卡）'))
       if (a === 'editor.prop')

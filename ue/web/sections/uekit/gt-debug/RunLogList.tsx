@@ -5,7 +5,7 @@ import { ms, StepIcon } from '../gt-run/step-parts.tsx'
 import { guardTitle, titleOfKey } from './lookup.ts'
 import { clock, type LogEntry } from './run-log.ts'
 
-const RESULT: Record<string, string> = { passed: 'succeeded', failed: 'failed', already: 'already', skipped: 'skipped' }
+const RESULT: Record<string, string> = { passed: 'succeeded', failed: 'failed', already: 'already', skipped: 'skipped', warned: 'warned' }
 
 /**
  * 「运行记录」页（效果图 6）：按到达顺序一行一条，块里的缩进；守护触发的一条整行染底，它处理时做的步骤缩在下面。

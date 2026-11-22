@@ -4,6 +4,7 @@ import { getAt, replace, type GtPath, type GtScript, type GtStep } from '../../.
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import { blockUi, CommonFields, NoteField, TONE_TEXT, type BlockTone } from '../gt-blocks/index.ts'
+import { HooksEditor } from '../gt-gm/HooksEditor.tsx'
 import { canRun, commandMenuItems, COMMANDS, type CmdCtx } from './commands.ts'
 
 /** 图标底下的浅色调小方块（效果图 1、11 右上）：和 TONE_TEXT 同一套色调，只是做成底色 */
@@ -140,6 +141,9 @@ export function Inspector({
         )}
         <Section title={t('出错和跳过')}>
           <CommonFields step={step} onChange={set} />
+        </Section>
+        <Section title={t('附带 GM')}>
+          <HooksEditor step={step} onChange={set} />
         </Section>
         {history && history(path) && (
           <Section title={t('最近几次')}>

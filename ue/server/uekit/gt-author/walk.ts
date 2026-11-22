@@ -28,7 +28,9 @@ export function strings(v: unknown, out: string[] = []): string[] {
 /** 一步自己的字段（不含子槽里的步骤）：查这一步里的引用时不把块里的步骤算进来 */
 export function ownFields(step: Obj): Obj {
   const out: Obj = {}
-  for (const [k, v] of Object.entries(step)) if (!['do', 'then', 'else', 'elif', 'guards'].includes(k)) out[k] = v
+  // hooks（附带 GM）和 gm.run 的 run 是别的步骤：附带项里的 $ret 只在那里有，不算这一步引用的变量
+  for (const [k, v] of Object.entries(step))
+    if (!['do', 'then', 'else', 'elif', 'guards', 'hooks', 'run'].includes(k)) out[k] = v
   if (Array.isArray(step.elif)) out.elif = step.elif.map((e) => (isObj(e) ? { cond: e.cond } : e))
   return out
 }

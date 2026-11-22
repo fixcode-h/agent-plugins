@@ -7,6 +7,8 @@ import { selectorLabel } from '../gt-selector-label.ts'
 import { wholeScreenOf } from '../gt-selector-tree.ts'
 import type { GtCloseHow, GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import { closeHowText } from '../gt-ref/CloseHowList.tsx'
+import type { GmRef } from '../../../../shared/gt-script/gm/expand.ts'
+import { refText } from '../gt-gm/gm-ref.ts'
 import { describeRef, identText, targetShort, targetText } from '../gt-ref/describe.ts'
 
 /**
@@ -113,6 +115,7 @@ registerFace('obj.call', {
   sub: (s) => (s.obj ? targetText({ obj: s.obj, part: s.part }) : ''),
 })
 registerFace('api', { title: (s) => t('调接口 {a}', { a: str(s.api) }) })
+registerFace('gm.run', { title: (s) => t('执行 GM {g}', { g: refText(s.gm as GmRef | undefined) }) })
 registerFace('break', { title: () => t('跳出循环') })
 registerFace('continue', { title: () => t('进下一轮') })
 registerFace('return', { title: () => t('结束脚本') })

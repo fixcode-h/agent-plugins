@@ -8,6 +8,7 @@ import {
   type GtScript,
 } from '../../../../shared/gt-script/index.ts'
 import { absorbLibDrops } from '../../../../shared/obj-lib/link.ts'
+import type { ExpandIssue } from '../../../../shared/gt-script/gm/expand.ts'
 import { ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 
@@ -121,9 +122,35 @@ export function useScript(o: { project: string; root: string; path: string }): S
     setSaving(true)
     try {
       const text = serialize(tidyScript(doc))
-      await ppost(o.project, 'ext/gt/file', { root: o.root, path: o.path, action: 'save', text, expectText: base })
-      setBase(text)
-      saved.current = doc
+      const r = await ppost<{ text?: string; gmIssues?: ExpandIssue[] }>(o.project, 'ext/gt/file', {
+        root: o.root,
+        path: o.path,
+        action: 'save',
+        text,
+        expectText: base,
+      })
+      // 「执行 GM」由面板按 GM 库展开后才写盘（server/uekit/gt-gm-expand.ts）：写进去的和发出去的不一样时按写进去的更新，
+      // 不然下次存盘的 expectText 对不上、检查器里「会执行」也是旧的
+      const written = typeof r.text === 'string' ? r.text : text
+      if (written !== text) {
+        const p = parseScript(written)
+        if (!('error' in p)) {
+          const tidy = tidyScript(p.doc)
+          setDoc(tidy)
+          saved.current = tidy
+        } else saved.current = doc
+      } else saved.current = doc
+      setBase(written)
+      if (r.gmIssues?.length)
+        h().toast.error(
+          t('存好了，但有 {n} 处「执行 GM」展开不了：{m}', {
+            n: r.gmIssues.length,
+            m: r.gmIssues
+              .slice(0, 3)
+              .map((x) => `${x.at}：${x.message}`)
+              .join('；'),
+          }),
+        )
       bump((n) => n + 1)
     } catch (e) {
       h().toast.error((e as Error).message)
