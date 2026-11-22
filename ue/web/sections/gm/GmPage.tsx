@@ -36,6 +36,7 @@ import { TableBindDialog } from './TableBindDialog.tsx'
 import { listTables, searchRows, storedTable, tableShape } from './tables.ts'
 import { useGm } from './use-gm.ts'
 import { useGmRun } from './use-gm-run.ts'
+import { MenuHost } from '../../menu.tsx'
 
 /**
  * GM 页（规格第 6、7 节，效果图 designs/GM页重设计-对象调用-效果图）。左栏顶上分类 GM · 引擎 · 宏 · 对象调用：
@@ -231,6 +232,8 @@ export function GmPage() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
+      {/* GM 页的右键菜单（对象列表、模块树、收藏）都靠它画；同一页挂了几个时只有第一个画 */}
+      <MenuHost />
       {dialog}
       {chat.dialog}
       {s.dialogs}

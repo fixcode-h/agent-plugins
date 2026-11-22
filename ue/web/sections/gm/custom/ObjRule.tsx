@@ -24,7 +24,7 @@ export function srcText(src: string) {
 }
 
 /** 按「在哪找」和类配图标：屏上界面、Lua、Actor（和效果图一致） */
-function iconOf(o: ObjLike) {
+export function iconOf(o: ObjLike) {
   if (o.src === '@pawn') return User
   if (o.src?.startsWith('@luaMod.') || o.ref?.class.startsWith('lua:')) return CodeXml
   if (o.src) return Cpu
@@ -37,7 +37,8 @@ function iconOf(o: ObjLike) {
 /**
  * 一条匹配规则的友好写法（效果图 1、2）：类 · 标识小块 = 值；只按类的写「只按类」。界面上不出现属性路径的符号（PathChips）
  */
-export function ObjRule({ o, small }: { o: ObjLike; small?: boolean }) {
+/** noIcon：前面已经有图标的地方（对象列表的树行）不再画一个 */
+export function ObjRule({ o, small, noIcon }: { o: ObjLike; small?: boolean; noIcon?: boolean }) {
   const { cn } = h()
   const Icon = iconOf(o)
   const lua = !!o.src?.startsWith('@luaMod.') || !!o.ref?.class.startsWith('lua:')
@@ -52,7 +53,7 @@ export function ObjRule({ o, small }: { o: ObjLike; small?: boolean }) {
         small ? 'ue:text-caption' : 'ue:text-footnote',
       )}
     >
-      <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', lua ? 'ue:text-muted' : 'ue:text-accent')} />
+      {!noIcon && <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', lua ? 'ue:text-muted' : 'ue:text-accent')} />}
       <span className="ue:font-mono ue:text-fg">
         {o.src ? srcText(o.src) : classShort(o.ref?.class.replace(/^lua:/, ''))}
       </span>
