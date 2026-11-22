@@ -45,7 +45,7 @@ export const apis: Check = {
             : issue(
                 s,
                 'api_missing',
-                `接口库里没有 ${name}：ue_gametest action=api 看有哪些（C++ 接口要编辑器扫过才在 _api.json 里）`,
+                `接口库里没有 ${name}：ue_gametest action=look what=api 看有哪些（C++ 接口要编辑器扫过才在 _api.json 里）`,
               ),
         )
       }

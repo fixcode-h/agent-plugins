@@ -9,6 +9,8 @@ import type { BpAt, BpGraph } from './graph.ts'
 export interface BpCtx {
   run: FlowRunState
   editable: boolean
+  /** 「核对所有对象」后此刻找不到对象的步骤 key：节点标黄 */
+  missing?: ReadonlySet<string>
   /** 连着线的引脚：`节点 key:引脚 id`（输入引脚是 `节点 key:in`），没连的引脚画成空心圈 */
   linked: Set<string>
   /** 选中的节点 key */

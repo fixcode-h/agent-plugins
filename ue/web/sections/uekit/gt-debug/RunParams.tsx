@@ -3,6 +3,8 @@ import { useState } from 'react'
 import type { GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
+import { useGm } from '../../gm/use-gm.ts'
+import { ParamTable } from './ParamTable.tsx'
 
 /** 上次填的值：同一个脚本再跑时接着用（每个人自己的，存浏览器） */
 const LAST_KEY = 'ue.gt.lastParams'
@@ -39,6 +41,8 @@ export function RunParams({
   onCancel: () => void
 }) {
   const { ui } = h()
+  // GM 的数据（gm.json 的表格关联、表格路径换算的根）：参数关联表格时用（F3）
+  const gm = useGm(0)
   const params = doc.params ?? {}
   const [vals, setVals] = useState<Record<string, string>>(() => {
     const last = readLast(scenario)
@@ -80,22 +84,31 @@ export function RunParams({
         }}
       >
         {Object.entries(params).map(([k, p], i) => (
-          <label key={k} className="ue:grid ue:grid-cols-[140px_1fr] ue:items-center ue:gap-x-3 ue:gap-y-0.5">
+          <div key={k} className="ue:grid ue:grid-cols-[140px_1fr] ue:items-center ue:gap-x-3 ue:gap-y-0.5">
             <span className="ue:flex ue:min-w-0 ue:flex-col">
               <span className="ue:truncate ue:font-mono ue:text-footnote ue:text-fg">${k}</span>
               {p.type && <span className="ue:text-caption ue:text-subtle">{p.type}</span>}
             </span>
-            <ui.Input
-              size="sm"
-              autoFocus={i === 0}
-              spellCheck={false}
-              className="ue:w-full ue:font-mono"
-              placeholder={scalarText(p.default) || t('空')}
+            <ParamTable
+              gm={gm}
+              scenario={scenario}
+              param={k}
               value={vals[k] ?? ''}
-              onChange={(e: { target: { value: string } }) => setVals({ ...vals, [k]: e.target.value })}
+              onChange={(v) => setVals((cur) => ({ ...cur, [k]: v }))}
+              input={
+                <ui.Input
+                  size="sm"
+                  autoFocus={i === 0}
+                  spellCheck={false}
+                  className="ue:w-full ue:font-mono"
+                  placeholder={scalarText(p.default) || t('空')}
+                  value={vals[k] ?? ''}
+                  onChange={(e: { target: { value: string } }) => setVals({ ...vals, [k]: e.target.value })}
+                />
+              }
             />
             {p.note && <span className="ue:col-start-2 ue:text-caption ue:text-subtle">{p.note}</span>}
-          </label>
+          </div>
         ))}
         <button type="submit" hidden />
       </form>

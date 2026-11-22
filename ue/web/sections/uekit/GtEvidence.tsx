@@ -4,6 +4,7 @@ import { h, t } from '../../host.ts'
 import { copyText } from '../../menu.tsx'
 import { ErrorText, Note, Term } from '../../ui.tsx'
 import { ShotImage } from './GtRecordShot.tsx'
+import { EvidenceObject } from './gt-debug/EvidenceObject.tsx'
 
 /**
  * 一步失败时 GameTest 自动留下的证据（1.2 起，报告里那一步的 payload.evidence）：都是相对项目根的路径，
@@ -18,6 +19,8 @@ export interface GtEvidenceData {
   log?: string
   target?: { path?: string; class?: string; text?: string; visibility?: string; enabled?: boolean }
   selectorError?: string
+  /** 这一步用到的对象（GameTest 2.3.1）：props 是 object.json（gt.props 同一种形状），读不到时 error */
+  object?: { path: string; name?: string; class?: string; props?: string; error?: string }
 }
 
 export const evidenceOf = (payload?: Record<string, unknown>): GtEvidenceData | undefined => {
@@ -90,6 +93,7 @@ export function GtEvidence({
           </Note>
         )
       )}
+      {e.object && <EvidenceObject o={e.object} loadText={loadText} />}
       {e.screenshot && imageUrl && recorded ? (
         <div className="ue:grid ue:grid-cols-1 ue:gap-2 ue:sm:grid-cols-2">
           <figure className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1">

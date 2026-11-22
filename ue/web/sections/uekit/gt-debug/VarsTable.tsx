@@ -1,6 +1,14 @@
+import { BookmarkPlus, ExternalLink, MoreHorizontal, Pencil, SquareFunction } from 'lucide-react'
+import { useState, type MouseEvent } from 'react'
+import type { GmObject } from '../../../../shared/gm/schema.ts'
 import type { GtScript } from '../../../../shared/gt-script/index.ts'
+import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
-import { ValueTree } from '../value/ValueTree.tsx'
+import { openMenu } from '../../../menu.tsx'
+import { ObjDialog } from '../../../obj-kit/ObjDialog.tsx'
+import { objOfInstance, openObjCall, saveObjToLib } from '../../../obj-kit/obj-lib-actions.ts'
+import type { MemberTab } from '../../../obj-kit/MemberPane.tsx'
+import { isObjRef, ValueTree } from '../value/ValueTree.tsx'
 
 /**
  * 报告里一步的 payload.vars（GameTest 1.11.2）：这一步用到、写到的变量在这一步结束时的值。
@@ -20,6 +28,7 @@ export function stepVars(payload?: Record<string, unknown>) {
  */
 export function VarsTable({ doc, vars, full }: { doc?: GtScript; vars?: Record<string, unknown>; full?: boolean }) {
   const { cn } = h()
+  const [open, setOpen] = useState<{ obj: GmObject; tab: MemberTab }>()
   const rows: { name: string; value: unknown; live: boolean; kind?: string }[] = []
   const seen = new Set<string>()
   if (full && doc) {
@@ -50,11 +59,46 @@ export function VarsTable({ doc, vars, full }: { doc?: GtScript; vars?: Record<s
           </dt>
           {/* 值按值树画（和 GM 调函数的输出同一套）：对象、数组、结构体能点开看，对象还能展开成员；
               没在跑时显示的是默认值，整格调淡 */}
-          <dd className={cn('ue:min-w-0', !r.live && 'ue:opacity-60')}>
-            <ValueTree value={r.value} collapsed />
+          <dd className={cn('ue:flex ue:min-w-0 ue:items-start ue:gap-1', !r.live && 'ue:opacity-60')}>
+            <div className="ue:min-w-0 ue:flex-1">
+              <ValueTree value={r.value} collapsed />
+            </div>
+            {/* 暂停时变量里的对象（测试页梳理 U4）：就地调函数、改值，或存进对象库、去 GM 页接着用 */}
+            {r.live && isObjRef(r.value) && <ObjRowActions v={r.value} onOpen={(obj, tab) => setOpen({ obj, tab })} />}
           </dd>
         </div>
       ))}
+      {open && <ObjDialog obj={open.obj} tab={open.tab} onClose={() => setOpen(undefined)} />}
     </dl>
+  )
+}
+
+/** 变量值是对象时行尾的「调函数…」和 ⋯（改值、在 GM 对象调用里打开、存进对象库） */
+function ObjRowActions({
+  v,
+  onOpen,
+}: {
+  v: { $obj: string; class?: string; name?: string }
+  onOpen: (obj: GmObject, tab: MemberTab) => void
+}) {
+  const { ui } = h()
+  const ue = useUe()
+  const obj = objOfInstance(v)
+  return (
+    <span className="ue:flex ue:shrink-0 ue:items-center">
+      <ui.IconButton icon={SquareFunction} size="sm" label={t('调函数…')} onClick={() => onOpen(obj, 'fns')} />
+      <ui.IconButton
+        icon={MoreHorizontal}
+        size="sm"
+        label={t('更多')}
+        onClick={(e: MouseEvent) =>
+          openMenu(e, [
+            { label: t('改值…'), icon: Pencil, onClick: () => onOpen(obj, 'props') },
+            { label: t('在 GM 对象调用里打开'), icon: ExternalLink, onClick: () => void openObjCall(ue.project.id, obj, ue.go) },
+            { label: t('存进对象库'), icon: BookmarkPlus, onClick: () => void saveObjToLib(ue.project.id, obj) },
+          ])
+        }
+      />
+    </span>
   )
 }

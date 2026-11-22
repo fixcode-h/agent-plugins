@@ -30,13 +30,15 @@ import { Inspector } from './Inspector.tsx'
 import { useRecordHere } from './record-here.ts'
 import { useTidyHere } from './tidy-here.ts'
 import { PaletteGrid } from './rail/PaletteGrid.tsx'
-import { useSelectorCheck } from './selector-check.tsx'
+import { useObjCheck } from './obj-check.tsx'
 import { copyScenarioJson, downloadScenarioJson } from '../gt-export.ts'
 import type { GtHistoryRun } from '../gt-step-history.ts'
 import { GtStepHistory } from '../GtStepHistory.tsx'
 import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
+import { LookObj } from '../gt-debug/LookObj.tsx'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
 import { LibDriftBar } from '../gt-objects/LibDriftBar.tsx'
+import { usePublishOpenScript } from '../gt-objects/open-script.ts'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useRefGate } from '../gt-ref/gate.tsx'
 import { useScript } from './use-script.ts'
@@ -141,6 +143,7 @@ export function GtEditor({
       }
     : s.apply
   const scope = useScope(s.doc, s.selected, s.select)
+  usePublishOpenScript(scenario.relativePath, s.doc, apply, gate.locked)
   // 对象块里改命名对象：改脚本 objects 里那一条，用到它的步骤都跟着变
   const setObject = (name: string, ref: GtRef) =>
     s.doc && apply({ ...s.doc, objects: { ...(s.doc.objects ?? {}), [name]: ref } })
@@ -304,7 +307,7 @@ export function GtEditor({
   }
   const steps = (s.doc?.steps ?? []) as GtStep[]
   const hasBlocks = steps.some((x) => isBlock(x))
-  const check = useSelectorCheck(project, s.doc, (p) => s.select([p]))
+  const check = useObjCheck(project, s.doc, (p) => s.select([p]))
   const { tidy } = tidyHere
   const moreItems: (MenuItem | false | undefined)[] = [
     {
@@ -314,9 +317,9 @@ export function GtEditor({
     },
     tidy.hasBackup && { label: t('恢复成原录制'), icon: Undo2, hint: t('整理前的备份'), onClick: tidy.restore },
     {
-      label: t('核对选择器'),
+      label: t('核对所有对象'),
       icon: check.checking ? Loader2 : ScanSearch,
-      hint: live ? t('只解析，不执行') : t('要先启动编辑器'),
+      hint: live ? t('数此刻命中几个，不执行') : t('要先启动编辑器'),
       disabled: !live || check.checking,
       onClick: check.start,
     },
@@ -384,6 +387,9 @@ export function GtEditor({
         />
         {run && (
           <RunBanner run={run} paused={debug.flow.paused}>
+            {debug.flow.paused && (
+              <LookObj project={project} objects={(s.doc?.objects ?? {}) as Record<string, unknown>} />
+            )}
             {!old && <RunControls debug={debug} />}
           </RunBanner>
         )}
@@ -426,6 +432,7 @@ export function GtEditor({
                 onLeave={scope.leave}
                 history={{ undo: s.undo, redo: s.redo, canUndo: s.canUndo, canRedo: s.canRedo }}
                 run={!run && !debug.flow.active && lastFailed ? { status: lastFailed } : undefined}
+                missing={check.missing}
               />
               {lastRun && !run && (
                 <LastRunChip

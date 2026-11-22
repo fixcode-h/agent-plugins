@@ -1,6 +1,7 @@
 import {
   Braces,
   Copy,
+  FlaskConical,
   CopyPlus,
   FolderOpen,
   Pencil,
@@ -20,6 +21,8 @@ import type { GmFav, GmStore } from '../../../../shared/gm/schema.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { copyText, openMenu } from '../../../menu.tsx'
+import { refOfMacro, refOfRecent } from '../../uekit/gt-gm/gm-ref.ts'
+import { addToTest } from '../../uekit/gt-gm/AddToTest.tsx'
 import { overrides } from '../custom/run-custom.ts'
 import type { GmEntry } from '../data.ts'
 import type { RecentRun } from '../RecentRuns.tsx'
@@ -70,6 +73,7 @@ export function useItemMenus(ctx: GmMenuCtx, save: (g: GmStore) => Promise<void>
     openMenu(e, [
       { label: t('打开'), icon: FolderOpen, onClick: () => ctx.open({ kind: 'macro', id }, 'macro') },
       { label: t('执行'), icon: Play, disabled: !!macroWhy, onClick: () => void execMacro(id) },
+      { label: t('加到测试…'), icon: FlaskConical, onClick: () => addToTest(refOfMacro(m)) },
       'sep',
       {
         label: t('重命名'),
@@ -182,6 +186,8 @@ export function useItemMenus(ctx: GmMenuCtx, save: (g: GmStore) => Promise<void>
         onClick: () => void save(toggleCommon(d.gm, fav)),
       },
       !c && !!run.code && { label: t('复制命令'), icon: Copy, onClick: () => copyText(run.code) },
+      // 这一次（带当时的参数）接到某个测试脚本最后（G7）
+      refOfRecent(run) && { label: t('加到测试…'), icon: FlaskConical, onClick: () => addToTest(refOfRecent(run)!) },
       c && !Array.isArray(run.args) && 'sep',
       c &&
         !Array.isArray(run.args) && {

@@ -55,6 +55,8 @@ export interface BpViewProps {
   picked?: string[]
   /** 框选、Ctrl+A 选了几个（只有步骤，守护不算） */
   onSelectMany?: (s: BpSelection[]) => void
+  /** 「核对所有对象」后此刻找不到对象的步骤 key */
+  missing?: ReadonlySet<string>
 }
 
 type RFNode = Node<BpData>
@@ -102,6 +104,7 @@ function BpCanvas({
   onLeave,
   picked,
   onSelectMany,
+  missing,
 }: BpViewProps) {
   const editable = !!onChange
   const { IconButton } = h().ui
@@ -185,6 +188,7 @@ function BpCanvas({
         onLeave,
         picked,
         onSelectMany,
+        missing,
       }}
       onAddGuard={here ? undefined : onAddGuard}
       toolbarLeft={
@@ -243,6 +247,7 @@ function BpInner({
   onLeave,
   picked,
   onSelectMany,
+  missing,
 }: {
   doc: GtScript
   graph: ReturnType<typeof bpGraph>
@@ -264,6 +269,7 @@ function BpInner({
   onLeave?: () => void
   picked?: string[]
   onSelectMany?: (s: BpSelection[]) => void
+  missing?: ReadonlySet<string>
 }) {
   const pickedSet = useMemo(() => new Set(picked ?? []), [picked])
   const [searching, setSearching] = useState(false)
@@ -355,6 +361,7 @@ function BpInner({
     () => ({
       run,
       editable,
+      missing,
       linked: linkedPins(graph),
       selected,
       picked: pickedSet,
@@ -370,7 +377,7 @@ function BpInner({
       editNote: (id, text) => apply(updateNote(doc, id, text === undefined ? undefined : { text })),
     }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- pickNode 每次渲染都新建，按它会每帧重建上下文
-    [run, editable, selected, pickedSet, doc, graph, apply],
+    [run, editable, missing, selected, pickedSet, doc, graph, apply],
   )
 
   const onConnect = (c: Connection) => {

@@ -18,7 +18,7 @@ export function flowLines(hints: FlowHintLite[] | undefined) {
     '- 几步只在某个界面在 / 不在时才做 → wrap 成 if（cond 用统一条件）；同一个 skipIf 写在连续几步上的合成一个 if。',
     '- 和场景根里现成脚本（登录、进副本……）一样的一段 → replace 成 { "action": "call", "script": "相对场景根的路径" }。',
     '- 输入的账号、名字、数量这类固定值 → param 提成参数（跑的时候能换、被 call 时能传）。',
-    '- 判断「功能做没做对」的检查点（金币变了、任务完成）优先读代码变量或项目接口（ue_gametest action=vars / api），不要只看界面文字。',
+    '- 判断「功能做没做对」的检查点（金币变了、任务完成）优先读代码变量或项目接口（ue_gametest action=look what=vars / api），不要只看界面文字。',
     list.length ? '面板的规则先认出了这些（只是建议：照项目代码判断，条件不对就改，不合适就不用，每一条都要写进 changes 才会生效）：' : '',
     ...list.map((h, i) => `${i + 1}. [${h.rule}] ${h.what}\n   ${JSON.stringify(h.changes)}`),
   ]

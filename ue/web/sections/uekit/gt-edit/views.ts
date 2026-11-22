@@ -24,6 +24,8 @@ export interface ViewProps {
   onLeave?: () => void
   /** 运行中的进度：按步骤 id 标状态，视图自己决定怎么画 */
   run?: { at?: string; status?: Record<string, 'ok' | 'fail' | 'run' | 'skip'> }
+  /** 「核对所有对象」后此刻找不到对象的步骤（id 或路径），流程图上标黄 */
+  missing?: ReadonlySet<string>
 }
 
 export interface ViewDef {
