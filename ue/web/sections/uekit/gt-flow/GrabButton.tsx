@@ -1,12 +1,10 @@
 import { Crosshair, Eye, Library, MousePointerClick, Search, SquareFunction, Timer, Wrench } from 'lucide-react'
 import { useRef, useState } from 'react'
-import type { GmObject } from '../../../../shared/gm/schema.ts'
 import type { GtRef, GtStep } from '../../../../shared/gt-script/index.ts'
-import { pget, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { openMenuAt } from '../../../menu.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
-import { classShort } from '../gt-ref/describe.ts'
+import { saveObjToLib } from '../../../obj-kit/obj-lib-actions.ts'
 import { RefDialog } from '../gt-ref/RefDialog.tsx'
 
 /** 抓到的对象能拿来做的事：每种生成一步（对象写成内联引用，部件跟着点到的） */
@@ -42,21 +40,9 @@ export function GrabButton({ onInsert }: { onInsert: (step: GtStep) => void }) {
   const [open, setOpen] = useState(false)
   const btn = useRef<HTMLElement | null>(null)
 
+  // 只存进对象库、不改脚本：和暂停时「存进对象库」同一个动作（obj-kit/obj-lib-actions.ts）
   const toLib = async (ref: GtRef) => {
-    try {
-      const lib = await pget<{ objects: GmObject[]; objFolders: string[] }>(ctx.project, 'objlib')
-      const base = classShort(ref.class) || 'obj'
-      let name = base
-      for (let i = 2; lib.objects.some((o) => o.name === name); i++) name = `${base}${i}`
-      // 对象一定要在文件夹里（和 GM 对象列表同一条规矩）：测试页抓的放进 GameTest
-      await ppost(ctx.project, 'objlib', {
-        objects: [...lib.objects, { name, ref, folder: 'GameTest' }],
-        objFolders: lib.objFolders,
-      })
-      h().toast.success(t('存进了对象库「GameTest/{n}」：在「对象」页签里拖进画布', { n: name }))
-    } catch (e) {
-      h().toast.error((e as Error).message)
-    }
+    await saveObjToLib(ctx.project, { name: '', ref })
   }
 
   return (

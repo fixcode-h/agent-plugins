@@ -1,6 +1,6 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { CirclePlay, CircleX, ClipboardList, LogIn, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
+import { CirclePlay, CircleX, ClipboardList, LogIn, ScanSearch, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
@@ -74,13 +74,14 @@ function Exits({ node, pins, action }: { node: string; pins: BpPin[]; action: st
 /** 一步（叶子、块、折起来的段）：头部图标 + 名字 + 类型，下面内容区（细节、条件一行一项）；块的子槽一行一个出口 */
 export const BpStepNode = memo(function BpStepNode({ data }: Props) {
   const n = data.node
-  const { run, selected, picked } = useBp()
+  const { run, selected, picked, missing } = useBp()
   const { cn } = h()
   const step = n.step
   if (!step) return null
   const face = faceOf(step)
   const ui = blockUi(step.action)
   const st = run.steps[n.id.replace(/^~/, '')]
+  const miss = !n.loose && !!missing?.has(n.id)
   // 「下一步 / 之后」都在头部右边，一直往右走直线；块的子槽（是 / 否 / 每轮…）一行一个排在下面，接到右下方，线不交叉
   const next = n.outs.find((p) => p.kind === 'next')
   const subs = n.outs.filter((p) => p.kind !== 'next')
@@ -99,6 +100,7 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
         st?.status === 'failed' && !n.loose && 'ue:ring-2 ue:ring-danger/70',
         (selected === n.id || picked?.has(n.id)) && 'ue:ring-2 ue:ring-accent',
         run.paused && run.at === n.id && 'ue:ring-2 ue:ring-warning',
+        miss && 'ue:ring-2 ue:ring-warning/70',
         (disabled || n.loose) && 'ue:opacity-55',
         n.loose && 'ue:border-dashed',
       )}
@@ -119,6 +121,12 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
         <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-danger">
           <CircleX className="ue:h-3 ue:w-3" />
           {t('在这一步失败')}
+        </div>
+      )}
+      {miss && st?.status !== 'failed' && (
+        <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-warning">
+          <ScanSearch className="ue:h-3 ue:w-3" />
+          {t('此刻找不到它的对象')}
         </div>
       )}
       {n.loose && (

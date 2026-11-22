@@ -7,7 +7,7 @@ user-invocable: true
 # 写 GameTest 测试
 
 GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里按 JSON 脚本操作界面、调函数、检查状态。
-脚本放在场景根（`ue_gametest action=status` 的 `scenarioRoot`），格式是 **v5**（`schemaVersion: 5`）。
+脚本放在场景根（`ue_gametest action=look what=status` 的 `scenarioRoot`），格式是 **v5**（`schemaVersion: 5`）。
 协议在 UEKit 的 `docs/game-test-ref.md`（v5 的对象引用、属性路径、部件、判断、对象动作，**以它为准**）和 `docs/game-test-script.md`（块、条件、表达式、守护、接口库）；这里是写测试的做法。
 
 ## 一句话记住 v5
@@ -22,10 +22,10 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 1. **弄清要测什么**：一句话写下「做了什么之后，应该看到什么」。读改动的代码（C++、蓝图名、Lua），找到入口界面、点击处理、改的数据在哪。
 2. **查**（不开游戏也行）：
-   - `ue_gametest action=widgets asset=/Game/UI/WBP_Bag`：WBP 的控件树，部件名就是这里的控件名；列表、格子标 `container`。
-   - `action=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
-   - `action=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
-   - `action=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
+   - `ue_gametest action=look what=widgets asset=/Game/UI/WBP_Bag`：WBP 的控件树，部件名就是这里的控件名；列表、格子标 `container`。
+   - `action=look what=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
+   - `action=look what=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
+   - `action=look what=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
 3. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再走界面操作，最后用对象判断或表达式检查。见下面「写法」。
 4. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
 5. **跑**：`action=run scenario=…`（可带 `params`），`job` 看进度，`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。
@@ -100,7 +100,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **表达式**：填值处写 `"=…"`，条件写 `{"expr": "…"}`。只算值：`$var`、`@来源.路径`、`prop(引用, "属性路径")`（例 `num(prop("shop", "@/TxtGold:text"))`）、`len` `min` `format`… 和**只读**接口。改状态的函数只能用 `obj.call` / `api` 步骤。
 - **取值来源**：`@gi @gs @gm @ps @pc @pawn @hud`、`@sub.<子系统类>`、`@actor[tag=X]`、`@obj.<名字>`、`@luaMod.<require 路径>`、`@luaG.<全局>`、`@cvar.<名字>`。路径照 `vars` / `props` 返回的抄，不要猜。
 - **守护**：不定时弹出的东西（引导、公告、断线重连、升级弹窗）写成守护，`when` 用对象判断、`do` 里常用 `obj.close`。不要在主流程里到处插「如果有就关掉」。全局的写在 `_settings.json` 的 `guards`，一个脚本自己的写在顶层 `guards`。
-- **子脚本**：重复出现的一段（登录、翻完引导、回主界面）写成带 `params` 的脚本放 `common/`，用 `call`。先 `action=scenarios` 看已有的，能复用就复用。参数传对象时传 `objects` 里的名字，不传选择器。
+- **子脚本**：重复出现的一段（登录、翻完引导、回主界面）写成带 `params` 的脚本放 `common/`，用 `call`。先 `action=look what=scenarios` 看已有的，能复用就复用。参数传对象时传 `objects` 里的名字，不传选择器。
 
 ## 旧脚本（v1–v4）
 
@@ -120,8 +120,14 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **Lua**：Lua 脚本根下 `GameTestApi` 文件夹（默认）里的模块，**模块函数**（`function M.Fn`，不是 `M:Fn`）就是接口，名字 `项目.<模块名>.<函数名>`。参数、返回照 EmmyLua 注释，`---@readonly` 的算只读（能当条件）。示例：[reference/lua-api-example.lua](reference/lua-api-example.lua)。
 - **C++**：`Source/**/GameTestApi` 下蓝图函数库的 `static BlueprintCallable` 函数，`BlueprintPure` 算只读，`WorldContext` 自动填。示例：[reference/cpp-api-example.h](reference/cpp-api-example.h)。
 - 接口只做「准备状态」和「查询」，**逻辑写在接口里，脚本只做编排**。参数只用能构造的类型（整数、浮点、布尔、字符串、枚举、简单结构体、数组）；对象参数传引用（`objects` 里的名字或 `$var`）。
-- 写完 Lua 接口跑一次 `action=api query=<模块名>`，面板会重扫并写进场景根 `_api.json`；`validate` 认得 `_api.json` 里的名字。
+- 写完 Lua 接口跑一次 `action=look what=api query=<模块名>`，面板会重扫并写进场景根 `_api.json`；`validate` 认得 `_api.json` 里的名字。
 - 用户的 UnLua 是二次开发版：Lua 里取游戏对象、调 C++ 的写法照项目里已有代码抄，不要套官方 UnLua 的 API。
+
+## 用项目的 GM（GameTest 2.3.0）
+
+- **执行 GM**：`{"action": "gm.run", "gm": {"kind": "cpp|lua|custom|macro|console", "name": …, "args": …}, "saveAs"?: …}`，`gm` 照 GM 页的条目写（C++ 带 `owner`，自定义 GM 的 `name` 是它的 id，宏是宏 id）。面板存盘、运行前按 GM 库展开成 `run` 步骤，**`run` 不要手写**。C++ GM、自定义 GM 的参数能写 `$变量` / `=表达式`；Lua、控制台的参数会拼进代码，只能写常量。
+- 用户刚在 GM 页点过、想写进测试：`look what=gmRecent` 直接给出 `gm.run` 步骤，照抄就行。
+- **附带 GM**：一步要在前后顺手跑 GM（发道具、打日志、截图）时挂 `hooks`：`{"before": [...], "after": [...], "fail": [...]}`，每项是一个 `gm.run`，可加 `once: true`（循环里只第一次）和 `onError: "fail"`（默认 `note`：出错只记一笔、报告标 `warn`、不算失败）。`after` / `fail` 里能用 `$ret` 拿到这一步 `saveAs` 的值。准备状态的主线步骤别藏进 hooks，写成正常步骤。
 
 ## 结合真实工作的写法
 

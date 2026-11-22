@@ -40,6 +40,7 @@ import { listTables, searchRows, storedTable, tableShape } from './tables.ts'
 import { useGm } from './use-gm.ts'
 import { useGmRun } from './use-gm-run.ts'
 import { MenuHost } from '../../menu.tsx'
+import { AddToTestHost } from '../uekit/gt-gm/AddToTest.tsx'
 
 /**
  * GM 页（规格第 6、7 节；2026-11-22 梳理，效果图 designs/GM页梳理与扩展-效果图）。顶上工具条：面包屑 + 连接状态 + 刷新 + ⋯。
@@ -288,6 +289,7 @@ export function GmPage() {
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       {/* GM 页的右键菜单（对象列表、模块树、常用）都靠它画；同一页挂了几个时只有第一个画 */}
       <MenuHost />
+      <AddToTestHost />
       {dialog}
       {chat.dialog}
       {s.dialogs}

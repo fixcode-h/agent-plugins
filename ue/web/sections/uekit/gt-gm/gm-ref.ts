@@ -1,6 +1,7 @@
 import type { GmRun } from '../../../../server/store.ts'
 import type { GmMacro } from '../../../../shared/gm/schema.ts'
 import type { GmKind, GmRef } from '../../../../shared/gt-script/gm/expand.ts'
+import { refOfRun } from '../../../../shared/gt-script/gm/ref-of-run.ts'
 import { t } from '../../../host.ts'
 import type { GmEntry } from '../../gm/data.ts'
 
@@ -25,20 +26,8 @@ export function refOfEntry(e: GmEntry, args?: GmRef['args']): GmRef {
 
 export const refOfMacro = (m: GmMacro): GmRef => ({ kind: 'macro', name: m.id, label: m.name })
 
-/** 最近执行（GM 页「最近执行」、调用记录）里的一条：键 lua:名字 / cpp:类.名字 / custom:id / console:命令 */
-export function refOfRecent(r: GmRun): GmRef | undefined {
-  const i = r.key.indexOf(':')
-  const kind = r.key.slice(0, i)
-  const rest = r.key.slice(i + 1)
-  if (kind === 'lua') return { kind: 'lua', name: rest, args: r.args }
-  if (kind === 'console') return { kind: 'console', name: rest }
-  if (kind === 'custom') return { kind: 'custom', name: rest, label: r.name, args: r.args }
-  if (kind === 'cpp') {
-    const dot = rest.lastIndexOf('.')
-    return { kind: 'cpp', name: rest.slice(dot + 1), owner: rest.slice(0, dot), args: r.args }
-  }
-  return undefined
-}
+/** 最近执行（GM 页「最近执行」、调用记录）里的一条 */
+export const refOfRecent = (r: GmRun): GmRef | undefined => refOfRun(r)
 
 /** 和 GM 页一样的条目键：找回 GmEntry 显示参数、说明 */
 export function keyOfRef(ref: GmRef): string {

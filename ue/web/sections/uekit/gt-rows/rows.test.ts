@@ -56,16 +56,6 @@ describe('runStart', () => {
   })
 })
 
-describe('collectTargets', () => {
-  it('段里的选择器也收，按行的路径记', async () => {
-    const { collectTargets } = await import('./check.ts')
-    assert.deepEqual(
-      collectTargets(doc).map((x) => [x.key, x.field, x.target]),
-      [['steps.1.do.0', 'target', 'A']],
-    )
-  })
-})
-
 describe('numOf', () => {
   it('同一槽里别的步骤的序号', () => {
     assert.equal(numOf({ i: 3, no: '4' })(0), '1')

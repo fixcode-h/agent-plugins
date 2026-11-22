@@ -54,6 +54,7 @@ export function FlowEditView({
   scope,
   onEnter,
   onLeave,
+  missing,
 }: ViewProps) {
   // 画布上可能有没连上的步骤（_layout.loose）：插入、复制这些通用命令只给流程里的步骤补 id，这里统一补上、去掉空串
   const onChange: ViewProps['onChange'] = (r, what) => {
@@ -154,6 +155,7 @@ export function FlowEditView({
         picked={picked}
         onSelectMany={selectMany}
         run={run ? fromViewRun(run, live) : live}
+        missing={missing}
         // 空白处右键「加守护」：加一条空守护，事件节点出现在画布上，触发条件到右栏「这个脚本的守护」里填
         onAddGuard={() => {
           const guards = doc.guards ?? []
