@@ -71,7 +71,7 @@ test('执行时只能改 editable 的参数', () => {
 
 test('取对象：gt.resolve 带 show；来源字符串不支持', () => {
   const q = getQuery({ obj: '商店界面', objects: buy.objects, props: ['@/TxtTitle.Text'] })
-  assert.deepEqual(q, { refs: [{ id: '商店界面', ref: shop }], show: ['@/TxtTitle.Text'] })
+  assert.deepEqual(q, { refs: [{ id: '商店界面', ref: shop, show: ['@/TxtTitle.Text'] }] })
   assert.throws(() => getQuery({ obj: 'p', objects: { p: { src: '@pawn' } } }), /匹配规则/)
 })
 

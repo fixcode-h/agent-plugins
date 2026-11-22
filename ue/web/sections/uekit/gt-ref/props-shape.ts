@@ -50,6 +50,7 @@ function fnItem(f: LuaFnRaw): GtPropItem {
       ...(typeof f.ret === 'string' && f.ret ? { ret: f.ret } : {}),
       src,
       ...(f.pure ? { pure: true } : {}),
+      ...(typeof f.path === 'string' && f.path.startsWith('@') ? { path: f.path } : {}),
     },
   }
 }

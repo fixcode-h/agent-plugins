@@ -3,9 +3,10 @@ import { useMemo, useState } from 'react'
 import type { GtPropItem, GtPropKind } from '../../../../../shared/gt-script/index.ts'
 import { Details } from '../../../../details/Details.tsx'
 import type { DetailsApi, Node } from '../../../../details/rows.tsx'
+import { mayContain, typeFits, valueFits } from '../../../../../shared/gm/type-match.ts'
 import { h, t } from '../../../../host.ts'
 import { tabOf, toDetailProps, type DetailTab } from './data.ts'
-import { FnList } from './FnList.tsx'
+import { FnList, pickTip } from './FnList.tsx'
 
 /** gt.props 截过的长字符串（C++ 截成前 200 字再加「…」，GameTestRpcProps.cpp MaxValueChars） */
 export const TRUNCATED_AT = 200
@@ -19,6 +20,12 @@ export function kindOfValue(v: unknown): GtPropKind | undefined {
   if (typeof v === 'string') return 'string'
   if (Array.isArray(v)) return 'array'
   return undefined
+}
+
+/** 抓取值时这一项自己能不能取：属性按类型，函数要是无参的只读取值函数、返回类型对得上 */
+export function takeable(type: string | undefined, it: GtPropItem) {
+  if (it.luaFn) return !!it.luaFn.path && it.luaFn.params.length === 0 && typeFits(type, it.luaFn.ret)
+  return typeFits(type, it.type)
 }
 
 const TABS: { id: DetailTab; label: () => string }[] = [
@@ -43,6 +50,8 @@ export function DetailPane({
   picked,
   onPick,
   noClass,
+  take,
+  needInstance,
 }: {
   items: GtPropItem[]
   loading?: boolean
@@ -55,14 +64,26 @@ export function DetailPane({
   picked: Set<string>
   onPick: (prop: string, kind: GtPropKind | undefined, value: unknown, item?: GtPropItem) => void
   noClass?: boolean
+  /**
+   * 抓取值（GM 改变量用同一个弹窗，用户 2026-11-22）：准星改成「取这个值」，单选；只列类型对得上的
+   * （结构体、数组本身对不上但里面的成员可能对得上的留着能展开），取值函数按返回类型列。type 是要填的变量的类型
+   */
+  take?: { type?: string }
+  /** 抓取值时还没点实例（或游戏没开）：细节先不列，写这句 */
+  needInstance?: string
 }) {
   const { ui, cn } = h()
   const [tab, setTab] = useState<DetailTab>('props')
+  const takeType = take?.type
+  const shownItems = useMemo(
+    () => (take ? items.filter((it) => takeable(takeType, it) || (!it.luaFn && mayContain(takeType, it.type))) : items),
+    [items, take, takeType],
+  )
   const byTab = useMemo(() => {
     const m: Record<DetailTab, GtPropItem[]> = { props: [], fns: [], lua: [], states: [] }
-    for (const it of items) m[tabOf(it)].push(it)
+    for (const it of shownItems) m[tabOf(it)].push(it)
     return m
-  }, [items])
+  }, [shownItems])
   const cur = byTab[tab].length || !items.length ? tab : (TABS.find((x) => byTab[x.id].length)?.id ?? tab)
   // 函数（functions 组）没有值，不进细节面板，单独列（FnList）；带值的 .Get() 这类照常在细节面板里
   const fns = useMemo(() => byTab[cur].filter((x) => x.luaFn), [byTab, cur])
@@ -77,6 +98,13 @@ export function DetailPane({
   )
   const byProp = useMemo(() => new Map(items.map((x) => [x.prop, x])), [items])
 
+  if (needInstance)
+    return (
+      <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:px-6 ue:text-center">
+        <Box className="ue:h-6 ue:w-6 ue:text-subtle" />
+        <p className="ue:text-footnote ue:text-subtle">{needInstance}</p>
+      </div>
+    )
   if (noClass)
     return (
       <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-2 ue:p-6 ue:text-center">
@@ -108,14 +136,18 @@ export function DetailPane({
       const v = item?.fromSource ? item.value : n.value
       // 结构体、数组本身不能直接比（UE 标了 comparable: false 的也一样），展开后比成员
       const structy = v !== null && typeof v === 'object' && !Array.isArray(v)
-      if (structy || item?.comparable === false) return null
+      // 抓取值：类型对得上才给准星（展开出来的子项按值判断）；数组整个能取，结构体展开后一个个成员取（用户 2026-11-22）
+      if (take) {
+        if (item ? !takeable(takeType, item) : structy || !valueFits(takeType, v)) return null
+      } else if (structy || item?.comparable === false) return null
       const on = picked.has(n.path)
+      const tip = pickTip(on, !!take)
       return (
         <button
           type="button"
           aria-pressed={on}
-          aria-label={on ? t('移出标识组') : t('加进唯一标识组')}
-          title={on ? t('移出标识组') : t('加进唯一标识组')}
+          aria-label={tip}
+          title={tip}
           onClick={(e) => {
             e.stopPropagation()
             onPick(n.path, item?.kind ?? kindOfValue(v), v, item)
@@ -152,7 +184,7 @@ export function DetailPane({
             {(props.length > 0 || loading) && (
               <Details props={props} api={api} loading={loading} flatSingle={cur === 'lua'} />
             )}
-            {fns.length > 0 && <FnList items={fns} picked={picked} onPick={onPick} />}
+            {fns.length > 0 && <FnList items={fns} picked={picked} onPick={onPick} takeValue={!!take} />}
           </>
         )}
       </div>

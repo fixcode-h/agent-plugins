@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import { h, t } from '../../../host.ts'
 import type { CallOut } from './run-custom.ts'
-import { ValueTree } from './ValueTree.tsx'
+import { ValueBrief, ValueTree } from '../../uekit/value/ValueTree.tsx'
 
 const fmt = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
 
@@ -52,8 +52,8 @@ export function CallOutput({ out, args }: { out?: CallOut; args?: Record<string,
             <div key={i} className="ue:flex ue:flex-col ue:gap-0.5 ue:border-t ue:border-line/60 ue:pt-1">
               <span className="ue:text-fg">{it.name}</span>
               {(it.ident ?? []).map((x) => (
-                <span key={x.prop} className="ue:text-muted">
-                  {x.prop} = {fmt(x.actual)}
+                <span key={x.prop} className="ue:flex ue:items-center ue:gap-1.5 ue:text-muted">
+                  {x.prop} <ValueBrief v={x.actual} />
                 </span>
               ))}
             </div>
@@ -62,17 +62,17 @@ export function CallOutput({ out, args }: { out?: CallOut; args?: Record<string,
       ) : (
         <div className={box}>
           {out.invoke.map((inv, i) => {
-            // GameTest 2.2.1 起有带类型的 value：对象、数组、表画成树；旧版只有显示文字 returned
-            const typed = inv.value !== undefined && inv.value !== null && typeof inv.value === 'object'
+            // GameTest 2.2.1 起有带类型的 value：按类型画（ValueTree，和改变量、抓取值同一套）；旧版只有显示文字 returned
+            const typed = inv.value !== undefined
             return (
               <div key={i} className="ue:flex ue:flex-col ue:gap-1">
                 <span className={cn('ue:flex ue:items-center ue:gap-1.5 ue:text-success')}>
                   <Check className="ue:h-3.5 ue:w-3.5" />
-                  {inv.returned === undefined
+                  {inv.returned === undefined && !typed
                     ? t('已调用（没有返回值）')
                     : typed
                       ? t('返回')
-                      : t('返回 {v}', { v: fmt(inv.value ?? inv.returned) })}
+                      : t('返回 {v}', { v: fmt(inv.returned) })}
                 </span>
                 {typed && <ValueTree value={inv.value} />}
               </div>

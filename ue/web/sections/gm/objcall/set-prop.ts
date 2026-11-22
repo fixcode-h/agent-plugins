@@ -1,8 +1,7 @@
 import { gtNames, objArg, objValue, stepOk } from '../../../../shared/gm/custom.ts'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
-import type { GtPropsResult } from '../../../../shared/gt-script/ref/types.ts'
 import { op } from '../../../api.ts'
-import { normalizeGroups } from '../../uekit/gt-ref/props-shape.ts'
+import { runCall } from '../custom/run-custom.ts'
 import type { Target } from '../../../../server/types.ts'
 
 /**
@@ -34,31 +33,45 @@ export async function setObjProp(
   o: GmObject,
   prop: string,
   value: unknown,
+  /** 值是别的对象时：它的匹配规则（value 写 `@obj.名字`，GameTest 写的时候现找） */
+  extra?: Record<string, unknown>,
 ) {
   const id = gtNames([o.name]).get(o.name)!
   const step = { action: 'obj.set', obj: objArg(id), prop, value }
   const r = await op<Record<string, unknown>>(
     project,
     'gt.step',
-    { step, objects: { [id]: objValue(o) } },
+    { step, objects: { ...extra, [id]: objValue(o) } },
     target,
     30000,
   )
   if (!stepOk(r)) throw new Error(String(r.message || r.status || '改不了'))
 }
 
-/** 抓取一个变量此刻的值：gt.props 读整个对象，挑出这一项（路径对不上时按名字） */
+/** 抓到的一个实例上这个变量的值 */
+export interface Grabbed {
+  name: string
+  value: unknown
+}
+
+/**
+ * 抓取一个变量此刻的值（用户 2026-11-22：抓取就是从运行中的游戏里取对象的值，和 GM「取对象」是一回事）：
+ * 直接走「取对象」那条路（runCall kind=get → gt.resolve 带 show），只读这一个属性，匹配规则命中几个就回几个
+ */
 export async function readObjProp(
   project: string,
   target: Target | undefined,
   o: GmObject,
   prop: string,
-  name: string,
-): Promise<unknown> {
-  if (!o.ref) throw new Error('来源对象读不了属性：在 GameTest 的选对象面板里看')
-  const r = await op<GtPropsResult>(project, 'gt.props', { target: { obj: o.ref } }, target, 30000)
-  const items = normalizeGroups(r).flatMap((g) => g.items)
-  const it = items.find((x) => x.prop === prop) ?? items.find((x) => x.name === name)
-  if (!it) throw new Error(`对象上没有「${name}」`)
-  return it.value
+): Promise<Grabbed[]> {
+  const out = await runCall(
+    project,
+    { kind: 'get', obj: o.name, objects: { [o.name]: o }, props: [prop], args: {}, many: 'error' },
+    {},
+    target,
+  )
+  if (!out.ok) throw new Error(out.error || '抓取失败')
+  const hits = (out.found?.items ?? []).filter((x) => x.match !== false)
+  if (!hits.length) throw new Error('游戏里没找到这个对象：按匹配规则此刻命中 0 个')
+  return hits.map((x) => ({ name: x.name, value: x.ident?.find((i) => i.prop === prop)?.actual }))
 }

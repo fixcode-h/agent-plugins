@@ -96,13 +96,14 @@ export function callStep(
 
 /**
  * 取对象（kind=get）：gt.resolve 一次拿命中的每个实例和这些属性此刻的值（show）。
+ * show 要写在 refs 的每一项里（协议 gt.resolve：refs: [{id, ref, show}]），写在外层 GameTest 不认、属性值不回来。
  * 来源字符串（@pawn）不是匹配规则，gt.resolve 不认，直接报错说明
  */
 export function getQuery(c: Pick<GmCustom, 'obj' | 'objects' | 'props'>) {
   const o = c.objects[c.obj]
   if (!o) throw new Error(`对象「${c.obj}」不在这条 GM 的 objects 里`)
   if (!o.ref) throw new Error(`「${c.obj}」是来源 ${o.src}，取对象只支持匹配规则`)
-  return { refs: [{ id: c.obj, ref: o.ref }], show: c.props ?? [] }
+  return { refs: [{ id: c.obj, ref: o.ref, show: c.props ?? [] }] }
 }
 
 /** gt.step 的结果里 obj.call 的报告：each 时是数组，统一成数组 */

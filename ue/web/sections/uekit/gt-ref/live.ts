@@ -149,7 +149,9 @@ export function useRefHits(
   const items = useMemo(() => {
     if (!sig) return undefined
     const [list, sh] = JSON.parse(sig) as [unknown[], string[] | undefined]
-    return { refs: { op: 'gt.resolve' as const, args: { refs: list, ...(sh?.length ? { show: sh } : {}) } } }
+    // show 写在 refs 的每一项里（协议 gt.resolve：refs: [{id, ref, show}]）：写在外层 GameTest 不认
+    const refs = sh?.length ? (list as Record<string, unknown>[]).map((r) => ({ ...r, show: sh })) : list
+    return { refs: { op: 'gt.resolve' as const, args: { refs } } }
   }, [sig])
   const w = useLiveWatch(project, items)
   const res = w.results.refs as { refs?: (RefHits & { id: string })[]; error?: string } | undefined

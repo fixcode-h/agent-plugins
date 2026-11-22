@@ -1,4 +1,4 @@
-import { AppWindow, Box, ChevronDown, ChevronRight, CircleCheck } from 'lucide-react'
+import { AppWindow, Box, ChevronDown, ChevronRight, CircleCheck, Crosshair } from 'lucide-react'
 import { useMemo, useState, type MouseEvent } from 'react'
 import type { GtIdentItem, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
@@ -26,6 +26,9 @@ export function InstancePane({
   selected,
   onSelect,
   onUseClass,
+  onTake,
+  taken,
+  takeMode,
 }: {
   live: boolean
   cls: string
@@ -38,6 +41,12 @@ export function InstancePane({
   selected?: string
   onSelect: (name: string) => void
   onUseClass: (cls: string, instance?: string) => void
+  /** 抓取值、要填的是对象时：实例行尾有准星，取这个对象本身 */
+  onTake?: (name: string) => void
+  /** 已经取了的实例名 */
+  taken?: string
+  /** 抓取值弹窗：只是选实例，不显示「就是它 / 被标识排除」（那是定标识用的） */
+  takeMode?: boolean
 }) {
   const { cn } = h()
   const [closed, setClosed] = useState<Set<string>>(new Set())
@@ -124,7 +133,7 @@ export function InstancePane({
           const why = hit
             ? undefined
             : ident.find((it) => actual.has(it.prop) && testIdent(it, actual.get(it.prop)) === false)
-          return (
+          const row = (
             <button
               key={c.name}
               type="button"
@@ -137,16 +146,39 @@ export function InstancePane({
               )}
             >
               <span className="ue:max-w-full ue:truncate ue:font-mono ue:text-footnote ue:text-fg">{c.name}</span>
-              <span
+              {!takeMode && (
+                <span
+                  className={cn(
+                    'ue:flex ue:max-w-full ue:items-center ue:gap-1 ue:text-caption',
+                    hit && mine.size === 1 ? 'ue:text-success' : hit ? 'ue:text-warning' : 'ue:text-subtle',
+                  )}
+                >
+                  {hit ? (mine.size === 1 ? t('就是它') : t('也命中：再加标识区分')) : t('被标识排除')}
+                  {why && <PathChips path={why.prop} small />}
+                </span>
+              )}
+            </button>
+          )
+          // 抓取对象：纯 Lua 实例不是 UObject，不能当对象填
+          if (!onTake || c.luaTable) return row
+          const on = taken === c.name
+          return (
+            <div key={c.name} className="ue:flex ue:items-center ue:gap-1">
+              <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">{row}</div>
+              <button
+                type="button"
+                aria-pressed={on}
+                aria-label={on ? t('不取这个对象') : t('取这个对象')}
+                title={on ? t('不取这个对象') : t('取这个对象')}
+                onClick={() => onTake(c.name)}
                 className={cn(
-                  'ue:flex ue:max-w-full ue:items-center ue:gap-1 ue:text-caption',
-                  hit && mine.size === 1 ? 'ue:text-success' : hit ? 'ue:text-warning' : 'ue:text-subtle',
+                  'ue:flex ue:h-6 ue:w-6 ue:shrink-0 ue:cursor-pointer ue:items-center ue:justify-center ue:rounded-md',
+                  on ? 'ue:bg-accent ue:text-on-accent' : 'ue:text-subtle ue:hover:bg-hover ue:hover:text-fg',
                 )}
               >
-                {hit ? (mine.size === 1 ? t('就是它') : t('也命中：再加标识区分')) : t('被标识排除')}
-                {why && <PathChips path={why.prop} small />}
-              </span>
-            </button>
+                <Crosshair className="ue:h-3.5 ue:w-3.5" />
+              </button>
+            </div>
           )
         })}
       </div>
