@@ -126,6 +126,7 @@ export function IdentRow({
   actual,
   canNot,
   flash,
+  grab,
 }: {
   value: GtIdentItem
   onChange: (v: GtIdentItem) => void
@@ -136,6 +137,8 @@ export function IdentRow({
   canNot?: boolean
   /** 刚从准星加进来：闪一下，让人看到它落在哪个组 */
   flash?: boolean
+  /** 值旁边出「抓取值…」（条件、等对象里用；选对象弹窗自己的标识组不出） */
+  grab?: boolean
 }) {
   const { ui, cn } = h()
   // 带参数的函数：按去掉参数的写法也认得属性树里那一项（参数改过之后路径就和列表里的不一样了）
@@ -199,6 +202,7 @@ export function IdentRow({
         kind={kind}
         members={membersOf(item)}
         textKey={textKeyFor(items, value.prop)}
+        grab={grab ? { type: item?.type } : undefined}
       />
     </div>
   )

@@ -65,6 +65,23 @@ export function ArgsEdit({
   const { ui } = h()
   const [text, setText] = useState(() => JSON.stringify(value))
   const [err, setErr] = useState('')
+  // 外面换了值（「换函数…」填好参数名）时文字跟上（B3：以前只在挂载时取一次，再敲一个字就把新参数名覆盖掉）；
+  // 自己敲出来的值不重排文字，免得光标跳
+  const json = JSON.stringify(value)
+  const [seen, setSeen] = useState(json)
+  if (seen !== json) {
+    setSeen(json)
+    let same = false
+    try {
+      same = JSON.stringify(JSON.parse(text || '{}')) === json
+    } catch {
+      // 正在敲、还不是 JSON：按外面的值重写
+    }
+    if (!same) {
+      setText(json)
+      setErr('')
+    }
+  }
   const args = api?.args ?? []
   if (!args.length && !Object.keys(value).length && api) return null
   if (args.length)

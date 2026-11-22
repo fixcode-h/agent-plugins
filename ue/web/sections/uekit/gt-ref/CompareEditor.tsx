@@ -4,6 +4,7 @@ import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { ValueInput } from '../gt-cond/ValueInput.tsx'
 import { COUNT_CMPS, opsFor } from '../../../../shared/gt-script/index.ts'
 import { KNOWN_ENUMS, noValue, opLabel } from './compare-table.ts'
+import { GrabValue } from './GrabValue.tsx'
 
 /** kind 不知道时（编辑器没开、Lua 字段没声明类型）给的比较：数字和文字的都给 */
 const LOOSE_OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'matches', 'in', 'is']
@@ -26,6 +27,7 @@ export function CompareEditor({
   kind,
   members: given = [],
   textKey,
+  grab,
 }: {
   value: GtIdentItem
   onChange: (v: GtIdentItem) => void
@@ -34,6 +36,8 @@ export function CompareEditor({
   members?: string[]
   /** 此刻的本地化键（文字类）：提示「改成按本地化键」 */
   textKey?: string
+  /** 值旁边出「抓取值…」（G8；选对象弹窗里自己的标识组不出，免得弹窗套弹窗） */
+  grab?: { type?: string }
 }) {
   const { ui, cn } = h()
   // 可见性的成员是固定的：调用方没给（按类读、没连游戏）也能点选
@@ -66,7 +70,7 @@ export function CompareEditor({
       options={(list.includes(op) ? list : [...list, op]).map((o) => ({ value: o, label: opLabel(o) }))}
     />
   )
-  const text = (placeholder?: string, mono = true) => (
+  const input = (placeholder?: string, mono = true) => (
     <ValueInput
       className="ue:min-w-0 ue:flex-1"
       mono={mono}
@@ -79,6 +83,15 @@ export function CompareEditor({
       }
     />
   )
+  const text = (placeholder?: string, mono = true) =>
+    grab ? (
+      <div className="ue:flex ue:min-w-0 ue:flex-1 ue:items-start ue:gap-1">
+        {input(placeholder, mono)}
+        <GrabValue type={grab.type} onValue={(v) => set({ value: v })} />
+      </div>
+    ) : (
+      input(placeholder, mono)
+    )
 
   // bool：是 / 否
   if (kind === 'bool')

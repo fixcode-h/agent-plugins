@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { GtScript } from '../../../../shared/gt-script/index.ts'
+import type { GtPath, GtRef, GtScript } from '../../../../shared/gt-script/index.ts'
 import type { ApiItem } from '../gt-api/model.ts'
 
 /**
@@ -17,6 +17,10 @@ export interface EditCtx {
   apis: ApiItem[]
   /** _vars.json 的常用名 */
   aliases: string[]
+  /** 检查器正在看的那一步（只选了一步时）：$变量 往前找「找对象」按它算先后 */
+  at?: GtPath
+  /** 改脚本「对象」里的一条（对象块点开抓取框改命名对象时用；只读时不给） */
+  setObject?: (name: string, ref: GtRef) => void
 }
 
 export const EditContext = createContext<EditCtx>({ project: '', root: '', live: false, apis: [], aliases: [] })

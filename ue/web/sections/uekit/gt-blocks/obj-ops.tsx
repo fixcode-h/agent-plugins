@@ -2,20 +2,19 @@ import { PanelTopClose, Search, SquareFunction, Timer, Wrench } from 'lucide-rea
 import { blockOf, type CondNode, type GtStep } from '../../../../shared/gt-script/index.ts'
 import type { GtCloseHow, GtCloseVerify, GtRefLike } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
-import { ArgsEdit } from '../gt-api/ApiPick.tsx'
-import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { propCheck } from '../gt-cond/checks/prop.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { CloseHowList, closeHowText, CloseVerify } from '../gt-ref/CloseHowList.tsx'
 import { classOfRef, describeRef, identText, inlineRef, isRefObj } from '../gt-ref/describe.ts'
 import { useRefHit } from '../gt-ref/live.ts'
 import { ObjInput, useRefGroups } from '../gt-ref/ObjInput.tsx'
-import { PartInput, partsOf } from '../gt-ref/PartInput.tsx'
+import { partsOf } from '../gt-ref/PartInput.tsx'
 import { RefCard } from '../gt-ref/RefCard.tsx'
 import { patchRunConfig, upsertCloseRule } from '../gt-ref/rules-io.ts'
-import { InvokeFnPick } from './invoke-pick.tsx'
+import { CallInspector } from './call-inspector.tsx'
+import { SetInspector } from './set-inspector.tsx'
 import { LeafInspector } from './leaf.tsx'
-import { patch, Row, TextField } from './parts.tsx'
+import { patch } from './parts.tsx'
 import { registerBlockUi } from './registry.ts'
 
 /**
@@ -102,45 +101,6 @@ function CloseInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep
           <span className="ue:text-caption ue:text-subtle">{t('写进设置「对象与标识 → 关闭方式」')}</span>
         </ui.Button>
       )}
-    </div>
-  )
-}
-
-function CallInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
-  const { groups } = useRefGroups(step.obj as GtRefLike | undefined)
-  return (
-    <div className="ue:flex ue:flex-col ue:gap-2.5">
-      <Row label={t('对象')} hint={t('脚本里的对象名，或前面「找对象」存的 $变量；调静态函数时不填')}>
-        <ObjInput value={step.obj as GtRefLike | undefined} onChange={(o) => onChange(patch(step, 'obj', o))} />
-      </Row>
-      {isRefObj(step.obj) || (typeof step.obj === 'string' && /^[A-Za-z_]/.test(step.obj)) ? (
-        <Row label={t('部件')}>
-          <PartInput
-            value={typeof step.part === 'string' ? step.part : ''}
-            onChange={(v) => onChange(patch(step, 'part', v))}
-            parts={partsOf(groups)}
-          />
-        </Row>
-      ) : null}
-      <Row label={t('函数')}>
-        <div className="ue:flex ue:items-center ue:gap-1.5">
-          <div className="ue:min-w-0 ue:flex-1">
-            <TextField step={step} k="function" mono onChange={onChange} placeholder="AcceptQuest" />
-          </div>
-          <InvokeFnPick step={step} onChange={onChange} />
-        </div>
-      </Row>
-      <Row label={t('参数')}>
-        <ArgsEdit
-          value={(step.args as Record<string, unknown>) ?? {}}
-          onChange={(a) => onChange({ ...step, args: a })}
-        />
-      </Row>
-      <Row label={t('返回值存到')}>
-        <TextField step={step} k="saveAs" mono onChange={onChange} placeholder={t('变量名（可不填）')} />
-      </Row>
-      <span className="ue:text-footnote ue:text-subtle">{t('返回值要满足（不写就不检查）')}</span>
-      <CondEditor compact value={step.expect} onChange={(c) => onChange({ ...step, expect: c })} />
     </div>
   )
 }
@@ -279,7 +239,7 @@ registerBlockUi(
     icon: Wrench,
     tone: 'warning',
     summary: (s) => `${objText(s.obj)} › ${String(s.prop ?? '')} = ${JSON.stringify(s.value ?? '')}`,
-    Inspector: LeafInspector,
+    Inspector: SetInspector,
   },
   [
     {

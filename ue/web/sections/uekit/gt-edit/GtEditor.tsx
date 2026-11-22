@@ -1,7 +1,14 @@
 import { CircleCheck, CircleX, Copy, Download, Loader2, ScanSearch, Sparkles, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { getAt, isBlock, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
+import {
+  getAt,
+  isBlock,
+  type GtPath,
+  type GtRef,
+  type GtScript,
+  type GtStep,
+} from '../../../../shared/gt-script/index.ts'
 import { op, ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { ErrorText, fmtTime } from '../../../ui.tsx'
@@ -133,6 +140,9 @@ export function GtEditor({
       }
     : s.apply
   const scope = useScope(s.doc, s.selected, s.select)
+  // 对象块里改命名对象：改脚本 objects 里那一条，用到它的步骤都跟着变
+  const setObject = (name: string, ref: GtRef) =>
+    s.doc && apply({ ...s.doc, objects: { ...(s.doc.objects ?? {}), [name]: ref } })
   const apis = useApis(project, root, live)
   const [aliases, setAliases] = useState<string[]>([])
   const [view, setView] = useState(readView)
@@ -335,7 +345,17 @@ export function GtEditor({
 
   return (
     <EditContext.Provider
-      value={{ project, root, path: scenario.relativePath, live, doc: s.doc, apis: apis.items, aliases }}
+      value={{
+        project,
+        root,
+        path: scenario.relativePath,
+        live,
+        doc: s.doc,
+        apis: apis.items,
+        aliases,
+        at: s.selected.length === 1 ? s.selected[0] : undefined,
+        setObject,
+      }}
     >
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
         <EditorHeader
