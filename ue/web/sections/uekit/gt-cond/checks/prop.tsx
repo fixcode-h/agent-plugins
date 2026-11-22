@@ -9,7 +9,7 @@ import { IdentRow } from '../../gt-ref/IdentList.tsx'
 import { ObjInput, useRefGroups } from '../../gt-ref/ObjInput.tsx'
 import { itemsOf } from '../../gt-ref/pick/data.ts'
 import { PropPickField } from '../../gt-ref/PropPickField.tsx'
-import { PropTree } from '../../gt-ref/PropTree.tsx'
+import { PropDetails } from '../../gt-ref/PropDetails.tsx'
 import type { CheckKind } from './registry.ts'
 
 /** 判断项那几个字段（协议 3.3）；obj 另外管 */
@@ -51,13 +51,12 @@ function Editor({ value, onChange }: { value: CondNode; onChange: (c: CondNode) 
         </ui.IconButton>
       </div>
       {tree && (
-        <div className="ue:flex ue:h-72 ue:flex-col ue:overflow-hidden ue:rounded-(--c-row-radius) ue:border ue:border-line">
-          <PropTree
+        <div className="ue:flex ue:h-96 ue:flex-col ue:overflow-hidden ue:rounded-(--c-row-radius) ue:border ue:border-line">
+          <PropDetails
             className="ue:flex-1"
             data={data}
             loading={loading}
-            mode="judge"
-            selected={[item.prop]}
+            picked={[item.prop]}
             onPick={(it) => {
               onChange(withItem(value, defaultIdent(it)))
               setTree(false)
@@ -65,7 +64,7 @@ function Editor({ value, onChange }: { value: CondNode; onChange: (c: CondNode) 
           />
         </div>
       )}
-      <IdentRow value={item} items={items} onChange={(it) => onChange(withItem(value, it))} />
+      <IdentRow value={item} items={items} grab onChange={(it) => onChange(withItem(value, it))} />
     </div>
   )
 }

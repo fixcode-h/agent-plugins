@@ -12,7 +12,7 @@ import { asTarget, classShort, describeRef, targetText } from './gt-ref/describe
 import { IdentList } from './gt-ref/IdentList.tsx'
 import { itemsOf } from './gt-ref/pick/data.ts'
 import { useProps, useRefHits, type PropsArgs } from './gt-ref/live.ts'
-import { PropTree } from './gt-ref/PropTree.tsx'
+import { PropDetails } from './gt-ref/PropDetails.tsx'
 import { ShotImage } from './GtRecordShot.tsx'
 
 /**
@@ -168,15 +168,13 @@ export function GtKeyAsk({
           <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 480} />
         </section>
         <section className={cn(PANE_FILL, 'ue:flex ue:min-h-0 ue:flex-col')}>
-          <PropTree
+          <PropDetails
             className="ue:min-h-60 ue:flex-1"
             data={props.data}
             loading={props.loading}
             error={props.error}
-            mode="ident"
-            selected={ident.map((i) => i.prop)}
+            picked={ident.map((i) => i.prop)}
             onPick={toggle}
-            loadPart={props.loadPart}
           />
           <div className="ue:flex ue:max-h-[45%] ue:shrink-0 ue:flex-col ue:gap-2 ue:overflow-auto ue:border-t ue:border-line ue:p-3">
             <div className="ue:flex ue:items-center ue:gap-2">

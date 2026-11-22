@@ -1,6 +1,7 @@
 import type { CondNode } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { ValueInput } from './ValueInput.tsx'
+import { GrabValue } from '../gt-ref/GrabValue.tsx'
 
 /** 比较（协议 4.1）：equals / ne / gt / gte / lt / lte / in / contains / matches；没写比较时按真值算 */
 export const COMPARE_OPS = ['equals', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains', 'matches'] as const
@@ -84,6 +85,7 @@ export function CompareEdit({ value, onChange }: { value: CondNode; onChange: (c
           placeholder={op === 'in' ? t('用逗号隔开：1, 2, 3') : t('值，或 = 开头的表达式')}
         />
       )}
+      {op !== 'truthy' && op !== 'in' && <GrabValue onValue={(x) => onChange(withCompare(value, op, x))} />}
     </div>
   )
 }

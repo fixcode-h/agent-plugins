@@ -1,11 +1,13 @@
 import { ListTree } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { objOfVar, pathOfStep, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
+import type { GmObject } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
+import { MemberPane, type MemberTab } from '../../../obj-kit/MemberPane.tsx'
+import { fnsOf, type FnInfo } from '../../../obj-kit/members.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
-import { FieldGroups, itemKey } from '../gt-vars/FieldGroups.tsx'
 import { inlineRef, isRefObj } from '../gt-ref/describe.ts'
-import { useVars, type VarGroup, type VarItem, type VarScope } from '../gt-vars/model.ts'
+import { useVars, type VarScope } from '../gt-vars/model.ts'
 
 const PLAYERS = new Set(['gi', 'gs', 'gm', 'ps', 'pc', 'pawn', 'hud'])
 
@@ -20,7 +22,8 @@ export function scopeOfInvoke(step: GtStep, doc: GtScript | undefined): VarScope
   if (doc && typeof obj === 'string' && obj.trim().startsWith('$')) {
     const src = objOfVar(doc, obj.trim(), pathOfStep(doc, step))
     // 来源还是 $变量时不再往下追：免得 $a = 找($b)、$b = 找($a) 绕圈
-    if (src !== undefined && !(typeof src === 'string' && src.startsWith('$'))) return scopeOfInvoke({ ...step, obj: src }, doc)
+    if (src !== undefined && !(typeof src === 'string' && src.startsWith('$')))
+      return scopeOfInvoke({ ...step, obj: src }, doc)
   }
   if (isRefObj(obj)) return { scope: 'object', ref: inlineRef(obj, objects) }
   const s = typeof obj === 'string' ? obj.trim() : ''
@@ -46,29 +49,50 @@ export function scopeOfInvoke(step: GtStep, doc: GtScript | undefined): VarScope
 }
 
 /** 选中的函数 → 步骤：函数名，参数按函数要的列出来（已经填过的留着；输出参数、自动参数不用填） */
-function applyFn(step: GtStep, g: VarGroup, it: VarItem): GtStep {
+export function applyFn(step: GtStep, f: FnInfo): GtStep {
   const old = (step.args && typeof step.args === 'object' ? step.args : {}) as Record<string, unknown>
   const args: Record<string, unknown> = {}
-  for (const a of it.args ?? []) if (!a.out && !a.auto) args[a.name] = a.name in old ? old[a.name] : ''
+  for (const p of f.params) args[p.name] = p.name in old ? old[p.name] : ''
   // 静态函数（没有对象）写成「类名.函数」，有对象的只写函数名
   const fn = step.obj
-    ? it.name
-    : `${g.class ?? (typeof step.function === 'string' ? step.function.split('.')[0] : '')}.${it.name}`
+    ? f.name
+    : `${f.owner || (typeof step.function === 'string' ? step.function.split('.')[0] : '')}.${f.name}`
   return { ...step, function: fn, args }
 }
 
 /**
- * 调函数检查器里「从列表选」（定稿第 5 节「只列真能调到的函数」、效果图 8）：按 C++ / 蓝图 / Lua 分组列出这个对象上的函数，
+ * 这一步的对象上能调的函数（签名卡、按类型的参数表单都按它）：和「换函数…」读同一份 gt.vars，
+ * 编辑器没连上时只有 Lua 文件里扫到的
+ */
+export function useInvokeFns(step: GtStep) {
+  const ctx = useEditCtx()
+  const scope = scopeOfInvoke(step, ctx.doc)
+  const ok = !('why' in scope)
+  const vars = useVars(ctx.project, ok ? scope : undefined, ctx.live)
+  const fns = useMemo(() => fnsOf(vars.data?.groups ?? []), [vars.data])
+  const name = typeof step.function === 'string' ? step.function.split('.').pop() : ''
+  return { fn: fns.find((f) => f.name === name), loading: vars.loading, why: ok ? undefined : scope.why }
+}
+
+/** gt.vars 的范围 → 成员面板要的对象：引用照给（游戏没开时成员面板自己按类列），其余写成来源 */
+function memberObj(scope: VarScope): { obj: GmObject; scope?: VarScope } {
+  if (scope.scope === 'object') return { obj: { name: 'obj', ref: scope.ref } as GmObject }
+  return { obj: { name: 'obj', src: '@' } as GmObject, scope }
+}
+
+/**
+ * 调函数检查器的「换函数…」（分析文档 G2、B6）：和 GM 对象调用中栏同一个成员面板（方法 · Lua），按声明类分组，
  * 调不了的（私有、编辑器专用、参数构造不出来）灰掉写原因；选了填上函数名和参数名
  */
 export function InvokeFnPick({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui } = h()
   const [open, setOpen] = useState(false)
+  const has = typeof step.function === 'string' && !!step.function
   return (
     <>
       <ui.Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
         <ListTree className="ue:h-3.5 ue:w-3.5" />
-        {t('从列表选')}
+        {has ? t('换函数…') : t('选函数…')}
       </ui.Button>
       {open && (
         <FnDialog
@@ -88,17 +112,13 @@ function FnDialog({ step, onClose, onPick }: { step: GtStep; onClose: () => void
   const { ui } = h()
   const ctx = useEditCtx()
   const scope = scopeOfInvoke(step, ctx.doc)
-  const ok = !('why' in scope)
-  const vars = useVars(ctx.project, ok ? scope : undefined, ctx.live)
-  const groups = (vars.data?.groups ?? [])
-    .map((g) => ({ ...g, items: g.items.filter((x) => x.kind === 'fn') }))
-    .filter((g) => g.items.length)
+  const [tab, setTab] = useState<MemberTab>('fns')
   const cur = typeof step.function === 'string' ? step.function.split('.').pop() : ''
-  const selected = new Set(groups.flatMap((g) => g.items.filter((x) => x.name === cur).map((x) => itemKey(g, x))))
+  const m = 'why' in scope ? undefined : memberObj(scope)
   return (
     <ui.Modal
       open
-      size="xl"
+      size="lg"
       onOpenChange={(o: boolean) => !o && onClose()}
       title={t('选要调的函数')}
       description={t('只列真能调到的：C++ 和蓝图的 BlueprintCallable、Exec，Lua 表上的函数。调不了的灰掉并写了原因。')}
@@ -108,21 +128,21 @@ function FnDialog({ step, onClose, onPick }: { step: GtStep; onClose: () => void
         </ui.Button>
       }
     >
-      <div className="ue:flex ue:h-[60vh] ue:min-h-0 ue:flex-col">
-        {!ok ? (
-          <p className="ue:p-4 ue:text-footnote ue:text-subtle">{scope.why}</p>
-        ) : vars.loading && !vars.data ? (
-          <p className="ue:p-4 ue:text-footnote ue:text-subtle">{t('正在列函数…')}</p>
+      <div className="ue:flex ue:h-[60vh] ue:min-h-0 ue:flex-col ue:overflow-hidden ue:rounded-(--c-row-radius) ue:border ue:border-line">
+        {!m ? (
+          <p className="ue:p-4 ue:text-footnote ue:text-subtle">{(scope as { why: string }).why}</p>
         ) : (
-          <>
-            {vars.error && <p className="ue:px-4 ue:pt-3 ue:text-footnote ue:text-danger">{vars.error}</p>}
-            {!ctx.live && (
-              <p className="ue:px-4 ue:pt-3 ue:text-footnote ue:text-subtle">
-                {t('编辑器没连上：只列得出 Lua 文件里扫到的函数，C++ 和蓝图的要连上编辑器')}
-              </p>
-            )}
-            <FieldGroups groups={groups} selected={selected} onToggle={(g, it) => onPick(applyFn(step, g, it))} />
-          </>
+          <MemberPane
+            project={ctx.project}
+            obj={m.obj}
+            scope={m.scope}
+            live={ctx.live}
+            tab={tab}
+            onTab={setTab}
+            tabs={['fns', 'lua']}
+            fn={cur}
+            onFn={(f) => onPick(applyFn(step, f))}
+          />
         )}
       </div>
     </ui.Modal>

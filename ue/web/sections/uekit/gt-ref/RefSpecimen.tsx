@@ -14,7 +14,7 @@ import { h, t } from '../../../host.ts'
 import { CloseHowList, CloseVerify } from './CloseHowList.tsx'
 import { CompareEditor } from './CompareEditor.tsx'
 import { RefRpcProvider, type RefRpc } from './live.ts'
-import { PropTree } from './PropTree.tsx'
+import { PropDetails } from './PropDetails.tsx'
 import { RefCard } from './RefCard.tsx'
 import { RefDialog } from './RefDialog.tsx'
 import { SPECIMEN_LUA_PROPS } from './specimen-lua-props.ts'
@@ -131,7 +131,7 @@ const PROPS: GtPropsResult = {
   ],
 }
 
-/** 选对象面板的回包才带（PropTree 示例直接吃 PROPS，不走 normalizeGroups，放进去会读到没有 prop 的项） */
+/** 选对象面板的回包才带（细节面板示例直接吃 PROPS，不走 normalizeGroups，放进去会读到没有 prop 的项） */
 const FN_GROUP = {
   // UE 类的函数（GameTest 2.1.5 起，形状同 C++ 回包，经 normalizeGroups 整成行）：无参取值函数带 path 能当条件
   id: 'functions',
@@ -358,13 +358,7 @@ export function RefSpecimen() {
   return (
     <div className="ue:grid ue:grid-cols-1 ue:gap-3 ue:lg:grid-cols-2">
       <div className="ue:flex ue:h-[380px] ue:flex-col ue:overflow-hidden ue:rounded-(--c-row-radius) ue:border ue:border-line ue:lg:row-span-2">
-        <PropTree
-          className="ue:min-h-0 ue:flex-1"
-          data={PROPS}
-          mode="ident"
-          selected={sel}
-          onPick={(it) => toggle(it.prop)}
-        />
+        <PropDetails className="ue:min-h-0 ue:flex-1" data={PROPS} picked={sel} onPick={(it) => toggle(it.prop)} />
       </div>
       <div className={box}>
         <span className={cap}>RefCard</span>

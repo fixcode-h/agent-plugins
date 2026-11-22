@@ -6,7 +6,7 @@ import { h, t } from '../host.ts'
 import { copyText, openMenu } from '../menu.tsx'
 import { useConnState } from '../conn/ConnPill.tsx'
 import { useProps } from '../sections/uekit/gt-ref/live.ts'
-import { useVars } from '../sections/uekit/gt-vars/model.ts'
+import { useVars, type VarScope } from '../sections/uekit/gt-vars/model.ts'
 import { fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
 import { VarList, type VarSel } from './VarList.tsx'
 
@@ -35,6 +35,8 @@ export function MemberPane({
   rev = 0,
   pinned,
   onTogglePin,
+  scope,
+  tabs,
 }: {
   project: string
   obj: GmObject
@@ -47,17 +49,21 @@ export function MemberPane({
   needSig?: boolean
   onSig?: (f: FnInfo) => void
   /** 正在「取对象」：属性行尾出 ＋ / × */
-  picking: boolean
-  picked: string[]
-  onTogglePick: (prop: string) => void
+  picking?: boolean
+  picked?: string[]
+  onTogglePick?: (prop: string) => void
   /** 选中的变量（属性路径）：右栏「改变量」 */
   varSel?: string
-  onVar: (v: VarSel) => void
+  onVar?: (v: VarSel) => void
   /** 改完变量加一：重读属性 */
   rev?: number
   /** 钉住的属性（F4） */
   pinned?: string[]
   onTogglePin?: (prop: string) => void
+  /** 列函数的范围另给（测试页静态函数按类列、$变量按前面「找对象」的类列）；不给按 obj 算 */
+  scope?: VarScope
+  /** 只出这几页（测试页「换函数…」只要方法和 Lua）；不给四页都出 */
+  tabs?: MemberTab[]
 }) {
   const { ui, cn } = h()
   // 搜索按页签各记各的，换对象清空（L8：以前共用一个，切页签像是列表空了）
@@ -74,7 +80,7 @@ export function MemberPane({
   const game = useConnState().state === 'game'
   const cls = (obj.ref as { class?: string } | undefined)?.class
   const byClass = !game && !!cls
-  const vars = useVars(project, byClass ? { scope: 'class', name: cls! } : scopeOf(obj), live)
+  const vars = useVars(project, scope ?? (byClass ? { scope: 'class', name: cls! } : scopeOf(obj)), live)
   const props = useProps(
     project,
     obj.ref && live ? (game ? { target: { obj: obj.ref as { class: string } } } : { class: cls! }) : undefined,
@@ -115,10 +121,10 @@ export function MemberPane({
       lua={lua}
       q={q}
       selected={varSel}
-      onPick={onVar}
-      picking={picking}
-      picked={picked}
-      onTogglePick={onTogglePick}
+      onPick={(v) => onVar?.(v)}
+      picking={!!picking}
+      picked={picked ?? []}
+      onTogglePick={(p) => onTogglePick?.(p)}
       pinned={pinned}
       onTogglePin={obj.ref ? onTogglePin : undefined}
     />
@@ -192,7 +198,7 @@ export function MemberPane({
             { id: 'props' as const, label: t('属性 {n}', { n: propList.length }) },
             { id: 'lua' as const, label: `Lua ${luaFns.length + luaVars.length}` },
             { id: 'states' as const, label: t('运行状态 {n}', { n: stateList.length }) },
-          ]}
+          ].filter((o) => !tabs || tabs.includes(o.id))}
         />
         {tab !== 'states' && (
           <ui.Input

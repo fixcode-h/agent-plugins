@@ -13,7 +13,6 @@ import { SettingGroup, SettingRow } from '../../../SettingRows.tsx'
 import { CloseHowList, closeHowText, CloseVerify } from './CloseHowList.tsx'
 import { inText } from './describe.ts'
 import { PathListInput } from './PathListInput.tsx'
-import { usePrefs } from './prefs.ts'
 import { MANY_OPTIONS } from './RefCard.tsx'
 import type { RefConfig } from './rules-io.ts'
 
@@ -46,7 +45,6 @@ export const REF_KEYS = ['identRules', 'closeRules', 'refDefaults', 'allowDestro
  */
 export function RefSettings({ value, onChange }: { value: RefConfig; onChange: (v: RefConfig) => void }) {
   const { ui } = h()
-  const [prefs, setPrefs] = usePrefs()
   const [closing, setClosing] = useState<number>()
   const idents = value.identRules ?? []
   const closes = value.closeRules ?? []
@@ -229,33 +227,6 @@ export function RefSettings({ value, onChange }: { value: RefConfig; onChange: (
             options={[
               { value: 'off', label: t('不允许（默认）') },
               { value: 'on', label: t('允许') },
-            ]}
-          />
-        </SettingRow>
-      </SettingGroup>
-
-      <SettingGroup page="refs" title={t('属性树')} aside={t('只记在这台电脑上')}>
-        <SettingRow title={t('行高')} desc={t('像素，默认 28；在「控件样式」里能看到效果')}>
-          <ui.Input
-            size="sm"
-            className="ue:w-full ue:font-mono"
-            inputMode="numeric"
-            value={String(prefs.rowH)}
-            onChange={(e: { target: { value: string } }) => {
-              const n = Number(e.target.value)
-              if (Number.isFinite(n) && n >= 22 && n <= 44) setPrefs({ rowH: Math.round(n) })
-            }}
-          />
-        </SettingRow>
-        <SettingRow title={t('「同类里」列')} desc={t('同类的其他实例这一项是不是各不相同')}>
-          <ui.Segmented
-            size="sm"
-            label={t('「同类里」列')}
-            value={prefs.siblings ? 'on' : 'off'}
-            onChange={(v: string) => setPrefs({ siblings: v === 'on' })}
-            options={[
-              { id: 'on', label: t('显示') },
-              { id: 'off', label: t('隐藏') },
             ]}
           />
         </SettingRow>
