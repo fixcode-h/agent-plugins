@@ -4879,5 +4879,7 @@
   "这个实例上此刻是 nil（还没赋值）：值是源码里的写法": "It's nil on this instance right now (not assigned yet); the value shown is from the source",
   "没选实例：值是源码里的写法；在实例列表里点一个看此刻的值": "No instance selected; the value shown is from the source. Click an instance to see its current value",
   "声明在 {at}": "Declared at {at}",
-  "游戏没开：值是源码里的初始值": "Game not running; the value is the initial value in the source"
+  "游戏没开：值是源码里的初始值": "Game not running; the value is the initial value in the source",
+  "函数 {n}": "Functions {n}",
+  "搜函数和变量": "Search functions and variables"
 }
