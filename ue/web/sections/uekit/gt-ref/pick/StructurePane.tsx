@@ -1,6 +1,7 @@
 import { AppWindow, Box, List, Square, Type, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { GtPropGroup, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
+import { CompTree, type Comp } from '../../../../CompTree.tsx'
 import { h, t } from '../../../../host.ts'
 import { openMenu } from '../../../../menu.tsx'
 import { TreeList, type TreeLine } from '../../../../TreeList.tsx'
@@ -97,9 +98,15 @@ export function StructurePane({
   onHover,
   onUseClass,
   empty,
+  comps,
+  owner,
 }: {
   title: string
   nodes: StructNode[]
+  /** Actor 的组件：给了就照资源页 / AssetForge 的组件树画（挂接缩进、按类的图标、移动这类在分隔线下面） */
+  comps?: Comp[]
+  /** 组件树第一行（Actor 自己）显示的名字 */
+  owner?: string
   kind?: ClassKind
   selected: string
   onSelect: (n: StructNode) => void
@@ -176,9 +183,24 @@ export function StructurePane({
       {!nodes.length && empty && (
         <p className="ue:px-3 ue:py-6 ue:text-center ue:text-footnote ue:text-subtle">{empty}</p>
       )}
-      <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col" onMouseLeave={() => onHover?.(undefined)}>
-        <TreeList lines={lines} label={t('结构')} />
-      </div>
+      {comps ? (
+        <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">
+          <CompTree
+            actor={owner ?? nodes[0]?.name ?? ''}
+            items={comps}
+            // 没选部件 = Actor 自己那行；选了的按组件名对回去（对不上时什么都不亮，不误亮自己）
+            selected={selected ? (comps.find((c) => c.name === selected)?.path ?? '\0') : ''}
+            onSelect={(path) => {
+              const n = path ? nodes.find((x) => x.key === path) : nodes[0]
+              if (n) onSelect(n)
+            }}
+          />
+        </div>
+      ) : (
+        <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col" onMouseLeave={() => onHover?.(undefined)}>
+          <TreeList lines={lines} label={t('结构')} />
+        </div>
+      )}
     </>
   )
 }
