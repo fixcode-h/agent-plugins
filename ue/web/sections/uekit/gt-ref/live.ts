@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   GtPropGroup,
   GtPropsResult,
@@ -42,14 +42,17 @@ export type PropsArgs = (
 export type PropsData = GtPropsResult & { unavailable?: string; luaFile?: string }
 
 /** 读一个对象的属性树；嵌套界面展开时再按 part 读一次（loadPart） */
-export function useProps(project: string, args: PropsArgs | undefined) {
+export function useProps(project: string, args: PropsArgs | undefined, rev = 0) {
   const rpc = useRefRpc()
   const [data, setData] = useState<PropsData>()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const key = args ? JSON.stringify(args) : ''
+  // rev 变了（改完值重读）时留着旧数据，不闪成「读取中」；换了对象才清空
+  const lastKey = useRef(key)
   useEffect(() => {
-    setData(undefined)
+    if (lastKey.current !== key || !key) setData(undefined)
+    lastKey.current = key
     setError('')
     if (!key) return
     let off = false
@@ -61,7 +64,7 @@ export function useProps(project: string, args: PropsArgs | undefined) {
     return () => {
       off = true
     }
-  }, [project, key, rpc])
+  }, [project, key, rpc, rev])
   const loadPart = async (part: string): Promise<GtPropGroup[] | undefined> => {
     if (!args) return undefined
     const r = await rpc<GtPropsResult>(project, 'gt.props', { ...args, part, siblings: true })
