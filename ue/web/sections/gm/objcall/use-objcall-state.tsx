@@ -17,6 +17,7 @@ import { SaveGmDialog } from '../custom/SaveGmDialog.tsx'
 import type { CallMode } from './CallPane.tsx'
 import type { FnInfo } from './members.ts'
 import type { MemberTab } from './MemberPane.tsx'
+import type { VarSel } from './VarList.tsx'
 import { useObjFolders } from './use-obj-folders.tsx'
 import { useObjHits, type ParamClass } from './use-objcall.ts'
 
@@ -43,6 +44,10 @@ export function useObjCallState(d: GmData, live: boolean) {
   const [tab, setTab] = useState<MemberTab>('fns')
   const [mode, setMode] = useState<CallMode>('call')
   const [fn, setFn] = useState<FnInfo>()
+  // 中栏点的变量（右栏「改变量」）
+  const [varSel, setVarSel] = useState<VarSel>()
+  // 改完变量加一：中栏属性列表重读
+  const [varRev, setVarRev] = useState(0)
   const [values, setValues] = useState<Record<string, unknown>>({})
   const [many, setMany] = useState<GmMany>('error')
   const [picked, setPicked] = useState<string[]>([])
@@ -93,7 +98,7 @@ export function useObjCallState(d: GmData, live: boolean) {
       ),
     ]
     return {
-      kind: mode,
+      kind: mode === 'get' ? ('get' as const) : ('call' as const),
       obj: obj!.name,
       objects: objectsFor(objects, names),
       function: fn?.name,
@@ -119,6 +124,7 @@ export function useObjCallState(d: GmData, live: boolean) {
     onPick: (n: string) => {
       if (n !== obj?.name) {
         setFn(undefined)
+        setVarSel(undefined)
         setOut(undefined)
         setPicked([])
       }
@@ -311,6 +317,14 @@ export function useObjCallState(d: GmData, live: boolean) {
     /** 模块右键「在这个模块里新建 GM」：之后保存为 GM 默认放进这个模块 */
     preferModule: (id: string) => setSaveModule(id),
     bench: {
+      varSel,
+      varRev,
+      varChanged: () => setVarRev((r) => r + 1),
+      /** 中栏点了变量：右栏切到「改变量」 */
+      pickVar: (v: VarSel) => {
+        setVarSel(v)
+        setMode('set')
+      },
       tab,
       setTab,
       mode,

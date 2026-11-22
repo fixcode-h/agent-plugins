@@ -111,6 +111,8 @@ export interface InvokeReport {
   function?: string
   args?: unknown
   returned?: unknown
+  /** GameTest 2.2.1 起：带类型的返回值（对象 {$obj, class, name}，数组 / 表保留层级，截断的写 $more） */
+  value?: unknown
   ms?: number
   [k: string]: unknown
 }

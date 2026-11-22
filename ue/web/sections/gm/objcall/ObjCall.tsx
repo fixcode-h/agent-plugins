@@ -63,6 +63,9 @@ export function ObjCall({
               picking={b.mode === 'get'}
               picked={b.picked}
               onTogglePick={b.togglePick}
+              varSel={b.mode === 'set' ? b.varSel?.prop : undefined}
+              onVar={b.pickVar}
+              rev={b.varRev}
             />
           </section>
           <SplitHandle pane={mid} paneRef={midRef} reserve={() => 360} />
@@ -71,6 +74,8 @@ export function ObjCall({
               obj={obj}
               hit={b.hits[obj.name]}
               mode={b.mode}
+              varSel={b.varSel}
+              onVarChanged={b.varChanged}
               onMode={b.setMode}
               fn={b.fn}
               values={b.values}

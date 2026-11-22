@@ -64,18 +64,26 @@ export function fnsOf(groups: VarGroup[]): FnInfo[] {
   )
 }
 
-/** gt.props → Details 的属性（只读）：名字用属性路径（行尾按钮按它挑「取对象」要读的属性），显示名用字段名 */
-export function propsOf(data: PropsData | undefined, state: boolean): Prop[] {
+/**
+ * gt.props → Details 的属性：名字用属性路径（行尾按钮按它挑「取对象」要读的属性、改值时交给 obj.set），显示名用字段名。
+ * which：属性（UE 反射属性）/ 运行状态（只读）/ Lua 字段。用户 2026-11-22：属性和 Lua 变量能直接改；
+ * 只读的、只在源码里看到的 Lua 字段（游戏里还没这个值）不能改
+ */
+export function propsOf(data: PropsData | undefined, which: 'props' | 'states' | 'lua'): Prop[] {
+  const pick = (src: string) =>
+    which === 'lua' ? src === 'lua' : src !== 'lua' && (src === 'state') === (which === 'states')
   return (data?.groups ?? []).flatMap((g) =>
     g.items
-      .filter((it) => (it.src === 'state') === state && it.src !== 'lua')
+      .filter((it) => pick(it.src) && !it.luaFn)
       .map((it) => ({
         name: it.prop,
         displayName: it.name,
         type: it.type,
         category: (it as { cat?: string }).cat || g.title,
         value: it.value,
-        readOnly: true,
+        readOnly: which === 'states' || !!it.readOnly || !!it.fromSource,
+        readOnlyWhy: it.fromSource ? it.srcWhy || '游戏里此刻还没有这个值（取自源码）' : it.why,
+        ...(it.members?.length ? { enum: it.members } : {}),
         edit: true,
       })),
   )

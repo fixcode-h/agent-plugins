@@ -11,19 +11,24 @@ import { ObjName } from '../custom/ObjRule.tsx'
 import type { CallOut } from '../custom/run-custom.ts'
 import type { FnInfo } from './members.ts'
 import type { ParamClass } from './use-objcall.ts'
+import { SetVarPane } from './SetVarPane.tsx'
+import type { VarSel } from './VarList.tsx'
 
-export type CallMode = 'call' | 'get'
+export type CallMode = 'call' | 'get' | 'set'
 
 const srcLabel = (s: FnInfo['src']) => (s === 'bp' ? t('蓝图') : s === 'lua' ? 'Lua' : 'C++')
 
 /**
- * 对象调用右栏（规格第 7 节、效果图 2、3）：调函数 / 取对象。调函数：签名卡、参数表单（对象参数出对象下拉）、
+ * 对象调用右栏（规格第 7 节、效果图 2、3）：调函数 / 取对象 / 改变量（SetVarPane，用户 2026-11-22）。调函数：签名卡、参数表单（对象参数出对象下拉）、
  * 命中多个时三选一（报错 / 只调第一个 / 对每个都调）、调用、保存为 GM、输出。取对象：要读的属性（中栏属性行尾 ＋ 加）、取、保存为 GM
  */
 export function CallPane(p: {
   obj: GmObject
   hit?: RefHits
   mode: CallMode
+  /** 改变量：中栏点的那个 */
+  varSel?: VarSel
+  onVarChanged: () => void
   onMode: (m: CallMode) => void
   fn?: FnInfo
   values: Record<string, unknown>
@@ -54,18 +59,21 @@ export function CallPane(p: {
       <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
         <ui.Segmented
           size="sm"
-          label={t('调函数 / 取对象')}
+          label={t('调函数 / 取对象 / 改变量')}
           value={p.mode}
           onChange={p.onMode}
           options={[
             { id: 'call' as const, label: t('调函数') },
             { id: 'get' as const, label: t('取对象') },
+            { id: 'set' as const, label: t('改变量') },
           ]}
         />
         <span className="ue:text-caption ue:text-subtle">{t('对象')}</span>
         <ObjName name={p.obj.name} />
       </div>
-      {p.mode === 'call' ? (
+      {p.mode === 'set' ? (
+        <SetVarPane obj={p.obj} v={p.varSel} live={p.live} canRun={p.canRun} onChanged={p.onVarChanged} />
+      ) : p.mode === 'call' ? (
         p.fn ? (
           <>
             <SigCard sig={{ name: p.fn.name, sig: p.fn.sig, src: srcLabel(p.fn.src) }} />
@@ -124,23 +132,25 @@ export function CallPane(p: {
           />
         </ui.Field>
       )}
-      <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
-        <ui.Button
-          size="sm"
-          disabled={!ready || p.running || !!p.canRun}
-          title={p.canRun || undefined}
-          onClick={p.onRun}
-        >
-          <Play className="ue:h-3.5 ue:w-3.5" />
-          {p.mode === 'call' ? t('调用') : t('取')}
-        </ui.Button>
-        <ui.Button size="sm" variant="secondary" disabled={!ready} onClick={p.onSave}>
-          <Save className="ue:h-3.5 ue:w-3.5" />
-          {t('保存为 GM')}
-        </ui.Button>
-        {p.canRun && <span className="ue:text-caption ue:text-subtle">{p.canRun}</span>}
-      </div>
-      <CallOutput out={p.out} args={p.sentArgs} />
+      {p.mode !== 'set' && (
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+          <ui.Button
+            size="sm"
+            disabled={!ready || p.running || !!p.canRun}
+            title={p.canRun || undefined}
+            onClick={p.onRun}
+          >
+            <Play className="ue:h-3.5 ue:w-3.5" />
+            {p.mode === 'call' ? t('调用') : t('取')}
+          </ui.Button>
+          <ui.Button size="sm" variant="secondary" disabled={!ready} onClick={p.onSave}>
+            <Save className="ue:h-3.5 ue:w-3.5" />
+            {t('保存为 GM')}
+          </ui.Button>
+          {p.canRun && <span className="ue:text-caption ue:text-subtle">{p.canRun}</span>}
+        </div>
+      )}
+      {p.mode !== 'set' && <CallOutput out={p.out} args={p.sentArgs} />}
     </div>
   )
 }
