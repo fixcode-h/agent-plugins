@@ -152,7 +152,15 @@ export interface GtPropItem {
   srcInit?: string
   /** Lua 类的函数（gt.props class: "lua:模块" 的 functions 组）：只列出来看，不能当路径、不能当标识 */
   /** UE 类也用它（2.1.5 起 gt.props 的 functions 组）：ret 返回类型，src 是 cpp / bp / lua，pure 是 BlueprintPure */
-  luaFn?: { params: string[]; from?: string; ret?: string; src?: 'cpp' | 'bp' | 'lua'; pure?: boolean }
+  luaFn?: {
+    params: string[]
+    from?: string
+    ret?: string
+    src?: 'cpp' | 'bp' | 'lua'
+    pure?: boolean
+    /** UE 只读取值函数的路径（`@.名字()`）：有它就能按实例读返回值（抓取值用），不管返回类型能不能比 */
+    path?: string
+  }
 }
 export interface GtPropGroup {
   id: string

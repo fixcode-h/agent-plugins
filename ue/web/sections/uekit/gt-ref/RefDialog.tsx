@@ -19,12 +19,13 @@ import {
   type GtTarget,
   type IdentPath,
 } from '../../../../shared/gt-script/index.ts'
+import { wantsObject } from '../../../../shared/gm/type-match.ts'
 import { Ctx } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
 import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
 import { defaultIdent } from './compare-table.ts'
 import { classShort, inText } from './describe.ts'
-import { highlight, RefRpcProvider, useRefRpc } from './live.ts'
+import { highlight, RefRpcProvider, useRefRpc, type RefHits } from './live.ts'
 import { ClassPicker } from './pick/ClassPicker.tsx'
 import { FromBrowser } from './pick/FromBrowser.tsx'
 import { defaultSources, inOfSources, sourcesOfIn, type Source } from './pick/data.ts'
@@ -34,6 +35,7 @@ import { InstancePane } from './pick/InstancePane.tsx'
 import { SourceChips } from './pick/SourceChips.tsx'
 import { StructurePane } from './pick/StructurePane.tsx'
 import { Summary } from './pick/Summary.tsx'
+import { TakenValue, type Taken } from './pick/TakenValue.tsx'
 import { usePick } from './pick/use-pick.ts'
 import { patchRunConfig, upsertIdentRule } from './rules-io.ts'
 
@@ -53,7 +55,9 @@ function useLiveFallback(live: boolean | undefined) {
  * 存进脚本的只有类、在哪找和标识，运行时按它重新找，不存那个对象本身。
  * 不依赖编辑页的上下文：设置页、GM 面板也能直接用（live 不给时按 UE 页的项目状态判断）。
  * withPart：动作落点用，结构栏里点的子控件 / 组件就是部件，保存时一起交出去（等于原来「连部件一起抓」）；
- * onSplit：条件里用，底栏多一个「按它分路」，把所在的如果换成按状态分支
+ * onSplit：条件里用，底栏多一个「按它分路」，把所在的如果换成按状态分支；
+ * take：抓取值（GM 改变量，用户 2026-11-22）：准星改成取这一项此刻的值，右栏显示抓到的值，右下角「确认」代替「保存对象」；
+ * 必须先点一个此刻的实例才列细节，只列类型对得上的属性和取值函数（函数对这个实例调一次拿返回值），目标是对象时左栏的实例本身也能取
  */
 export function RefDialog(props: Omit<ComponentProps<typeof RefDialogBody>, 'onRefresh'>) {
   const base = useRefRpc()
@@ -78,6 +82,7 @@ function RefDialogBody({
   withPart,
   part: initialPart,
   onSplit,
+  take,
   onRefresh,
   onClose,
   onSave,
@@ -100,8 +105,10 @@ function RefDialogBody({
   part?: string
   /** 「按它分路」：落点（对象 + 选中的部件）和选中那一项的类名 */
   onSplit?: (target: GtTarget, widgetClass?: string) => void
+  /** 抓取值：type 是要填的变量的类型；确认时交出选中的那一项（给了它就不显示「保存对象」，onSave 不会被调） */
+  take?: { type?: string; onTake: (taken: Taken) => void }
   onClose: () => void
-  onSave: (name: string, ref: GtRef, part?: string) => void
+  onSave?: (name: string, ref: GtRef, part?: string) => void
 }) {
   const { ui, cn } = h()
   const rpc = useRefRpc()
@@ -125,6 +132,7 @@ function RefDialogBody({
   // 准星的「已加」按目标组看：同一条属性可以在别的组里再写一次（比如 A 或 B 的两个分支）
   const picked = new Set(tgtGroup ? kidsOf(tgtGroup).flatMap((k) => ('prop' in k ? [k.prop] : [])) : [])
   const [flash, setFlash] = useState<{ at: IdentPath; prop: string }>()
+  const [taken, setTaken] = useState<Taken>()
 
   const panes = {
     inst: usePane('gt-pick-inst', '17%', 180),
@@ -145,6 +153,15 @@ function RefDialogBody({
       setSources(defaultSources(item?.kind ?? (cls.startsWith('lua:') ? 'lua' : undefined)))
   }
   const onPick = (prop: string, kind: GtPropKind | undefined, v: unknown, item?: GtPropItem) => {
+    if (take) {
+      // 抓取值：单选，再点一下取消；取值函数对选中的实例调一次（gt.resolve 带 show，和唯一标识读取值函数同一条路）
+      if (taken?.prop === prop) return setTaken(undefined)
+      const base = { prop, label: item?.name ?? prop, from: p.shown, type: item?.luaFn?.ret ?? item?.type }
+      if (!item?.luaFn) return setTaken({ ...base, value: v })
+      setTaken({ ...base, fn: true, loading: true, value: undefined })
+      void callGetter(prop).then((r) => setTaken((x) => (x?.prop === prop ? { ...x, ...r, loading: false } : x)))
+      return
+    }
     const on = picked.has(prop)
     // 截过的长字符串不能拿去比「等于」：改成「开头是」前 200 字
     const it = isTruncated(v)
@@ -171,6 +188,44 @@ function RefDialogBody({
     }
   }
 
+  /** 对 p.shown 这个实例读一个取值函数的返回值 */
+  const callGetter = async (path: string): Promise<{ value?: unknown; error?: string }> => {
+    try {
+      const r = await rpc<{ refs?: RefHits[] }>(project, 'gt.resolve', {
+        refs: [{ id: 'take', ref: out, show: [path] }],
+        ...(objects ? { objects } : {}),
+      })
+      const hit = r.refs?.[0]
+      if (hit?.error) return { error: hit.error }
+      const c = hit?.candidates?.find((x) => x.name === p.shown)
+      if (!c) return { error: t('这个实例此刻没找到：点「刷新」再选一次') }
+      const got = c.ident?.find((x) => x.prop === path)
+      return got ? { value: got.actual } : { error: t('UE 没回这个函数的值（GameTest 太旧或函数调用失败）') }
+    } catch (e) {
+      return { error: (e as Error).message }
+    }
+  }
+  /** 目标是对象：左栏的实例本身能取；存成「类 + 对象名」的匹配规则（GameTest 2.2.2 的 @:name），写的时候按它现找 */
+  const takeObj =
+    take && wantsObject(take.type)
+      ? (name: string) => {
+          const c = (p.hits.all?.candidates ?? p.hits.me?.candidates ?? []).find((x) => x.name === name)
+          if (!c?.path) return
+          if (taken?.prop === '@') return setTaken(undefined)
+          const rule: GtRef = {
+            class: out.class,
+            ...(out.in !== undefined ? { in: out.in } : {}),
+            ident: [{ prop: '@:name', op: 'eq', value: name }],
+          }
+          setTaken({
+            prop: '@',
+            label: name,
+            from: name,
+            value: { $obj: c.path, class: classShort(out.class), name },
+            rule,
+          })
+        }
+      : undefined
   const inValue: GtRef['in'] =
     sources === undefined ? ref.in : touched || value?.in !== undefined ? inOfSources(sources) : undefined
   const out: GtRef = { ...ref, class: ref.class.trim() }
@@ -204,7 +259,7 @@ function RefDialogBody({
         setBusy(false)
       }
     }
-    onSave(name.trim(), out, outPart)
+    onSave?.(name.trim(), out, outPart)
   }
 
   const structTitle =
@@ -221,22 +276,26 @@ function RefDialogBody({
       open
       size="full"
       onOpenChange={(o: boolean) => !o && onClose()}
-      title={t('选对象')}
+      title={take ? t('抓取值') : t('选对象')}
       footer={
         <>
           <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col ue:gap-1">
-            <Summary cls={out.class} inn={out.in} ident={ident} part={outPart} />
-            <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
-              <input
-                type="checkbox"
-                className="ue:accent-accent"
-                checked={rule}
-                disabled={!ident.length}
-                onChange={(e) => setRule(e.target.checked)}
-              />
-              {t('以后抓 {c} 默认选这几项', { c: classShort(out.class) || t('这个类') })}
-              <span className="ue:text-subtle">{t('（存进运行设置的「对象与标识」）')}</span>
-            </label>
+            {take ? null : (
+              <>
+                <Summary cls={out.class} inn={out.in} ident={ident} part={outPart} />
+                <label className="ue:flex ue:w-fit ue:cursor-pointer ue:items-center ue:gap-2 ue:text-footnote ue:text-fg">
+                  <input
+                    type="checkbox"
+                    className="ue:accent-accent"
+                    checked={rule}
+                    disabled={!ident.length}
+                    onChange={(e) => setRule(e.target.checked)}
+                  />
+                  {t('以后抓 {c} 默认选这几项', { c: classShort(out.class) || t('这个类') })}
+                  <span className="ue:text-subtle">{t('（存进运行设置的「对象与标识」）')}</span>
+                </label>
+              </>
+            )}
           </span>
           <ui.Button variant="secondary" onClick={onClose}>
             {t('取消')}
@@ -250,9 +309,15 @@ function RefDialogBody({
               {t('按它分路')}
             </ui.Button>
           )}
-          <ui.Button disabled={!ok || busy} onClick={() => void save()}>
-            {t('保存对象')}
-          </ui.Button>
+          {take ? (
+            <ui.Button disabled={!taken || taken.loading || !!taken.error} onClick={() => taken && take.onTake(taken)}>
+              {t('确认')}
+            </ui.Button>
+          ) : (
+            <ui.Button disabled={!ok || busy} onClick={() => void save()}>
+              {t('保存对象')}
+            </ui.Button>
+          )}
         </>
       }
     >
@@ -318,6 +383,9 @@ function RefDialogBody({
               all={p.hits.all}
               error={p.hits.error || p.screen.error}
               selected={p.shown}
+              onTake={takeObj}
+              takeMode={!!take}
+              taken={taken?.prop === '@' ? taken.from : undefined}
               onSelect={(n) => {
                 p.setInst(n)
                 p.setPart('')
@@ -361,8 +429,18 @@ function RefDialogBody({
               note={p.props.data?.unavailable}
               siblings={p.props.data?.siblings}
               groupTitle={p.groupTitle}
-              picked={picked}
+              picked={take ? new Set(taken ? [taken.prop] : []) : picked}
               onPick={onPick}
+              take={take}
+              needInstance={
+                take
+                  ? !live
+                    ? t('游戏没在运行：抓取值要从此刻的实例上取')
+                    : !p.shown
+                      ? t('先在左边点一个此刻的实例')
+                      : undefined
+                  : undefined
+              }
             />
           </section>
           <section ref={identRef} style={panes.ident.style('40%')} className={cn(PANE_FIXED, col)}>
@@ -372,19 +450,23 @@ function RefDialogBody({
               side="right"
               reserve={() => 380 + width(instRef) + width(treeRef)}
             />
-            <CondGroups
-              cls={p.cls}
-              groups={groups}
-              onChange={setGroups}
-              target={tgt}
-              onTarget={setTarget}
-              flash={flash}
-              items={p.known.length ? p.known : p.items}
-              actual={p.actual}
-              live={live}
-              me={p.hits.me}
-              groupHits={p.groupHits}
-            />
+            {take ? (
+              <TakenValue taken={taken} project={project} want={take.type} />
+            ) : (
+              <CondGroups
+                cls={p.cls}
+                groups={groups}
+                onChange={setGroups}
+                target={tgt}
+                onTarget={setTarget}
+                flash={flash}
+                items={p.known.length ? p.known : p.items}
+                actual={p.actual}
+                live={live}
+                me={p.hits.me}
+                groupHits={p.groupHits}
+              />
+            )}
           </section>
         </div>
       </div>

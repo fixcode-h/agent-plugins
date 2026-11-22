@@ -13,9 +13,17 @@ export interface CallOut {
   /** obj.call 的报告（each 时每个对象一条） */
   invoke: InvokeReport[]
   /** 取对象：命中的每个实例和属性此刻的值 */
-  found?: { count: number; items: { name: string; ident?: { prop: string; actual: unknown }[] }[] }
+  found?: { count: number; items: FoundItem[] }
   ms: number
   at: string
+}
+
+/** 取对象命中的一个实例：match=false 是同类但匹配规则没对上的（gt.resolve 一起回来，给「排除：因为哪条」用） */
+export interface FoundItem {
+  name: string
+  path?: string
+  match?: boolean
+  ident?: { prop: string; actual: unknown }[]
 }
 
 type Def = Pick<GmCustom, 'kind' | 'obj' | 'objects' | 'function' | 'part' | 'args' | 'many' | 'props'>
@@ -30,7 +38,7 @@ export async function runCall(
   const at = new Date().toISOString()
   try {
     if (def.kind === 'get') {
-      const r = await op<{ refs?: { count?: number; candidates?: { name: string }[]; error?: string }[] }>(
+      const r = await op<{ refs?: { count?: number; candidates?: FoundItem[]; error?: string }[] }>(
         projectId,
         'gt.resolve',
         getQuery(def),

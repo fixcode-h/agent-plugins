@@ -63,6 +63,7 @@ export function Details({
   top,
   footer,
   flatSingle,
+  query: outerQ,
 }: {
   props: Prop[]
   api: Omit<DetailsApi, 'q'>
@@ -72,6 +73,8 @@ export function Details({
   /** 放在所有分类前面的块（Actor 的「变换」） */
   top?: (q: string) => ReactNode
   footer?: ReactNode
+  /** 外面已经有搜索框（GM 对象调用中栏）：按它筛，自己的搜索框不画 */
+  query?: string
 }) {
   const { cn, ui } = h()
   const [q, setQ] = useState('')
@@ -86,7 +89,7 @@ export function Details({
   const changedProps = props.filter((p) => api.isChanged(p.name))
   // 分类按钮只按第一层分类；选中的分类没了（换了对象）就回到「所有」
   const cur = chip === CHANGED || chip === INTERNAL || roots.some((g) => g.key === chip) ? chip : ''
-  const query = q.trim()
+  const query = (outerQ ?? q).trim()
   const shown = useMemo(() => {
     const base =
       cur === CHANGED
@@ -150,29 +153,33 @@ export function Details({
     <DetailsCtx.Provider value={ctx}>
       <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2">
         <div className="ue:flex ue:items-center ue:gap-1.5">
-          <label className="ue:flex ue:h-7 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:border ue:border-line ue:bg-field ue:px-2 ue:transition-colors ue:focus-within:border-focus">
-            <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setQ('')
-              }}
-              placeholder={t('搜索')}
-              aria-label={t('搜索属性')}
-              className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-footnote ue:text-fg ue:outline-none ue:placeholder:text-subtle"
-            />
-            {q && (
-              <button
-                type="button"
-                aria-label={t('清空搜索')}
-                onClick={() => setQ('')}
-                className="ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
-              >
-                <X className="ue:h-3.5 ue:w-3.5" />
-              </button>
-            )}
-          </label>
+          {outerQ === undefined ? (
+            <label className="ue:flex ue:h-7 ue:min-w-0 ue:flex-1 ue:items-center ue:gap-2 ue:border ue:border-line ue:bg-field ue:px-2 ue:transition-colors ue:focus-within:border-focus">
+              <Search className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setQ('')
+                }}
+                placeholder={t('搜索')}
+                aria-label={t('搜索属性')}
+                className="ue:min-w-0 ue:flex-1 ue:bg-transparent ue:text-footnote ue:text-fg ue:outline-none ue:placeholder:text-subtle"
+              />
+              {q && (
+                <button
+                  type="button"
+                  aria-label={t('清空搜索')}
+                  onClick={() => setQ('')}
+                  className="ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
+                >
+                  <X className="ue:h-3.5 ue:w-3.5" />
+                </button>
+              )}
+            </label>
+          ) : (
+            <span className="ue:flex-1" />
+          )}
           <ui.IconButton
             icon={anyOpen ? FoldVertical : UnfoldVertical}
             label={anyOpen ? t('全部收起') : t('全部展开')}

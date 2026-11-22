@@ -91,6 +91,10 @@ export interface DetailsApi {
   resetToDefault?: boolean
   /** 行尾额外的按钮（GameTest 挑标识的准星），一直显示 */
   action?: (n: Node, depth: number) => ReactNode
+  /** 点一行（不是点在值控件、按钮上）：GM 改变量点一行在右栏展示（用户 2026-11-22） */
+  onRow?: (n: Node, depth: number) => void
+  /** 选中的那一行（属性路径），画成选中底色 */
+  selected?: string
 }
 export const DetailsCtx = createContext<DetailsApi | null>(null)
 const useDetails = () => useContext(DetailsCtx)!
@@ -211,11 +215,14 @@ export function Row({ n, depth = 0 }: { n: Node; depth?: number }) {
       {/* 能展开的行点整行都能展开收起（用户嫌只能点箭头，2026-11-16）；点在值控件、按钮上的不算 */}
       <div
         onClick={(e) => {
-          if (canOpen && rowClickToggles(e)) void toggle()
+          if (!rowClickToggles(e)) return
+          d.onRow?.(n, depth)
+          if (canOpen) void toggle()
         }}
         className={cn(
           'ue:group ue:grid ue:min-h-8 ue:grid-cols-[var(--ue-name-w)_minmax(0,1fr)_4.5rem] ue:border-b ue:border-line/50 ue:transition-colors ue:hover:bg-hover/50',
-          canOpen && 'ue:cursor-pointer',
+          (canOpen || d.onRow) && 'ue:cursor-pointer',
+          d.selected === n.path && 'ue:bg-sel ue:hover:bg-sel',
           mark && 'ue:bg-warning/8 ue:shadow-[inset_2px_0_0_var(--warning)]',
         )}
       >

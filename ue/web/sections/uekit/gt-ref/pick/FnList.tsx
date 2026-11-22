@@ -2,6 +2,10 @@ import { Crosshair } from 'lucide-react'
 import type { GtPropItem, GtPropKind } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
 
+/** 行尾准星的提示：选对象时加进 / 移出标识组，抓取值时取 / 不取这个值 */
+export const pickTip = (on: boolean, takeValue?: boolean) =>
+  takeValue ? (on ? t('不取这个值') : t('取这个值')) : on ? t('移出标识组') : t('加进唯一标识组')
+
 /**
  * 「方法」页的函数列表：函数没有值（用户 2026-11-21：没值就别画空的值框），一行是名字 + 参数占满，
  * 返回类型、定义在哪个父类放右边；悬停看完整签名。UE 类和 Lua 类共用。
@@ -11,12 +15,16 @@ export function FnList({
   items,
   picked,
   onPick,
+  takeValue,
 }: {
   items: GtPropItem[]
+  /** 抓取值时：列进来的都是能取的取值函数（DetailPane 筛过），准星取它的返回值 */
+  takeValue?: boolean
   picked: Set<string>
   onPick: (prop: string, kind: GtPropKind | undefined, value: unknown, item?: GtPropItem) => void
 }) {
   const { cn } = h()
+  const on = (it: GtPropItem) => picked.has(it.prop) || (!!it.luaFn?.path && picked.has(it.luaFn.path))
   return (
     <div role="list" className="ue:flex ue:flex-col ue:py-1">
       {items.map((it) => {
@@ -50,18 +58,16 @@ export function FnList({
               <span className="ue:max-w-[30%] ue:shrink-0 ue:truncate ue:text-caption ue:text-subtle">{fn.from}</span>
             )}
             <span className="ue:flex ue:w-6 ue:shrink-0 ue:justify-center">
-              {it.comparable !== false && (
+              {(takeValue || it.comparable !== false) && (
                 <button
                   type="button"
-                  aria-pressed={picked.has(it.prop)}
-                  aria-label={picked.has(it.prop) ? t('移出标识组') : t('加进唯一标识组')}
-                  title={picked.has(it.prop) ? t('移出标识组') : t('加进唯一标识组')}
-                  onClick={() => onPick(it.prop, it.kind, it.value, it)}
+                  aria-pressed={on(it)}
+                  aria-label={pickTip(on(it), takeValue)}
+                  title={pickTip(on(it), takeValue)}
+                  onClick={() => onPick(takeValue && it.luaFn?.path ? it.luaFn.path : it.prop, it.kind, it.value, it)}
                   className={cn(
                     'ue:flex ue:h-6 ue:w-6 ue:cursor-pointer ue:items-center ue:justify-center ue:rounded-md',
-                    picked.has(it.prop)
-                      ? 'ue:bg-accent ue:text-on-accent'
-                      : 'ue:text-subtle ue:hover:bg-hover ue:hover:text-fg',
+                    on(it) ? 'ue:bg-accent ue:text-on-accent' : 'ue:text-subtle ue:hover:bg-hover ue:hover:text-fg',
                   )}
                 >
                   <Crosshair className="ue:h-3.5 ue:w-3.5" />
