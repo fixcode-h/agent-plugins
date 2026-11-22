@@ -39,19 +39,56 @@ export const objNamesInArgs = (args: Record<string, unknown>) =>
     .filter(isObjArg)
     .map((v) => v.$obj)
 
+/** GameTest 对象名的规则：字母、数字、下划线或中文，不以数字开头（gt.validate 照这个拦） */
+const GT_NAME = /^[A-Za-z_\p{Script=Han}][\w\p{Script=Han}]*$/u
+
+/**
+ * 对象列表的名字 → GameTest 认的名字。对象列表的名字随便起（选 Lua 类时默认就是 `lua:BP_Game`），
+ * 交给 gt.step / gt.validate 前把不合规则的字符换成 _，数字开头的前面加 _，换完撞名的加 _2、_3
+ */
+export function gtNames(names: string[]) {
+  const out = new Map<string, string>()
+  const used = new Set(names.filter((n) => GT_NAME.test(n)))
+  for (const n of names) {
+    if (out.has(n)) continue
+    if (GT_NAME.test(n)) {
+      out.set(n, n)
+      continue
+    }
+    let base = n.replace(/[^\w\p{Script=Han}]/gu, '_')
+    if (!base || /^\d/.test(base)) base = `_${base}`
+    let id = base
+    for (let i = 2; used.has(id); i++) id = `${base}_${i}`
+    used.add(id)
+    out.set(n, id)
+  }
+  return out
+}
+
 /** 调函数：gt.step 的完整参数 */
 export function callStep(
   c: Pick<GmCustom, 'obj' | 'objects' | 'function' | 'part' | 'args' | 'many'>,
   args: Record<string, unknown> = c.args,
 ) {
-  const objects: GtObjects = {}
-  for (const [name, o] of Object.entries(c.objects)) objects[name] = objValue(o)
-  const target = objects[c.obj]
-  if (target === undefined) throw new Error(`对象「${c.obj}」不在这条 GM 的 objects 里`)
+  if (!c.objects[c.obj]) throw new Error(`对象「${c.obj}」不在这条 GM 的 objects 里`)
   for (const n of objNamesInArgs(args))
-    if (objects[n] === undefined) throw new Error(`参数里用到的对象「${n}」不在这条 GM 的 objects 里`)
-  if (c.many === 'first' && typeof target === 'object') objects[c.obj] = { ...target, many: 'first' }
-  const step: Record<string, unknown> = { action: 'obj.call', obj: objArg(c.obj), function: c.function ?? '', args }
+    if (!c.objects[n]) throw new Error(`参数里用到的对象「${n}」不在这条 GM 的 objects 里`)
+  // 名字换成 GameTest 认的（lua:BP_Game → lua_BP_Game），步骤和参数里的引用跟着换
+  const id = gtNames(Object.keys(c.objects))
+  const objects: GtObjects = {}
+  for (const [name, o] of Object.entries(c.objects)) objects[id.get(name)!] = objValue(o)
+  const tid = id.get(c.obj)!
+  const target = objects[tid]
+  if (c.many === 'first' && typeof target === 'object') objects[tid] = { ...target, many: 'first' }
+  const gtArgs = Object.fromEntries(
+    Object.entries(args).map(([k, v]) => [k, isObjArg(v) ? objArg(id.get(v.$obj)!) : v]),
+  )
+  const step: Record<string, unknown> = {
+    action: 'obj.call',
+    obj: objArg(tid),
+    function: c.function ?? '',
+    args: gtArgs,
+  }
   if (c.part) step.part = c.part
   if (c.many === 'each') step.each = true
   return { step, objects }

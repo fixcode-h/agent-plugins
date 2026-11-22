@@ -3,6 +3,7 @@ import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
 import type { GmCustom, GmCustomObj, GmMany, GmObject } from '../../../../shared/gm/schema.ts'
 import { toggleFav } from '../../../../shared/gm/favs.ts'
 import { allModules } from '../../../../shared/gm/modules.ts'
+import { CUSTOM_FOLDER } from '../../../../shared/gm/obj-folders.ts'
 import { useAsk } from '../../../ask.tsx'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
@@ -16,9 +17,8 @@ import { SaveGmDialog } from '../custom/SaveGmDialog.tsx'
 import type { CallMode } from './CallPane.tsx'
 import type { FnInfo } from './members.ts'
 import type { MemberTab } from './MemberPane.tsx'
+import { useObjFolders } from './use-obj-folders.tsx'
 import { useObjHits, type ParamClass } from './use-objcall.ts'
-
-const NAME_OK = (n: string, list: GmObject[], self?: string) => !!n && (n === self || !list.some((o) => o.name === n))
 
 /** 对象列表 → 调用时的 objects：只要用到的那几个 */
 const objectsFor = (list: GmObject[], names: string[]) => {
@@ -62,23 +62,14 @@ export function useObjCallState(d: GmData, live: boolean) {
   const obj = objects.find((o) => o.name === sel) ?? objects[0]
 
   const save = (next: GmObject[]) => d.saveGm({ ...d.gm, objects: next })
-  const askName = async (init: string, self?: string) => {
-    const n = (
-      await ask({ title: t('对象的名字'), label: t('在对象列表里叫什么（例如：商店界面、店主）'), init })
-    )?.trim()
-    if (!n) return undefined
-    if (!NAME_OK(n, objects, self)) {
-      toast.error(t('对象列表里已经有「{n}」了', { n }))
-      return undefined
-    }
-    return n
-  }
-  const addObject = async (o: Omit<GmObject, 'name'>, init: string) => {
-    const name = await askName(init)
-    if (!name) return undefined
-    await save([...objects, { name, ...o } as GmObject])
-    setSel(name)
-    return name
+  const fold = useObjFolders(d)
+  /** 加进对象列表：问名字和文件夹（必须选一个，用户 2026-11-22）；folder 是默认选的文件夹 */
+  const addObject = async (o: Omit<GmObject, 'name' | 'folder'>, init: string, folder?: string) => {
+    const r = await fold.askObj({ title: t('加进对象列表'), name: init, folder: folder ?? obj?.folder })
+    if (!r) return undefined
+    await save([...objects, { name: r.name, ...o, folder: r.folder } as GmObject])
+    setSel(r.name)
+    return r.name
   }
   const pickFn = (f: FnInfo) => {
     setFn(f)
@@ -133,25 +124,39 @@ export function useObjCallState(d: GmData, live: boolean) {
       }
       setSel(n)
     },
-    onAdd: () =>
+    ...fold.actions,
+    onAdd: (folder?: string) =>
       setRefEdit({
         done: (ref) =>
-          void addObject({ ref: ref as GmObject['ref'] }, ref.class.replace(/^.*[./]/, '').replace(/_C$/, '')),
+          void addObject(
+            { ref: ref as GmObject['ref'] },
+            ref.class
+              .replace(/^lua:/, '')
+              .replace(/^.*[./]/, '')
+              .replace(/_C$/, ''),
+            folder,
+          ),
       }),
-    onAddSource: async (kind: 'pawn' | 'sub' | 'luaMod') => {
-      if (kind === 'pawn') return void addObject({ src: '@pawn' }, t('玩家'))
+    onAddSource: async (kind: 'pawn' | 'sub' | 'luaMod', folder?: string) => {
+      if (kind === 'pawn') return void addObject({ src: '@pawn' }, t('玩家'), folder)
       const label = kind === 'sub' ? t('子系统的类名（例如 UQuestSubsystem）') : t('Lua 模块名（require 的路径）')
       const v = (await ask({ title: kind === 'sub' ? t('加子系统') : t('加 Lua 模块'), label, init: '' }))?.trim()
-      if (v) void addObject({ src: `@${kind}.${v}` }, v.split('.').pop() ?? v)
+      if (v) void addObject({ src: `@${kind}.${v}` }, v.split('.').pop() ?? v, folder)
     },
     onEdit: (o: GmObject) =>
       setRefEdit({
         value: o.ref as GtRef,
         done: (ref) =>
-          void save(objects.map((x) => (x.name === o.name ? { name: o.name, ref: ref as GmObject['ref'] } : x))),
+          void save(
+            objects.map((x) =>
+              x.name === o.name
+                ? { name: o.name, ref: ref as GmObject['ref'], ...(o.folder ? { folder: o.folder } : {}) }
+                : x,
+            ),
+          ),
       }),
     onRename: async (o: GmObject) => {
-      const n = await askName(o.name, o.name)
+      const n = (await fold.askObj({ title: t('重命名对象'), name: o.name, self: o.name, noFolder: true }))?.name
       if (!n || n === o.name) return
       const favs = d.gm.favs.objcall.map((f) => (f.key === `obj:${o.name}` ? { key: `obj:${n}` } : f))
       await d.saveGm({
@@ -162,8 +167,8 @@ export function useObjCallState(d: GmData, live: boolean) {
       if (sel === o.name) setSel(n)
     },
     onCopy: async (o: GmObject) => {
-      const { name: _n, by: _b, ...rest } = o
-      await addObject(rest, t('{n} 副本', { n: o.name }))
+      const { name: _n, by: _b, folder, ...rest } = o
+      await addObject(rest, t('{n} 副本', { n: o.name }), folder)
     },
     onDelete: async (o: GmObject) => {
       const ok = await ask({ title: t('删除对象「{n}」？', { n: o.name }), okText: t('删除'), danger: true })
@@ -199,7 +204,8 @@ export function useObjCallState(d: GmData, live: boolean) {
   const openCustom = async (c: GmCustom) => {
     const add = Object.entries(c.objects)
       .filter(([n]) => !objects.some((o) => o.name === n))
-      .map(([name, o]) => ({ name, ...o }) as GmObject)
+      // 对象都要在文件夹里：自动加进来的放「来自自定义 GM」
+      .map(([name, o]) => ({ name, ...o, folder: CUSTOM_FOLDER }) as GmObject)
     if (add.length) await save([...objects, ...add])
     setSel(c.obj)
     setMode(c.kind)
@@ -223,6 +229,7 @@ export function useObjCallState(d: GmData, live: boolean) {
   const dialogs = (
     <>
       {dialog}
+      {fold.dialogs}
       {refEdit && (
         <RefDialog
           project={project.id}

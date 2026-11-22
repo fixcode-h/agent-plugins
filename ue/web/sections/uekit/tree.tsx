@@ -101,6 +101,7 @@ export function FileTree<T>({
   onOpen,
   leafIcon,
   leafRight,
+  leafSub,
   leafDim,
   folderRight,
   onLeafMenu,
@@ -124,6 +125,8 @@ export function FileTree<T>({
   onOpen: (path: string, data: T) => void
   leafIcon: (d: T) => { icon: LucideIcon; tone: string }
   leafRight?: (d: T) => ReactNode
+  /** 叶子名字下面的第二行（GM 对象列表的匹配规则）；给了的叶子行高随内容 */
+  leafSub?: (d: T) => ReactNode
   /** 变灰的行（没有配置的资产） */
   leafDim?: (d: T) => boolean
   folderRight?: (leaves: T[]) => ReactNode
@@ -199,6 +202,7 @@ export function FileTree<T>({
       const Icon = meta?.icon ?? (open ? FolderOpen : Folder)
       const isPicked = leaf !== undefined && !!picked?.has(n.path)
       const isDrop = leaf === undefined && dnd?.over === n.path
+      const sub = leaf !== undefined ? leafSub?.(leaf) : undefined
       rows.push(
         <button
           key={n.path}
@@ -227,7 +231,8 @@ export function FileTree<T>({
           }
           style={{ paddingLeft: `${6 + depth * INDENT}px` }}
           className={cn(
-            'ue:flex ue:h-7 ue:w-full ue:shrink-0 ue:cursor-pointer ue:select-none ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:pr-2 ue:text-left ue:text-body ue:transition-colors ue:hover:bg-sel/60',
+            sub && 'ue:flex-wrap ue:gap-y-0 ue:py-1',
+            'ue:flex ue:min-h-7 ue:w-full ue:shrink-0 ue:cursor-pointer ue:select-none ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:pr-2 ue:text-left ue:text-body ue:transition-colors ue:hover:bg-sel/60',
             leaf !== undefined
               ? 'ue:text-fg ue:aria-selected:bg-sel ue:aria-selected:font-semibold'
               : 'ue:font-medium ue:text-muted ue:aria-selected:bg-sel',
@@ -254,6 +259,12 @@ export function FileTree<T>({
           <span className="ue:flex ue:shrink-0 ue:items-center ue:gap-1.5 ue:text-caption ue:font-normal ue:text-subtle ue:tabular-nums">
             {leaf !== undefined ? leafRight?.(leaf) : folderRight ? folderRight(n.leaves) : n.leaves.length}
           </span>
+          {sub && (
+            // 第二行和名字对齐：前面空出箭头和图标的宽度
+            <span className="ue:flex ue:w-full ue:min-w-0 ue:overflow-hidden ue:pb-0.5 ue:pl-[38px] ue:font-normal">
+              {sub}
+            </span>
+          )}
         </button>,
       )
       if (leaf === undefined && open) walk(n.children, depth + 1)
