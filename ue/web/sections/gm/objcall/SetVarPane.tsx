@@ -14,7 +14,20 @@ const toText = (v: unknown) => (v === undefined ? '' : typeof v === 'string' ? v
  * 对象调用右栏「改变量」（用户 2026-11-22）：中栏点一个属性 / Lua 字段后在这里展示，
  * 「抓取值」读它此刻的值（gt.props），填新值后点「修改」写回（GameTest obj.set，按匹配规则现找对象），改完再抓一次给你看结果
  */
-export function SetVarPane({ obj, v, live, canRun }: { obj: GmObject; v?: VarSel; live: boolean; canRun: string }) {
+export function SetVarPane({
+  obj,
+  v,
+  live,
+  canRun,
+  onChanged,
+}: {
+  obj: GmObject
+  v?: VarSel
+  live: boolean
+  canRun: string
+  /** 改成功了：中栏列表重读一次 */
+  onChanged: () => void
+}) {
   const { ui } = h()
   const { project, target } = useUe()
   const [now, setNow] = useState<{ value: unknown; at: string }>()
@@ -51,6 +64,7 @@ export function SetVarPane({ obj, v, live, canRun }: { obj: GmObject; v?: VarSel
     try {
       await setObjProp(project.id, target, obj, v.prop, v.lua ? luaValue(v.type, text) : text)
       setBusy('')
+      onChanged()
       if (await grab(false)) setMsg({ ok: true, text: t('已修改') })
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message })

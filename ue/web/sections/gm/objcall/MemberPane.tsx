@@ -29,6 +29,7 @@ export function MemberPane({
   onTogglePick,
   varSel,
   onVar,
+  rev = 0,
 }: {
   project: string
   obj: GmObject
@@ -44,11 +45,13 @@ export function MemberPane({
   /** 选中的变量（属性路径）：右栏「改变量」 */
   varSel?: string
   onVar: (v: VarSel) => void
+  /** 改完变量加一：重读属性 */
+  rev?: number
 }) {
   const { ui, cn } = h()
   const [q, setQ] = useState('')
   const vars = useVars(project, scopeOf(obj), live)
-  const props = useProps(project, obj.ref && live ? { target: { obj: obj.ref as { class: string } } } : undefined)
+  const props = useProps(project, obj.ref && live ? { target: { obj: obj.ref as { class: string } } } : undefined, rev)
   const groups = vars.data?.groups ?? []
   const fns = useMemo(() => fnsOf(groups.filter((g) => g.src !== 'lua')), [groups])
   const luaFns = useMemo(() => fnsOf(groups.filter((g) => g.src === 'lua')), [groups])

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import { h, t } from '../../../host.ts'
 import type { CallOut } from './run-custom.ts'
+import { ValueTree } from './ValueTree.tsx'
 
 const fmt = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v))
 
@@ -60,12 +61,23 @@ export function CallOutput({ out, args }: { out?: CallOut; args?: Record<string,
         </div>
       ) : (
         <div className={box}>
-          {out.invoke.map((inv, i) => (
-            <span key={i} className={cn('ue:flex ue:items-center ue:gap-1.5 ue:text-success')}>
-              <Check className="ue:h-3.5 ue:w-3.5" />
-              {inv.returned === undefined ? t('已调用（没有返回值）') : t('返回 {v}', { v: fmt(inv.returned) })}
-            </span>
-          ))}
+          {out.invoke.map((inv, i) => {
+            // GameTest 2.2.1 起有带类型的 value：对象、数组、表画成树；旧版只有显示文字 returned
+            const typed = inv.value !== undefined && inv.value !== null && typeof inv.value === 'object'
+            return (
+              <div key={i} className="ue:flex ue:flex-col ue:gap-1">
+                <span className={cn('ue:flex ue:items-center ue:gap-1.5 ue:text-success')}>
+                  <Check className="ue:h-3.5 ue:w-3.5" />
+                  {inv.returned === undefined
+                    ? t('已调用（没有返回值）')
+                    : typed
+                      ? t('返回')
+                      : t('返回 {v}', { v: fmt(inv.value ?? inv.returned) })}
+                </span>
+                {typed && <ValueTree value={inv.value} />}
+              </div>
+            )
+          })}
           {!out.invoke.length && <span className="ue:text-success">{t('已执行')}</span>}
           {out.invoke.some((x) => x.object) && (
             <span className="ue:text-muted">

@@ -28,6 +28,7 @@ export function CallPane(p: {
   mode: CallMode
   /** 改变量：中栏点的那个 */
   varSel?: VarSel
+  onVarChanged: () => void
   onMode: (m: CallMode) => void
   fn?: FnInfo
   values: Record<string, unknown>
@@ -71,7 +72,7 @@ export function CallPane(p: {
         <ObjName name={p.obj.name} />
       </div>
       {p.mode === 'set' ? (
-        <SetVarPane obj={p.obj} v={p.varSel} live={p.live} canRun={p.canRun} />
+        <SetVarPane obj={p.obj} v={p.varSel} live={p.live} canRun={p.canRun} onChanged={p.onVarChanged} />
       ) : p.mode === 'call' ? (
         p.fn ? (
           <>
