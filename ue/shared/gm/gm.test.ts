@@ -2,7 +2,7 @@
 // 用法：node --test ue/shared/gm/gm.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callStep, getQuery, invokesOf, mergeArgs, stepOk, callText } from './custom.ts'
+import { callStep, getQuery, gtNames, invokesOf, mergeArgs, stepOk, callText } from './custom.ts'
 import { allModules, placeOf } from './modules.ts'
 import { emptyGm, GmCustom, parseGm } from './schema.ts'
 import { pluginToStored, relInside, storedToAbs, storedToPlugin } from './table-path.ts'
@@ -111,4 +111,19 @@ test('表格路径：相对版本管理根存，外面的存绝对路径，旧�
   assert.equal(storedToAbs('a/../b.xlsx', '/r'), '/r/b.xlsx')
   assert.equal(relInside('/r/x', '/r/xy/a'), undefined)
   assert.equal(relInside('/r/x', '/r/x/a'), 'a')
+})
+
+test('对象名不合 GameTest 规则（lua:BP_Game、数字开头）时换成合规的名字，步骤和参数跟着换', () => {
+  const m = gtNames(['lua:BP_Game', 'lua_BP_Game', '1号', '商店界面'])
+  assert.deepEqual([...m.values()], ['lua_BP_Game_2', 'lua_BP_Game', '_1号', '商店界面'])
+  const r = callStep({
+    obj: 'lua:BP_Game',
+    objects: { 'lua:BP_Game': { ref: { class: 'lua:BP_Game' } }, 'a-b': { src: '@pawn' } },
+    function: 'NotifyEnemyDied',
+    args: { Who: { $obj: 'a-b' } },
+    many: 'error',
+  })
+  assert.deepEqual(r.step.obj, { $obj: 'lua_BP_Game' })
+  assert.deepEqual(r.step.args, { Who: { $obj: 'a_b' } })
+  assert.deepEqual(Object.keys(r.objects), ['lua_BP_Game', 'a_b'])
 })

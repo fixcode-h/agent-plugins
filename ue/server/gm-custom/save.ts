@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isObjArg, newCustomId, objValue } from '../../shared/gm/custom.ts'
+import { gtNames, isObjArg, newCustomId, objValue } from '../../shared/gm/custom.ts'
 import { findModule, newModuleId } from '../../shared/gm/modules.ts'
 import { AGENT_FOLDER, normFolder } from '../../shared/gm/obj-folders.ts'
 import { GmCustom, GmObject, type GmCustomObj, type GmStore } from '../../shared/gm/schema.ts'
@@ -21,9 +21,11 @@ const errText = (e: unknown) =>
 
 /** 拼一份临时脚本交给 gt.validate：只有一步 obj.call，对象写进 objects（来源字符串直接写在步骤里） */
 function scriptFor(c: GmCustom) {
+  // 名字换成 GameTest 认的（lua:BP_Game → lua_BP_Game），和执行时 callStep 一样
+  const id = gtNames(Object.keys(c.objects))
   const objects: Obj = {}
-  for (const [n, o] of Object.entries(c.objects)) if (o.ref) objects[n] = o.ref
-  const objOf = (n: string) => (c.objects[n]?.src ? c.objects[n].src : n)
+  for (const [n, o] of Object.entries(c.objects)) if (o.ref) objects[id.get(n)!] = o.ref
+  const objOf = (n: string) => (c.objects[n]?.src ? c.objects[n].src : (id.get(n) ?? n))
   const args: Obj = {}
   for (const [k, v] of Object.entries(c.args)) args[k] = isObjArg(v) ? objOf(v.$obj) : v
   const step =
