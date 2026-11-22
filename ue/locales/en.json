@@ -4913,5 +4913,6 @@
   "照 UE 的写法填（结构体如 (X=1,Y=2)）": "Use UE's text format (structs like (X=1,Y=2))",
   "修改中…": "Changing…",
   "查看": "View",
-  "改这个变量": "Set this variable"
+  "改这个变量": "Set this variable",
+  "实例表字段太多，这个没读到：值是源码里的写法": "Too many fields on the instance table to read this one; the value shown is from the source"
 }

@@ -97,17 +97,25 @@ export async function gtRefOp<C extends CardLike>(op: string, args: A, deps: GtR
   if (failed && !mod) throw failed
   // 游戏开着、读的是某个实例：直接读它的实例表这一层，UE 名额外的字段也有此刻的值（用户 2026-11-22：DefaultFOV 显示「游戏没开」）
   let live: LuaLive | undefined
+  // 实例表超过一页（lua.get 回 more）时没读到的字段不能说成 nil（#230 评审）
+  let partial = false
   const path = typeof args.path === 'string' ? args.path : ''
   if (!failed && card && path && mod && deps.luaFields && !args.part && !Number(args.offset ?? 0))
     live = await deps.luaFields(card, path).then(
       // 没绑 Lua 的对象（value 不是表）不算读到，免得把字段都说成「此刻是 nil」
-      (r) => ((r.value as { t?: string } | undefined)?.t === 'table' ? liveMap(r.fields) : undefined),
+      (r) => {
+        if ((r.value as { t?: string } | undefined)?.t !== 'table') return undefined
+        partial = r.more === true
+        return liveMap(r.fields)
+      },
       () => undefined,
     )
   const srcWhy = failed
     ? undefined
     : live
-      ? t('这个实例上此刻是 nil（还没赋值）：值是源码里的写法')
+      ? partial
+        ? t('实例表字段太多，这个没读到：值是源码里的写法')
+        : t('这个实例上此刻是 nil（还没赋值）：值是源码里的写法')
       : path || args.target || args.node
         ? undefined
         : t('没选实例：值是源码里的写法；在实例列表里点一个看此刻的值')
