@@ -36,6 +36,7 @@ import type { GtHistoryRun } from '../gt-step-history.ts'
 import { GtStepHistory } from '../GtStepHistory.tsx'
 import { loadReport, type GtRunSummary } from '../gt-run/types.ts'
 import { RunBanner, type EditRun } from './RunBanner.tsx'
+import { LibDriftBar } from '../gt-objects/LibDriftBar.tsx'
 import { ScriptSettings } from './ScriptSettings.tsx'
 import { useRefGate } from '../gt-ref/gate.tsx'
 import { useScript } from './use-script.ts'
@@ -396,6 +397,7 @@ export function GtEditor({
           </p>
         )}
         {gate.banner}
+        <LibDriftBar project={project} doc={s.doc} apply={(d) => apply(d)} readOnly={gate.locked} />
         {check.banner}
         {s.error ? (
           <div className="ue:p-4">

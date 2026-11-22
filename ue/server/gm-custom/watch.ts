@@ -1,12 +1,13 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import { objLibFile } from '../obj-lib/store.ts'
 import { GM_EVENT, gmFile } from '../store.ts'
 import type { UeProject } from '../types.ts'
 import { c } from '../util.ts'
 
 /**
- * gm.json 在面板外被改了（别人提交后拉下来、手改）也让打开着的 GM 页刷新：盯它所在的目录（编辑器保存时常是改名替换，
+ * gm.json、objects.json 在面板外被改了（别人提交后拉下来、手改）也让打开着的 GM 页刷新：盯它所在的目录（编辑器保存时常是改名替换，
  * 盯文件本身会丢事件），停手 300 毫秒推一次 gm 事件。面板自己写的在 writeGm 里已经推过，这里多推一次只是多读一次。
  * GM 页第一次取 gm.json 时开始盯，一个项目一个
  */
@@ -23,7 +24,8 @@ export async function followGm(p: Pick<UeProject, 'id' | 'root' | 'gmStore'>) {
     const entry: { file: string; w: FSWatcher; timer?: ReturnType<typeof setTimeout> } = {
       file,
       w: watch(dir, (_e, name) => {
-        if (name && String(name) !== path.basename(file)) return
+        // 对象库 objects.json 和 gm.json 在同一个目录，一起盯
+        if (name && String(name) !== path.basename(file) && String(name) !== path.basename(objLibFile(p))) return
         clearTimeout(entry.timer)
         entry.timer = setTimeout(() => c().pages?.push(GM_EVENT, { project: p.id }), 300)
         entry.timer.unref?.()

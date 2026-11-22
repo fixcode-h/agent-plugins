@@ -21,7 +21,9 @@ import { luaRoute } from './lua/api.ts'
 import { precheck } from './precheck.ts'
 import { luaDebugRoute } from './lua-debug/api.ts'
 import { DEFAULT_PERMS, getProject, listProjects, patchProject, removeProject, saveProject } from './registry.ts'
+import { objLibFile, writeObjLib } from './obj-lib/store.ts'
 import {
+  GM_EVENT,
   gmFile,
   patchLocal,
   pushConsoleHistory,
@@ -37,7 +39,7 @@ import { followGm } from './gm-custom/watch.ts'
 import { runCustom } from './gm-custom/run.ts'
 import type { InstallMode, Target, UeProject } from './types.ts'
 import { historyWithLive, undoAll } from './undo.ts'
-import { json, now, t } from './util.ts'
+import { c, json, now, t } from './util.ts'
 import { enableFor } from './capability.ts'
 import { searchIndexRoute } from './search-index/index.ts'
 import { vsDebugRoute } from './vs-debug/api.ts'
@@ -206,6 +208,17 @@ export async function handle(req: Request): Promise<Response> {
         return json(await readGm(project))
       case 'POST gm':
         return json(await writeGm(project, b))
+      case 'GET objlib': {
+        // 对象库（GM 对象调用和测试页「对象」页签共用，obj-lib/store.ts）：也开始盯，外面改了推 gm 事件
+        void followGm(project)
+        const g = await readGm(project)
+        return json({ objects: g.objects, objFolders: g.objFolders, file: objLibFile(project) })
+      }
+      case 'POST objlib': {
+        const lib = await writeObjLib(project, b as Parameters<typeof writeObjLib>[1])
+        c().pages?.push(GM_EVENT, { project: project.id })
+        return json(lib)
+      }
       case 'GET gm/info':
         // 存在哪（设置页显示），和参数关联表格存相对路径用的根（shared/gm/table-path.ts）
         return json({ file: gmFile(project), table: await tableBase(project) })

@@ -7,6 +7,7 @@ import {
   type GtPath,
   type GtScript,
 } from '../../../../shared/gt-script/index.ts'
+import { absorbLibDrops } from '../../../../shared/obj-lib/link.ts'
 import { ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 
@@ -90,7 +91,8 @@ export function useScript(o: { project: string; root: string; path: string }): S
       const next = 'doc' in r && 'path' in r && Array.isArray(r.path) ? (r as EditResult) : undefined
       past.current = [...past.current.slice(-HISTORY + 1), doc]
       future.current = []
-      setDoc(next ? next.doc : (r as GtScript))
+      // 从「对象」页签拖进来的步骤带着对象库的一项：拷进脚本 objects、记下来源（shared/obj-lib/link.ts）
+      setDoc(absorbLibDrops(next ? next.doc : (r as GtScript)))
       if (next) setSelected([next.path])
       bump((n) => n + 1)
       return true

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { GM_VERSION, GmStore as GmSchema, parseGm, type GmStore } from '../shared/gm/schema.ts'
 import { docsRoot, legacyDocsRoot } from './doc-root.ts'
+import { readObjLib, writeObjLib } from './obj-lib/store.ts'
 import type { UeProject } from './types.ts'
 import { c, readJson, writeJson } from './util.ts'
 
@@ -58,16 +59,27 @@ async function adoptOldGm(p: P, file: string) {
   c().log?.info('UE：gm.json 搬到项目文档根', { project: p.id, from: old, to: file })
 }
 
+/**
+ * 读 GM 的东西：gm.json + 对象库 objects.json（0.53.0 起对象列表单独存，GM 页和测试页共用，obj-lib/store.ts）。
+ * 合成一份交出去，GM 页和 ue_gm 照旧按 GmStore 用
+ */
 export async function readGm(p: P): Promise<GmStore> {
   const file = gmFile(p)
   await adoptOldGm(p, file).catch((e: Error) => c().log?.warn('UE：旧 gm.json 没搬过来', { error: e.message }))
-  return parseGm(await readJson<unknown>(file, null))
+  const raw = await readJson<unknown>(file, null)
+  const lib = await readObjLib(p, file, raw)
+  return { ...parseGm(raw), objects: lib.objects, objFolders: lib.objFolders }
 }
 
-/** 写之前按契约校验（网页整份传上来的、Agent 拼的都过一遍），写完推 gm 事件让打开着的 GM 页刷新 */
+/**
+ * 写之前按契约校验（网页整份传上来的、Agent 拼的都过一遍）：对象列表写进 objects.json，其余写 gm.json；
+ * 写完推 gm 事件让打开着的 GM 页、测试页刷新
+ */
 export async function writeGm(p: P, data: unknown) {
   const next = GmSchema.parse(data)
-  await writeJson(gmFile(p), next)
+  const { objects, objFolders, ...rest } = next
+  await writeObjLib(p, { objects, objFolders })
+  await writeJson(gmFile(p), rest)
   c().pages?.push(GM_EVENT, { project: p.id })
   return next
 }

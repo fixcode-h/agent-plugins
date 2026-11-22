@@ -14,6 +14,7 @@ import {
   Sparkles,
   SlidersHorizontal,
 } from 'lucide-react'
+import { ObjectsTab } from './gt-objects/ObjectsTab.tsx'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -88,7 +89,7 @@ export function GameTest() {
   const [runs, setRuns] = useState<GtRunSummary[]>([])
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState<'scenarios' | 'runs'>('scenarios')
+  const [tab, setTab] = useState<'scenarios' | 'objects' | 'runs'>('scenarios')
   // 「节点」页签里给编辑器画节点面板的位置（编辑器用 portal 画进来）
   const [paletteHost, setPaletteHost] = useState<HTMLDivElement | null>(null)
   // 左栏「最近运行」里点的那次：打开那个脚本，右栏看这次的报告
@@ -579,11 +580,12 @@ export function GameTest() {
           <ui.Segmented
             size="sm"
             fill
-            label={t('脚本 / 最近运行')}
+            label={t('脚本 / 对象 / 最近运行')}
             value={tab}
             onChange={setTab}
             options={[
               { id: 'scenarios', label: t('脚本') },
+              { id: 'objects', label: t('对象') },
               { id: 'runs', label: `${t('最近运行')} ${runs.length}` },
             ]}
           />
@@ -603,6 +605,8 @@ export function GameTest() {
           <div className="ue:flex ue:justify-center ue:p-6 ue:text-subtle">
             <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
           </div>
+        ) : tab === 'objects' ? (
+          <ObjectsTab project={project.id} live={live} q={q} />
         ) : tab === 'runs' ? (
           <RunList
             runs={runs}

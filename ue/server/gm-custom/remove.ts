@@ -1,5 +1,6 @@
 import { customKey } from '../../shared/gm/schema.ts'
 import type { OpCtx } from '../ops.ts'
+import { objLibFile } from '../obj-lib/store.ts'
 import { gmFile, readGm, writeGm } from '../store.ts'
 
 /**
@@ -19,7 +20,7 @@ export async function removeGmDef(ctx: OpCtx, a: Record<string, unknown>) {
       objects: g.objects.filter((o) => o.name !== name),
       common: g.common.filter((f) => f.key !== key),
     })
-    return { removed: true, object: name, file: gmFile(ctx.project) }
+    return { removed: true, object: name, file: objLibFile(ctx.project) }
   }
   if (a.kind !== 'gm') throw new Error('remove 的 kind 写 gm（自定义 GM）或 object（对象列表）')
   const c = g.custom.find((x) => x.id === name) ?? g.custom.find((x) => x.name === name)
