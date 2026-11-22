@@ -66,6 +66,8 @@ export interface GmNavProps {
   /** 对象调用分类的对象列表（GameTest 没装时不给，显示提示） */
   objList?: ObjCallState['listProps']
   footer?: ReactNode
+  /** 只列这几个分类（测试页「选一条 GM」弹窗复用这棵树时不要对象调用）；不给就全列 */
+  cats?: GmCat[]
 }
 
 /**
@@ -134,7 +136,7 @@ export function GmNav(p: GmNavProps) {
   }, [cat, shown, d.gm, mods, hits, open, selected, q])
 
   const gmN = d.entries.filter((e) => inCat(e, 'gm')).length
-  const CATS: CatRow<GmCat>[] = [
+  const ALL_CATS: CatRow<GmCat>[] = [
     { id: 'common', icon: Star, label: t('常用'), count: d.gm.common.length },
     p.offline
       ? { id: 'gm', icon: Wand2, label: 'GM', count: `${gmN} · —`, why: t('C++ GM 要 UE 在运行才列得出') }
@@ -150,6 +152,7 @@ export function GmNav(p: GmNavProps) {
     { id: 'macro', icon: ListVideo, label: t('宏'), count: d.gm.macros.length },
     { id: 'objcall', icon: Crosshair, label: t('对象调用'), count: d.gm.objects.length },
   ]
+  const CATS = p.cats ? ALL_CATS.filter((c) => p.cats!.includes(c.id)) : ALL_CATS
   const SRC_LABEL: Record<SrcFilter, string> = {
     all: t('全部'),
     lua: 'Lua',

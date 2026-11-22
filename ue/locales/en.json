@@ -4907,13 +4907,7 @@
   "执行 GM {g}": "Run GM {g}",
   "上次成功": "Last run OK",
   "上次失败": "Last run failed",
-  "最近在 GM 页调过": "Recently run on the GM page",
   "选一条 GM": "Pick a GM",
-  "和 GM 页同一份：C++ GM 要 UE 在运行才列得出来。存的是「哪条 GM + 参数」，GM 库里改了，存盘和运行前会跟上。": "Same list as the GM page: C++ GMs only show while UE is running. The step stores which GM plus its args; changes in the GM library are picked up on save and before each run.",
-  "按名字、说明、参数搜": "Search by name, description, args",
-  "正在读 GM 列表…": "Loading GMs…",
-  "没有含「{q}」的 GM": "No GM matches \"{q}\"",
-  "还没有 GM：去 GM 页看看": "No GMs yet: check the GM page",
   "值，或 $变量、= 表达式、$ret（这一步的返回）": "Value, or $var, = expression, $ret (this step's result)",
   "值（Lua、控制台的参数要拼进代码，不能用变量）": "Value (Lua and console args are inlined into code; variables not allowed)",
   "还没选 GM": "No GM picked",
@@ -4980,5 +4974,9 @@
   "正在读测试脚本…": "Reading test scripts…",
   "没有路径里含「{q}」的脚本": "No script path contains “{q}”",
   "还没有测试脚本：去测试页新建一个": "No test scripts yet: create one on the Tests page",
-  "「只在这个脚本里」只列脚本自己的对象，不能拖进去": "“Only in this script” lists the script's own objects; you can't drag into it"
+  "「只在这个脚本里」只列脚本自己的对象，不能拖进去": "“Only in this script” lists the script's own objects; you can't drag into it",
+  "找不到这条 GM：UE 没在运行时 C++ GM 列不出来": "Can't find this GM: C++ GMs aren't listed while UE isn't running",
+  "和 GM 页同一棵树：C++ GM 要 UE 在运行才列得出来。存的是「哪条 GM + 参数」，GM 库里改了，存盘和运行前会跟上。": "Same tree as the GM page: C++ GMs are listed only while UE is running. This stores which GM plus its arguments; if the GM library changes, saving and running pick up the change.",
+  "对象调用不能直接加：在 GM 页把它存成 GM 再选": "Object calls can't be added directly: save it as a GM on the GM page, then pick it",
+  "最近在 GM 页调过（带当时的参数）": "Recently run on the GM page (with those arguments)"
 }
