@@ -124,6 +124,11 @@ export function MemberPane({
       )
     })
   }
+  const section = (label: string) => (
+    <div className="ue:mt-1 ue:border-b ue:border-line/60 ue:px-2 ue:pt-2 ue:pb-1 ue:text-caption ue:font-semibold ue:tracking-wide ue:text-fg">
+      {label}
+    </div>
+  )
   const note = (s: string) => <p className="ue:p-3 ue:text-footnote ue:text-subtle">{s}</p>
   const offline = !live ? note(t('游戏没在运行：连上编辑器、开着 PIE 才列得出这个对象的成员')) : null
   return (
@@ -144,7 +149,7 @@ export function MemberPane({
         {tab !== 'states' && (
           <ui.Input
             size="sm"
-            placeholder={tab === 'fns' ? t('搜函数') : tab === 'props' ? t('搜属性') : t('搜函数、变量')}
+            placeholder={tab === 'fns' ? t('搜函数') : tab === 'props' ? t('搜属性') : t('搜函数和变量')}
             value={q}
             onChange={(e: { target: { value: string } }) => setQ(e.target.value)}
           />
@@ -157,14 +162,14 @@ export function MemberPane({
         {tab === 'fns' &&
           (offline ?? (fns.length ? fnList(fns) : note(vars.loading ? t('读取中…') : t('没有能调的函数'))))}
         {tab === 'lua' && (
+          // 函数和变量分成两组（用户 2026-11-22：以前混在一个列表里），搜索两组都筛
           <>
+            {luaFns.length > 0 && section(t('函数 {n}', { n: luaFns.length }))}
             {fnList(luaFns)}
             {/* 游戏开着时用 gt.props 读到的实例上的值；读不到时退回 Lua 文件里声明的字段 */}
             {luaVars.length > 0 && (
               <>
-                <div className="ue:px-2 ue:pt-2 ue:pb-1 ue:text-caption ue:font-medium ue:text-muted">
-                  {t('Lua 变量')}
-                </div>
+                {section(t('变量 {n}', { n: luaVars.length }))}
                 {varList(
                   luaVars.map((p) => ({ ...p, category: undefined })),
                   true,
