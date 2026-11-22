@@ -4898,5 +4898,6 @@
   "对象要放在文件夹里：拖到某个文件夹上": "Objects must be in a folder: drop onto a folder",
   "把「{n}」移到文件夹": "Move \"{n}\" to folder",
   "加进对象列表": "Add to object list",
-  "重命名对象": "Rename object"
+  "重命名对象": "Rename object",
+  "实例表字段太多，这个没读到：值是源码里的写法": "Too many fields on the instance table to read this one; the value shown is from the source"
 }
