@@ -4,6 +4,7 @@ import { findModule, newModuleId } from '../../shared/gm/modules.ts'
 import { AGENT_FOLDER, normFolder } from '../../shared/gm/obj-folders.ts'
 import { GmCustom, GmObject, type GmCustomObj, type GmStore } from '../../shared/gm/schema.ts'
 import { runOp, type OpCtx } from '../ops.ts'
+import { objLibFile } from '../obj-lib/store.ts'
 import { gmFile, readGm, writeGm } from '../store.ts'
 import { saveMacro } from './save-macro.ts'
 
@@ -144,5 +145,6 @@ export async function saveGmDef(ctx: OpCtx, a: Obj) {
           ? await saveMacro(ctx, g, def, dryRun)
           : undefined
   if (!r) throw new Error('save 的 kind 写 gm（自定义 GM）、object（对象列表）或 macro（宏）')
-  return { ...r, file: gmFile(ctx.project) }
+  // 对象列表 0.53.0 起单独存 objects.json（对象库，GM 页和测试页共用）
+  return { ...r, file: a.kind === 'object' ? objLibFile(ctx.project) : gmFile(ctx.project) }
 }

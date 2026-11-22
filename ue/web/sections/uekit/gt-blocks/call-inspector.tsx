@@ -133,6 +133,8 @@ function ParamForm({
   const objArg = (p: CallParam, v: GtRefLike | undefined) => {
     if (v === undefined) return onChange(p.name, '')
     if (typeof v === 'string') return onChange(p.name, v.startsWith('$') ? v : { $obj: v })
+    // 选了对象库的一项（{$lib}）：改脚本时收成名字，这里先包成 {$obj: …}
+    if (!isRefObj(v)) return onChange(p.name, { $obj: v })
     // 内联引用不能直接当参数：起个名字存进脚本「对象」，参数写它
     const objects = (ctx.doc?.objects ?? {}) as Record<string, unknown>
     const base = (v.class.split('.').pop() ?? 'obj').replace(/^lua:/, '').replace(/\W/g, '') || 'obj'

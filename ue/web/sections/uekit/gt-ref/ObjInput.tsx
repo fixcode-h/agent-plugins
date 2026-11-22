@@ -1,4 +1,7 @@
-import { Box, ChevronDown, Crosshair, Plus, Variable, X } from 'lucide-react'
+import { Box, ChevronDown, Crosshair, Library, Plus, Variable, X } from 'lucide-react'
+import type { GmObject } from '../../../../shared/gm/schema.ts'
+import { LIB_DROP_KEY, libPath, objValue } from '../../../../shared/obj-lib/link.ts'
+import { pget } from '../../../api.ts'
 import { useState, type MouseEvent } from 'react'
 import { objOfVar, type GtRef, type GtRefLike, type GtTarget } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
@@ -69,8 +72,14 @@ export function ObjInput({
   const { hit } = useRefHit(ctx.project, ctx.live, ref, objects)
   const canEdit = kind === 'inline' || (kind === 'name' && !!ref && !!ctx.setObject)
 
-  const switchMenu = (e: MouseEvent<HTMLElement>) => {
+  const switchMenu = async (e: MouseEvent<HTMLElement>) => {
     e.stopPropagation()
+    const at = e.currentTarget
+    // 对象库（objects.json，第三期 3.3）点开时现读：选了拷进脚本、记来源（值写 {$lib}，改脚本时收成名字，shared/obj-lib/link.ts）
+    const lib = ctx.project
+      ? await pget<{ objects: GmObject[] }>(ctx.project, 'objlib').catch(() => undefined)
+      : undefined
+    const libItems = (lib?.objects ?? []).slice(0, 40)
     const vars = ctx.doc ? savedVars(ctx.doc) : []
     const items: MenuItem[] = [
       { label: t('新抓一个对象…'), icon: Crosshair, onClick: () => setDialog('new') },
@@ -82,6 +91,14 @@ export function ObjInput({
         checked: kind === 'name' && n === name,
         onClick: () => onChange(n),
       })),
+      ...(libItems.length ? [{ title: t('对象库') }] : []),
+      ...libItems.map((o) => ({
+        label: o.name,
+        icon: Library,
+        hint: o.folder ?? classShort(o.ref?.class),
+        onClick: () =>
+          onChange({ [LIB_DROP_KEY]: { name: o.name, path: libPath(o), value: objValue(o) } } as unknown as GtRefLike),
+      })),
       ...(vars.length ? [{ title: t('前面「找对象」存的') }] : []),
       ...vars.map((v) => ({
         label: `$${v}`,
@@ -91,7 +108,7 @@ export function ObjInput({
       })),
       ...(kind !== 'empty' ? [{ label: t('不填（调静态函数时）'), icon: X, onClick: () => onChange(undefined) }] : []),
     ]
-    openMenuAt(e.currentTarget, items)
+    openMenuAt(at, items)
   }
 
   const open = () => {
@@ -173,7 +190,7 @@ export function ObjInput({
         className="ue:self-start"
         label={t('换成别的对象')}
         icon={kind === 'empty' ? Plus : ChevronDown}
-        onClick={switchMenu}
+        onClick={(e: MouseEvent<HTMLElement>) => void switchMenu(e)}
       />
       {dialog && (
         <RefDialog

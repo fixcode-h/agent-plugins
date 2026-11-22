@@ -1,4 +1,5 @@
 import { Plus, Redo2, Trash2, Undo2 } from 'lucide-react'
+import { GrabButton } from './GrabButton.tsx'
 import { useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   getAt,
@@ -171,6 +172,8 @@ export function FlowEditView({
               label={t('插入一步')}
               onClick={(e: MouseEvent) => openMenu(e, insertMenuItems(pickInsert))}
             />
+            {/* 抓取（G11）：选对象面板 → 拿它做什么 → 插在选中那步后面，和「插入一步」同一个位置规则 */}
+            <GrabButton onInsert={(st) => pickInsert({ make: () => st } as InsertItem)} />
             {history && (
               <>
                 <CanvasToolbarSep />
