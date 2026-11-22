@@ -15,7 +15,7 @@ export interface LogEntry {
   key: string
   /** 路径里有几层块：缩进用 */
   depth: number
-  status?: 'running' | 'passed' | 'failed' | 'skipped' | 'already'
+  status?: 'running' | 'passed' | 'failed' | 'skipped' | 'already' | 'warned'
   iter?: number
   ms?: number
   /** 开跑后第几毫秒 */
@@ -43,6 +43,8 @@ export function applyLog(log: RunLog, e: GtFlowEvent, now: number): RunLog {
   const base: RunLog = e.runId && e.runId !== log.runId ? { runId: e.runId, entries: [] } : log
   const t0 = base.t0 ?? now
   const key = e.id || e.path || ''
+  // 附带 GM 外面包的那层（<路径>#hooks，GameTest 2.3.0）不单记：主步骤和每条附带 GM 各自有记录
+  if (key.endsWith('#hooks')) return base
   const at = now - t0
   const n = (base.entries[base.entries.length - 1]?.n ?? -1) + 1
   const depth = depthOf(e.path) + (base.inGuard ? 1 : 0)

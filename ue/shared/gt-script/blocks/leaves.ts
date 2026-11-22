@@ -27,6 +27,16 @@ export const api: BlockDef = {
   make: () => ({ action: 'api', api: '', args: {} }),
 }
 
+/**
+ * 执行一条面板的 GM（GameTest 2.3.0）：gm 记是哪条、这次的参数，run 是面板存盘 / 运行前按 GM 库生成的（gm/expand.ts），
+ * 不当子步骤槽：界面上是一个节点，run 不给人改
+ */
+export const gmRun: BlockDef = {
+  action: 'gm.run',
+  idPrefix: 'gm',
+  make: () => ({ action: 'gm.run', gm: { kind: 'custom', name: '' } }),
+}
+
 export const breakBlock: BlockDef = { action: 'break', idPrefix: 's', make: () => ({ action: 'break' }) }
 export const continueBlock: BlockDef = { action: 'continue', idPrefix: 's', make: () => ({ action: 'continue' }) }
 export const returnBlock: BlockDef = { action: 'return', idPrefix: 's', make: () => ({ action: 'return' }) }

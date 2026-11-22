@@ -27,6 +27,8 @@ export interface GtStep {
   path?: string
   /** 块结束时记的一条（块本身的结果） */
   block?: boolean
+  /** 附带 GM 出错只记一笔（GameTest 2.3.0）：status 是 failed，但不算这次运行失败 */
+  warn?: boolean
 }
 
 export interface StepDef {
@@ -79,6 +81,8 @@ export function StepIcon({ s, live }: { s?: string; live?: boolean }) {
   if (s === 'succeeded') return <CircleCheck className="ue:h-3.5 ue:w-3.5 ue:text-success" />
   if (s === 'already') return <SkipForward className="ue:h-3.5 ue:w-3.5 ue:text-success" />
   if (s === 'failed') return <CircleX className="ue:h-3.5 ue:w-3.5 ue:text-danger" />
+  // 附带 GM 出错只记一笔（GameTest 2.3.0）：黄的，不算失败
+  if (s === 'warned') return <TriangleAlert className="ue:h-3.5 ue:w-3.5 ue:text-warning" />
   return <CircleDashed className="ue:h-3.5 ue:w-3.5 ue:text-subtle" />
 }
 

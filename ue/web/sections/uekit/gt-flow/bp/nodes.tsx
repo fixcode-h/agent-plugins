@@ -7,6 +7,8 @@ import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
 import { blockUi } from '../../gt-blocks/index.ts'
 import { condLines, faceOf } from '../faces.tsx'
 import { RUN_LOOK } from '../nodes/parts.tsx'
+import { hookCount } from '../../../../../shared/gt-script/gm/hooks.ts'
+import { HookLines } from '../../gt-gm/HookLines.tsx'
 import { useBp } from './ctx.ts'
 import { EXIT_TONE, ExitRow, NodeBody, NodeCard, NodeHead, NodeTile, Pin } from './parts.tsx'
 import type { BpNode, BpPin } from './graph.ts'
@@ -111,7 +113,7 @@ export const BpStepNode = memo(function BpStepNode({ data }: Props) {
         <Kind>{ui.title()}</Kind>
         {next && <OutPin node={n.id} pin={next} top={HEAD_MID} label={subs.length ? t('之后') : undefined} />}
       </NodeHead>
-      <NodeBody lines={lines} />
+      <NodeBody lines={lines} extra={hookCount(step) ? <HookLines step={step} /> : undefined} />
       <Exits node={n.id} pins={subs} action={step.action} />
       {st?.status === 'failed' && !n.loose && (
         <div className="ue:absolute ue:-bottom-5 ue:left-0.5 ue:flex ue:items-center ue:gap-1 ue:whitespace-nowrap ue:text-caption ue:text-danger">

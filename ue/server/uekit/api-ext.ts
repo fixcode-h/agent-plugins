@@ -14,6 +14,7 @@ import { apiSettingsAction } from './gt-author/api-settings.ts'
 import { libraryAction } from './gt-library/index.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
+import { expandGmText } from './gt-gm-expand.ts'
 import { configBaseline } from './forge-baseline.ts'
 import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
 import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
@@ -92,7 +93,7 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
       return readEvidenceText(p.root, String(b.file ?? ''))
     case 'POST ext/gt/file':
       // GameTest 页场景的右键菜单：改名、复制、删除、在文件夹中显示；步骤的「转成控件步骤」（replace）
-      return scenarioAction(p.root, b)
+      return scenarioAction(p.root, b, (text) => expandGmText(p, text))
     case 'POST ext/gt/luafields': {
       // 代码变量弹窗、对象标识的 Lua 组：游戏没开时扫界面绑的 Lua 文件（和 Agent 工具同一份 gt-author/lua-vars.ts）
       const g = await luaGroup(luaRoot(p), String(b.module ?? ''), '')

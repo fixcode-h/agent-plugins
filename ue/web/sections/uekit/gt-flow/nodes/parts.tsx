@@ -22,6 +22,8 @@ export const RUN_LOOK: Record<StepRun['status'], string> = {
   already: 'ue:bg-[color-mix(in_oklab,var(--color-success)_5%,var(--color-card))] ue:ring-1 ue:ring-success/20',
   failed: 'ue:bg-[color-mix(in_oklab,var(--color-danger)_6%,var(--color-card))] ue:ring-1 ue:ring-danger/40',
   skipped: 'ue:opacity-55',
+  // 附带 GM 出错只记一笔：节点本身不会是这个状态（附带 GM 不是节点），留着让表完整
+  warned: 'ue:bg-[color-mix(in_oklab,var(--color-warning)_6%,var(--color-card))] ue:ring-1 ue:ring-warning/40',
 }
 
 /** 连线的接点（结构由数据定，不让手连，所以都不显示）：左进右出；底部一对给循环的「下一轮」回线用。高度按布局给的 anchorY 放，框的入口不在正中 */

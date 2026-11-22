@@ -5,7 +5,7 @@
  * 步骤按 id 记，没有 id 的按路径（和布局里的 stepKey 一样）。纯函数，单测在 run-state.test.ts
  */
 
-export type StepRunStatus = 'running' | 'passed' | 'failed' | 'skipped' | 'already'
+export type StepRunStatus = 'running' | 'passed' | 'failed' | 'skipped' | 'already' | 'warned'
 
 export interface StepRun {
   status: StepRunStatus
@@ -48,7 +48,7 @@ export const emptyRun = (): FlowRunState => ({ active: false, paused: false, ste
 
 const keyOf = (e: { id?: string; path?: string }) => e.id || e.path || ''
 
-const DONE = new Set<string>(['passed', 'failed', 'skipped', 'already'])
+const DONE = new Set<string>(['passed', 'failed', 'skipped', 'already', 'warned'])
 
 export function applyFlowEvent(s: FlowRunState, e: GtFlowEvent): FlowRunState {
   // 新的一次运行：上一次的高亮、计数都清掉

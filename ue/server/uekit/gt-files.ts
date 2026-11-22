@@ -125,14 +125,21 @@ async function replaceSteps(abs: string, rel: string, doc: Record<string, unknow
  * 编辑页存盘（GameTest 脚本 v3）：整份原文写回。expectText 是编辑页打开时读到的原文：文件在这期间被重新录制、
  * Agent 或别人改过就对不上，报错让用户重新打开，不覆盖别人的改动。写之前确认是合法的 JSON 对象
  */
-async function saveScript(abs: string, rel: string, b: Record<string, unknown>) {
-  const text = typeof b.text === 'string' ? b.text : ''
+async function saveScript(
+  abs: string,
+  rel: string,
+  b: Record<string, unknown>,
+  expand?: (text: string) => Promise<{ text: string; issues: unknown[] }>,
+) {
+  const given = typeof b.text === 'string' ? b.text : ''
   try {
-    const v = JSON.parse(text) as unknown
+    const v = JSON.parse(given) as unknown
     if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object')
   } catch (e) {
     throw new BridgeError(t('不是合法的 JSON：{p}（{e}）', { p: rel, e: (e as Error).message }))
   }
+  // 「执行 GM」按 GM 库重新展开（gt-gm-expand.ts）：写进文件的是展开后的，网页按回包的 text 更新
+  const { text, issues } = expand ? await expand(given) : { text: given, issues: [] }
   const now = await readFile(abs, 'utf8').then(
     (x) => x.replace(/^\uFEFF/, ''),
     () => undefined,
@@ -140,7 +147,7 @@ async function saveScript(abs: string, rel: string, b: Record<string, unknown>) 
   if (typeof b.expectText === 'string' && now !== undefined && now !== b.expectText)
     throw new BridgeError(t('场景文件在这期间被改过（{p}），重新打开后再改', { p: rel }))
   await writeFile(abs, text, 'utf8')
-  return { path: rel, text }
+  return { path: rel, text, ...(issues.length ? { gmIssues: issues } : {}) }
 }
 
 /**
@@ -151,6 +158,7 @@ async function saveScript(abs: string, rel: string, b: Record<string, unknown>) 
 export async function scenarioAction(
   projectRoot: string,
   b: { root?: unknown; path?: unknown; action?: unknown; name?: unknown; [k: string]: unknown },
+  expand?: (text: string) => Promise<{ text: string; issues: unknown[] }>,
 ) {
   const action = String(b.action ?? '')
   const f = scenarioFile(projectRoot, String(b.root ?? ''), String(b.path ?? ''), action === 'reveal')
@@ -166,7 +174,7 @@ export async function scenarioAction(
     })
     return { path: f.rel, text: text.replace(/^\uFEFF/, '') }
   }
-  if (action === 'save') return saveScript(f.abs, f.rel, b)
+  if (action === 'save') return saveScript(f.abs, f.rel, b, expand)
   if (action === 'delete') {
     await rm(f.abs).catch(() => {
       throw new BridgeError(t('删不掉 {p}：文件不存在或被占用', { p: f.rel }))

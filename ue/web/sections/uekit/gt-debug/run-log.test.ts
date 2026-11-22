@@ -38,3 +38,19 @@ test('新的一次运行清掉旧记录，记录有上限', () => {
   assert.equal(l.entries.length, LOG_MAX)
   assert.equal(clock(65_400), '1:05')
 })
+
+test('附带 GM：外面包的那层不记，每条附带 GM 缩在步骤下面，出错只记一笔的是 warned', () => {
+  let l = applyLog(emptyLog(), { runId: 'r', phase: 'enter', path: 'steps.0#hooks' }, 0)
+  l = applyLog(l, { runId: 'r', phase: 'enter', id: 'a', path: 'steps.0' }, 1)
+  l = applyLog(l, { runId: 'r', phase: 'leave', id: 'a', path: 'steps.0', status: 'passed' }, 2)
+  l = applyLog(l, { runId: 'r', phase: 'enter', path: 'steps.0.hooks.after.0' }, 3)
+  l = applyLog(l, { runId: 'r', phase: 'leave', path: 'steps.0.hooks.after.0', status: 'warned' }, 4)
+  l = applyLog(l, { runId: 'r', phase: 'leave', path: 'steps.0#hooks', status: 'passed' }, 5)
+  assert.deepEqual(
+    l.entries.map((e) => [e.key, e.status, e.depth]),
+    [
+      ['a', 'passed', 0],
+      ['steps.0.hooks.after.0', 'warned', 1],
+    ],
+  )
+})
