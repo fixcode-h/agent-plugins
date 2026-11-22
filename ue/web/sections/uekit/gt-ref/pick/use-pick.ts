@@ -13,6 +13,7 @@ import { classShort } from '../describe.ts'
 import { classOnly, useProps, useRefHits, useTree, type PropsArgs, type RefHits } from '../live.ts'
 import { KIND_ICON } from './ClassPicker.tsx'
 import { SOURCES, sourcesFor, useClassInfo, useSubtree, itemsOf, type ClassKind, type Source } from './data.ts'
+import { fromComps, useActorComps } from './actor-comps.ts'
 import { fromGroups, fromTree, type StructNode } from './StructurePane.tsx'
 
 /** 选对象面板的输入：项目、连没连游戏、正在编辑的引用、场景的 objects（名字引用展开） */
@@ -123,13 +124,22 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
   }, [cls, shown])
   const groups = props.data?.groups
 
-  // 结构：UMG 实例有树就用树；其余按部件组摊开（组件树、没开游戏时的控件树）
-  const structure: StructNode[] = useMemo(
-    () =>
-      tree ??
-      (cls ? fromGroups(groups, { name: classShort(cls), class: cls, icon: kind ? KIND_ICON[kind] : AppWindow }) : []),
-    [tree, groups, cls, kind],
-  )
+  // Actor 的组件树按挂接关系（和资源页 / AssetForge 同一份组件树），读不到挂接时也按它的样子画平铺的组件
+  const comps = useActorComps(project, {
+    cls,
+    kind,
+    asset: info?.asset,
+    path: live && !byClass ? shownPath : undefined,
+    groups,
+  })
+  // 结构：UMG 实例有树就用树；Actor 用组件树；其余按部件组摊开（没开游戏时的控件树）
+  const structure: StructNode[] = useMemo(() => {
+    if (tree) return tree
+    if (!cls) return []
+    const self = { name: classShort(cls), class: cls, icon: kind ? KIND_ICON[kind] : AppWindow }
+    if (comps) return fromComps(comps, { ...self, key: '@', part: '', depth: 0, kids: false })
+    return fromGroups(groups, self)
+  }, [tree, groups, cls, kind, comps])
 
   // 部件组折叠着（UE 没随整个对象一起给）时按 part 再读一次
   const [partGroups, setPartGroups] = useState<Record<string, GtPropGroup[]>>({})
@@ -201,6 +211,8 @@ export function usePick({ project, live, ref, objects, initialPart }: PickInput)
     setPart,
     structure,
     structureFromTree: !!tree,
+    /** Actor 的组件（结构栏照资源页的组件树画）；不是 Actor 或有 UMG 树时 undefined */
+    comps: tree ? undefined : comps,
     rootNode,
     /** 结构栏选中的那一项（对象自己时是第一行） */
     selectedNode: structure.find((n) => n.part === part) ?? structure[0],
