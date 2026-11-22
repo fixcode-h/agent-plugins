@@ -128,7 +128,14 @@ export function useObjCallState(d: GmData, live: boolean) {
     onAdd: (folder?: string) =>
       setRefEdit({
         done: (ref) =>
-          void addObject({ ref: ref as GmObject['ref'] }, ref.class.replace(/^.*[./]/, '').replace(/_C$/, ''), folder),
+          void addObject(
+            { ref: ref as GmObject['ref'] },
+            ref.class
+              .replace(/^lua:/, '')
+              .replace(/^.*[./]/, '')
+              .replace(/_C$/, ''),
+            folder,
+          ),
       }),
     onAddSource: async (kind: 'pawn' | 'sub' | 'luaMod', folder?: string) => {
       if (kind === 'pawn') return void addObject({ src: '@pawn' }, t('玩家'), folder)
