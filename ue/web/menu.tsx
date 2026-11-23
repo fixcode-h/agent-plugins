@@ -385,7 +385,8 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
         {s.search !== undefined && <MenuSearch value={q} placeholder={s.search} onChange={setQ} />}
         <div
           className={cn(
-            'ue:flex ue:min-h-0 ue:flex-col ue:overflow-y-auto',
+            // 列表本身不能是 flex 列：小标题、分隔线没有 shrink-0，限高时会被压扁（0.55.6 的回归，GameTest 画布「找节点」）
+            'ue:min-h-0 ue:overflow-y-auto',
             s.search !== undefined && 'ue:max-h-[min(420px,60vh)]',
           )}
         >
@@ -421,7 +422,7 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
               }}
             />
           )}
-          <div className="ue:flex ue:min-h-0 ue:flex-col ue:overflow-y-auto">
+          <div className="ue:min-h-0 ue:overflow-y-auto">
             <MenuRows
               items={subItems}
               act={inSub ? subAct : -1}
