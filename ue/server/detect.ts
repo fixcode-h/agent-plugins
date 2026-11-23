@@ -17,20 +17,32 @@ export function versionOk(v: string) {
   return a > MIN_ENGINE[0] || (a === MIN_ENGINE[0] && (b || 0) >= MIN_ENGINE[1])
 }
 
-/** 版本管理：往上找 .git / .svn，P4 看 P4CONFIG 文件或 p4 where 认不认这个目录 */
+/**
+ * 版本管理：往上找 .git / .svn，P4 看配置文件（常见名字 + 环境变量和 p4 set 里的 P4CONFIG）。
+ * 不跑 p4 where：要连服务器，慢的时候几秒（用户 2026-11-23：「p4 where 不要用这个」）
+ */
 export async function detectVcs(root: string): Promise<Vcs> {
+  const names = [process.env.P4CONFIG, '.p4config', 'p4config.txt', await p4ConfigName()]
   let d = root
   for (let i = 0; i < 12; i++) {
     if (exists(path.join(d, '.git'))) return 'git'
     if (exists(path.join(d, '.svn'))) return 'svn'
-    for (const f of [process.env.P4CONFIG, '.p4config', 'p4config.txt']) if (f && exists(path.join(d, f))) return 'p4'
+    for (const f of names) if (f && exists(path.join(d, f))) return 'p4'
     const up = path.dirname(d)
     if (up === d) break
     d = up
   }
-  const r = await run('p4', ['-d', root, 'where', path.join(root, '...')], { cwd: root, timeout: 4000 })
-  if (r.code === 0 && r.out.trim() && !/not in client view|is not under client/i.test(r.out + r.err)) return 'p4'
   return 'none'
+}
+
+let p4Config: Promise<string | undefined> | undefined // 模块状态：缓存，进程里只问一次
+
+/** p4 set 里的 P4CONFIG（只读本机设置，不连服务器）：P4CONFIG=p4config.txt (set) */
+function p4ConfigName() {
+  p4Config ??= run('p4', ['set', '-q', 'P4CONFIG'], { cwd: process.cwd(), timeout: 3000 })
+    .then((r) => /^P4CONFIG=([^\s(]+)/m.exec(r.out.trim())?.[1])
+    .catch(() => undefined)
+  return p4Config
 }
 
 export async function detect(dir: string, customEngine = ''): Promise<Detection> {

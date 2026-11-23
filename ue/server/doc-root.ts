@@ -34,6 +34,22 @@ export function docsRoot(p: P) {
 export async function refreshDocsRoot(p: P, force = false) {
   const hit = cache.get(p.id)
   if (!force && hit && Date.now() - hit.at < TTL) return
+  // 已经有一份（过期了）：先用着，后台重取。P4 项目面板算文档根要几秒，每个接口取项目都在这里等，
+  // 一分钟一过 Forge、测试页就要转好久（用户 2026-11-23）
+  if (!force && hit) {
+    if (!refreshing.has(p.id)) {
+      refreshing.add(p.id)
+      void askDocsRoot(p).finally(() => refreshing.delete(p.id))
+    }
+    return
+  }
+  await askDocsRoot(p)
+}
+
+/** 正在后台重取文档根的项目：同一个项目不叠着问 */
+const refreshing = new Set<string>() // 模块状态：运行时
+
+async function askDocsRoot(p: P) {
   try {
     const got = await c().projects?.docRoot?.(p.id)
     if (!got) return
