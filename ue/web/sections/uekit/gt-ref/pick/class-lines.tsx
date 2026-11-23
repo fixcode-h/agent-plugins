@@ -3,7 +3,7 @@ import type { GtClassItem } from '../../../../../shared/gt-script/index.ts'
 import { t } from '../../../../host.ts'
 import { openMenu } from '../../../../menu.tsx'
 import type { TreeLine } from '../../../../TreeList.tsx'
-import { ancestors, luaDirOf, searchIndex, type ClassIndex } from './class-index-model.ts'
+import { ancestors, luaDirOf, searchIndex, type ClassIndex } from '../../../../catalog/class-index-model.ts'
 import type { ClassKind } from './data.ts'
 import { KIND_ICON } from './kind-icon.ts'
 

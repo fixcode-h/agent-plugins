@@ -1,4 +1,4 @@
-import type { GtClassIndexResult, GtClassItem, GtClassRow } from '../../../../../shared/gt-script/index.ts'
+import type { GtClassIndexResult, GtClassItem, GtClassRow } from '../../shared/gt-script/index.ts'
 
 /**
  * 「类」下拉本地索引的纯逻辑（不碰 React 和请求，单测和 class-index.ts 共用）：

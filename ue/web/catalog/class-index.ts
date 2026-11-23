@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GtClassIndexResult, GtClassRow, GtClassesResult } from '../../../../../shared/gt-script/index.ts'
-import { useRefRpc, type RefRpc } from '../live.ts'
+import type { GtClassIndexResult, GtClassRow, GtClassesResult } from '../../shared/gt-script/index.ts'
+import { useRefRpc, type RefRpc } from '../sections/uekit/gt-ref/live.ts'
 import { buildIndex, type ClassIndex } from './class-index-model.ts'
 
 export { ancestors, luaDirOf, searchIndex, SEARCH_MAX, type ClassIndex, type LuaDir } from './class-index-model.ts'

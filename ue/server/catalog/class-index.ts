@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import type { GtClassIndexResult, GtClassRow } from '../../../../shared/gt-script/ref/types.ts'
-import type { UeProject } from '../../../types.ts'
-import { c, readJson, t, writeJson } from '../../../util.ts'
+import type { GtClassIndexResult, GtClassRow } from '../../shared/gt-script/ref/types.ts'
+import type { UeProject } from '../types.ts'
+import { c, readJson, t, writeJson } from '../util.ts'
 
 /**
  * 「类」下拉的本地索引（网页 gt.classes all: true）。用户 2026-11-23：每次打开下拉都「读类树…」重读、搜索每个字都问一次很慢。

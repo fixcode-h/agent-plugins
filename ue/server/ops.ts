@@ -1,5 +1,5 @@
-import { offlineClasses, offlineRows } from './uekit/gt-ref/offline/classes.ts'
-import { classIndex } from './uekit/gt-ref/class-index/index.ts'
+import { offlineClasses, offlineRows } from './catalog/classes.ts'
+import { classIndex } from './catalog/class-index.ts'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -536,7 +536,7 @@ export async function runOp(
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
   // GameTest 对象引用：几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）。gt.migrate 随 v5 删掉（旧脚本不迁移）
   if (op === 'gt.migrate') throw new BridgeError(t('旧格式不再支持，请按新写法重写'))
-  // 「类」下拉的本地索引：整张类表记在面板、网页本地建树和搜（uekit/gt-ref/class-index/）
+  // 「类」下拉的本地索引：整张类表记在面板、网页本地建树和搜（catalog/class-index.ts）
   if (op === 'gt.classes' && args.all === true)
     return {
       ...(await classIndex(ctx.project, args, {

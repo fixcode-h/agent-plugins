@@ -82,7 +82,7 @@ export async function nativeParents(root: string) {
   return parents
 }
 
-/** 项目 Source 和 Plugins 下的全部头文件（离线读类成员也用，见 gt-ref/offline/cpp-members.ts） */
+/** 项目 Source 和 Plugins 下的全部头文件（离线读类成员也用，见 catalog/cpp-members.ts） */
 export async function projectHeaders(root: string) {
   // 面板有项目文件索引时直接取（离线读类成员、GM 离线列成员、选对象的类树都走这里），不再逐层走 Source / Plugins
   const idx = await dirFileIndex(root)

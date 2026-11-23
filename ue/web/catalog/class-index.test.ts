@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { GtClassRow } from '../../../../../shared/gt-script/index.ts'
+import type { GtClassRow } from '../../shared/gt-script/index.ts'
 import { ancestors, buildIndex, searchIndex, SEARCH_MAX } from './class-index-model.ts'
 
 const meta = { v: 'x', source: 'ue' as const }
