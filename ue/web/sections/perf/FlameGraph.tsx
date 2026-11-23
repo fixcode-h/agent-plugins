@@ -2,7 +2,7 @@ import { ArrowLeft, Copy, ExternalLink, Search, Target } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { ErrorText, LinkBtn } from '../../ui.tsx'
 import { readTheme, useThemeTick, useWidth } from './canvas.ts'
 import { LUA_BRIDGE, luaColor, luaFullSource, luaOf, luaSource, useLuaTrace } from './lua-trace.ts'
@@ -77,7 +77,10 @@ export function FlameGraph({
   const top = res.data?.root
   // 换了根或范围：详情里的那格先换成新的根（带 root 时桥接回「全部」下面只挂一个孩子，就是 root 计时器）
   useEffect(
-    () => setSel(top ? (top.id !== -1 ? top : root && top.children?.length === 1 ? top.children[0] : undefined) : undefined),
+    () =>
+      setSel(
+        top ? (top.id !== -1 ? top : root && top.children?.length === 1 ? top.children[0] : undefined) : undefined,
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 只跟着回包换
     [top],
   )

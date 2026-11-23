@@ -2,7 +2,7 @@ import { ChevronDown, Crosshair } from 'lucide-react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
-import { openMenuAt } from '../../../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import { ObjName, ObjRule, srcText } from './ObjRule.tsx'
 

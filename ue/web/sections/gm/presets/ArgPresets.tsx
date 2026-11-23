@@ -2,7 +2,7 @@ import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react'
 import type { GmArgPreset } from '../../../../shared/gm/schema.ts'
 import type { useAsk } from '../../../ask.tsx'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 
 type Args = GmArgPreset['args']
 

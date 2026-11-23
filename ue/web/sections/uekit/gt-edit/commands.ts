@@ -40,7 +40,7 @@ import {
   type GtStep,
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import type { MenuItem } from '../../../menu.tsx'
+import type { MenuItem } from '@panel/web/src/components/ui/item-menu'
 
 /**
  * 编辑命令表：快捷键、右键菜单、工具栏都从这里取，一条命令一处定义（加命令就往表里加一项）。

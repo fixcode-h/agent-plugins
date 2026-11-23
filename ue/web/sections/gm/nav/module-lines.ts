@@ -3,7 +3,7 @@ import { createElement, type MouseEvent, type ReactNode } from 'react'
 import { placeOf } from '../../../../shared/gm/modules.ts'
 import type { GmStore } from '../../../../shared/gm/schema.ts'
 import { t } from '../../../host.ts'
-import type { TreeLine } from '../../../TreeList.tsx'
+import type { TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
 import type { GmEntry } from '../data.ts'
 import type { Mods } from './module-ops.ts'
 

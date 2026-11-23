@@ -1,9 +1,9 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { h, t } from './host.ts'
-import { forgetPane, storedPane } from './split.tsx'
+import { forgetPane, storedPane } from '@panel/web/src/components/ui/split-pane'
 
 /**
- * 弹层右下角拖动放大（用户 2026-11-21：类下拉要能拖大）：宽高记在 split.tsx 同一张表里（ue:pane:<key>.w / .h），
+ * 弹层右下角拖动放大（用户 2026-11-21：类下拉要能拖大）：宽高记在面板 split-pane 同一张表里（pane:<key>.w / .h），
  * 下次打开还是这个大小；双击角标恢复默认。拖的时候按指针位移算，不改弹层的定位
  */
 export function useCornerSize(key: string, def: { w: number; h: number }, min: { w: number; h: number }) {
@@ -13,8 +13,8 @@ export function useCornerSize(key: string, def: { w: number; h: number }, min: {
   }))
   const save = (s: { w: number; h: number }) => {
     try {
-      localStorage.setItem(`ue:pane:${key}.w`, String(Math.round(s.w)))
-      localStorage.setItem(`ue:pane:${key}.h`, String(Math.round(s.h)))
+      localStorage.setItem(`pane:${key}.w`, String(Math.round(s.w)))
+      localStorage.setItem(`pane:${key}.h`, String(Math.round(s.h)))
     } catch {}
   }
   const onPointerDown = (e: ReactPointerEvent) => {

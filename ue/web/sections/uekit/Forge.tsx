@@ -4,7 +4,6 @@ import { op, useAction } from '../../api.ts'
 import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost } from '../../menu.tsx'
 import { PathText } from '../../path-text.tsx'
 import { ErrorText } from '../../ui.tsx'
 import { ForgeDetail, type ForgeTab } from './ForgeDetail.tsx'
@@ -477,7 +476,6 @@ export function Forge() {
         />
       )}
       {chat.dialog}
-      <MenuHost />
     </div>
   )
 }

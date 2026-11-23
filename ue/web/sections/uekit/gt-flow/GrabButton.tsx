@@ -2,7 +2,7 @@ import { Crosshair, Eye, Library, MousePointerClick, Search, SquareFunction, Tim
 import { useRef, useState } from 'react'
 import type { GtRef, GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenuAt } from '../../../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { saveObjToLib } from '../../../obj-kit/obj-lib-actions.ts'
 import { RefDialog } from '../gt-ref/RefDialog.tsx'

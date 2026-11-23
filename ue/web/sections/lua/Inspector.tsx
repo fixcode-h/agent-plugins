@@ -6,7 +6,8 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
 import { luaText } from '../../Lua.tsx'
-import { ErrorText, Note, SearchBox } from '../../ui.tsx'
+import { ErrorText, Note } from '../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { FnLayers } from './FnLayers.tsx'
 import { rootText, type InspectRes, type LuaRoot } from './inspect-data.ts'
 import { FieldRow } from './InspectRows.tsx'
@@ -60,7 +61,8 @@ export function LuaInspector({
   )
   const d = data.data
   const hit = (s: string) => !q || s.toLowerCase().includes(q.toLowerCase())
-  const modOfRoot = !root.path && root.keys[0] === 'package' && root.keys[1] === 'loaded' ? String(root.keys[2]) : undefined
+  const modOfRoot =
+    !root.path && root.keys[0] === 'package' && root.keys[1] === 'loaded' ? String(root.keys[2]) : undefined
   const chain = tidyChain((d?.chain ?? []) as ChainLayer[], obj?.module || modOfRoot)
   const fns = regroupFns(d?.functions ?? [], chain).filter((f) => (!own || f.from === 0) && hit(f.name))
   const fields = (d?.fields ?? []).filter((f) => hit(f.k))

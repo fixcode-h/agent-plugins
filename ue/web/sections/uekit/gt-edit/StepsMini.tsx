@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Trash2 } from 'luc
 import { useState } from 'react'
 import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { blockUi, TONE_TEXT } from '../gt-blocks/index.ts'
 import { insertMenuItems } from './insert-menu.ts'
 

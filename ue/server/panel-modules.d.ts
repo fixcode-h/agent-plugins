@@ -305,3 +305,208 @@ declare module '@panel/server/exec/tracked' {
   export function spawnTracked(command: string, args: string[], o: TrackedSpawnOptions): ChildProcess
   export function stopTree(pid: number, o?: { waitMs?: number }): Promise<{ ok: boolean; error?: string }>
 }
+
+/** 网页：按项目列表打开的菜单（右键、下拉、子菜单、菜单内搜索；面板 web/src/components/ui/item-menu.tsx，面板整个应用挂了一个 MenuHost） */
+declare module '@panel/web/src/components/ui/item-menu' {
+  import type { LucideIcon } from 'lucide-react'
+  import type { MouseEvent, ReactElement, ReactNode } from 'react'
+  export interface MenuAction {
+    label: string
+    icon?: LucideIcon
+    onClick: () => void
+    disabled?: boolean
+    danger?: boolean
+    hint?: string
+    checked?: boolean
+    lead?: ReactNode
+    dim?: boolean
+  }
+  export type MenuLeaf = MenuAction | { title: string } | 'sep'
+  export interface MenuSub {
+    label: string
+    icon?: LucideIcon
+    hint?: string
+    disabled?: boolean
+    sub: (MenuLeaf | false | '' | undefined | null)[]
+    search?: string
+  }
+  export type MenuItem = MenuLeaf | MenuSub
+  export interface MenuOptions {
+    search?: string
+    onClose?: () => void
+  }
+  type Items = (MenuItem | false | '' | undefined | null)[]
+  export function openMenu(e: MouseEvent | globalThis.MouseEvent, items: Items, o?: MenuOptions): void
+  export function openMenuAt(el: HTMLElement, items: Items, o?: MenuOptions): void
+  export function closeMenu(): void
+  export function copyText(text: string): void
+  export function pageMenu(e: MouseEvent | globalThis.MouseEvent): void
+  export function MenuHost(): ReactElement | null
+}
+
+/** 网页：名字旁的圆底问号，悬停 / 聚焦弹说明（面板 web/src/components/ui/help-tip.tsx） */
+declare module '@panel/web/src/components/ui/help-tip' {
+  import type { ReactElement, ReactNode } from 'react'
+  export function HelpTip(p: { children: ReactNode; className?: string }): ReactElement
+}
+
+/** 网页：搜索框：边打字边筛或点「搜索」，带清空（面板 web/src/components/ui/search-box.tsx） */
+declare module '@panel/web/src/components/ui/search-box' {
+  import type { ReactElement, ReactNode } from 'react'
+  export function SearchBox({
+    initial,
+    placeholder,
+    hint,
+    onSearch,
+    busy,
+    allowEmpty,
+    live,
+    addon,
+    onEnter,
+    onFocusChange,
+  }: {
+    initial?: string
+    placeholder: string
+    hint?: string
+    onSearch: (q: string) => void
+    busy?: boolean
+    allowEmpty?: boolean
+    live?: boolean
+    addon?: ReactNode
+    onEnter?: (q: string) => void
+    onFocusChange?: (focused: boolean) => void
+  }): ReactElement
+}
+
+/** 网页：树和折叠行前的小三角（面板 web/src/components/ui/tree/caret.tsx） */
+declare module '@panel/web/src/components/ui/tree/caret' {
+  import type { ReactElement } from 'react'
+  export function Caret({ open, className }: { open: boolean; className?: string }): ReactElement
+}
+
+/** 网页：只画可见行的树列表（面板 web/src/components/ui/tree/tree-list.tsx） */
+declare module '@panel/web/src/components/ui/tree/tree-list' {
+  import type { LucideIcon } from 'lucide-react'
+  import type { MouseEvent, ReactElement, ReactNode } from 'react'
+  export interface TreeLine {
+    key: string
+    depth: number
+    label: ReactNode
+    icon: LucideIcon
+    iconTone?: string
+    expandable: boolean
+    open: boolean
+    selected: boolean
+    from?: boolean
+    title?: string
+    aside?: ReactNode
+    onToggle?: () => void
+    onSelect?: () => void
+    clickToggles?: boolean
+    onDouble?: () => void
+    onMenu?: (e: MouseEvent) => void
+    onHover?: () => void
+    action?: ReactNode
+    actionShown?: boolean
+  }
+  export function TreeList({
+    lines,
+    label,
+    reveal,
+  }: {
+    lines: TreeLine[]
+    label: string
+    reveal?: {
+      key: string
+      seq: number
+    }
+  }): ReactElement
+}
+
+/** 网页：树上面的搜索框、命中数和保留命中及上级（面板 web/src/components/ui/tree/tree-search.tsx） */
+declare module '@panel/web/src/components/ui/tree/tree-search' {
+  import type { ReactElement, ReactNode } from 'react'
+  export function hitText(q: string, ...fields: (string | undefined)[]): boolean
+  export function keepSet<N>(
+    roots: N[],
+    kidsOf: (n: N) => N[],
+    keyOf: (n: N) => string,
+    test: (n: N) => boolean,
+  ): {
+    keep: Set<string>
+    hits: number
+  }
+  export function Hit({ text, q }: { text: string; q: string }): ReactElement
+  export function TreeSearch({
+    value,
+    onChange,
+    placeholder,
+    hits,
+    partial,
+    busy,
+    extra,
+    addon,
+    onEnter,
+    onFocusChange,
+  }: {
+    value: string
+    onChange: (q: string) => void
+    placeholder: string
+    hits?: number
+    partial?: boolean
+    busy?: boolean
+    extra?: ReactNode
+    addon?: ReactNode
+    onEnter?: (q: string) => void
+    onFocusChange?: (focused: boolean) => void
+  }): ReactElement
+  export function TreeSearchSpecimen(): ReactElement
+}
+
+/** 网页：切换内容时的半透明遮罩和延时转圈（面板 web/src/components/ui/loading-mask.tsx） */
+declare module '@panel/web/src/components/ui/loading-mask' {
+  import type { ReactElement, ReactNode } from 'react'
+  export function LoadingMask({
+    show,
+    label,
+    children,
+  }: {
+    show: boolean
+    label?: ReactNode
+    children: ReactNode
+  }): ReactElement
+  export function LoadingMaskSpecimen(): ReactElement
+}
+
+/** 网页：按 CSS 变量分的多栏（百分比默认、窄屏上下排、拖边记住尺寸；面板 web/src/components/ui/split-pane.tsx） */
+declare module '@panel/web/src/components/ui/split-pane' {
+  import type { CSSProperties, ReactElement } from 'react'
+  export function storedPane(key: string): number
+  export function forgetPane(key: string): void
+  export interface Pane {
+    size: string
+    min: number
+    axis: 'x' | 'y'
+    dragging: boolean
+    setDragging: (v: boolean) => void
+    set: (n: number) => void
+    save: (n: number | undefined) => void
+    reset: () => void
+    style: (max: string) => CSSProperties
+  }
+  export function usePane(key: string, def: string, min: number, axis?: 'x' | 'y'): Pane
+  export function usePaneHeight(key: string, def: string, min: number): Pane
+  export const SPLIT_ROW: string
+  export const STACK: string
+  export const PANE_FIXED: string
+  export const PANE_FILL: string
+  export const PANE_FIXED_H: string
+  export const PANE_FILL_H: string
+  export function SplitHandle(p: {
+    pane: Pane
+    paneRef: { current: HTMLElement | null }
+    side?: 'left' | 'right'
+    reserve: () => number
+    edge?: boolean
+  }): ReactElement
+}

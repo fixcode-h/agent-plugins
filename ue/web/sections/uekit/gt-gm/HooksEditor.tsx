@@ -1,4 +1,16 @@
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, MoreHorizontal, Plus, Power, Repeat1, Trash2, TriangleAlert } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  MoreHorizontal,
+  Plus,
+  Power,
+  Repeat1,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react'
 import { useEffect, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import {
@@ -14,7 +26,7 @@ import {
   type HookItem,
 } from '../../../../shared/gt-script/gm/hooks.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { refText } from './gm-ref.ts'
 import { onAddRequest } from './hook-commands.ts'
 import { GmPickDialog, KIND_ICON } from './GmPickDialog.tsx'
@@ -212,7 +224,12 @@ export function HooksEditor({ step, onChange }: { step: GtStep; onChange: (s: Gt
                           onChange(moveHook(step, g, i, i + 1))
                         }}
                       />
-                      <ui.IconButton icon={MoreHorizontal} size="sm" label={t('更多')} onClick={(e: MouseEvent) => itemMenu(e, g, i, it)} />
+                      <ui.IconButton
+                        icon={MoreHorizontal}
+                        size="sm"
+                        label={t('更多')}
+                        onClick={(e: MouseEvent) => itemMenu(e, g, i, it)}
+                      />
                     </span>
                   </div>
                   {expanded && (

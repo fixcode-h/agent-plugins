@@ -5,7 +5,8 @@ import { useAsk } from './ask.tsx'
 import { useToChat } from './chat.tsx'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
-import { Badge, ErrorText, SearchBox } from './ui.tsx'
+import { Badge, ErrorText } from './ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 
 interface Table {
   struct: string

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { Badge, fmtTime } from '../../ui.tsx'
 import type { ForgeEntry, ForgeJob } from './Forge.tsx'
 

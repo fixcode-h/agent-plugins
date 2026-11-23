@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, ChevronRight, History, X } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
-import { MenuHost, openMenuAt, type MenuItem } from '../menu.tsx'
+import { openMenuAt, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { Badge, KindBadge, type ObjKind } from '../ui.tsx'
 
 /** 面包屑的一段：实例是蓝点、资源是橙点；via 是走到这一段用的属性（段前的虚线小框） */
@@ -65,16 +65,14 @@ export function InspectorBar({
   const openRecent = (el: HTMLElement) =>
     openMenuAt(el, [
       { title: t('最近看过 · 点一项直接回去') },
-      ...recent.map(
-        (r): MenuItem => ({
-          label: r.name,
-          hint: r.how,
-          checked: r.current,
-          dim: r.stale,
-          lead: <Badge tone={r.asset ? 'warn' : 'run'}>{r.asset ? t('资源') : t('实例')}</Badge>,
-          onClick: r.onClick,
-        }),
-      ),
+      ...recent.map((r): MenuItem => ({
+        label: r.name,
+        hint: r.how,
+        checked: r.current,
+        dim: r.stale,
+        lead: <Badge tone={r.asset ? 'warn' : 'run'}>{r.asset ? t('资源') : t('实例')}</Badge>,
+        onClick: r.onClick,
+      })),
       'sep',
       { label: t('清空记录'), icon: X, hint: t('只留在这个页面，刷新整页就清'), onClick: onClear },
     ])
@@ -148,7 +146,6 @@ export function InspectorBar({
       </nav>
       <KindBadge kind={kind} />
       {actions && <div className="ue:flex ue:shrink-0 ue:items-center ue:gap-0.5 ue:pl-1">{actions}</div>}
-      <MenuHost />
     </div>
   )
 }

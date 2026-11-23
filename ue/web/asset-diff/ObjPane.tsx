@@ -2,7 +2,7 @@ import { Box, Component, Rows3 } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
 import type { ObjDiff, PropDiff } from '../../shared/asset-diff/types.ts'
 import { h, t } from '../host.ts'
-import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { Mark, PropGrid } from './PropGrid.tsx'
 
 /** 左边列表里的一项：对象差异 + 缩进 + 显示名 */

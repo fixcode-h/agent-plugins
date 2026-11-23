@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import type { ForgeEntry } from './Forge.tsx'
 import { fileOpItems, type ForgeFileOps } from './forge-file-ops.ts'
 import { canExport, canImport, fileName, type useForgeActions } from './forge-actions.ts'

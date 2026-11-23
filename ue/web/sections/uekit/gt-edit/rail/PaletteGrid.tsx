@@ -1,6 +1,6 @@
 import type { EditResult, GtPath, GtScript } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
-import { openMenuAt } from '../../../../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import { blockUi, TONE_TEXT, type InsertItem } from '../../gt-blocks/index.ts'
 import { GT_STEPS_MIME } from '../../gt-flow/dnd.ts'
 import { insertPlace, insertStep } from '../insert-menu.ts'

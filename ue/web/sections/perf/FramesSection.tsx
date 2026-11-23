@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { h, t } from '../../host.ts'
-import { openMenuAt } from '../../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import { ErrorText, LinkBtn } from '../../ui.tsx'
 import { FrameStrip } from './FrameStrip.tsx'
 import type { LuaFrames } from './lua-trace.ts'
@@ -75,9 +75,7 @@ export function FramesSection({
           {range ? (
             <LinkBtn onClick={() => onRange(undefined)}>{t('整段')}</LinkBtn>
           ) : (
-            <span className="ue:hidden ue:2xl:inline">
-              {t('左键拖动平移 · 单击看这一帧 · 右键拖选范围')}
-            </span>
+            <span className="ue:hidden ue:2xl:inline">{t('左键拖动平移 · 单击看这一帧 · 右键拖选范围')}</span>
           )}
           {lua && f && <LuaSlowest frames={f} lua={lua} onPick={onSelect} onRange={onRange} />}
           <ZoomControls win={strip} duration={duration} onWin={setStrip} />

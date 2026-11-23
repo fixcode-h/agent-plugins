@@ -6,9 +6,9 @@ import { ClassPicker, type ClassOpt } from '../../ClassPicker.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
-import { copyText, MenuHost, openMenu } from '../../menu.tsx'
-import { TreeList, type TreeLine } from '../../TreeList.tsx'
-import { Hit, TreeSearch } from '../../tree-search.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { Hit, TreeSearch } from '@panel/web/src/components/ui/tree/tree-search'
 import { ErrorText } from '../../ui.tsx'
 import { useAssetMenu } from './asset-menu.ts'
 import { useFavFolders } from './fav-data.ts'
@@ -399,7 +399,6 @@ export function AssetFolders({
         where={fav.file}
       />
       <TreeList lines={lines} label={t('资源文件夹')} reveal={scrollTo} />
-      <MenuHost />
       <RedirectorDialog onFixed={(p) => void load(p)} />
     </div>
   )

@@ -11,9 +11,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Caret } from '../../../details/controls.tsx'
+import { Caret } from '@panel/web/src/components/ui/tree/caret'
 import { h, t } from '../../../host.ts'
-import { Hit, TreeSearch } from '../../../tree-search.tsx'
+import { Hit, TreeSearch } from '@panel/web/src/components/ui/tree/tree-search'
 import { Card, ErrorText } from '../../../ui.tsx'
 import { toneColor } from '../../../sections/uekit/gt-flow/bp/parts.tsx'
 import {

@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Loader2, Plus, ScanEye, Trash2, Wand2 } from 'lucid
 import { useState } from 'react'
 import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { TargetInput } from '../gt-cond/TargetInput.tsx'
 import { NowBadge } from '../gt-live/NowBar.tsx'

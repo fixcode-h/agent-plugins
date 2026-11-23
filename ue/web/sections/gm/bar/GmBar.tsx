@@ -1,9 +1,9 @@
 import { ChevronRight, ClipboardPaste, Copy, Ellipsis, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { Fragment, type MouseEvent, type ReactNode } from 'react'
 import { ConnPill } from '../../../conn/ConnPill.tsx'
-import { HelpTip } from '../../../HelpTip.tsx'
+import { HelpTip } from '@panel/web/src/components/ui/help-tip'
 import { h, t } from '../../../host.ts'
-import { copyText, openMenuAt } from '../../../menu.tsx'
+import { copyText, openMenuAt } from '@panel/web/src/components/ui/item-menu'
 
 /**
  * GM 页的工具条（GM 页梳理 L1，用户 2026-11-22）：取代原来的大标题 + 长说明 + 对象调用自己的标题行。

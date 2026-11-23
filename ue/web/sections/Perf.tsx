@@ -4,7 +4,7 @@ import { useToChat } from '../chat.tsx'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { DockCol } from '../nav/slot.tsx'
-import { SplitHandle, usePane } from '../split.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { Confirm, ErrorText, Note, PageHead, fmtSize, fmtTime, useTargetInfo } from '../ui.tsx'
 import { captureItems, RenameDialog } from './perf/CaptureMenu.tsx'
 import { Compare } from './perf/Compare.tsx'
@@ -12,7 +12,7 @@ import { Detail } from './perf/Detail.tsx'
 import { recentAvg, useLive } from './perf/live.ts'
 import { LiveView } from './perf/LiveView.tsx'
 import { MemLive } from './perf/MemView.tsx'
-import { MenuHost, openMenu } from '../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { RecordControls, type StartOpts } from './perf/RecordControls.tsx'
 import { Sessions } from './perf/Sessions.tsx'
 import { StatsBar, liveItems } from './perf/StatsBar.tsx'
@@ -149,7 +149,7 @@ export function Perf() {
             <aside
               ref={paneRef}
               style={pane.style('calc(100% - 480px)')}
-              className="ue:relative ue:flex ue:max-h-72 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+              className="ue:relative ue:flex ue:max-h-72 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--pane-w) ue:md:max-w-(--pane-max) ue:md:border-r ue:md:border-b-0"
             >
               {sessions}
               <SplitHandle pane={pane} paneRef={paneRef} reserve={() => 480} edge />
@@ -219,7 +219,6 @@ export function Perf() {
         {del?.imported && <div className="ue:mt-2 ue:text-subtle">{t('导入的外部文件只取消登记，不删原文件。')}</div>}
       </Confirm>
       <RenameDialog project={project.id} capture={ren} onClose={() => setRen(undefined)} onDone={reload} />
-      <MenuHost />
       {chat.dialog}
     </div>
   )

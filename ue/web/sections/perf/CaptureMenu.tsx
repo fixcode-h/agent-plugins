@@ -1,8 +1,17 @@
-import { Copy, ExternalLink, FolderOpen, GitCompareArrows, MessageSquare, PanelRightOpen, Pencil, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FolderOpen,
+  GitCompareArrows,
+  MessageSquare,
+  PanelRightOpen,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, type MenuItem } from '../../menu.tsx'
+import { copyText, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { nameOf, type Capture } from './types.ts'
 
 /**

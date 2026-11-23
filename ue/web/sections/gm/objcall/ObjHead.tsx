@@ -2,7 +2,7 @@ import { Copy, Crosshair, Ellipsis, Pencil, ScanSearch, Star, StarOff, Trash2, X
 import type { MouseEvent } from 'react'
 import type { GmObject } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
-import { openMenuAt } from '../../../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import { HitBadge, ObjRule, iconOf } from '../custom/ObjRule.tsx'
 

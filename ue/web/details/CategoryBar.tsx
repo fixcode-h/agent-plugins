@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
-import { MenuHost, openMenuAt } from '../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 
 export interface CategoryItem {
   key: string
@@ -139,7 +139,6 @@ export function CategoryBar({
           <ChevronDown className="ue:h-3.5 ue:w-3.5" />
         </button>
       </nav>
-      <MenuHost />
     </div>
   )
 }

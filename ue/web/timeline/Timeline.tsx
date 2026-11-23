@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
-import { usePane } from '../split.tsx'
+import { usePane } from '@panel/web/src/components/ui/split-pane'
 import { fmtSec, fmtValue, tickStep, valueAt, type AnimKey } from './keys.ts'
 
 /**

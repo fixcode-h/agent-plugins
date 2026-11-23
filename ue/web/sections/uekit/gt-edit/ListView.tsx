@@ -13,7 +13,7 @@ import {
   type ListRow,
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { blockUi, TONE_BAR, TONE_TEXT } from '../gt-blocks/index.ts'
 import { condSummary } from '../gt-cond/summary.ts'
 import { BreakpointDot } from '../gt-debug/BreakpointDot.tsx'

@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
-import { usePane } from '../../split.tsx'
+import { usePane } from '@panel/web/src/components/ui/split-pane'
 
 const OPEN_KEY = 'ue:gt-nodes-open'
 

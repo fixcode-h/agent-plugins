@@ -1,5 +1,5 @@
 import { getAt, insert, placeOf, type GtPath, type GtScript, type GtStep } from '../../../../shared/gt-script/index.ts'
-import { openMenu, type MenuItem } from '../../../menu.tsx'
+import { openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { blockUi, insertItems, type InsertItem } from '../gt-blocks/index.ts'
 
 /** 插入菜单：插入项按组排（组名在表里第一次出现的顺序），组名当小标题，右边是 / 短名 */

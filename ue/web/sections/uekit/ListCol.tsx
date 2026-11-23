@@ -3,7 +3,7 @@ import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h } from '../../host.ts'
 import { DockCol, SubNavAside } from '../../nav/slot.tsx'
-import { SplitHandle, usePane } from '../../split.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 
 /**
  * AssetForge、GameTest 的左边列表栏：照面板的 ListPane（表格页也是它）画——标题和数量、右边的按钮、
@@ -124,7 +124,7 @@ export function ListCol({
         <aside
           ref={ref}
           style={pane.style('calc(100% - 420px)')}
-          className="ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:bg-panel ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+          className="ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:bg-panel ue:md:w-(--pane-w) ue:md:max-w-(--pane-max) ue:md:border-r ue:md:border-b-0"
         >
           {body(false)}
           <SplitHandle pane={pane} paneRef={ref} reserve={() => 420} edge />

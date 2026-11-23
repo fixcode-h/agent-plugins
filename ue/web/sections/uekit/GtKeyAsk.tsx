@@ -4,7 +4,7 @@ import type { GtIdentItem, GtPropItem } from '../../../shared/gt-script/ref/type
 import { identLeaves, isIdentGroup } from '../../../shared/gt-script/ref/ident-tree.ts'
 import { op, useAction } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../split.tsx'
+import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { ErrorText, Note } from '../../ui.tsx'
 import { type KeyAnswer, type KeyAsk } from './gt-key.ts'
 import { defaultIdent } from './gt-ref/compare-table.ts'

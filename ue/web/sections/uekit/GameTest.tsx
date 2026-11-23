@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost, pageMenu, type MenuItem } from '../../menu.tsx'
+import { pageMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { Confirm, ErrorText } from '../../ui.tsx'
 import { useScenarioMenus, type Scenario } from './GtMenus.tsx'
 import { useScenarioLibrary } from './GtLibrary.tsx'
@@ -874,7 +874,6 @@ export function GameTest() {
       {apiLib && list?.absoluteRootDir && (
         <ApiLibrary project={project.id} root={list.absoluteRootDir} live={live} onClose={() => setApiLib(false)} />
       )}
-      <MenuHost />
       <Confirm
         open={!!switchTo}
         title={t('有改动没存')}

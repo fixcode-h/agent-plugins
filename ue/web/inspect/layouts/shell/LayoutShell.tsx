@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { h } from '../../../host.ts'
-import { PANE_FILL, PANE_FILL_H, PANE_FIXED, PANE_FIXED_H, SPLIT_ROW, SplitHandle } from '../../../split.tsx'
+import { PANE_FILL, PANE_FILL_H, PANE_FIXED, PANE_FIXED_H, SPLIT_ROW, SplitHandle } from '@panel/web/src/components/ui/split-pane'
 import type { LayoutDef, RegionDef } from '../types.ts'
 import { regionOff, useRegion } from './regions.ts'
 
@@ -10,7 +10,7 @@ type Place = RegionDef['place']
 const NONE = (place: Place): RegionDef => ({ id: `_${place}`, label: () => '', place, size: '0px', min: 0 })
 
 /**
- * 区域积木（设计稿第 2 节）：按布局声明的区域摆出左 / 左下 / 中 / 底 / 右几块，块之间是可拖的细线（split.tsx），
+ * 区域积木（设计稿第 2 节）：按布局声明的区域摆出左 / 左下 / 中 / 底 / 右几块，块之间是可拖的细线（面板 split-pane），
  * 尺寸按「布局 id + 区域」记在本机、双击恢复默认；窄屏（lg 以下）上下排、整块滚。
  * regions 按区域 id 给内容；某块没给内容（null）或在设置里关掉了（optional 的区域）就不画，旁边的块占满。
  * 每块自己画标题和内容（一般是 Card），这里只管摆和拖。

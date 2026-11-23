@@ -2,7 +2,7 @@ import { CircleDot, Copy, FilePlus, FolderOpen, FolderPlus, Layers, Pencil, Spar
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import type { Scenario } from './GtMenus.tsx'
 import { DeleteDialog, MoveDialog, NameDialog } from './GtLibraryDialogs.tsx'
 import { dirOf, followMove, libOp, type DeletePlan, type MoveDone, type MovePlan } from './gt-library.ts'

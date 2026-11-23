@@ -2,7 +2,7 @@ import { Copy, Flame, Maximize2, Scan, X, ZoomIn } from 'lucide-react'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { h, t } from '../../host.ts'
 import { readTheme, setup, useThemeTick, useWidth } from './canvas.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { frameIndex, type LuaFrames } from './lua-trace.ts'
 import { fmtAt, fmtMs } from './parts.tsx'
 import type { Bookmark, Range } from './trace.ts'
@@ -77,7 +77,10 @@ export function FrameStrip({
   const x = (s: number) => ((s - win.t0) / span) * w
   const at = (px: number) => Math.max(0, Math.min(duration, win.t0 + (px / Math.max(w, 1)) * span))
   // 纵轴：最慢那帧顶到接近满格，但至少露出 30 fps 线、最多到不可接受阈值的 1.8 倍（一次长卡顿不会把其余的帧压扁）
-  const cap = Math.max(budget.target * 1.3, Math.min(Math.max(...ms.slice(0, 50000), 1) * 1.08, budget.unacceptable * 1.8))
+  const cap = Math.max(
+    budget.target * 1.3,
+    Math.min(Math.max(...ms.slice(0, 50000), 1) * 1.08, budget.unacceptable * 1.8),
+  )
   const frameAt = (s: number) => frameIndex(start, s)
 
   useEffect(() => {
@@ -296,8 +299,7 @@ export function FrameStrip({
             if (!p.moved) return menu(e)
             const d = drag
             setDrag(undefined)
-            if (d && Math.abs(x(d.b) - x(d.a)) >= 3)
-              onRange({ t0: Math.min(d.a, d.b), t1: Math.max(d.a, d.b) })
+            if (d && Math.abs(x(d.b) - x(d.a)) >= 3) onRange({ t0: Math.min(d.a, d.b), t1: Math.max(d.a, d.b) })
             return
           }
           // 左键单击：选中那一帧，时间轴跳过去

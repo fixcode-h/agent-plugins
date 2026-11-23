@@ -13,7 +13,7 @@ import {
   type GtStep,
 } from '../../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../../host.ts'
-import { openMenu, type MenuItem } from '../../../../menu.tsx'
+import { openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { callCopy } from '../../gt-edit/call-copy.ts'
 import { insertMenuItems } from '../../gt-edit/insert-menu.ts'
 import { canDrop, readDrop, wantsCopy } from '../dnd.ts'

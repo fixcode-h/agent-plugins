@@ -31,7 +31,7 @@ import {
 } from '../../../../shared/gt-script/index.ts'
 import { ppost, show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { NowBar } from '../gt-live/NowBar.tsx'
 import { useCondNow } from '../gt-live/use-cond-now.ts'

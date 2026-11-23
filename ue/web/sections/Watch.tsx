@@ -1,7 +1,7 @@
 import { Pause, Play, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { op, pget, ppost, show, useLoad } from '../api.ts'
-import { STACK } from '../split.tsx'
+import { STACK } from '@panel/web/src/components/ui/split-pane'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, ErrorText, PageHead, useTargetInfo } from '../ui.tsx'

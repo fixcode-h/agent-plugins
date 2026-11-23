@@ -7,7 +7,7 @@ import { StatePill } from './StatePill.tsx'
 
 /**
  * 设置 →「组件」里 AssetForge 共用部件的示例（设计稿 §4）：StatePill 各状态、ForgeLink 三种方向、一份小作业报告。
- * 全是假数据，不连 UE（设置页里没有 UE 页的上下文）。右键菜单借「UE · ContextMenu」示例挂的 MenuHost，
+ * 全是假数据，不连 UE（设置页里没有 UE 页的上下文）。右键菜单借面板「ItemMenu」示例挂的 MenuHost，
  * 这里不再挂一个（一页挂两个会弹出两份菜单）。
  */
 const ENTRIES: ForgeEntry[] = [

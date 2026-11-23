@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, Loader2, RefreshCw, TriangleAlert } from 'lu
 import { useMemo, useState } from 'react'
 import { ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
-import { SearchBox } from '../../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { rejectedOfFile, sigOf, useApis, type ApiItem, type ApiRejected } from './model.ts'
 
 type Src = ApiItem['src']

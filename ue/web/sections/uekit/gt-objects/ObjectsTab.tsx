@@ -6,7 +6,7 @@ import { LIB_DROP_KEY, libPath, objValue, type LibDrop } from '../../../../share
 import { blockOf, type GtRef, type GtStep } from '../../../../shared/gt-script/index.ts'
 import type { GtScript } from '../../../../shared/gt-script/types.ts'
 import { h, t } from '../../../host.ts'
-import { copyText, openMenu } from '../../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { HitBadge, ObjRowLabel, iconOf, objRuleTitle } from '../../gm/custom/ObjRule.tsx'
 import { GT_STEPS_MIME } from '../gt-flow/dnd.ts'
 import { useRefHits } from '../gt-ref/live.ts'
@@ -62,7 +62,9 @@ export function ObjectsTab({ project, live, q }: { project: string; live: boolea
   const { hits } = useRefHits(
     project,
     live,
-    [...objects, ...local].filter((o) => o.ref).map((o) => ({ id: (isLocal(o) ? '#' : '') + o.name, ref: o.ref as GtRef })),
+    [...objects, ...local]
+      .filter((o) => o.ref)
+      .map((o) => ({ id: (isLocal(o) ? '#' : '') + o.name, ref: o.ref as GtRef })),
   )
   const store = () => ({ objects, objFolders: lib.data?.objFolders ?? [] }) as unknown as GmStore
   const save = async (next: GmObject[]) => {

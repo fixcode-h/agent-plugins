@@ -2,10 +2,11 @@ import { Play } from 'lucide-react'
 import { useState } from 'react'
 import { op, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
-import { Caret } from './details/controls.tsx'
+import { Caret } from '@panel/web/src/components/ui/tree/caret'
 import { FnDialog, type Fn, type FnResult } from './FnDialog.tsx'
 import { t } from './host.ts'
-import { Badge, ErrorText, SearchBox } from './ui.tsx'
+import { Badge, ErrorText } from './ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 
 const ACCESS: Record<string, () => string> = { protected: () => t('受保护'), private: () => t('私有') }
 const RANK = { public: 0, protected: 1, private: 2 }

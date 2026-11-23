@@ -17,7 +17,7 @@ import {
 import type { MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { copyText, openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import type { ForgeTab } from './ForgeDetail.tsx'
 import type { ForgeEntry } from './Forge.tsx'
 import type { ForgeNewInit } from './ForgeNew.tsx'

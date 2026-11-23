@@ -1,8 +1,22 @@
-import { ChevronRight, Copy, Crosshair, ExternalLink, Flame, GitFork, Highlighter, Layers, Maximize2, Scan, Search, X, ZoomIn } from 'lucide-react'
+import {
+  ChevronRight,
+  Copy,
+  Crosshair,
+  ExternalLink,
+  Flame,
+  GitFork,
+  Highlighter,
+  Layers,
+  Maximize2,
+  Scan,
+  Search,
+  X,
+  ZoomIn,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { h, t } from '../../host.ts'
 import { readTheme, setup, tickLabel, tickStep, useThemeTick, useWidth } from './canvas.ts'
-import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { copyText, openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { luaFullSource, luaOf, useLuaTrace } from './lua-trace.ts'
 import { luaFill } from './lua-paint.ts'
 import { fmtAt, fmtMs } from './parts.tsx'
@@ -402,18 +416,23 @@ export function Timeline({
       },
     ]
   }
-  const viewMenu = (at: number): MenuItem[] => [
-    { label: t('看全部'), icon: Maximize2, onClick: () => setView({ t0: 0, t1: duration }) },
-    range && { label: t('缩放到分析范围'), icon: ZoomIn, onClick: () => zoomTo(range.t0, range.t1) },
-    { label: t('把当前看的这段设为分析范围'), icon: Scan, onClick: () => onRange({ t0: Math.max(0, view.t0), t1: Math.min(duration, view.t1) }) },
-    range && { label: t('清除分析范围'), icon: X, onClick: () => onRange(undefined) },
-    'sep',
-    workers.length > 0 && {
-      label: showWorkers ? t('收起工作线程') : t('展开 {n} 个工作线程', { n: workers.length }),
-      onClick: onToggleWorkers,
-    },
-    { label: t('复制这个时间点'), icon: Crosshair, hint: fmtAt(at), onClick: () => copyText(at.toFixed(6)) },
-  ].filter(Boolean) as MenuItem[]
+  const viewMenu = (at: number): MenuItem[] =>
+    [
+      { label: t('看全部'), icon: Maximize2, onClick: () => setView({ t0: 0, t1: duration }) },
+      range && { label: t('缩放到分析范围'), icon: ZoomIn, onClick: () => zoomTo(range.t0, range.t1) },
+      {
+        label: t('把当前看的这段设为分析范围'),
+        icon: Scan,
+        onClick: () => onRange({ t0: Math.max(0, view.t0), t1: Math.min(duration, view.t1) }),
+      },
+      range && { label: t('清除分析范围'), icon: X, onClick: () => onRange(undefined) },
+      'sep',
+      workers.length > 0 && {
+        label: showWorkers ? t('收起工作线程') : t('展开 {n} 个工作线程', { n: workers.length }),
+        onClick: onToggleWorkers,
+      },
+      { label: t('复制这个时间点'), icon: Crosshair, hint: fmtAt(at), onClick: () => copyText(at.toFixed(6)) },
+    ].filter(Boolean) as MenuItem[]
 
   return (
     <div className="ue:relative ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -590,7 +609,8 @@ function BlockTip({
   const { cn } = h()
   const pct = (v: number, of: number) => `${((v / Math.max(of, 1e-9)) * 100).toFixed(2)}%`
   const rows: [string, ReactNode][] = []
-  if (source) rows.push([t('来源'), <span className="ue:text-accent-text">{source === 'C' ? t('C 函数') : source}</span>])
+  if (source)
+    rows.push([t('来源'), <span className="ue:text-accent-text">{source === 'C' ? t('C 函数') : source}</span>])
   if (ctx?.parent)
     rows.push([
       t('占父'),

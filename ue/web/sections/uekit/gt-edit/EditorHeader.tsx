@@ -11,7 +11,7 @@ import {
   StepForward,
 } from 'lucide-react'
 import { h, t } from '../../../host.ts'
-import { openMenuAt, type MenuItem } from '../../../menu.tsx'
+import { openMenuAt, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { ConnPill } from '../../../conn/ConnPill.tsx'
 import type { ViewDef } from './views.ts'
 

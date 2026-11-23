@@ -1,7 +1,7 @@
 import { FileCog, FileText, Folder as FolderIcon, FolderOpen } from 'lucide-react'
 import { t } from '../../host.ts'
-import type { TreeLine } from '../../TreeList.tsx'
-import { Hit, keepSet } from '../../tree-search.tsx'
+import type { TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { Hit, keepSet } from '@panel/web/src/components/ui/tree/tree-search'
 
 export interface Sec {
   name: string

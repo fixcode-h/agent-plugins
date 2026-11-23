@@ -1,7 +1,7 @@
 import { Copy } from 'lucide-react'
 import { useState } from 'react'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { ErrorBox, Hint, Loading } from './forge-parts.tsx'
 import { sectionIds } from '../../../shared/forge-doc/sections.ts'
 import { groupBySection } from './forge-config/diff-groups.ts'

@@ -6,7 +6,7 @@ import type { OpenHow } from '../details/RefChip.tsx'
 import { t } from '../host.ts'
 import { Inspect } from '../Inspect.tsx'
 import { Props } from '../Props.tsx'
-import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { Card } from '../ui.tsx'
 
 /**

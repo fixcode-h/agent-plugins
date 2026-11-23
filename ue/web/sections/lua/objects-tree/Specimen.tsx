@@ -1,4 +1,4 @@
-import { TreeList, type TreeLine } from '../../../TreeList.tsx'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
 import { Box, Braces } from 'lucide-react'
 import { t } from '../../../host.ts'
 import { LeakView } from './LeakView.tsx'
@@ -33,7 +33,11 @@ export function LuaObjectsSpecimen() {
         <div className="ue:flex ue:h-[150px] ue:w-80 ue:flex-col ue:border ue:border-line">
           <TreeList
             label={t('Lua 对象')}
-            lines={[row('m', 0, 'AI.BP_AICharacter_C'), row('a', 1, 'BP_AICharacter_C_0'), row('b', 1, 'BP_AICharacter_C_1')]}
+            lines={[
+              row('m', 0, 'AI.BP_AICharacter_C'),
+              row('a', 1, 'BP_AICharacter_C_0'),
+              row('b', 1, 'BP_AICharacter_C_1'),
+            ]}
           />
           <StateLegend />
         </div>
@@ -64,7 +68,10 @@ export function LuaObjectsSpecimen() {
         onModule={noop}
       />
       <div className="ue:border ue:border-line">
-        <LeakView item={{ kind: 'destroyed', module: 'UI.WBP_ShopPanel_C', path: '_G.UIManager.Panels[3]' }} onGcAndScan={noop} />
+        <LeakView
+          item={{ kind: 'destroyed', module: 'UI.WBP_ShopPanel_C', path: '_G.UIManager.Panels[3]' }}
+          onGcAndScan={noop}
+        />
       </div>
     </div>
   )

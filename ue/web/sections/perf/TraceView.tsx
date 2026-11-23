@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { SplitHandle, usePane } from '../../split.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { ErrorText, LinkBtn, Note } from '../../ui.tsx'
 import { useOpenLua } from '../lua/open-file.ts'
 import { FramesSection } from './FramesSection.tsx'
@@ -292,7 +292,7 @@ function TraceBody({
         <aside
           ref={paneRef}
           style={pane.style('60%')}
-          className="ue:relative ue:flex ue:min-h-[480px] ue:shrink-0 ue:flex-col ue:border-t ue:border-line ue:lg:w-(--ue-w) ue:lg:max-w-(--ue-max) ue:lg:border-t-0 ue:lg:border-l"
+          className="ue:relative ue:flex ue:min-h-[480px] ue:shrink-0 ue:flex-col ue:border-t ue:border-line ue:lg:w-(--pane-w) ue:lg:max-w-(--pane-max) ue:lg:border-t-0 ue:lg:border-l"
         >
           <div className="ue:absolute ue:inset-y-0 ue:-left-[3px] ue:hidden ue:w-[6px] ue:lg:block">
             <SplitHandle pane={pane} paneRef={paneRef} side="right" reserve={() => 480} edge />

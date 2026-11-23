@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { show } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
-import { SearchBox } from '../../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { SRC_ORDER, type VarGroup, type VarItem, type VarSrc } from './model.ts'
 
 export const srcLabel = (s: VarSrc) => ({ cpp: 'C++', bp: t('蓝图'), lua: 'Lua' })[s]

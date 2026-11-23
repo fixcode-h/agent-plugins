@@ -46,7 +46,7 @@ import { Forge } from './sections/uekit/Forge.tsx'
 import { GameTest } from './sections/uekit/GameTest.tsx'
 import { Plugins } from './sections/uekit/Plugins.tsx'
 import { Watch } from './sections/Watch.tsx'
-import { SplitHandle, usePane } from './split.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { usePendingPie } from './launch.ts'
 import { useLaunchEvents } from './launch-progress/store.ts'
 import { Jump } from './Jump.tsx'
@@ -305,7 +305,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
           <aside
             ref={navRef}
             style={wide ? { display: 'none' } : nav.style('calc(100% - 480px)')}
-            className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:overflow-y-auto ue:md:border-r"
+            className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:gap-2 ue:border-line ue:bg-panel ue:p-3 ue:md:w-(--pane-w) ue:md:max-w-(--pane-max) ue:md:overflow-y-auto ue:md:border-r"
           >
             {projectCard}
             <TargetCard />
