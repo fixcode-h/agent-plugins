@@ -40,6 +40,17 @@ export type GmObject = z.infer<typeof GmObject>
 export const GmCustomObj = z.object(objFields).refine(oneOf, ONE_OF)
 export type GmCustomObj = z.infer<typeof GmCustomObj>
 
+/**
+ * 自定义 GM 调的函数的一个参数（保存时从函数签名抄进来）。只存 args 的话，保存时没填、留给函数默认值的参数就丢了，
+ * 详情页显示「没有参数」、执行时也没法再填（用户 2026-11-23 报）。obj 有值时是对象参数（cls 类名，lua 表示 Lua 类）
+ */
+export const GmCustomParam = z.object({
+  name: z.string().min(1),
+  type: z.string().default(''),
+  obj: z.object({ cls: z.string(), lua: z.boolean().default(false) }).optional(),
+})
+export type GmCustomParam = z.infer<typeof GmCustomParam>
+
 /** 命中多个时：报错 / 只调第一个（Ref many=first）/ 对每个都调一遍（obj.call each） */
 export const GmMany = z.enum(['error', 'first', 'each'])
 export type GmMany = z.infer<typeof GmMany>
@@ -60,6 +71,8 @@ export const GmCustom = z.object({
   function: z.string().optional(),
   part: z.string().nullable().optional(),
   args: z.record(z.string(), z.unknown()).default({}),
+  /** 函数的全部参数，按签名顺序（没存的旧数据按 args 的键）；args 里没有的参数不传，用函数的默认值 */
+  params: z.array(GmCustomParam).optional(),
   /** 执行时能改的参数（GM 页表单里只有这些能填，ue_gm run 也只能改这些） */
   editable: z.array(z.string()).default([]),
   many: GmMany.default('error'),

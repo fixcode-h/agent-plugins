@@ -18,8 +18,26 @@ export const isObjArg = (v: unknown): v is { $obj: string } =>
 /** 一个对象条目在 gt.step objects 里的值：来源字符串原样，引用拷一份（加 many 不改到原数据） */
 export const objValue = (o: GmCustomObj): GmRef | string => (o.src ? o.src : { ...(o.ref as GmRef) })
 
-/** 执行时的参数：存的 args 上叠用户这次改的（只认 editable 里的，别的改了抛错，ue_gm run 原样告诉 Agent） */
-export function mergeArgs(c: Pick<GmCustom, 'args' | 'editable' | 'name'>, override?: Record<string, unknown>) {
+/** 自定义 GM 的参数名，按函数签名的顺序：存了 params 的按它，旧数据只有 args 的按 args 的键 */
+export const paramNames = (c: Pick<GmCustom, 'args' | 'params'>) =>
+  c.params?.length ? c.params.map((p) => p.name) : Object.keys(c.args)
+
+/** 参数按签名顺序排好（签名外的接在后面）：保存后改过的参数不会跑到最后，「会执行」和交给 UE 的顺序都对 */
+export function orderArgs(c: Pick<GmCustom, 'args' | 'params'>, args: Record<string, unknown>) {
+  const out: Record<string, unknown> = {}
+  for (const n of paramNames(c)) if (n in args) out[n] = args[n]
+  for (const [k, v] of Object.entries(args)) if (!(k in out)) out[k] = v
+  return out
+}
+
+/**
+ * 执行时的参数：存的 args 上叠用户这次改的（只认 editable 里的，别的改了抛错，ue_gm run 原样告诉 Agent）。
+ * 保存时没填的参数（不在 args 里）只要是 editable 的，执行时照样能填
+ */
+export function mergeArgs(
+  c: Pick<GmCustom, 'args' | 'editable' | 'name' | 'params'>,
+  override?: Record<string, unknown>,
+) {
   const out = { ...c.args }
   for (const [k, v] of Object.entries(override ?? {})) {
     if (!c.editable.includes(k))
@@ -30,7 +48,7 @@ export function mergeArgs(c: Pick<GmCustom, 'args' | 'editable' | 'name'>, overr
       )
     out[k] = v
   }
-  return out
+  return orderArgs(c, out)
 }
 
 /** 参数里用到的对象名（对象参数 `{"$obj": 名}`） */

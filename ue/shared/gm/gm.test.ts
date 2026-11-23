@@ -2,7 +2,7 @@
 // 用法：node --test ue/shared/gm/gm.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callStep, getQuery, gtNames, invokesOf, mergeArgs, stepOk, callText } from './custom.ts'
+import { callStep, getQuery, gtNames, invokesOf, mergeArgs, paramNames, stepOk, callText } from './custom.ts'
 import { allModules, placeOf } from './modules.ts'
 import { emptyGm, GmCustom, parseGm } from './schema.ts'
 import { pluginToStored, relInside, storedToAbs, storedToPlugin } from './table-path.ts'
@@ -133,4 +133,31 @@ test('对象名不合 GameTest 规则（lua:BP_Game、数字开头）时换成�
   assert.deepEqual(r.step.obj, { $obj: 'lua_BP_Game' })
   assert.deepEqual(r.step.args, { Who: { $obj: 'a_b' } })
   assert.deepEqual(Object.keys(r.objects), ['lua_BP_Game', 'a_b'])
+})
+
+test('保存时没填的参数也存进 params：显示全、editable 的执行时能填、按签名顺序交给 UE', () => {
+  // 用户 2026-11-23：Lua 函数 SetInviteAIDecorationItem 参数都没填就保存，结果成了「没有参数」
+  const c = GmCustom.parse({
+    id: 'c9',
+    name: '邀请 AI',
+    module: 'home',
+    obj: 'SM_HD_HomeDecoration',
+    objects: { SM_HD_HomeDecoration: { ref: { class: 'lua:SM_HD_HomeDecoration' } } },
+    function: 'SetInviteAIDecorationItem',
+    args: { Count: 2 },
+    params: [
+      { name: 'ItemId', type: 'integer' },
+      { name: 'Count', type: 'integer' },
+      { name: 'Owner', type: 'Pawn', obj: { cls: 'Pawn' } },
+    ],
+    editable: ['ItemId', 'Count'],
+  })
+  assert.deepEqual(paramNames(c), ['ItemId', 'Count', 'Owner'])
+  assert.equal(c.params?.[2].obj?.lua, false)
+  // 没填的 ItemId 执行时补上，顺序按签名（不是接在最后）
+  assert.deepEqual(Object.keys(mergeArgs(c, { ItemId: 7 })), ['ItemId', 'Count'])
+  assert.deepEqual(mergeArgs(c), { Count: 2 })
+  assert.throws(() => mergeArgs(c, { Owner: '@pawn' }), /Owner.*不能改/)
+  // 旧数据没有 params：参数名按 args 的键
+  assert.deepEqual(paramNames(buy), ['ItemId', 'Count', 'Buyer'])
 })

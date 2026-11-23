@@ -71,7 +71,10 @@ async function saveCustom(ctx: OpCtx, g: GmStore, def: Obj, dryRun: boolean, age
   const old = g.custom.find((x) => x.name === String(def.name ?? '').trim())
   let c: GmCustom
   try {
+    // Agent 改一条已有的 GM 没写 params 时，同一个函数沿用原来存的参数表，不把保存时抄下的签名弄丢
+    const keep = !def.params && old?.params && old.function === def.function ? { params: old.params } : {}
     c = GmCustom.parse({
+      ...keep,
       ...def,
       name: String(def.name ?? '').trim(),
       id: old?.id ?? newCustomId(g.custom.map((x) => x.id)),

@@ -1,10 +1,17 @@
 import { newCustomId, objNamesInArgs } from '../../../../shared/gm/custom.ts'
 import { newModuleId } from '../../../../shared/gm/modules.ts'
-import type { GmCustom, GmCustomObj, GmMany, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
+import type { GmCustom, GmCustomObj, GmCustomParam, GmMany, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import type { SaveGmResult } from './SaveGmDialog.tsx'
 
 /** 对象列表里的一项 → 自定义 GM 里的对象副本 */
 const copyObj = (o: GmObject): GmCustomObj => (o.src ? { src: o.src } : { ref: { ...o.ref! } })
+
+/** 表单的参数 → 存进 gm.json 的：只留名字、类型、对象参数的类 */
+const toParam = (p: GmCustomParam): GmCustomParam => ({
+  name: p.name,
+  type: p.type ?? '',
+  ...(p.obj ? { obj: { cls: p.obj.cls, lua: !!p.obj.lua } } : {}),
+})
 
 /**
  * 对象调用「保存为 GM」→ gm.json（规格第 7 节）：把用到的对象（调用的对象 + 对象参数）的匹配规则复制进 custom.objects，
@@ -19,6 +26,8 @@ export function addCustom(
     function?: string
     part?: string | null
     args: Record<string, unknown>
+    /** 函数的全部参数（签名顺序）：没填的也要存，不然这条 GM 就成了「没有参数」 */
+    params?: GmCustomParam[]
     many: GmMany
     props?: string[]
   },
@@ -47,7 +56,13 @@ export function addCustom(
     kind: src.kind,
     obj: src.obj,
     objects,
-    ...(src.kind === 'call' ? { function: src.function, ...(src.part ? { part: src.part } : {}) } : {}),
+    ...(src.kind === 'call'
+      ? {
+          function: src.function,
+          ...(src.part ? { part: src.part } : {}),
+          ...(src.params?.length ? { params: src.params.map(toParam) } : {}),
+        }
+      : {}),
     args: src.kind === 'call' ? src.args : {},
     editable: src.kind === 'call' ? r.editable : [],
     many: src.many,

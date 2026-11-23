@@ -4986,5 +4986,6 @@
   "蓝图 {names} 自己的变量和函数要连上编辑器才读得到": "Variables and functions defined in blueprint {names} can only be read with the editor connected",
   "引擎类 {name} 及以上的成员要连上编辑器才列得出": "Members of engine class {name} and above can only be listed with the editor connected",
   "项目源码里没找到这个类": "This class wasn't found in the project source",
-  "脚本根里没找到这个 Lua 模块的源文件": "No source file for this Lua module was found under the script root"
+  "脚本根里没找到这个 Lua 模块的源文件": "No source file for this Lua module was found under the script root",
+  "没填，用默认值": "Not set, uses the default"
 }

@@ -18,6 +18,7 @@ import { addCustom } from '../custom/build-custom.ts'
 import { argValue, type CallParam } from '../../../obj-kit/CallForm.tsx'
 import { outLine, runCall, type CallOut } from '../custom/run-custom.ts'
 import { SaveGmDialog } from '../custom/SaveGmDialog.tsx'
+import { customParams } from '../custom/custom-params.ts'
 import type { CallMode } from './CallPane.tsx'
 import type { FnInfo } from '../../../obj-kit/members.ts'
 import type { MemberTab } from '../../../obj-kit/MemberPane.tsx'
@@ -137,6 +138,8 @@ export function useObjCallState(d: GmData, live: boolean) {
       objects: objectsFor(list, names),
       function: fn?.name,
       args,
+      // 函数的全部参数一起存：没填的参数也在，保存成 GM 后照样显示、执行时照样能填
+      params: fn?.params ?? [],
       many: narrow ? narrowMany(only, many) : many,
       props: picked,
     }
@@ -326,7 +329,7 @@ export function useObjCallState(d: GmData, live: boolean) {
             sig: '',
             src: 'cpp',
             owner: '',
-            params: Object.keys(c.args).map((n) => ({ name: n, type: '' })),
+            params: customParams(c),
             callable: true,
           }
         : undefined,
@@ -361,6 +364,7 @@ export function useObjCallState(d: GmData, live: boolean) {
           obj={{ name: saving.c.obj, o: saving.c.objects[saving.c.obj] ?? {} }}
           fn={saving.c.kind === 'call' ? saving.c.function : undefined}
           args={saving.c.kind === 'call' ? saving.args : {}}
+          params={saving.c.kind === 'call' ? customParams(saving.c) : undefined}
           props={saving.c.kind === 'get' ? saving.c.props : undefined}
           onClose={() => setSaving(false)}
           onSave={async (r) => {
@@ -388,6 +392,7 @@ export function useObjCallState(d: GmData, live: boolean) {
           obj={{ name: obj.name, o: obj }}
           fn={mode === 'call' ? fn?.name : undefined}
           args={mode === 'call' ? def().args : {}}
+          params={mode === 'call' ? fn?.params : undefined}
           props={mode === 'get' ? picked : undefined}
           onClose={() => setSaving(false)}
           onSave={async (r) => {

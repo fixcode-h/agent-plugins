@@ -29,6 +29,7 @@ export function SaveGmDialog({
   obj,
   fn,
   args,
+  params,
   props,
   onClose,
   onSave,
@@ -39,6 +40,8 @@ export function SaveGmDialog({
   /** 调函数时的函数名；取对象时不给 */
   fn?: string
   args: Record<string, unknown>
+  /** 函数的全部参数：没填的也列出来（存进去后执行时用函数的默认值，勾了「执行时可改」的执行时能填） */
+  params?: { name: string; obj?: unknown }[]
   /** 取对象时读的属性 */
   props?: string[]
   onClose: () => void
@@ -50,10 +53,10 @@ export function SaveGmDialog({
   const [note, setNote] = useState(init.note ?? '')
   const [mod, setMod] = useState(init.module ?? modules[0]?.id ?? '')
   const [newMod, setNewMod] = useState<string>()
+  const names = params?.length ? params.map((p) => p.name) : Object.keys(args)
+  const isObjParam = (k: string) => isObjArg(args[k]) || !!params?.find((p) => p.name === k)?.obj
   // 默认非对象参数都能改：对象参数换了就是另一件事，执行时改它多半是误操作
-  const [editable, setEditable] = useState<string[]>(
-    init.editable ?? Object.keys(args).filter((k) => !isObjArg(args[k])),
-  )
+  const [editable, setEditable] = useState<string[]>(init.editable ?? names.filter((k) => !isObjParam(k)))
   const opts = [
     ...modules.map((m) => ({ value: m.id, label: m.name })),
     ...(newMod ? [{ value: NEW, label: newMod }] : []),
@@ -144,20 +147,29 @@ export function SaveGmDialog({
             </div>
           )}
           <div className="ue:flex ue:flex-col ue:gap-1 ue:pl-14">
-            {Object.entries(args).map(([k, v]) => (
-              <div key={k} className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
-                <span className="ue:w-24 ue:truncate ue:font-mono ue:text-muted">{k}</span>
-                <span className="ue:w-28 ue:truncate ue:text-fg">
-                  {isObjArg(v) ? <ObjName name={v.$obj} /> : <span className="ue:font-mono">{argText(v) || '—'}</span>}
-                </span>
-                <Checkbox
-                  checked={editable.includes(k)}
-                  label={t('执行时可改')}
-                  onChange={(c) => setEditable(c ? [...editable, k] : editable.filter((x) => x !== k))}
-                />
-                <span className="ue:text-caption ue:text-muted">{t('执行时可改')}</span>
-              </div>
-            ))}
+            {names.map((k) => {
+              const v = args[k]
+              return (
+                <div key={k} className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
+                  <span className="ue:w-24 ue:truncate ue:font-mono ue:text-muted">{k}</span>
+                  <span className="ue:w-28 ue:truncate ue:text-fg">
+                    {isObjArg(v) ? (
+                      <ObjName name={v.$obj} />
+                    ) : k in args ? (
+                      <span className="ue:font-mono">{argText(v) || '—'}</span>
+                    ) : (
+                      <span className="ue:text-subtle">{t('没填，用默认值')}</span>
+                    )}
+                  </span>
+                  <Checkbox
+                    checked={editable.includes(k)}
+                    label={t('执行时可改')}
+                    onChange={(c) => setEditable(c ? [...editable, k] : editable.filter((x) => x !== k))}
+                  />
+                  <span className="ue:text-caption ue:text-muted">{t('执行时可改')}</span>
+                </div>
+              )
+            })}
           </div>
           <span className="ue:text-caption ue:text-subtle">
             {t('对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找')}
