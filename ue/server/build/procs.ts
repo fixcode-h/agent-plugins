@@ -132,33 +132,16 @@ export const rootsOf = (procs: BuildProc[]) => procs.filter((x) => !procs.some((
  * Windows 用 taskkill /T /F 结束整棵树；结束后等进程真退出（互斥量才放开）再返回。
  */
 export async function killProcs(procs: BuildProc[]): Promise<{ failed: { pid: number; msg: string }[] }> {
-  const failed: { pid: number; msg: string }[] = []
+  // 结束整棵树并等它真的退出：走面板的外部进程入口（ADR 0076）
+  const { stopTree } = await import('@panel/server/exec/tracked')
+  const stop = async (list: BuildProc[]) =>
+    (await Promise.all(list.map(async (b) => ({ pid: b.pid, r: await stopTree(b.pid) }))))
+      .filter((x) => !x.r.ok)
+      .map((x) => ({ pid: x.pid, msg: x.r.error ?? '' }))
   const roots = rootsOf(procs)
-  for (const b of roots) {
-    if (process.platform === 'win32') {
-      const r = await run('taskkill.exe', ['/PID', String(b.pid), '/T', '/F'], { timeout: 15000 })
-      if (r.code !== 0 && alive(b.pid)) failed.push({ pid: b.pid, msg: (r.err || r.out).trim() || `exit ${r.code}` })
-    } else {
-      try {
-        process.kill(b.pid, 'SIGTERM')
-      } catch (e) {
-        if (alive(b.pid)) failed.push({ pid: b.pid, msg: (e as Error).message })
-      }
-    }
-  }
-  // 树根结束了，子进程在 POSIX 上不一定跟着走：没结束的也补一刀
-  if (process.platform !== 'win32')
-    for (const b of procs)
-      if (!roots.includes(b) && alive(b.pid))
-        try {
-          process.kill(b.pid, 'SIGTERM')
-        } catch {
-          // 已经退出
-        }
-  const wait = procs.map((b) => b.pid).filter((pid) => !failed.some((f) => f.pid === pid))
-  const until = Date.now() + 20000
-  while (wait.some(alive) && Date.now() < until) await new Promise((r) => setTimeout(r, 300))
-  for (const pid of wait.filter(alive)) failed.push({ pid, msg: t('结束后 20 秒还没退出') })
+  const failed = await stop(roots)
+  // 树根结束了，子进程在 POSIX 上不一定跟着走：还活着的也结束掉
+  failed.push(...(await stop(procs.filter((b) => !roots.includes(b) && alive(b.pid)))))
   return { failed }
 }
 

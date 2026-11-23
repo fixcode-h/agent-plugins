@@ -1,6 +1,6 @@
-import { type ChildProcess, spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import type { Job } from './types.ts'
-import { now, run, t, uid } from './util.ts'
+import { now, t, uid } from './util.ts'
 
 /**
  * 后台作业（编译、安装）：内存里留最近 30 个，网页轮询看输出。
@@ -98,26 +98,40 @@ export function spawnJob(
   jobLog(job, `> ${[cmd, ...args].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`)
   return new Promise((resolve) => {
     const bat = process.platform === 'win32' && /\.(bat|cmd)$/i.test(cmd)
-    const child = bat
-      ? spawn(`"${cmd}" ${args.map((a) => `"${a}"`).join(' ')}`, { cwd, shell: true, windowsHide: true })
-      : spawn(cmd, args, { cwd, windowsHide: true })
-    children.set(job.id, child)
-    const out = (d: unknown) => {
-      jobLog(job, String(d))
-      onText?.(String(d))
+    // 经面板的外部进程入口起（ADR 0076）：进孤儿登记，面板被强杀后下次启动会把留下的 Build.bat / UBT 清掉
+    void import('@panel/server/exec/tracked').then(
+      ({ spawnTracked }) => {
+        const o = { cwd, source: 'ue', title: job.title, tag: cmd }
+        const child = bat
+          ? spawnTracked(`"${cmd}" ${args.map((a) => `"${a}"`).join(' ')}`, [], { ...o, shell: true })
+          : spawnTracked(cmd, args, o)
+        watch(child)
+      },
+      (e: Error) => {
+        jobLog(job, e.message)
+        endJob(job, false)
+        resolve(false)
+      },
+    )
+    const watch = (child: ChildProcess) => {
+      children.set(job.id, child)
+      const out = (d: unknown) => {
+        jobLog(job, String(d))
+        onText?.(String(d))
+      }
+      child.stdout?.on('data', out)
+      child.stderr?.on('data', out)
+      child.on('error', (e) => {
+        jobLog(job, e.message)
+        endJob(job, false)
+        resolve(false)
+      })
+      child.on('close', (code) => {
+        children.delete(job.id)
+        endJob(job, !job.canceled && code === 0, code ?? -1)
+        resolve(code === 0)
+      })
     }
-    child.stdout?.on('data', out)
-    child.stderr?.on('data', out)
-    child.on('error', (e) => {
-      jobLog(job, e.message)
-      endJob(job, false)
-      resolve(false)
-    })
-    child.on('close', (code) => {
-      children.delete(job.id)
-      endJob(job, !job.canceled && code === 0, code ?? -1)
-      resolve(code === 0)
-    })
   })
 }
 
@@ -139,9 +153,8 @@ export async function cancelJob(id: string) {
   if (!child?.pid) return false
   job.canceled = true
   jobLog(job, t('已取消'))
-  if (process.platform === 'win32') {
-    const r = await run('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 15000 })
-    if (r.code !== 0 && children.has(id)) jobLog(job, t('没能结束编译进程：{msg}', { msg: (r.err || r.out).trim() }))
-  } else child.kill('SIGTERM')
+  const { stopTree } = await import('@panel/server/exec/tracked')
+  const r = await stopTree(child.pid, { waitMs: 15000 })
+  if (!r.ok && children.has(id)) jobLog(job, t('没能结束编译进程：{msg}', { msg: r.error ?? '' }))
   return true
 }

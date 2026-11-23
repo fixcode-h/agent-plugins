@@ -289,3 +289,19 @@ declare module '@panel/server/jobs/registry' {
     cancel?: () => void | Promise<void>
   }): JobHandle
 }
+
+/** 服务端：外部进程统一入口（面板 server/exec/tracked.ts，ADR 0076）：起的进程进孤儿登记，面板被强杀后下次启动清掉 */
+declare module '@panel/server/exec/tracked' {
+  import type { ChildProcess, SpawnOptions } from 'node:child_process'
+  export type TrackedSpawnOptions = Pick<
+    SpawnOptions,
+    'cwd' | 'env' | 'shell' | 'detached' | 'stdio' | 'windowsHide'
+  > & {
+    cwd: string
+    source: string
+    title: string
+    tag?: string
+  }
+  export function spawnTracked(command: string, args: string[], o: TrackedSpawnOptions): ChildProcess
+  export function stopTree(pid: number, o?: { waitMs?: number }): Promise<{ ok: boolean; error?: string }>
+}

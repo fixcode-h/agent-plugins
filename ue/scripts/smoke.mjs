@@ -8,6 +8,7 @@
 // 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 /** 目录里还剩下的东西 */
@@ -119,6 +120,19 @@ globalThis.__agentPanelServer = {
     // 后台作业表（面板 ADR 0075）：冒烟测试不看侧栏，给个只记不推的替身
     'server/jobs/registry': {
       startJob: () => ({ id: 'smoke', log: () => {}, progress: () => {}, end: () => {}, canceled: false }),
+    },
+    // 外部进程入口（面板 ADR 0076）：冒烟测试起的是真进程，只是不登记
+    'server/exec/tracked': {
+      spawnTracked: (cmd, args, o) => {
+        const { source: _s, title: _t, tag: _g, ...opts } = o
+        return spawn(cmd, args, { windowsHide: true, ...opts })
+      },
+      stopTree: async (pid) => {
+        try {
+          process.kill(pid, 'SIGTERM')
+        } catch {}
+        return { ok: true }
+      },
     },
     // 文件索引帮助函数：冒烟测试没有索引，一律退回自己走目录
     'server/file-index/indexed': {

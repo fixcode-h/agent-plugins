@@ -123,6 +123,7 @@
     "server/exec/invoke",
     "server/exec/process",
     "server/exec/retry-policy",
+    "server/exec/tracked",
     "server/exec/vcs-history",
     "server/exec/vcs-run",
     "server/file-index/indexed",

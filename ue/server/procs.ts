@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { BuildBlocker, UeProject } from './types.ts'
-import { alive, run, t } from './util.ts'
+import { run, t } from './util.ts'
 
 /**
  * 编译前查有没有开着的编辑器（只在 Windows 查）。
@@ -94,17 +94,10 @@ export async function editorBlockers(
  * 编辑器是管理员权限打开、面板不是时 taskkill 会被拒绝，原样把系统的报错交给调用方。
  */
 export async function killBlockers(list: BuildBlocker[]): Promise<{ failed: { pid: number; msg: string }[] }> {
-  const failed: { pid: number; msg: string }[] = []
-  for (const b of list) {
-    const r = await run('taskkill.exe', ['/PID', String(b.pid), '/T', '/F'], { timeout: 15000 })
-    // 进程已经自己退出了也算成功
-    if (r.code !== 0 && alive(b.pid)) failed.push({ pid: b.pid, msg: (r.err || r.out).trim() || `exit ${r.code}` })
-  }
-  const wait = list.filter((b) => !failed.some((f) => f.pid === b.pid)).map((b) => b.pid)
-  const until = Date.now() + 20000
-  while (wait.some(alive) && Date.now() < until) await new Promise((r) => setTimeout(r, 300))
-  for (const pid of wait.filter(alive)) failed.push({ pid, msg: t('结束后 20 秒还没退出') })
-  return { failed }
+  // 结束和等退出都走面板的外部进程入口（ADR 0076），几个一起结束、一起等
+  const { stopTree } = await import('@panel/server/exec/tracked')
+  const rs = await Promise.all(list.map(async (b) => ({ pid: b.pid, r: await stopTree(b.pid) })))
+  return { failed: rs.filter((x) => !x.r.ok).map((x) => ({ pid: x.pid, msg: x.r.error ?? '' })) }
 }
 
 /** 写进编译输出的说明：哪些进程挡着、怎么办 */
