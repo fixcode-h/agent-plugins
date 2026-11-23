@@ -33,6 +33,8 @@ export interface FnInfo {
   params: CallParam[]
   callable: boolean
   why?: string
+  /** 函数上面的注释第一句（Lua 的 --- 说明、C++ 的 /** *\/）：悬停时显示 */
+  note?: string
 }
 
 const LUA_PRIMS = /^(number|integer|string|boolean|table|any|nil|function|userdata|fun\(.*|[\w.]+\[\])$/i
@@ -68,6 +70,7 @@ export function fnsOf(groups: VarGroup[]): FnInfo[] {
         params: (it.args ?? []).filter((a) => !a.out && !a.auto).map((a) => paramOf(a, g.src === 'lua')),
         callable: it.callable !== false,
         why: it.why,
+        ...(it.note ? { note: it.note } : {}),
       })),
   )
 }

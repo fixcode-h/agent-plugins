@@ -12,11 +12,12 @@ import { traceOps } from './fake-trace.mjs'
 /**
  * extraOps：再挂几个操作（截图脚本给 AssetForge 之类的扩展用）；extensions：名片和 /info 里报的扩展（UEKit 的 AssetForge、GameTest）；
  * bridge：名片上的桥接版本（默认 1.0.0，冒烟测试按它测旧桥接的提示；看 trace 视图要 1.5.0 以上，Lua 那层按 2.9.0 的接口）；
- * features：名片上的能力名（bp.layout 这类不是操作的能力只在名片上）
+ * features：名片上的能力名（bp.layout 这类不是操作的能力只在名片上）；
+ * worlds：/info 报的世界（默认编辑器 + 一个 PIE；只给编辑器世界就是「编辑器开着、游戏没运行」）
  */
 export async function startFakeBridge(
   root,
-  { kind = 'editor', extraOps = {}, extensions, bridge = '1.0.0', features } = {},
+  { kind = 'editor', extraOps = {}, extensions, bridge = '1.0.0', features, worlds } = {},
 ) {
   const token = 'fake-token'
   const state = {
@@ -800,7 +801,7 @@ export async function startFakeBridge(
         lua: { available: true, version: 'Lua 5.4.6' },
         ops: Object.keys(ops),
         ...(extensions ? { extensions } : {}),
-        worlds: [
+        worlds: worlds ?? [
           { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
           { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },
         ],
