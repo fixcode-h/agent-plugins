@@ -11,11 +11,15 @@ import { ClearDialog, Crashes } from './LogsExtra.tsx'
 import { SubNav, SubRows } from '../nav/slot.tsx'
 import { LogEntryRow } from '../log-view/LogEntryRow.tsx'
 import { layoutRows, visibleRange } from '../log-view/layout.ts'
+import { useLogPush } from '../log-view/log-push.ts'
 
 interface TailRes {
   live: boolean
   lines: Line[]
   cursor: number
+  /** 读日志文件时：游标属于哪一版文件；reset：整份换掉（换了文件、有筛选、第一次） */
+  epoch?: number
+  reset?: boolean
   dropped?: number
   errors: number
   warnings: number
@@ -30,7 +34,8 @@ const ROW = 20
 const MAX_CATS = 200
 
 /**
- * 运行日志（图 9）：在跑的 UE 按游标每秒增量取（筛选在桥接里做，只传匹配的行），没在跑读日志文件；
+ * 运行日志（图 9）：在跑的 UE 按游标增量取（筛选在桥接里做，只传匹配的行），没在跑读日志文件（也按游标增量取）；
+ * 什么时候取由服务端推送（log-view/log-push.ts：Saved/Logs 有新写入就推），不再每秒问一次；
  * 滚上去看旧行时自动暂停跟随；清空正在写的日志文件（设计文档 3.5）；崩溃记录。
  * 界面优化第 11–13 条：级别分段带计数、分类从见过的里选、时间列、PIE 开停分隔、连续重复折叠、
  * 选中行的详情条、选中后浮出「复制 / 发给对话」
@@ -53,6 +58,10 @@ export function Logs() {
   const [focus, setFocus] = useState<number>()
   const [clearOpen, setClearOpen] = useState(false)
   const cursor = useRef(0)
+  /** 上次回包是读日志文件时的 epoch；在跑时没有（游标是桥接的） */
+  const epoch = useRef<number>(undefined)
+  /** 上次回包是不是在跑的（桥接）：读文件 ↔ 桥接换了时整份换掉，两边的行会重复 */
+  const wasLive = useRef<boolean>(undefined)
   const box = useRef<HTMLDivElement>(null)
   const [scroll, setScroll] = useState({ top: 0, height: 400 })
   const inFlight = useRef(false)
@@ -68,16 +77,22 @@ export function Logs() {
   // 筛选变了：从头取
   useEffect(() => {
     cursor.current = 0
+    epoch.current = undefined
     setLines([])
     setSkipped(0)
     setSel(new Set())
     setFocus(undefined)
   }, [filter, project.id])
 
+  const tickRef = useRef<() => void>(() => undefined)
+  const watching = useLogPush(project.id, () => tickRef.current())
   useEffect(() => {
     let stop = false
+    let again = false
     const tick = async () => {
-      if (stop || paused || document.hidden || inFlight.current) return
+      if (stop || paused || document.hidden) return
+      // 正在取时又来了推送：取完再取一次，不丢
+      if (inFlight.current) return void (again = true)
       inFlight.current = true
       try {
         const r = await ppost<TailRes>(project.id, 'logs', {
@@ -85,6 +100,7 @@ export function Logs() {
           // 级别分段是「只看这一级」：选警告时不混进错误（Agent 的 ue_log 仍按最低级别）
           exact: true,
           since: cursor.current,
+          ...(epoch.current !== undefined && { epoch: epoch.current }),
           limit: cursor.current ? 1000 : 500,
         })
         if (stop) return
@@ -101,27 +117,39 @@ export function Logs() {
             return add.length ? [...old, ...add].slice(0, MAX_CATS) : old
           })
         if (!r.live) {
-          // 日志文件：每次给的是尾部全量，直接替换
-          setLines(got)
-          cursor.current = 0
+          // 日志文件：按游标给新的；换了文件、有筛选时 reset，整份换掉
+          if (r.reset) setLines(got)
+          else if (got.length) setLines((old) => [...old, ...got].slice(-MAX_LINES))
+          cursor.current = r.cursor
+          epoch.current = r.epoch
         } else {
+          // 刚从读文件换到在跑（UE 启动了）：文件里的旧行换成桥接给的
+          if (wasLive.current === false) setLines([])
+          epoch.current = undefined
           if (r.dropped) setSkipped((s) => s + (r.dropped ?? 0))
           if (got.length) setLines((old) => [...old, ...got].slice(-MAX_LINES))
           cursor.current = r.cursor
         }
+        wasLive.current = r.live
       } catch (e) {
         if (!stop) setError((e as Error).message)
       } finally {
         inFlight.current = false
+        if (again && !stop) {
+          again = false
+          void tick()
+        }
       }
     }
+    tickRef.current = () => void tick()
     void tick()
-    const id = setInterval(() => void tick(), 1000)
+    // 推送登记不上（旧面板、盯不了目录）才退回每秒取
+    const id = watching ? undefined : setInterval(() => void tick(), 1000)
     return () => {
       stop = true
-      clearInterval(id)
+      if (id) clearInterval(id)
     }
-  }, [project.id, filter, paused])
+  }, [project.id, filter, paused, watching])
 
   // PIE 开始 / 结束时在日志里插一条分隔（按面板看到的世界变化，不靠日志文字）
   const pieOn = !!state?.instances.some((i) => i.kind === 'editor' && i.worlds.some((w) => w.type === 'PIE'))

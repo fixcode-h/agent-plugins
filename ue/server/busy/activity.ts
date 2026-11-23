@@ -1,4 +1,5 @@
-import { open, stat } from 'node:fs/promises'
+import { stripLogPrefix } from '../log-parse/entries.ts'
+import { logTailOf } from '../log-tail/registry.ts'
 
 /**
  * 编辑器忙（游戏线程卡在同步加载、编译着色器、长帧里，UELink 的 /info 几秒没回应）时，从它的日志尾部认出在忙什么。
@@ -18,8 +19,6 @@ export interface BusyGuess {
   line?: string
 }
 
-/** 「[2026.11.16-07.33.15:123][  0]LogStreaming: …」开头的时间戳和帧号 */
-const PREFIX = /^(?:\[[^\]]*\]){1,2}\s*/
 const PKG = /(\/(?:Game|Engine|Script|[A-Z][\w-]*)\/[^\s'"(),]+)/
 
 const RULES: { kind: BusyKind; re: RegExp; detail?: (m: RegExpExecArray, line: string) => string | undefined }[] = [
@@ -51,7 +50,7 @@ const RECENT = 12
 export function guessBusy(text: string): BusyGuess {
   const lines = text
     .split(/\r?\n/)
-    .map((l) => l.replace(PREFIX, '').trim())
+    .map((l) => stripLogPrefix(l).trim())
     .filter(Boolean)
   if (!lines.length) return {}
   const out: BusyGuess = { line: lines[lines.length - 1].slice(0, 200) }
@@ -68,21 +67,23 @@ export function guessBusy(text: string): BusyGuess {
   return out
 }
 
-/** 读日志文件最后 32 KB 认一遍；quietSec 是日志多久没写新内容（卡死时一直涨，加载时偶尔会动） */
+/**
+ * 从日志最后几条认一遍：读取走共用的增量读取（log-tail/，日志页开着时是同一份，不再另读一遍文件尾）；
+ * quietSec 是日志多久没写新内容（卡死时一直涨，加载时偶尔会动）
+ */
 export async function busyFromLog(file: string): Promise<BusyGuess & { quietSec?: number }> {
-  const st = await stat(file).catch(() => null)
-  if (!st) return {}
-  const size = Math.min(st.size, 32 * 1024)
-  const fh = await open(file, 'r').catch(() => null)
-  if (!fh) return {}
-  try {
-    const buf = Buffer.alloc(size)
-    await fh.read(buf, 0, size, st.size - size)
-    // 从第一个整行开始：截在半行中间的那段不要
-    const text = buf.toString('utf8')
-    const start = st.size > size ? text.indexOf('\n') + 1 : 0
-    return { ...guessBusy(text.slice(start)), quietSec: Math.max(0, Math.round((Date.now() - st.mtimeMs) / 1000)) }
-  } finally {
-    await fh.close()
-  }
+  const tail = logTailOf(file)
+  // 读不了（被独占、权限）当没线索
+  await tail.refresh().catch(() => false)
+  const recent = tail.recent(RECENT)
+  if (!recent.length) return {}
+  // 还原成「分类: 级别: 文字」（多行消息只看第一行），规则按分类名认
+  const text = recent
+    .map((l) =>
+      [l.category, l.verbosity !== 'Log' && l.category ? l.verbosity : '', l.text.split('\n')[0]]
+        .filter(Boolean)
+        .join(': '),
+    )
+    .join('\n')
+  return { ...guessBusy(text), quietSec: Math.max(0, Math.round((Date.now() - tail.mtimeMs) / 1000)) }
 }

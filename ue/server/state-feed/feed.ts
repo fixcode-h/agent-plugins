@@ -2,7 +2,7 @@ import path from 'node:path'
 import { projectState } from '../actions.ts'
 import { getProject } from '../registry.ts'
 import type { ProjectState, UeProject } from '../types.ts'
-import { c } from '../util.ts'
+import { pageSubs } from '../page-subs/index.ts'
 
 /**
  * UE 页的项目概况（实例、桥接、扩展、启动进度……）改成服务端推送（统一能力盘点第 4 项）：
@@ -18,7 +18,6 @@ export const STATE_EVENT = 'ue-state'
 const TICK_MS = 3000
 
 interface Feed {
-  conns: Set<string>
   timer?: ReturnType<typeof setInterval>
   last?: string
   running?: boolean
@@ -27,7 +26,8 @@ interface Feed {
 }
 
 const feeds = new Map<string, Feed>() // 模块状态：运行时，页面重连后重新登记
-let closeHooked = false
+// 登记的页面（共用 page-subs）：项目上没人看了就停掉这个项目的计算
+const subs = pageSubs((id) => stop(id))
 
 async function compute(id: string) {
   const f = feeds.get(id)
@@ -42,9 +42,9 @@ async function compute(id: string) {
     if (!p) return
     const state = await projectState(p)
     const sig = JSON.stringify(state)
-    if (sig === f.last || feeds.get(id) !== f || !f.conns.size) return
+    if (sig === f.last || feeds.get(id) !== f || !subs.has(id)) return
     f.last = sig
-    c().pages.push(STATE_EVENT, { project: id, state } satisfies { project: string; state: ProjectState }, [...f.conns])
+    subs.push(STATE_EVENT, id, { project: id, state } satisfies { project: string; state: ProjectState })
   } catch {
     // 算不出来（项目刚删、读盘失败）：下一拍再算，页面上保留上一份
   } finally {
@@ -77,34 +77,22 @@ function stop(id: string) {
   f.stopWatch?.()
 }
 
-function forget(conn: string) {
-  for (const [id, f] of [...feeds]) {
-    f.conns.delete(conn)
-    if (!f.conns.size) stop(id)
-  }
-}
-
 /** 页面登记 / 取消：on=false 取消。登记后马上推一份（页面不用另取） */
 export async function watchState(p: UeProject, conn: string, on: boolean) {
-  if (!conn || !c().pages.open(conn)) return { watching: false }
-  if (!closeHooked) {
-    closeHooked = true
-    c().pages.onClose(forget)
-  }
-  let f = feeds.get(p.id)
   if (!on) {
-    f?.conns.delete(conn)
-    if (f && !f.conns.size) stop(p.id)
+    subs.remove(p.id, conn)
     return { watching: false }
   }
+  const r = subs.add(p.id, conn)
+  if (!r.ok) return { watching: false }
+  let f = feeds.get(p.id)
   if (!f) {
-    f = { conns: new Set() }
+    f = {}
     feeds.set(p.id, f)
     f.timer = setInterval(() => void compute(p.id), TICK_MS)
     f.timer.unref?.()
     void watchCards(p, f)
   }
-  f.conns.add(conn)
   // 新来的页面也要拿到一份：清掉上次的签名，这一次照推
   f.last = undefined
   void compute(p.id)
@@ -118,5 +106,6 @@ export function kickState(projectId: string) {
 
 /** 插件停掉时 */
 export function stopStateFeeds() {
+  subs.clear()
   for (const id of [...feeds.keys()]) stop(id)
 }

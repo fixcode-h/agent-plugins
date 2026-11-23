@@ -9,7 +9,8 @@ import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
 import { availableVersion } from './uelink.ts'
 import { projectJobs } from './jobs.ts'
-import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile, tailFile } from './logs.ts'
+import { clearOfflineLog, levelMatches, logFile, type LogLine, logSize, searchFile } from './logs.ts'
+import { logTailOf } from './log-tail/registry.ts'
 import { markOf, readMarks, saveMark } from './log-clear/mark.ts'
 import { runOp, type OpCtx } from './ops.ts'
 import { runLuaGm } from './lua-gm/run.ts'
@@ -91,13 +92,16 @@ export interface LogArgs {
   /** 只要这一级（网页的级别分段），见 LineFilter.exact */
   exact?: boolean
   contains?: string
+  /** 读日志文件时上次回包的 epoch（游标是文件里的，不是桥接的）：在跑时带着它说明页面拿的是文件游标，从头取 */
+  epoch?: number
 }
 
 /** 日志：UE 在跑就从桥接取（带游标），没在跑读日志文件尾部 */
 export async function logTail(ctx: OpCtx, a: LogArgs) {
   const cards = (await liveCards(ctx.project.root)).filter((x) => x.kind !== 'background')
   if (cards.length) {
-    const r = await runOp(ctx, 'log.tail', { ...a, limit: a.limit ?? 300 })
+    const { epoch, ...rest } = a
+    const r = await runOp(ctx, 'log.tail', { ...rest, ...(epoch !== undefined && { since: 0 }), limit: a.limit ?? 300 })
     // 桥接的 verbosity 是最低级别（Warning 连错误也给）；网页要「只看这一级」时在这里再筛一遍，旧桥接也适用
     // 清空过的进程只给清空之后的行：缓冲里的旧行桥接没丢（log-clear/mark.ts）
     const pid = (r.instance as { pid?: number } | undefined)?.pid
@@ -118,21 +122,39 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
       ),
     }
   }
-  // UE 没在运行：没筛选时只读文件尾部；有筛选时流式搜索最后 64 MB（大文件不整个读进内存）
-  const filtered = !!(a.category || a.verbosity || a.contains)
-  const r = filtered
-    ? await searchFile(logFile(ctx.project), a, a.limit ?? 300)
-    : { ...(await tailFile(logFile(ctx.project), a.limit ?? 300)), truncated: false }
+  // UE 没在运行：有筛选时流式搜索最后 64 MB（大文件不整个读进内存），每次整份给；
+  // 没筛选时走共用的增量读取（log-tail/），按游标只给新的，换了文件给 reset 让页面整份换掉
+  const file = logFile(ctx.project)
+  const at = (l: LogLine) => ({ ...l, at: fileTime(l.time) })
+  if (a.category || a.verbosity || a.contains) {
+    const r = await searchFile(file, a, a.limit ?? 300)
+    return {
+      live: false,
+      lines: r.lines.map(at),
+      cursor: 0,
+      reset: true,
+      // 按读到的整段算（不是筛选后的行），和在跑时桥接给的总数一样不随筛选变
+      errors: r.errors,
+      warnings: r.warnings,
+      file: r.file,
+      size: r.size,
+      truncated: r.truncated,
+    }
+  }
+  const tail = logTailOf(file)
+  await tail.refresh()
+  const r = tail.since(a.since ?? 0, a.epoch, a.limit ?? 300)
   return {
     live: false,
-    lines: r.lines.map((l: LogLine) => ({ ...l, at: fileTime(l.time) })),
-    cursor: 0,
-    // 按读到的整段算（不是筛选后的行），和在跑时桥接给的总数一样不随筛选变
-    errors: r.errors,
-    warnings: r.warnings,
-    file: r.file,
-    size: r.size,
-    truncated: r.truncated,
+    lines: r.lines.map(at),
+    cursor: r.cursor,
+    epoch: r.epoch,
+    reset: r.reset,
+    errors: tail.errors,
+    warnings: tail.warnings,
+    file,
+    size: tail.size,
+    truncated: false,
   }
 }
 

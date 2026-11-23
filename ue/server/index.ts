@@ -13,6 +13,7 @@ import { stopLuaGmWatch } from './lua-gm/scan.ts'
 import { stopGmWatch } from './gm-custom/watch.ts'
 import { stopStateFeeds } from './state-feed/feed.ts'
 import { stopDocsRootFollow } from './doc-root.ts'
+import { stopLogFeeds } from './log-tail/feed.ts'
 import { installedIn } from './uekit/catalog.ts'
 import { EXT_TOOL_PLUGIN } from './uekit/tools-ext.ts'
 import { listProjects, projectForRun } from './registry.ts'
@@ -182,6 +183,7 @@ const activate: ActivateServer = async (ctx) => {
       stopGmWatch()
       stopStateFeeds()
       stopDocsRootFollow()
+      stopLogFeeds()
     },
   }
 }
