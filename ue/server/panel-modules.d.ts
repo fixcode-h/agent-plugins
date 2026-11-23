@@ -256,3 +256,18 @@ declare module '@panel/server/watch/dir' {
     o?: { recursive?: boolean; onLost?: (why: string) => void },
   ): { close(): void } | undefined
 }
+
+/** 项目文件索引的帮助函数：等就绪、按目录取（带 ext）、换相对路径（UE、表格插件共用） */
+declare module '@panel/server/file-index/indexed' {
+  type Files = import('../../sdk/server.ts').PluginFiles | undefined
+  type Index = import('../../sdk/server.ts').PluginFileIndex
+  export function readyIndex(files: Files, projectIdOrDir: string, ms?: number): Promise<Index | undefined>
+  export function indexedTree(
+    files: Files,
+    root: string,
+    o?: { ext?: string[]; want?: RegExp; idx?: Index },
+  ): Promise<string[] | undefined>
+  export function indexedDirs(files: Files, root: string, idx?: Index): Promise<string[] | undefined>
+  export function touchIndexed(files: Files, paths: string[]): void
+  export function extsOfGlob(glob: string): string[] | undefined
+}

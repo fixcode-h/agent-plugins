@@ -73,6 +73,57 @@ globalThis.__agentPanelServer = {
       },
       VcsInputError: class extends Error {},
     },
+    // 版本管理服务（面板 ADR 0073）：冒烟测试的假项目不在版本管理里
+    'server/vcs/detect': { detectVcs: async (d) => ({ vcs: 'none', root: d }) },
+    'server/vcs/run': {
+      vcsExec: async () => ({
+        ok: false,
+        code: -1,
+        stdout: Buffer.alloc(0),
+        stderr: '',
+        spawnError: '冒烟测试里没有 p4 / svn',
+      }),
+      vcsWhy: (cmd) => `冒烟测试里没有 ${cmd}`,
+    },
+    'server/vcs/p4-plan': {
+      p4WritePlan: async () => ({ edit: [], add: [], opened: [], stale: [] }),
+      p4Open: async () => undefined,
+    },
+    'server/p4-split': { p4Runner: () => async () => ({ ok: false, out: '', err: '冒烟测试里没有 p4' }) },
+    'server/exec/git': {
+      gitRun: async () => ({ code: 1, stdout: '', stderr: '', spawnError: '冒烟测试里没有 git' }),
+    },
+    // 缓存和文件监听（面板 ADR 0074）：缓存照常算（不过期、不盯文件），监听不开
+    'server/memo/index': {
+      createMemo: (o) => {
+        const m = new Map()
+        const keyOf = o.keyOf ?? String
+        return {
+          get: (k, g) => {
+            const key = keyOf(k)
+            if (!g?.fresh && m.has(key)) return m.get(key)
+            const v = o.load(k)
+            m.set(key, v)
+            v.catch(() => m.delete(key))
+            return v
+          },
+          peek: (k) => m.get(keyOf(k)),
+          invalidate: (k) => (k === undefined ? m.clear() : m.delete(keyOf(k))),
+          size: () => m.size,
+        }
+      },
+    },
+    'server/watch/dir': { watchDir: () => undefined },
+    'server/watch/files': { watchFiles: (files) => ({ close: () => {}, unwatched: files }) },
+    'server/watch/tree': { watchTree: () => undefined, TREE_SKIP: new Set() },
+    // 文件索引帮助函数：冒烟测试没有索引，一律退回自己走目录
+    'server/file-index/indexed': {
+      readyIndex: async () => undefined,
+      indexedTree: async () => undefined,
+      indexedDirs: async () => undefined,
+      touchIndexed: () => {},
+      extsOfGlob: () => undefined,
+    },
     'server/download': {
       downloadFile: async (url, to) => {
         const res = await fetch(url)

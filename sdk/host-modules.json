@@ -125,6 +125,7 @@
     "server/exec/retry-policy",
     "server/exec/vcs-history",
     "server/exec/vcs-run",
+    "server/file-index/indexed",
     "server/fs",
     "server/image",
     "server/log",
@@ -177,6 +178,13 @@
     "shared/task",
     "shared/text"
   ],
-  "webPackages": ["@radix-ui/react-dialog", "@radix-ui/react-popover", "@xyflow/react", "zod"],
-  "serverPackages": ["zod"]
+  "webPackages": [
+    "@radix-ui/react-dialog",
+    "@radix-ui/react-popover",
+    "@xyflow/react",
+    "zod"
+  ],
+  "serverPackages": [
+    "zod"
+  ]
 }

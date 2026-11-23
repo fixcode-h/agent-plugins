@@ -127,15 +127,18 @@ export async function detectUnLua(
 
 /**
  * 带缓存的版本：概况每次刷新都要问，扫引擎的插件树要几百次 stat。
- * 缓存走面板的派生缓存（server/memo，面板 ADR 0074）：.uproject 改了、Plugins/ 下装或删了插件（.uplugin 变化）马上重新认，
- * 盯不住时和引擎里的变化一样十分钟后重认；设置 →「数据」能看到和清空
+ * 缓存走面板的派生缓存（server/memo，面板 ADR 0074）：.uproject 改了、Plugins/ 下装或删了插件马上重新认；
+ * 装进更深的子目录靠盯 .uplugin 的变化，盯不住时和引擎里的变化一样十分钟后重认；设置 →「数据」能看到和清空
  */
 type UnLuaProject = Pick<UeProject, 'root' | 'uproject' | 'engine' | 'engineDir'>
-const memo = ueMemo<UnLuaProject, UnLuaFound>({
+/** 键里带 .uproject 和 Plugins/ 的修改时间：改了启用的插件、在 Plugins/ 下直接装或删插件，下一次取马上重新认（不等监听的事件） */
+type Keyed = UnLuaProject & { stamp: string }
+const memo = ueMemo<Keyed, UnLuaFound>({
   name: 'ue.unlua-detect',
-  keyOf: (p) => [p.root, p.uproject, p.engine?.dir || p.engineDir || ''].join('|'),
+  keyOf: (p) => [p.root, p.uproject, p.engine?.dir || p.engineDir || '', p.stamp].join('|'),
   load: (p) => detectUnLua(p).catch(() => ({ found: false }) as UnLuaFound),
   ttlMs: 10 * 60_000,
+  max: 32,
   watch: (p) => ({
     files: p.uproject ? [p.uproject] : [],
     trees: [path.join(p.root, 'Plugins')],
@@ -143,7 +146,15 @@ const memo = ueMemo<UnLuaProject, UnLuaFound>({
   }),
 })
 
-export const unluaOf = (p: UnLuaProject): Promise<UnLuaFound> => memo.get(p)
+export async function unluaOf(p: UnLuaProject): Promise<UnLuaFound> {
+  const mtime = (f: string) =>
+    stat(f).then(
+      (s) => s.mtimeMs,
+      () => 0,
+    )
+  const stamp = `${await mtime(p.uproject || '')}|${await mtime(path.join(p.root, 'Plugins'))}`
+  return memo.get({ ...p, stamp })
+}
 
 export const hasUnLua = async (p: Pick<UeProject, 'root' | 'uproject' | 'engine' | 'engineDir'>) =>
   (await unluaOf(p)).found
