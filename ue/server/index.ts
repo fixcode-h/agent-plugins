@@ -21,6 +21,7 @@ import { UE_SUMMARY } from './tool-guides.ts'
 import { c, setCtx, t } from './util.ts'
 import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
 import { engineFacts } from './engine-facts.ts'
+import { gtOfferBeforeEnd, gtOfferTrack } from './gt-offer.ts'
 
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
@@ -42,6 +43,7 @@ const HINT = `## UE 工具
 - 改资源（DataTable、DataAsset）先在运行时验证；资源改动只是暂存，要 ue_save 才写回（会请用户确认）。
 - 看资源：ue_asset describe / export / refs；新建、复制、改名、删除也在 ue_asset（先 dryRun；要不要请用户确认看结构性操作权限），不认识的类型用 ue_asset help。
 - 蓝图：ue_blueprint outline 看大纲 → graph 读一张图的伪代码 → edit 按操作列表改（先 dryRun 演练，改完看返回的编译结果，有错按节点 id 接着修），保存前用 ue_compile 编译确认通过；ue_find kind=node 跨蓝图搜节点。蓝图资源路径在 ue_get / ue_set 里是类默认值，在 ue_blueprint / ue_asset 里是蓝图本身。
+- 验证到编译为止，不跑引擎的 Automation RunTests（面板会拦）；要看功能在游戏里是否正常，先用提问工具问用户要不要写 GameTest 测试脚本，同意了再按 ue-gametest-authoring 写、用 ue_gametest 跑。
 - 工具报错原样告诉用户，不要绕过权限或换别的办法偷偷重试；运行时修改和没保存的资源修改可以 ue_undo 撤回。`
 
 /**
@@ -123,6 +125,10 @@ const activate: ActivateServer = async (ctx) => {
         },
       ],
     }),
+
+    // 清单 hooks 里的钩子（插件接口 3）：编译通过后问一次要不要写 GameTest（gt-offer.ts）
+    hook: (id, input) =>
+      id === 'gt-offer-track' ? gtOfferTrack(input) : id === 'gt-offer' ? gtOfferBeforeEnd(input) : undefined,
 
     // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
     textify: ueTextifier,
