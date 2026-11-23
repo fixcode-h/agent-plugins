@@ -13,6 +13,7 @@ test('跳过的目录', () => {
   assert.equal(ignoredChange('.git/index'), true)
   assert.equal(ignoredChange('Source/Intermediate/x.h'), true)
   assert.equal(ignoredChange('.agentpanel/tables/enum-scan-results.json'), true)
+  assert.equal(ignoredChange('docs/AgentPanel/Tables/enum-scan-results.json'), true)
 })
 
 test('按 watch 规则开目录，改了就扫、推给页面；规则关掉就收', async () => {

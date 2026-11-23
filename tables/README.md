@@ -8,7 +8,7 @@
 - **项目设置的「表格」页**（`projectSections`）：表格目录、表头、枚举、校验、导表、AI 分析；目录这些设置存在 `project.plugins.tables`，跟项目设置一起保存。
 - **设置 →「组件」里的示例**（`specimens`）：枚举下拉、列表编辑、检查结果栏。
 - **服务端**（`server/index.ts`）：表格页的接口挂在 `/api/plugins/tables/api/tables/`；`table.*` 面板动作（`server/actions.ts`）；评审里 `.xlsx` / `.xlsm` 的差异（`server/review.ts`，`textify.diff`）。
-- **数据**：结构文件在项目目录 `.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，保存前的备份在数据目录里，和面板自带时同一个位置；插件删了也照样留着。
+- **数据**：结构文件在文档根 `AgentPanel/Tables/`（设置选「只存本机」时在数据目录 `project-data/Tables/<项目 id>/`），1.8.0 以前的 `.agentpanel/tables/` 第一次用到时自动复制过去；保存前的备份在数据目录里；插件删了也照样留着。
 
 ## 代码布局
 

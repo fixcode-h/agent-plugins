@@ -45,8 +45,10 @@ export interface EnumScanWatchDeps {
 
 /** 事件里的相对路径落在要跳过的目录里 */
 export function ignoredChange(rel: string) {
-  return rel
-    .replace(/\\/g, '/')
+  const norm = rel.replace(/\\/g, '/')
+  // 结构文件自己的目录（文档根/AgentPanel/Tables，文档根在项目里时也在盯的范围内）：写扫描结果不能反过来再触发一次
+  if (/(^|\/)AgentPanel\/Tables\//.test(norm)) return true
+  return norm
     .split('/')
     .slice(0, -1)
     .some((s) => SKIP_DIRS.has(s) || s.startsWith('.'))

@@ -73,7 +73,7 @@ export async function projectOf(deps: TablesDeps, id: string) {
     : false
   if (!ok) throw new HttpError(t('项目目录不存在：{dir}', { dir: p.path || t('（未设置）') }), 404)
   const cfg = tablesOf(p) ?? TablesConfig.parse({})
-  return { project: p, dir, cfg, schemaAt: schemaDir(dir, p.id, cfg) }
+  return { project: p, dir, cfg, schemaAt: await schemaDir(dir, p.id, cfg) }
 }
 
 /** 版本命令在哪个目录跑：项目目录里的表格在项目目录跑，项目目录外的在它所在的目录跑（那边自己的仓库） */

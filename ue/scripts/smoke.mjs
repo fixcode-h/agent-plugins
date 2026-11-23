@@ -121,6 +121,8 @@ globalThis.__agentPanelServer = {
     'server/jobs/registry': {
       startJob: () => ({ id: 'smoke', log: () => {}, progress: () => {}, end: () => {}, canceled: false }),
     },
+    // 文档根变化事件：冒烟测试里文档根不会变
+    'server/docs/root-cache': { onDocRootChange: () => () => {} },
     // 外部进程入口（面板 ADR 0076）：冒烟测试起的是真进程，只是不登记
     'server/exec/tracked': {
       spawnTracked: (cmd, args, o) => {

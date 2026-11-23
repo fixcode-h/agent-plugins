@@ -19,7 +19,7 @@ export const TablesConfig = z.object({
   dirs: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
   include: z.string().trim().max(300).default(TABLE_INCLUDE),
   exclude: z.string().trim().max(300).default(TABLE_EXCLUDE),
-  /** project：项目目录 .agentpanel/tables/（能提交给团队）；data：只存本机数据目录 */
+  /** project：文档根/AgentPanel/Tables/（能提交给团队，值名沿用旧的）；data：只存本机数据目录 */
   store: z.enum(['project', 'data']).default('project'),
   /** 只读：表格页只能看、搜、对比，不能改 */
   readOnly: z.boolean().default(false),

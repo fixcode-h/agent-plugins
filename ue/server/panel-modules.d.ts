@@ -510,3 +510,19 @@ declare module '@panel/web/src/components/ui/split-pane' {
     edge?: boolean
   }): ReactElement
 }
+
+/** 服务端：项目文档根变了（项目设置里改的）时通知（面板 server/docs/root-cache.ts）；root 为空表示可能变了、自己重新问 */
+declare module '@panel/server/docs/root-cache' {
+  export function onDocRootChange(fn: (projectId: string, root: string | undefined) => void): () => void
+}
+
+/** 服务端：按项目存数据（面板 server/project-data/index.ts）：共享的在文档根/AgentPanel/<名字>，本机的在数据目录，写入原子且按 P4 签出规则 */
+declare module '@panel/server/project-data/index' {
+  export interface ProjectData {
+    shared: string
+    local: string
+    write: (file: string, data: string | object) => Promise<void>
+  }
+  export function projectData(projectId: string, name: string): Promise<ProjectData>
+  export function writeTracked(file: string, text: string): Promise<void>
+}

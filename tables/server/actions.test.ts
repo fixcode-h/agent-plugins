@@ -12,6 +12,7 @@ process.env.AGENT_PANEL_DATA = mkdtempSync(path.join(tmpdir(), 'agent-panel-tabl
 const { Hono } = await import('hono')
 const { tablesApi } = await import('./tables/routes.ts')
 const { tableActions } = await import('./actions.ts')
+const { initProjectData } = await import('./project-data/index.ts')
 
 const dir = mkdtempSync(path.join(tmpdir(), 'agent-panel-table-actions-'))
 mkdirSync(path.join(dir, 'Config'))
@@ -28,6 +29,8 @@ writeFileSync(
   JSON.stringify({ header: { start: 0, rows: [{ kind: 'type' }, { kind: 'name' }] } }),
 )
 const project = { id: 'p1', name: 'g', path: dir, plugins: { tables: { dirs: ['Config'] } } }
+// 面板启动时接线的项目数据入口：没有文档根时结构文件在 <项目>/docs/AgentPanel/Tables，旧的 .agentpanel/tables 第一次用到时复制过去
+initProjectData({ getProject: async () => project as never, docRoot: async () => undefined })
 const app = new Hono().route(
   '/api/plugins/tables/api/tables',
   tablesApi({ projects: { get: async () => project as never } }),
@@ -158,4 +161,11 @@ test('列结构：类型、枚举能填的值、表头几行、数据从第几�
   assert.equal(q.kind, 'enum')
   assert.deepEqual(q.enum?.values.slice(0, 2), ['Common', 'Rare'])
   assert.equal(v.columns.find((c) => c.field === 'ID')?.kind, 'uint')
+})
+
+test('结构文件：旧的 .agentpanel/tables 第一次用到时复制到 文档根/AgentPanel/Tables，旧文件留着', async () => {
+  const moved = path.join(dir, 'docs', 'AgentPanel', 'Tables')
+  assert.match(readFileSync(path.join(moved, 'enums.json'), 'utf8'), /Rare/)
+  assert.match(readFileSync(path.join(moved, 'style.json'), 'utf8'), /header/)
+  assert.match(readFileSync(path.join(dir, '.agentpanel', 'tables', 'enums.json'), 'utf8'), /Rare/)
 })
