@@ -43,7 +43,7 @@ export function ObjHead({
       <Icon className="ue:h-4 ue:w-4 ue:shrink-0 ue:text-accent-text" />
       <span className="ue:truncate ue:text-body ue:font-semibold ue:text-fg">{obj.name}</span>
       <span className="ue:min-w-0 ue:max-w-[50%] ue:overflow-hidden">
-        <ObjRule o={obj} small noIcon />
+        <ObjRule o={obj} small noIcon name={obj.name} />
       </span>
       {obj.ref && live && <HitBadge n={hit?.count} error={hit?.error} />}
       <span className="ue:flex-1" />
