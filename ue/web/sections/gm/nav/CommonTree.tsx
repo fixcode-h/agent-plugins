@@ -116,20 +116,30 @@ export function CommonTree({
     openMenu(e, [
       ...(gone(r.f) ? [] : itemMenu(r.f)),
       'sep',
-      { title: t('移到分组') },
-      ...['', ...groups].map((p) => ({
-        label: p || t('（最外层）'),
-        icon: p ? Folder : FolderInput,
-        disabled: (r.f.group ?? '') === p,
-        onClick: () => save(setCommonGroup(g, r.i, p || undefined)),
-      })),
+      // 分组多了平铺会把菜单撑得很长：收进子菜单（项多自动带搜索）
       {
-        label: t('新分组…'),
-        icon: FolderPlus,
-        onClick: async () => {
-          const name = await askGroup(t('新建分组'))
-          if (name) save(setCommonGroup(addCommonGroup(g, name), r.i, name))
-        },
+        label: t('移到分组'),
+        icon: FolderInput,
+        hint: r.f.group || t('（最外层）'),
+        search: t('搜分组'),
+        sub: [
+          {
+            label: t('新分组…'),
+            icon: FolderPlus,
+            onClick: async () => {
+              const name = await askGroup(t('新建分组'))
+              if (name) save(setCommonGroup(addCommonGroup(g, name), r.i, name))
+            },
+          },
+          'sep',
+          ...['', ...groups].map((p) => ({
+            label: p || t('（最外层）'),
+            icon: p ? Folder : FolderInput,
+            checked: (r.f.group ?? '') === p,
+            disabled: (r.f.group ?? '') === p,
+            onClick: () => save(setCommonGroup(g, r.i, p || undefined)),
+          })),
+        ],
       },
       'sep',
       {
