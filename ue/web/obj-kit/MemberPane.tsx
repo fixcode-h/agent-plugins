@@ -10,10 +10,13 @@ import { useVars, type VarScope } from '../sections/uekit/gt-vars/model.ts'
 import { declPropsOf, fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
 import { VarList, type VarSel } from './VarList.tsx'
 
-export type MemberTab = 'fns' | 'props' | 'lua' | 'states'
+/** 页签里具体看的那一栏：UE 页分函数 / 属性，Lua 页分函数 / 变量（用户 2026-11-23：方法和属性合成一个 UE 页，和 Lua 页一样里面再分两栏） */
+export type MemberTab = 'fns' | 'props' | 'luaFns' | 'luaVars' | 'states'
+type MemberGroup = 'ue' | 'lua' | 'states'
+const groupOf = (t: MemberTab): MemberGroup => (t === 'fns' || t === 'props' ? 'ue' : t === 'luaFns' || t === 'luaVars' ? 'lua' : 'states')
 
 /**
- * 对象调用中栏（规格第 7 节、效果图 2）：方法 · 属性 · Lua · 运行状态。方法按声明类分组，名字 + 签名，
+ * 对象调用中栏（规格第 7 节、效果图 2）：UE（函数 | 属性）· Lua（函数 | 变量）· 运行状态。方法按声明类分组，名字 + 签名，
  * 调不了的（callable:false）置灰、悬停写原因；属性、Lua 变量、运行状态是一行一个的变量列表（VarList），
  * 点一个在右栏「改变量」里抓取值、改值（用户 2026-11-22）；「取对象」时行尾的 ＋ 把属性加进要读的列表
  */
@@ -62,7 +65,7 @@ export function MemberPane({
   onTogglePin?: (prop: string) => void
   /** 列函数的范围另给（测试页静态函数按类列、$变量按前面「找对象」的类列）；不给按 obj 算 */
   scope?: VarScope
-  /** 只出这几页（测试页「换函数…」只要方法和 Lua）；不给四页都出 */
+  /** 只出这几栏（测试页「换函数…」只要 UE 和 Lua 的函数）；不给全出。一页里只剩一栏时不出里面的切换 */
   tabs?: MemberTab[]
 }) {
   const { ui, cn } = h()
@@ -128,7 +131,7 @@ export function MemberPane({
   // 离线的 Lua 类只有 Lua 成员：停在空的「方法」页像是什么都没读到，换对象时直接翻到 Lua 页
   const toLua = fromSource && !fns.length && luaFns.length + luaVars.length > 0
   useEffect(() => {
-    if (toLua && tab === 'fns') onTab('lua')
+    if (toLua && tab === 'fns') onTab(luaFns.length ? 'luaFns' : 'luaVars')
     // 只在换对象、刚读到成员时翻一次，之后用户自己点回「方法」不再跳
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [obj.name, toLua])
@@ -194,11 +197,6 @@ export function MemberPane({
       )
     })
   }
-  const section = (label: string) => (
-    <div className="ue:mt-1 ue:border-b ue:border-line/60 ue:px-2 ue:pt-2 ue:pb-1 ue:text-caption ue:font-semibold ue:tracking-wide ue:text-fg">
-      {label}
-    </div>
-  )
   const note = (s: string) => <p className="ue:p-3 ue:text-footnote ue:text-subtle">{s}</p>
   // 按类的对象离线也从源码列（fromSource），只有按来源（@pawn 之类）的才真的列不出
   const offline =
@@ -222,28 +220,80 @@ export function MemberPane({
           : t('游戏没在运行：运行状态要开 PIE 后才有')}
       </p>
     ) : null
+  const all: MemberTab[] = tabs ?? ['fns', 'props', 'luaFns', 'luaVars', 'states']
+  const count: Record<MemberTab, number> = {
+    fns: fns.length,
+    props: propList.length,
+    luaFns: luaFns.length,
+    luaVars: luaVars.length,
+    states: stateList.length,
+  }
+  const inGroup = (g: MemberGroup) => all.filter((x) => groupOf(x) === g)
+  const group = groupOf(tab)
+  // 切回某页时回到上次在这页看的那一栏；没看过时先给有东西的那栏（纯 Lua 类常常只有变量）
+  const [lastSub, setLastSub] = useState<Partial<Record<MemberGroup, MemberTab>>>({})
+  const lastOfGroup = lastSub[group]
+  if (lastOfGroup !== tab) setLastSub((m) => ({ ...m, [group]: tab }))
+  const openGroup = (g: MemberGroup) => {
+    const subs = inGroup(g)
+    const remembered = lastSub[g]
+    onTab(remembered && subs.includes(remembered) ? remembered : (subs.find((x) => count[x] > 0) ?? subs[0]))
+  }
+  const groupLabel: Record<MemberGroup, string> = {
+    ue: `UE ${count.fns + count.props}`,
+    lua: `Lua ${count.luaFns + count.luaVars}`,
+    states: t('运行状态 {n}', { n: count.states }),
+  }
+  const subLabel: Record<MemberTab, string> = {
+    fns: t('函数 {n}', { n: count.fns }),
+    props: t('属性 {n}', { n: count.props }),
+    luaFns: t('函数 {n}', { n: count.luaFns }),
+    luaVars: t('变量 {n}', { n: count.luaVars }),
+    states: '',
+  }
+  const subs = inGroup(group)
+  const placeholder: Record<MemberTab, string> = {
+    fns: t('搜函数'),
+    props: t('搜属性'),
+    luaFns: t('搜函数'),
+    luaVars: t('搜变量'),
+    states: '',
+  }
+  const luaEmpty = !luaFns.length && !luaVars.length
+  const luaNone = offline ?? note(vars.loading ? t('读取中…') : t('这个对象没绑 Lua，或 Lua 文件里没有声明'))
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <div className="ue:flex ue:flex-col ue:gap-2 ue:border-b ue:border-line ue:p-2">
         <ui.Segmented
           size="sm"
-          label={t('方法 / 属性 / Lua / 运行状态')}
-          value={tab}
-          onChange={onTab}
-          options={[
-            { id: 'fns' as const, label: t('方法 {n}', { n: fns.length }) },
-            { id: 'props' as const, label: t('属性 {n}', { n: propList.length }) },
-            { id: 'lua' as const, label: `Lua ${luaFns.length + luaVars.length}` },
-            { id: 'states' as const, label: t('运行状态 {n}', { n: stateList.length }) },
-          ].filter((o) => !tabs || tabs.includes(o.id))}
+          label={t('UE / Lua / 运行状态')}
+          value={group}
+          onChange={openGroup}
+          options={(['ue', 'lua', 'states'] as const)
+            .filter((g) => inGroup(g).length > 0)
+            .map((g) => ({ id: g, label: groupLabel[g] }))}
         />
         {tab !== 'states' && (
-          <ui.Input
-            size="sm"
-            placeholder={tab === 'fns' ? t('搜函数') : tab === 'props' ? t('搜属性') : t('搜函数和变量')}
-            value={q}
-            onChange={(e: { target: { value: string } }) => setQ(e.target.value)}
-          />
+          <div className="ue:flex ue:items-center ue:gap-2">
+            {/* UE 和 Lua 页里各分函数和变量两栏，各占满整栏高度（用户 2026-11-23：以前混在一个列表里，变量被挤到底部） */}
+            {subs.length > 1 && (
+              <ui.Segmented
+                size="sm"
+                label={group === 'ue' ? t('函数 / 属性') : t('函数 / 变量')}
+                value={tab}
+                onChange={onTab}
+                options={subs.map((x) => ({ id: x, label: subLabel[x] }))}
+              />
+            )}
+            <div className="ue:min-w-0 ue:flex-1">
+              <ui.Input
+                size="sm"
+                placeholder={placeholder[tab]}
+                value={q}
+                onChange={(e: { target: { value: string } }) => setQ(e.target.value)}
+              />
+            </div>
+          </div>
         )}
       </div>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:p-1">
@@ -263,27 +313,18 @@ export function MemberPane({
                       ? t('这是 Lua 类：函数在「Lua」页')
                       : t('没有能调的函数'),
                 )))}
-        {tab === 'lua' && (
-          // 函数和变量分成两组（用户 2026-11-22：以前混在一个列表里），搜索两组都筛
-          <>
-            {luaFns.length > 0 && section(t('函数 {n}', { n: luaFns.length }))}
-            {fnList(luaFns)}
-            {/* 游戏开着时用 gt.props 读到的实例上的值；读不到时退回 Lua 文件里声明的字段 */}
-            {luaVars.length > 0 && (
-              <>
-                {section(t('变量 {n}', { n: luaVars.length }))}
-                {varList(
-                  luaVars.map((p) => ({ ...p, category: undefined })),
-                  true,
-                )}
-              </>
-            )}
-            {/* B7：离线时读不到不等于没绑 Lua，先说是没连上 */}
-            {!luaFns.length &&
-              !luaVars.length &&
-              (offline ?? note(vars.loading ? t('读取中…') : t('这个对象没绑 Lua，或 Lua 文件里没有声明')))}
-          </>
-        )}
+        {tab === 'luaFns' &&
+          (luaFns.length ? fnList(luaFns) : luaEmpty ? luaNone : note(t('Lua 文件里没有函数，变量在「变量」栏')))}
+        {/* 游戏开着时用 gt.props 读到的实例上的值；读不到时退回 Lua 文件里声明的字段 */}
+        {tab === 'luaVars' &&
+          (luaVars.length
+            ? varList(
+                luaVars.map((p) => ({ ...p, category: undefined })),
+                true,
+              )
+            : luaEmpty
+              ? luaNone
+              : note(t('Lua 文件里没有声明变量')))}
         {(tab === 'props' || tab === 'states') &&
           (obj.src
             ? note(t('来源对象只列方法；属性在 GameTest 的选对象面板里看'))

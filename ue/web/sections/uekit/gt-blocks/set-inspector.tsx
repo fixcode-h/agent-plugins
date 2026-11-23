@@ -94,7 +94,7 @@ export function SetInspector({ step, onChange }: { step: GtStep; onChange: (s: G
                 live={ctx.live}
                 tab={tab}
                 onTab={setTab}
-                tabs={['props', 'lua', 'states']}
+                tabs={['props', 'luaVars', 'states']}
                 onFn={() => undefined}
                 varSel={prop}
                 onVar={(v) => {
