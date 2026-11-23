@@ -104,6 +104,8 @@ export function TableBindDialog({
       open
       onOpenChange={(o: boolean) => !o && onClose()}
       title={t('参数 {p} 关联表格', { p: param })}
+      // 标题带参数名：固定键让所有参数的关联弹窗共用一份尺寸记忆（用户 2026-11-23）
+      resizeKey="ue-gm-table-bind"
       footer={
         <>
           {hint && (
