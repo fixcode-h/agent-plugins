@@ -3,6 +3,7 @@ import path from 'node:path'
 import { readIni } from '../editor-tools/config-layers.ts'
 import { docsSubDir } from './docs-sub.ts'
 import { t } from '../util.ts'
+import { indexedTree } from '../file-index.ts'
 import { SCHEMA_VERSION } from '../../shared/gt-script/script.ts'
 
 /**
@@ -94,6 +95,12 @@ function validate(doc: Record<string, unknown>) {
 }
 
 async function walkJson(dir: string, out: string[]) {
+  // 面板有项目文件索引、场景根在索引里时直接取
+  const listed = await indexedTree(dir, /\.json$/i)
+  if (listed) {
+    for (const r of listed) out.push(path.join(dir, ...r.split('/')))
+    return
+  }
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
     const abs = path.join(dir, e.name)
     if (e.isDirectory()) await walkJson(abs, out)

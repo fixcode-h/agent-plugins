@@ -5,6 +5,7 @@ import { t } from '../../util.ts'
 import { callHits, fileKey } from './call-refs.ts'
 import { exists, isDir, libPath, slash, stemOf, walkDirs, walkJson } from './files.ts'
 import { scanCalls } from './scan.ts'
+import { touchIndexed } from '../../file-index.ts'
 import type { LibArgs } from './types.ts'
 
 /**
@@ -52,6 +53,7 @@ export async function createScript(projectRoot: string, a: LibArgs) {
     steps: [],
   }
   await writeFile(to.abs, JSON.stringify(doc, null, '\t') + '\n', 'utf8')
+  touchIndexed([to.abs])
   return { path: to.rel }
 }
 
@@ -98,5 +100,6 @@ export async function deleteEntry(projectRoot: string, a: LibArgs) {
   })
   // 整理过的脚本留着的原录制备份（gt-tidy.ts 的 <文件>.json.bak）跟着删，不留孤儿
   if (!dir) await rm(`${f.abs}.bak`, { force: true })
+  touchIndexed([f.abs])
   return { path: f.rel }
 }

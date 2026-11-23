@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { indexedTree } from '../../file-index.ts'
 import type { UeProject } from '../../types.ts'
 
 /**
@@ -39,6 +40,9 @@ export async function readLua(abs: string) {
 /** 一个文件夹（及子文件夹）下的 .lua，最多 limit 个（接口库文件夹不会更大；防止配成整个脚本根卡住） */
 export async function listLua(dir: string, limit = 2000): Promise<string[]> {
   const out: string[] = []
+  // 面板有项目文件索引时直接取，不走目录
+  const listed = await indexedTree(dir, /\.lua$/i)
+  if (listed) return listed.sort().slice(0, limit).map((r) => path.join(dir, ...r.split('/')))
   const walk = async (d: string) => {
     if (out.length >= limit) return
     const entries = await readdir(d, { withFileTypes: true }).catch(() => [])

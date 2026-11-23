@@ -21,6 +21,7 @@ import { UE_SUMMARY } from './tool-guides.ts'
 import { c, setCtx, t } from './util.ts'
 import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
 import { engineFacts } from './engine-facts.ts'
+import { ueIndexRoots } from './file-index-roots.ts'
 import { gtOfferBeforeEnd, gtOfferTrack } from './gt-offer.ts'
 
 /**
@@ -132,6 +133,9 @@ const activate: ActivateServer = async (ctx) => {
 
     // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
     textify: ueTextifier,
+
+    // 项目文件索引（面板插件接口 16）：引擎的 Engine 目录也收进面板的文件索引，旧面板不调
+    fileIndexRoots: ueIndexRoots,
 
     // 项目能力（插件接口 9）：新建项目时按目录推荐，打开了但没接入、没装桥接时提示
     detect: detectUe,

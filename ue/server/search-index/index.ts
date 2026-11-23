@@ -52,7 +52,7 @@ async function buildAssets(p: UeProject, c: Cache, dirs: string[]): Promise<Part
     const data = await readUetovsAssets(found, p.root, mounts)
     if (data) return { key, data, source: 'uetovs', file: found.file }
   }
-  const data = await diskAssets(c.assetDisk, mounts)
+  const data = await diskAssets(c.assetDisk, mounts, p.id)
   return { key: `d:${c.assetDisk.generation}`, data, source: 'disk' }
 }
 
@@ -66,7 +66,7 @@ async function buildLua(p: UeProject, c: Cache, dirs: string[]): Promise<Part<In
   }
   // 和 Lua 编译设置的脚本目录一致（默认 Content/Script）；没有这个目录的项目就是没有 Lua
   const scriptDir = path.resolve(p.root, p.luaBuild?.scriptDir || 'Content/Script')
-  const data = await diskLua(c.luaDisk, scriptDir)
+  const data = await diskLua(c.luaDisk, scriptDir, p.id)
   return { key: `d:${c.luaDisk.generation}`, data, source: data.length ? 'disk' : 'none' }
 }
 

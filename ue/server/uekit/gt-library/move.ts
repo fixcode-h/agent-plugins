@@ -6,6 +6,7 @@ import { outputRoot } from '../gt-disk.ts'
 import { remapCall, remapPath, rewriteCalls, type PathMove } from './call-refs.ts'
 import { exists, isDir, libPath, readJsonFile, slash, stemOf, walkJson, writeJsonFile } from './files.ts'
 import { scanCalls } from './scan.ts'
+import { touchIndexed } from '../../file-index.ts'
 import type { LibArgs } from './types.ts'
 
 /**
@@ -114,6 +115,7 @@ export async function moveEntry(projectRoot: string, a: LibArgs) {
     // 「AI 整理」留的原录制备份（<文件>.json.bak）跟着脚本走；文件夹里的本来就一起挪了
     if (!r.dir && (await exists(`${r.from.abs}.bak`)) && !(await exists(`${r.to.abs}.bak`)))
       await rename(`${r.from.abs}.bak`, `${r.to.abs}.bak`).catch(() => undefined)
+    touchIndexed([r.from.abs, r.to.abs])
   }
   if (r.name !== undefined) {
     const f = await readJsonFile(r.to.abs)

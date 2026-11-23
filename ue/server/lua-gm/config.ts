@@ -4,6 +4,7 @@ import path from 'node:path'
 import { docsRoot, legacyDocsRoot } from '../doc-root.ts'
 import type { UeProject } from '../types.ts'
 import { readJson, writeJson } from '../util.ts'
+import { indexedTree } from '../file-index.ts'
 import type { LuaGmBinding, LuaGmConfig } from './types.ts'
 
 type P = Pick<UeProject, 'id' | 'root'>
@@ -176,6 +177,17 @@ export async function matchFiles(root: string, patterns: string[]) {
         files.add(out(baseAbs))
         dirs.add(path.dirname(baseAbs))
       }
+      continue
+    }
+    // 面板有项目文件索引、这个目录也在索引里时直接按模式取（不走目录）；GM 文件内容变了照旧靠 scan.ts 盯目录
+    const fromIndex = await indexedTree(baseAbs, re)
+    if (fromIndex) {
+      for (const r of fromIndex.slice(0, MAX_FILES)) {
+        const abs = path.join(baseAbs, ...r.split('/'))
+        files.add(out(abs))
+        dirs.add(path.dirname(abs))
+      }
+      dirs.add(baseAbs)
       continue
     }
     const walk = async (rel: string, depth: number): Promise<void> => {
