@@ -417,14 +417,14 @@
   "连续 {n} 次": "{n} times in a row",
   "PIE 开始": "PIE started",
   "PIE 结束": "PIE stopped",
-  "已复制 {n} 行": "Copied {n} lines",
+  "已复制 {n} 条": "Copied {n} entries",
   "级别": "Level",
   "错误 {n}": "Errors {n}",
   "错误": "Errors",
   "警告 {n}": "Warnings {n}",
   "警告": "Warnings",
   "所有分类": "All categories",
-  "已选 {n} 行": "{n} lines selected",
+  "已选 {n} 条": "{n} entries selected",
   "复制": "Copy",
   "UE 日志：": "UE log:",
   "取消选择": "Clear selection",
@@ -5007,5 +5007,6 @@
   "函数 / 变量": "Functions / Variables",
   "搜变量": "Search variables",
   "Lua 文件里没有函数，变量在「变量」栏": "No functions in the Lua file; variables are under \"Variables\"",
-  "Lua 文件里没有声明变量": "No variables declared in the Lua file"
+  "Lua 文件里没有声明变量": "No variables declared in the Lua file",
+  "…（还有 {n} 行没列出，完整内容看日志文件）": "… ({n} more lines not shown; see the log file for the full text)"
 }
