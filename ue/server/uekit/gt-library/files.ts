@@ -49,7 +49,7 @@ export function stemOf(name: string) {
 /** 场景根下全部 .json（含 _settings.json 这类配置：它们的守护里也可能 call 脚本）；. 开头的目录（.git）不进 */
 export async function walkJson(dir: string, out: string[] = []) {
   // 面板有项目文件索引、场景根在索引里时直接取（. 开头的目录照样不进）
-  const listed = await indexedTree(dir, /\.json$/i)
+  const listed = await indexedTree(dir, /\.json$/i, undefined, ['json'])
   if (listed) {
     for (const r of listed) if (!r.split('/').some((s) => s.startsWith('.'))) out.push(path.join(dir, ...r.split('/')))
     return out

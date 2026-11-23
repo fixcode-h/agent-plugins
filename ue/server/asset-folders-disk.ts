@@ -88,7 +88,7 @@ export async function projectPlugins(root: string): Promise<Mount[]> {
   const out: Mount[] = []
   // 面板有项目文件索引时直接拿 Plugins 下的 .uplugin（只认最外层的：插件里面不会再有插件）
   const plugins = path.join(root, 'Plugins')
-  const listed = await indexedTree(plugins, /\.uplugin$/i)
+  const listed = await indexedTree(plugins, /\.uplugin$/i, undefined, ['uplugin'])
   if (listed) {
     const dirs = listed
       .map((r) => r.split('/').slice(0, -1).join('/'))

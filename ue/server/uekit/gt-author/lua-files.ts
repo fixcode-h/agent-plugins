@@ -41,7 +41,7 @@ export async function readLua(abs: string) {
 export async function listLua(dir: string, limit = 2000): Promise<string[]> {
   const out: string[] = []
   // 面板有项目文件索引时直接取，不走目录
-  const listed = await indexedTree(dir, /\.lua$/i)
+  const listed = await indexedTree(dir, /\.lua$/i, undefined, ['lua'])
   if (listed) return listed.sort().slice(0, limit).map((r) => path.join(dir, ...r.split('/')))
   const walk = async (d: string) => {
     if (out.length >= limit) return

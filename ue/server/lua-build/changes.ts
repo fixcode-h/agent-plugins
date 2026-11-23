@@ -51,7 +51,7 @@ export async function patchBuildState(projectId: string, f: (s: BuildState) => v
 export async function luaFiles(dir: string): Promise<{ path: string; mtime: number }[]> {
   const out: { path: string; mtime: number }[] = []
   // 面板有项目文件索引时文件清单直接取，只 stat 这些 .lua 拿修改时间
-  const listed = await indexedTree(dir, /(^|\/)[^.][^/]*\.lua$/i)
+  const listed = await indexedTree(dir, /(^|\/)[^.][^/]*\.lua$/i, undefined, ['lua'])
   if (listed && !listed.some((r) => r.split('/').slice(0, -1).some((s) => s.startsWith('.')))) {
     for (const rel of listed.slice(0, MAX_FILES)) {
       const st = await stat(path.join(dir, ...rel.split('/'))).catch(() => undefined)

@@ -30,9 +30,12 @@ export class DiskScanner {
   generation = 0
 
   private readonly want: RegExp
+  /** 在面板索引里先按扩展名筛（不把整个 Content 的文件都拿出来） */
+  private readonly exts: string[]
 
-  constructor(want: RegExp) {
+  constructor(want: RegExp, exts: string[]) {
     this.want = want
+    this.exts = exts
   }
 
   /** 上次从面板文件索引拿到的清单的指纹：变了才算索引变了 */
@@ -47,7 +50,7 @@ export class DiskScanner {
     const out: { root: string; rel: string }[] = []
     const rest: string[] = []
     for (const root of roots) {
-      const got = await indexedTree(root, this.want, idx)
+      const got = await indexedTree(root, this.want, idx, this.exts)
       if (got) for (const rel of got) out.push({ root, rel: rel.split('/').join(path.sep) })
       else rest.push(root)
     }
@@ -123,5 +126,5 @@ export async function diskLua(scanner: DiskScanner, scriptDir: string, projectId
   return files.map((f) => [f.rel.replace(/\\/g, '/').replace(LUA, '').replace(/\//g, '.'), path.join(f.root, f.rel)])
 }
 
-export const assetScanner = () => new DiskScanner(ASSET)
-export const luaScanner = () => new DiskScanner(LUA)
+export const assetScanner = () => new DiskScanner(ASSET, ['uasset', 'umap'])
+export const luaScanner = () => new DiskScanner(LUA, ['lua'])
