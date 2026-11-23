@@ -13,7 +13,7 @@ import type { AssistMessage } from './assist.ts'
 import { SHEET_ROLES } from './sheet-header.ts'
 import { HeaderRule } from './table-header.ts'
 import { upgradeRule } from './table-schema-upgrade.ts'
-import { TableColumn, TableEnum, type TableSchema } from './tables.ts'
+import { TYPE_NAMES, TableColumn, TableEnum, type TableSchema } from './tables.ts'
 import { EnumScan, newScanId } from './table-enum-scan.ts'
 import { MapFormat, TableType, TypeFormats } from './table-types.ts'
 
@@ -29,8 +29,10 @@ export const TABLES_STYLE_LANG = 'tables-style'
 export function tablesJsonOf(
   text: string,
   fallback: (text: string) => { json?: unknown; error?: string },
+  /** 一张表的「AI 识别表头」用 tables-header（shared/table-header-ai.ts），同一种 JSON */
+  lang: string = TABLES_STYLE_LANG,
 ): { json?: unknown; error?: string } {
-  const blocks = [...text.matchAll(new RegExp('```' + TABLES_STYLE_LANG + '[^\\n]*\\n([\\s\\S]*?)```', 'g'))]
+  const blocks = [...text.matchAll(new RegExp('```' + lang + '[^\\n]*\\n([\\s\\S]*?)```', 'g'))]
   const raw = blocks.at(-1)?.[1]
   if (raw === undefined) return fallback(text)
   try {
@@ -178,9 +180,13 @@ export function buildTablesBody(subject: Record<string, string>, messages: Assis
 function fixRule(h: unknown, roleEnums: Record<string, unknown>): unknown {
   const up = upgradeRule(h, roleEnums)
   if (!up || typeof up !== 'object' || !Array.isArray((up as { rows?: unknown }).rows)) return up
-  const rows = (up as { rows: unknown[] }).rows.map((r) => {
-    if (!r || typeof r !== 'object') return r
-    const { kind, label } = r as { kind?: unknown; label?: unknown }
+  const rows = (up as { rows: unknown[] }).rows.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw
+    let r = raw as Record<string, unknown>
+    const { kind, label, values } = r as { kind?: unknown; label?: unknown; values?: unknown }
+    // 能填什么写枚举名；AI 常照着 "@types" 的样子写成 "@Side"（实测 DeepSeek），只有 @types 带 @，其余去掉
+    if (typeof values === 'string' && values.startsWith('@') && values !== TYPE_NAMES)
+      r = { ...r, values: values.slice(1) }
     if (typeof kind === 'string' && (SHEET_ROLES as readonly string[]).includes(kind)) return r
     return { ...r, kind: 'other', ...(!label && typeof kind === 'string' ? { label: kind.slice(0, 20) } : {}) }
   })
@@ -305,7 +311,13 @@ export function draftItemIds(d: TablesDraft): string[] {
  * 把勾上的几项并进结构文件：表头、主键这类单值直接换；按文件指定的按 glob + 工作表换掉同一条；枚举、列按名字整项换
  * （手写的从枚举表取值的设置保留）。没勾的不动，记下分析时间
  */
-export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Set<string>, at: string): TableSchema {
+export function applyTablesDraft(
+  schema: TableSchema,
+  d: TablesDraft,
+  picked: Set<string>,
+  /** 记成分析时间；一张表的「AI 识别表头」不是整项目分析，传空不改 */
+  at: string,
+): TableSchema {
   const s = d.style
   const style = { ...schema.style }
   if (picked.has('header') && s.header?.rows.length) style.header = s.header
@@ -343,7 +355,7 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
       mapStore: { ...f.mapStore, ...d.formats.mapStore },
     })
   }
-  return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, analyzedAt: at }
+  return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, ...(at ? { analyzedAt: at } : {}) }
 }
 
 /**

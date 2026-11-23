@@ -88,13 +88,21 @@ async function scanNow(projectId: string, saved: TableSchema, ids: string[]) {
  * 把勾上的几项写进结构文件：在最新的结构文件上并，设置页别的地方刚存的不会被盖掉；
  * 存好后项目设置的「表头」「通用枚举」、表格页跟着更新。项目设置和分析窗口右侧都走这里，应用了就清掉暂存的结果
  */
-export async function applyAnalysis(projectId: string, draft: TablesDraft, picked: Set<string>) {
+export async function applyAnalysis(
+  projectId: string,
+  draft: TablesDraft,
+  picked: Set<string>,
+  /** single：一张表的「AI 识别表头」，不记分析时间、不动整项目分析的暂存结果 */
+  opts: { single?: boolean } = {},
+) {
   try {
     const saved = await saveTableSchema(projectId, (cur) =>
-      applyTablesDraft(cur, draft, picked, new Date().toISOString()),
+      applyTablesDraft(cur, draft, picked, opts.single ? '' : new Date().toISOString()),
     )
-    pending.delete(projectId)
-    emit()
+    if (!opts.single) {
+      pending.delete(projectId)
+      emit()
+    }
     toast.success(t('已应用到表格设置：表头、通用枚举已经更新，表格页按新的结构显示'))
     // 勾上的扫描规则马上按规则批量扫一次，枚举下拉和检查跟着有值
     const froms = new Set(draft.scans.filter((_, i) => picked.has(`scan:${i}`)).map((s) => JSON.stringify(s.from)))

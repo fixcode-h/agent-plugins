@@ -72,6 +72,10 @@ export const tablesApi = {
   sample: (projectId: string) => request<{ text: string; files: number }>(`${BASE}/${projectId}/sample`),
   /** AI 分析表格风格的第一句话（服务端读好样本、按面板的回复语言拼好） */
   analyzePrompt: (projectId: string) => request<{ prompt: string }>(`${BASE}/${projectId}/analyze-prompt`),
+  headerPrompt: (projectId: string, path: string, sheet: string) =>
+    request<{ prompt: string }>(
+      `${BASE}/${projectId}/header-prompt?path=${encodeURIComponent(path)}&sheet=${encodeURIComponent(sheet)}`,
+    ),
   analysis: (projectId: string) => request<{ saved: SavedAnalysis | null }>(`${BASE}/${projectId}/analysis`),
   saveAnalysis: (projectId: string, a: SavedAnalysis) =>
     request<{ saved: SavedAnalysis }>(`${BASE}/${projectId}/analysis`, json('PUT', a)),

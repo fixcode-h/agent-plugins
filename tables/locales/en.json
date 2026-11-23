@@ -1243,5 +1243,11 @@
   "表头 {n} 行": "{n} header rows",
   "{n} 条扫描规则": "{n} scan rules",
   "{n} 个类型": "{n} types",
-  "{n} 列": "{n} columns"
+  "{n} 列": "{n} columns",
+  "这个表格里没有工作表": "This file has no sheets",
+  "表头规则": "Header rules",
+  "AI 看这张表给出的表头规则，勾选后写进项目的表格结构文件": "Header rules the AI suggests for this table. Pick the ones to apply and they are written to the project's table structure file",
+  "把这张表开头几行和项目的表头配置交给 AI，让它说哪里对不上、给出要补的表头规则，勾选后才写进去": "Send this table's first rows and the project's header config to the AI. It explains what doesn't match and suggests header rules; nothing is written until you pick them",
+  "AI 识别表头": "AI header check",
+  "AI 识别表头：{file} · {sheet}": "AI header check: {file} · {sheet}"
 }

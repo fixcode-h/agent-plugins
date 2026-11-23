@@ -597,6 +597,7 @@ export function TableView({
         compact
         setup={
           <TableHeaderSetup
+            projectId={projectId}
             schema={schema}
             file={doc.path}
             sheet={sheet?.name ?? ''}
