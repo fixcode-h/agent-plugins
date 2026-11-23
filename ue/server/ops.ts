@@ -19,7 +19,8 @@ import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
 import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
 import { ensureLuaConfig } from './lua/settings.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
-import { c, t, wildcard } from './util.ts'
+import { c, t } from './util.ts'
+import { wildcard } from '@panel/shared/text-match/index'
 import { gameFileOf, p4EditFiles, p4SavePlan, type P4Stale } from './p4-checkout.ts'
 import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
 import { vcsCmd } from './vcs.ts'
@@ -187,7 +188,7 @@ export function dangerousMatch(command: string) {
     .split(/[,\n]/)
     .map((s) => s.trim())
     .filter(Boolean)
-  return list.find((p) => wildcard(p, command) || wildcard(p, command.split(/\s+/)[0]))
+  return list.find((p) => wildcard(command, p) || wildcard(command.split(/\s+/)[0], p))
 }
 
 async function ask(ctx: OpCtx, req: PluginConfirm) {

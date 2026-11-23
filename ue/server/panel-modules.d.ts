@@ -526,3 +526,20 @@ declare module '@panel/server/project-data/index' {
   export function projectData(projectId: string, name: string): Promise<ProjectData>
   export function writeTracked(file: string, text: string): Promise<void>
 }
+
+declare module '@panel/shared/text-match/index' {
+  /** subject 是不是匹配通配 pattern（* 任意串、? 一个字符，不分大小写） */
+  export function wildcard(subject: string, pattern: string): boolean
+  export function wildcardRe(pattern: string): RegExp
+  export interface GlobOptions {
+    ignoreCase?: boolean
+    dirPrefix?: boolean
+  }
+  export function globRe(glob: string, o?: GlobOptions): RegExp
+  export function globMatch(glob: string, file: string, o?: GlobOptions): boolean
+  export function normPath(p: string): string
+  export function splitPatterns(s: string): string[]
+  export function queryWords(q: string): string[]
+  export function textHit(fields: string | (string | undefined | null)[], query: string): boolean
+  export function textScore(text: string, query: string): number
+}

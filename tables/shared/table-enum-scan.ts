@@ -11,6 +11,7 @@
  */
 import { z } from 'zod'
 import { t } from './i18n.ts'
+import { globRe, wildcard } from './text-match/index.ts'
 import type { SheetData } from './files.ts'
 
 /** 一个成员：和 tables.ts 的 EnumValue 同样的形状（不从那边引，tables.ts 要引这里的规则，互相引会在加载时出错） */
@@ -122,31 +123,7 @@ export const isFileGlob = (file: string) => /[*?{,]/.test(file)
 
 /** 通配 → 正则（按 / 分段：** 跨目录，* ? 不跨，{a,b} 任选一个）；服务端找文件和页面判断「这个文件归不归这条规则」共用 */
 export function pathGlobRe(glob: string, ignoreCase = true) {
-  let re = ''
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]
-    if (c === '*' && glob[i + 1] === '*') {
-      i++
-      if (glob[i + 1] === '/') {
-        i++
-        re += '(?:.*/)?'
-      } else re += '.*'
-    } else if (c === '*') re += '[^/]*'
-    else if (c === '?') re += '[^/]'
-    else if (c === '{') {
-      const e = glob.indexOf('}', i)
-      if (e < 0) re += '\\{'
-      else {
-        re += `(?:${glob
-          .slice(i + 1, e)
-          .split(',')
-          .map((x) => x.replace(/[.+^$()|[\]\\]/g, '\\$&'))
-          .join('|')})`
-        i = e
-      }
-    } else re += c.replace(/[.+^$()|[\]\\]/g, '\\$&')
-  }
-  return new RegExp(`^${re}$`, ignoreCase ? 'i' : '')
+  return globRe(glob, { ignoreCase })
 }
 
 /** 表格类规则用不用到这个表格文件：写死的文件比路径，通配的按通配比（不分大小写，表格目录在 Windows 上也不分） */
@@ -229,17 +206,9 @@ export function colIndex(s: string) {
   return n - 1
 }
 
-/** 简单通配：* 任意多个字，? 一个字，不分大小写 */
+/** 简单通配：* 任意多个字，? 一个字，不分大小写（写法统一在面板 shared/text-match） */
 export function globMatch(glob: string, s: string) {
-  if (!glob || glob === '*') return true
-  const re = new RegExp(
-    `^${glob
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.')}$`,
-    'i',
-  )
-  return re.test(s)
+  return wildcard(s, glob)
 }
 
 export function renameEnum(name: string, r: ScanRename) {

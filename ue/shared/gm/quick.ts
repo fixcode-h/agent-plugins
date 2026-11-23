@@ -1,3 +1,4 @@
+import { textScore } from '@panel/shared/text-match/index'
 /**
  * 快速执行栏（GM 页梳理 F6）的纯逻辑：一行「名字 参数 参数」拆开、参数个数对齐、按输入排补全。
  * 写在 shared 里方便单测；条目长什么样由网页给（name + kind）
@@ -29,21 +30,16 @@ export interface QuickItem {
   kind: string
 }
 
-/** 补全排序：名字以输入开头的在前（越短越前），再是包含的；不分大小写；空输入不给 */
+/**
+ * 补全排序：整个相等 > 开头 > 词首 > 包含 > 拼音首字母（打分统一在面板 shared/text-match），同档名字短的在前；
+ * 不分大小写；空输入不给
+ */
 export function rankQuick<T extends QuickItem>(items: T[], q: string, limit = 8): T[] {
-  const s = q.trim().toLowerCase()
-  if (!s) return []
-  const score = (n: string) => {
-    const l = n.toLowerCase()
-    if (l === s) return 0
-    if (l.startsWith(s)) return 1
-    if (l.includes(s)) return 2
-    return -1
-  }
+  if (!q.trim()) return []
   return items
-    .map((it) => ({ it, sc: score(it.name) }))
-    .filter((x) => x.sc >= 0)
-    .sort((a, b) => a.sc - b.sc || a.it.name.length - b.it.name.length || a.it.name.localeCompare(b.it.name))
+    .map((it) => ({ it, sc: textScore(it.name, q.trim()) }))
+    .filter((x) => x.sc > 0)
+    .sort((a, b) => b.sc - a.sc || a.it.name.length - b.it.name.length || a.it.name.localeCompare(b.it.name))
     .slice(0, limit)
     .map((x) => x.it)
 }

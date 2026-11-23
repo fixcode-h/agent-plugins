@@ -1,4 +1,5 @@
-/** select 的面板侧筛选和逐个列出的上限：纯函数，不依赖面板模块，单测直接跑（targets.test.ts） */
+/** select 的面板侧筛选和逐个列出的上限：纯函数，单测直接跑（targets.test.ts，通配用面板的 shared/text-match） */
+import { wildcard } from '@panel/shared/text-match/index'
 
 /**
  * paths / items 逐个列出的默认上限（用户 2026-11-19 定 20，设置「批量时逐个列出的上限」可改）：
@@ -12,14 +13,8 @@ export function list(v: unknown): string[] {
   return arr.map((x) => String(x).trim()).filter(Boolean)
 }
 
-/** 和 UELink 的 FString::MatchesWildcard 一样：* 任意串、? 一个字符，不分大小写 */
-export function wildcard(subject: string, pattern: string) {
-  const re = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*')
-    .replace(/\?/g, '.')
-  return new RegExp(`^${re}$`, 'i').test(subject)
-}
+/** 和 UELink 的 FString::MatchesWildcard 一样：* 任意串、? 一个字符，不分大小写（写法统一在面板 shared/text-match） */
+export { wildcard }
 
 /** 面板这边的同一套筛选（旧 UELink 不认 paths / name / exclude）：带 / 的模式比对包路径，否则比对资源名 */
 export function keep(
