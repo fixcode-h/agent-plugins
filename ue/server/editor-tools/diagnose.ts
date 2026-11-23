@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { connect } from 'node:net'
 import path from 'node:path'
 import { editorBlockers } from '../procs.ts'
+import { missingModules } from '../install-files.ts'
 import { bridgeVersionIn, liveCards, olderVersion, type Card } from '../instances.ts'
 import { availableVersion } from '../uelink.ts'
 import type { UeProject } from '../types.ts'
@@ -116,7 +117,14 @@ export async function diagnose(p: UeProject): Promise<{ items: DiagItem[]; at: s
   // 1. 装没装、是不是最新
   if (!installed) {
     items.push(
-      item('installed', t('插件已安装'), 'fail', t('Plugins/UELink 里没有 UELink'), t('点「安装」装进项目，再编译'), 'install'),
+      item(
+        'installed',
+        t('插件已安装'),
+        'fail',
+        t('Plugins/UELink 里没有 UELink'),
+        t('点「安装」装进项目，再编译'),
+        'install',
+      ),
     )
   } else if (latest && olderVersion(installed, latest)) {
     items.push(
@@ -130,6 +138,20 @@ export async function diagnose(p: UeProject): Promise<{ items: DiagItem[]; at: s
       ),
     )
   } else items.push(item('installed', t('插件已安装'), 'ok', installed))
+
+  // 1b. 目录不全：升级时删到一半失败过，UBT 报 Could not find definition for module
+  const missing = installed ? await missingModules(path.join(p.root, 'Plugins', 'UELink'), 'UELink') : []
+  if (missing.length)
+    items.push(
+      item(
+        'complete',
+        t('插件文件完整'),
+        'fail',
+        t('缺模块 {mods} 的 Build.cs，编译会报找不到模块定义', { mods: missing.join('、') }),
+        t('点「安装」重新装一遍，再编译'),
+        'install',
+      ),
+    )
 
   // 2. .uproject 里关掉了
   if (installed && (await disabledInUproject(p)))
@@ -184,7 +206,9 @@ export async function diagnose(p: UeProject): Promise<{ items: DiagItem[]; at: s
         t('编辑器 PID {pids} 在运行，但 Saved/UELink/instances 里没有它的名片', {
           pids: orphans.map((o) => o.pid).join('、'),
         }),
-        t('UELink 没加载：看编辑器「插件」窗口里有没有启用、输出日志里有没有 LogAgentPanelBridge；命令行带了 -NoAgentPanel 时不起服务'),
+        t(
+          'UELink 没加载：看编辑器「插件」窗口里有没有启用、输出日志里有没有 LogAgentPanelBridge；命令行带了 -NoAgentPanel 时不起服务',
+        ),
       ),
     )
   else if (!cards.length)
@@ -219,7 +243,9 @@ export async function diagnose(p: UeProject): Promise<{ items: DiagItem[]; at: s
           t('{who} · 端口能连上', { who }),
           'fail',
           t('连不上 127.0.0.1:{port}（{msg}）', { port: card.port, msg: http.msg }),
-          t('名片可能是上次崩溃留下的、或端口被防火墙 / 代理软件拦了：重启编辑器；还不行在命令行加 -AgentPanelPort=空闲端口'),
+          t(
+            '名片可能是上次崩溃留下的、或端口被防火墙 / 代理软件拦了：重启编辑器；还不行在命令行加 -AgentPanelPort=空闲端口',
+          ),
         ),
       )
     else if (http.state === 'token')
@@ -229,7 +255,9 @@ export async function diagnose(p: UeProject): Promise<{ items: DiagItem[]; at: s
           t('{who} · 令牌对得上', { who }),
           'fail',
           t('端口通了但令牌不对（{msg}）', { msg: http.msg }),
-          t('同一个端口上是另一个进程（多开、崩溃后端口被占）：关掉多余的编辑器，删掉 Saved/UELink/instances 里的旧名片后重启'),
+          t(
+            '同一个端口上是另一个进程（多开、崩溃后端口被占）：关掉多余的编辑器，删掉 Saved/UELink/instances 里的旧名片后重启',
+          ),
         ),
       )
     else if (http.state === 'error')

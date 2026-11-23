@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { bridgeVersionIn } from '../instances.ts'
+import { missingModules } from '../install-files.ts'
 import { cmpVersion } from '../semver.ts'
 import type { UeProject } from '../types.ts'
 import { findPluginDirs, pluginVersion, UELINK, type UELinkManifest } from '../uelink.ts'
@@ -99,7 +100,15 @@ export async function installedIn(root: string, name: string) {
   const record = await readFile(path.join(dirs[0], '.install.json'), 'utf8')
     .then((s) => JSON.parse(s) as { mode?: string })
     .catch(() => undefined)
-  return { dir: dirs[0], rel: path.relative(root, dirs[0]), version, mode: record?.mode }
+  // 缺了 Build.cs 的模块（升级时删到一半失败过）：UE 插件页标「安装不完整」，给重新安装
+  const missing = await missingModules(dirs[0], name)
+  return {
+    dir: dirs[0],
+    rel: path.relative(root, dirs[0]),
+    version,
+    mode: record?.mode,
+    ...(missing.length && { missing }),
+  }
 }
 
 /** requires 里的 ">=2.2.0-beta.1"：只支持 >=（UEKit 的 kit.json 只这么写） */
@@ -132,7 +141,7 @@ export interface ExtensionStatus {
   displayName: string
   description: string
   known: boolean
-  installed?: { version: string; rel: string; mode?: string }
+  installed?: { version: string; rel: string; mode?: string; missing?: string[] }
   latest?: string
   prerelease?: string
   /** 能装的那一版（见 pickOffer） */
@@ -183,7 +192,7 @@ export async function extensionStatus(
         displayName: e?.displayName || name,
         description: e?.description || '',
         known: (KNOWN_EXTENSIONS as readonly string[]).includes(name),
-        installed: inst && { version: inst.version, rel: inst.rel, mode: inst.mode },
+        installed: inst && { version: inst.version, rel: inst.rel, mode: inst.mode, missing: inst.missing },
         latest: e?.latest?.version,
         prerelease: e?.prerelease?.version,
         offer: offerM

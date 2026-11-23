@@ -5008,5 +5008,17 @@
   "搜变量": "Search variables",
   "Lua 文件里没有函数，变量在「变量」栏": "No functions in the Lua file; variables are under \"Variables\"",
   "Lua 文件里没有声明变量": "No variables declared in the Lua file",
-  "…（还有 {n} 行没列出，完整内容看日志文件）": "… ({n} more lines not shown; see the log file for the full text)"
+  "…（还有 {n} 行没列出，完整内容看日志文件）": "… ({n} more lines not shown; see the log file for the full text)",
+  "插件文件完整": "Plugin files complete",
+  "缺模块 {mods} 的 Build.cs，编译会报找不到模块定义": "Build.cs missing for module {mods}; the build will fail with 'Could not find definition for module'",
+  "点「安装」重新装一遍，再编译": "Click Install to reinstall it, then build",
+  "{name} 的旧文件挪不开（{msg}）：有程序占着插件目录里的文件，关掉 UE 编辑器和打开了插件源码的 VS 再试": "Could not move the old {name} files ({msg}): a program is holding files in the plugin folder. Close the UE editor and any Visual Studio with the plugin source open, then try again",
+  "复制后缺少模块 {mods} 的 Build.cs": "Build.cs for module {mods} is missing after copying",
+  "{name} 没装进去，已经恢复成原来的文件：{msg}": "{name} was not installed; the original files have been restored: {msg}",
+  "旧文件 {dir} 没删掉（{msg}），不影响编译，可以手动删": "Could not delete the old files at {dir} ({msg}). This does not affect the build; you can delete them manually",
+  "项目里的 UELink {v} 不全，缺模块 {mods} 的源码：重新装一遍": "UELink {v} in the project is incomplete (source for module {mods} is missing): reinstalling",
+  "找不到模块 {mod}：装它的插件目录不全，到 UE 页「UE 插件」重新安装这个插件再编译": "Module {mod} not found: the plugin that provides it is incomplete. Reinstall that plugin on the UE page under UE Plugins, then build again",
+  "重新安装": "Reinstall",
+  "缺模块 {mods} 的源码（Build.cs），编译会报找不到模块定义：点「重新安装」": "Source (Build.cs) for module {mods} is missing, so the build will fail with 'Could not find definition for module'. Click Reinstall",
+  "安装不完整": "Incomplete install"
 }

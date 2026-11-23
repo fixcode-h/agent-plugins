@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { ProjectState, UeProject } from '../../../../server/types.ts'
 import type { ExtensionStatus } from '../../../../server/uekit/catalog.ts'
-import { extView, upgradePlan, uelinkView } from './model.ts'
+import { cardState, extView, upgradePlan, uelinkView } from './model.ts'
 
 // 用户实际碰到的：UELink 装 2.3.0（正式版最新），AssetForge 装着 1.0.0-beta.2，
 // 能升的 1.2.0-beta.2 要 UELink ≥ 2.4.0-beta.2，只有 2.4.0-beta.3 预发布能满足
@@ -39,4 +39,15 @@ test('装着的扩展已是能装的那一版时，不为它把 UELink 升到预
   const same = { ...forge, installed: { version: '1.2.0-beta.2', rel: 'Plugins/AssetForge' } }
   const link = uelinkView(project, state, { items: [same] })
   assert.equal(link.offer, undefined)
+})
+
+// 用户实际碰到的：升级时 Source 删到一半，Plugins/UELink 缺 UELinkCore.Build.cs，版本号却已是最新，
+// 卡片以前显示「已是最新」、没有按钮，编译一直报 Could not find definition for module 'UELinkCore'
+test('UELink 缺模块的 Build.cs：卡片标安装不完整（压过已是最新）', () => {
+  const broken = { ...state, bridgeMissing: ['UELinkCore'] } as ProjectState
+  const v = uelinkView(project, broken, undefined)
+  assert.deepEqual(v.installed?.missing, ['UELinkCore'])
+  assert.equal(v.upgrade, false)
+  assert.deepEqual(cardState(v), { tone: 'danger', key: 'broken' })
+  assert.deepEqual(cardState(uelinkView(project, state, undefined)), { tone: 'ok', key: 'latest' })
 })

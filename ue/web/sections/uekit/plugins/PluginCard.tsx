@@ -15,6 +15,7 @@ const STATE_LABEL: Record<StateKey, () => string> = {
   unpublished: () => t('没有发布的版本'),
   blocked: () => t('装不了'),
   missing: () => t('未安装'),
+  broken: () => t('安装不完整'),
   upgrade: () => t('可升级'),
   stale: () => t('编辑器里是旧版'),
   latest: () => t('已是最新'),

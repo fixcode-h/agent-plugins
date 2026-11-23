@@ -1,9 +1,10 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { guardStale, watchWaitMutex } from './build/stale.ts'
 import { endJob, jobLog, newJob, runningJob, spawnJob } from './jobs.ts'
 import { guardBuild } from './build-guard.ts'
+import { missingModules, swapPluginFiles } from './install-files.ts'
 import { closeBackground } from './editor.ts'
 import { blockerLines, LIVE_CODING_BLOCK } from './procs.ts'
 import type { InstallMode, Job, UeProject } from './types.ts'
@@ -165,7 +166,14 @@ export async function install(p: UeProject, mode: InstallMode, prerelease = '') 
     if (remoteError)
       jobLog(job, t('公共库读不到（{e}），用插件自带的 UELink {v}', { e: remoteError, v: source.version }))
     await removeOldPlugins(job, p)
-    if (installed && installed !== '?' && cmpVersion(installed, source.version) >= 0) {
+    // 目录不全（以前升级时删到一半失败过）：版本号再新也要重装，否则 UBT 一直报找不到模块定义
+    const missing = installed ? await missingModules(dest, UELINK) : []
+    if (missing.length)
+      jobLog(
+        job,
+        t('项目里的 UELink {v} 不全，缺模块 {mods} 的源码：重新装一遍', { v: installed, mods: missing.join('、') }),
+      )
+    if (!missing.length && installed && installed !== '?' && cmpVersion(installed, source.version) >= 0) {
       // 只升不降：另一个工具（UEToVS）装了更新的就不动
       jobLog(job, t('项目里已经是 UELink {v}，不用更新', { v: installed }))
     } else {
@@ -177,11 +185,8 @@ export async function install(p: UeProject, mode: InstallMode, prerelease = '') 
         srcDir = path.join(tmp, UELINK)
         if (!exists(path.join(srcDir, `${UELINK}.uplugin`))) throw new Error(t('源码包里没有 UELink/UELink.uplugin'))
       }
-      // 只换源码和配置：旧的 Binaries / Intermediate 留着会被 UBT 按时间戳重编，不用删
-      await rm(path.join(dest, 'Source'), { recursive: true, force: true })
-      await rm(path.join(dest, 'Config'), { recursive: true, force: true })
-      await mkdir(dest, { recursive: true })
-      await cp(srcDir, dest, { recursive: true, filter: (f) => !/[\\/](Binaries|Intermediate)([\\/]|$)/.test(f) })
+      // 只换源码和配置：旧的 Binaries / Intermediate 留着会被 UBT 按时间戳重编，不用删；失败时恢复原样（install-files.ts）
+      await swapPluginFiles(job, srcDir, dest, UELINK, p.root)
       jobLog(job, t('已把 UELink {v} 复制到 {dest}', { v: source.version, dest }))
     }
     // 安装记录：UEToVS 升级时沿用同样的模式（docs/protocol.md 第 5 节）
@@ -250,6 +255,9 @@ function buildArgs(p: UeProject) {
 const NO_TOOLCHAIN =
   /Unable to find valid .*toolchain|No valid Visual C\+\+ toolchain|Visual Studio \d+ must be installed|No Visual Studio installation/i
 
+/** UBT 找不到模块的 Build.cs 时的报错 */
+const NO_MODULE = /Could not find definition for module '([^']+)'/
+
 /**
  * 编译：有自定义命令按它（整行交给 shell），否则用引擎的 Build.bat。
  * 用 Build.bat 时先过 guardBuild（build-guard.ts）：编辑器开着或 Live Coding 的锁还在就不跑，作业带上 hint，网页给出处理方式；
@@ -272,6 +280,10 @@ export async function build(p: UeProject, opts: { force?: boolean; kill?: boolea
       }
       // 纯蓝图项目也可能装好了 VS（日志里能看到「Using Visual Studio … toolchain」），
       // 所以只在编译失败、且 UBT 说找不到 C++ 工具链时才提示装 VS，普通的编译报错不提示
+      // 插件目录不全（升级时删到一半失败过、手动删了源码）：UBT 只说找不到模块定义，指给用户怎么修
+      const lost = job.status === 'failed' ? job.log.map((l) => NO_MODULE.exec(l)?.[1]).find(Boolean) : undefined
+      if (lost)
+        jobLog(job, t('找不到模块 {mod}：装它的插件目录不全，到 UE 页「UE 插件」重新安装这个插件再编译', { mod: lost }))
       if (!p.cpp && job.status === 'failed' && job.log.some((l) => NO_TOOLCHAIN.test(l)))
         jobLog(job, t('纯蓝图项目：编译桥接插件需要本机装好 Visual Studio（含「使用 C++ 的游戏开发」）'))
     })

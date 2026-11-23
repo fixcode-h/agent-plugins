@@ -1,6 +1,7 @@
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { swapPluginFiles } from '../install-files.ts'
 import { dropFromUproject, markLocal, removeDir, unmarkLocal, vcsAdd } from '../install.ts'
 import { endJob, jobLog, newJob } from '../jobs.ts'
 import type { InstallMode, UeProject } from '../types.ts'
@@ -49,10 +50,8 @@ export async function installExtension(p: UeProject, name: string, opts: { versi
     const dropped = await dropFromUproject(p, manifest.replaces ?? [])
     if (dropped.length) jobLog(job, t('已从 .uproject 的插件列表里去掉 {names}', { names: dropped.join('、') }))
 
-    await rm(path.join(dest, 'Source'), { recursive: true, force: true })
-    await rm(path.join(dest, 'Config'), { recursive: true, force: true })
-    await mkdir(dest, { recursive: true })
-    await cp(src, dest, { recursive: true, filter: (f) => !/[\\/](Binaries|Intermediate)([\\/]|$)/.test(f) })
+    // 失败时恢复原样，不留删了一半的 Source（install-files.ts）
+    await swapPluginFiles(job, src, dest, name, p.root)
     jobLog(job, t('已把 {name} {v} 复制到 {dest}', { name, v: manifest.version, dest }))
     await writeFile(
       path.join(dest, '.install.json'),
