@@ -7,7 +7,8 @@ import { c } from './util.ts'
  * 等就绪、按目录取、换相对路径都用面板开放的 server/file-index/indexed（和表格插件同一份），这里只把 ctx.files 接上、
  * 保留插件里一直在用的签名
  */
-const panel = () => import('@panel/server/file-index/indexed')
+// 不在面板里跑（插件单测直接 node --test）时没有 @panel：当作没有索引，调用方照旧自己走目录
+const panel = () => import('@panel/server/file-index/indexed').catch(() => undefined)
 const files = () => {
   try {
     return c().files
@@ -18,12 +19,12 @@ const files = () => {
 
 /** 项目的索引（按面板项目 id） */
 export async function projectFileIndex(projectId: string): Promise<PluginFileIndex | undefined> {
-  return (await panel()).readyIndex(files(), projectId)
+  return (await panel())?.readyIndex(files(), projectId)
 }
 
 /** 按目录找到所在项目的索引（目录可以在项目外，例如引擎目录：要那个项目已经加载过） */
 export async function dirFileIndex(dir: string): Promise<PluginFileIndex | undefined> {
-  return (await panel()).readyIndex(files(), dir)
+  return (await panel())?.readyIndex(files(), dir)
 }
 
 /**
@@ -36,7 +37,7 @@ export async function indexedTree(
   idx?: PluginFileIndex,
   ext?: string[],
 ): Promise<string[] | undefined> {
-  return (await panel()).indexedTree(files(), root, { want, idx, ext })
+  return (await panel())?.indexedTree(files(), root, { want, idx, ext })
 }
 
 /** 插件写了文件（新建、导出、改名）：报给面板马上进索引；旧面板没有这个接口就算了 */
@@ -50,5 +51,5 @@ export function touchIndexed(paths: string[]) {
 
 /** root 下全部子目录（相对 root，/ 分隔）；root 不在索引里返回 undefined */
 export async function indexedDirs(root: string): Promise<string[] | undefined> {
-  return (await panel()).indexedDirs(files(), root)
+  return (await panel())?.indexedDirs(files(), root)
 }

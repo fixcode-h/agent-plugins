@@ -271,3 +271,21 @@ declare module '@panel/server/file-index/indexed' {
   export function touchIndexed(files: Files, paths: string[]): void
   export function extsOfGlob(glob: string): string[] | undefined
 }
+
+/** 后台作业注册表：侧栏底部一处看全、看日志、取消（面板 ADR 0075） */
+declare module '@panel/server/jobs/registry' {
+  export interface JobHandle {
+    id: string
+    log(text: string): void
+    progress(p: { phase?: string; done?: number; total?: number }): void
+    end(ok: boolean, info?: string): void
+    readonly canceled: boolean
+  }
+  export function startJob(o: {
+    source: string
+    projectId?: string
+    kind: string
+    title: string
+    cancel?: () => void | Promise<void>
+  }): JobHandle
+}

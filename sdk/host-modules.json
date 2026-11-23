@@ -128,6 +128,7 @@
     "server/file-index/indexed",
     "server/fs",
     "server/image",
+    "server/jobs/registry",
     "server/log",
     "server/memo/index",
     "server/merge-build",
@@ -178,13 +179,6 @@
     "shared/task",
     "shared/text"
   ],
-  "webPackages": [
-    "@radix-ui/react-dialog",
-    "@radix-ui/react-popover",
-    "@xyflow/react",
-    "zod"
-  ],
-  "serverPackages": [
-    "zod"
-  ]
+  "webPackages": ["@radix-ui/react-dialog", "@radix-ui/react-popover", "@xyflow/react", "zod"],
+  "serverPackages": ["zod"]
 }

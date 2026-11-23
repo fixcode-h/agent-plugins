@@ -25,6 +25,30 @@ export const onCancel = (id: string, fn: () => Promise<void>) => void cancels.se
 export const offCancel = (id: string) => void cancels.delete(id)
 const MAX_LOG = 4000
 
+/**
+ * 同一条作业也登记到面板的后台作业表（面板 ADR 0075）：侧栏底部看得到「在编译 / 在安装」，能看日志、能取消。
+ * UE 页自己的作业条照旧读这里的表（日志、编译进程识别都靠它）；面板那份只是镜像，加载不到（旧面板）就不登记
+ */
+type PanelJob = import('@panel/server/jobs/registry').JobHandle
+const panelJobs = new Map<string, Promise<PanelJob | undefined>>() // 模块状态：运行时，作业结束就删
+function mirror(job: Job & { project: string }) {
+  panelJobs.set(
+    job.id,
+    import('@panel/server/jobs/registry')
+      .then(({ startJob }) =>
+        startJob({
+          source: 'ue',
+          projectId: job.project,
+          kind: job.kind,
+          title: job.title,
+          cancel: async () => void (await cancelJob(job.id)),
+        }),
+      )
+      .catch(() => undefined),
+  )
+}
+const toPanel = (id: string, fn: (h: PanelJob) => void) => void panelJobs.get(id)?.then((h) => h && fn(h))
+
 /** 跑着的作业的子进程 PID（作业 id → PID），扫编译进程时据此分出「面板起的」和残留的 */
 export function jobPids() {
   const out = new Map<number, string>()
@@ -35,6 +59,7 @@ export function jobPids() {
 export function newJob(project: string, kind: Job['kind'], title: string) {
   const job = { id: uid(), project, kind, title, status: 'running' as const, log: [], startedAt: now() }
   jobs.set(job.id, job)
+  mirror(job)
   if (jobs.size > 30) jobs.delete(jobs.keys().next().value as string)
   return job as Job & { project: string }
 }
@@ -44,6 +69,7 @@ export function jobLog(job: Job, text: string) {
     if (!line.trim()) continue
     job.log.push(line)
   }
+  toPanel(job.id, (h) => h.log(text))
   if (job.log.length > MAX_LOG) job.log.splice(0, job.log.length - MAX_LOG)
 }
 
@@ -51,6 +77,8 @@ export function endJob(job: Job, ok: boolean, code?: number) {
   job.status = ok ? 'done' : 'failed'
   job.code = code
   job.endedAt = now()
+  toPanel(job.id, (h) => h.end(ok, ok ? undefined : job.log.at(-1)))
+  panelJobs.delete(job.id)
 }
 
 export const getJob = (id: string) => jobs.get(id)

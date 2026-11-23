@@ -116,6 +116,10 @@ globalThis.__agentPanelServer = {
     'server/watch/dir': { watchDir: () => undefined },
     'server/watch/files': { watchFiles: (files) => ({ close: () => {}, unwatched: files }) },
     'server/watch/tree': { watchTree: () => undefined, TREE_SKIP: new Set() },
+    // 后台作业表（面板 ADR 0075）：冒烟测试不看侧栏，给个只记不推的替身
+    'server/jobs/registry': {
+      startJob: () => ({ id: 'smoke', log: () => {}, progress: () => {}, end: () => {}, canceled: false }),
+    },
     // 文件索引帮助函数：冒烟测试没有索引，一律退回自己走目录
     'server/file-index/indexed': {
       readyIndex: async () => undefined,
