@@ -118,7 +118,7 @@ export function search(list: GmEntry[], q: string) {
   ]
 }
 
-/** 自定义 GM 当成一条 GM 列出：参数是存的 args 的名字（执行时只有 editable 的能改） */
+/** 自定义 GM 当成一条 GM 列出：参数按保存时抄下的函数签名（旧数据按存的 args 的名字；执行时只有 editable 的能改） */
 export function fromCustom(items: GmCustom[]): GmEntry[] {
   return items.map((c) => ({
     key: customKey(c.id),
@@ -126,7 +126,9 @@ export function fromCustom(items: GmCustom[]): GmEntry[] {
     name: c.name,
     group: '',
     desc: c.note ?? '',
-    params: Object.keys(c.args).map((n) => ({ name: n, type: '' })),
+    params: c.params?.length
+      ? c.params.map((p) => ({ name: p.name, type: p.type }))
+      : Object.keys(c.args).map((n) => ({ name: n, type: '' })),
     custom: c,
   }))
 }

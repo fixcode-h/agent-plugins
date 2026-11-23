@@ -71,7 +71,16 @@ async function saveCustom(ctx: OpCtx, g: GmStore, def: Obj, dryRun: boolean, age
   const old = g.custom.find((x) => x.name === String(def.name ?? '').trim())
   let c: GmCustom
   try {
+    // Agent 改一条已有的 GM 没写 params 时，同一个函数沿用原来存的参数表，不把保存时抄下的签名弄丢
+    const keep = !def.params && old?.params && old.function === def.function ? { params: old.params } : {}
+    // 写了 params 没写 editable：全部参数执行时都能填（和网页保存一样，用户 2026-11-23：只存参数、值执行时选）
+    const allEditable =
+      Array.isArray(def.params) && !('editable' in def)
+        ? { editable: (def.params as { name?: unknown }[]).map((p) => String(p.name ?? '')).filter(Boolean) }
+        : {}
     c = GmCustom.parse({
+      ...keep,
+      ...allEditable,
       ...def,
       name: String(def.name ?? '').trim(),
       id: old?.id ?? newCustomId(g.custom.map((x) => x.id)),

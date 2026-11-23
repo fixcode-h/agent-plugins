@@ -2,24 +2,17 @@ import { Check, Crosshair, History, ListPlus, MessageSquarePlus, Package, Play, 
 import type { ReactNode } from 'react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../../server/lua-gm/types.ts'
 import type { GmRun } from '../../../../server/store.ts'
-import { callText, isObjArg } from '../../../../shared/gm/custom.ts'
+import { callText, isObjArg, paramNames } from '../../../../shared/gm/custom.ts'
 import type { GmCustom, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
 import { Badge } from '../../../ui.tsx'
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import type { GmEntry, GmParam } from '../data.ts'
-import { CallForm, SigCard, type CallParam } from '../../../obj-kit/CallForm.tsx'
+import { CallForm, SigCard } from '../../../obj-kit/CallForm.tsx'
+import { customParams } from './custom-params.ts'
 import { CallOutput, Section } from '../../../obj-kit/CallOutput.tsx'
 import { AgentBadge, HitBadge, ObjName, ObjRule } from './ObjRule.tsx'
 import type { CallOut } from './run-custom.ts'
-
-/** 自定义 GM 只存了值、没存类型：值是对象写法的就是对象参数（类型不知道，不判断能不能传） */
-export const customParams = (c: GmCustom): CallParam[] =>
-  Object.entries(c.args).map(([name, v]) =>
-    isObjArg(v) || (typeof v === 'string' && v.startsWith('@'))
-      ? { name, type: '', obj: { cls: '', lua: false } }
-      : { name, type: typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'bool' : '' },
-  )
 
 /** 自定义 GM 自带的对象副本，当成对象列表给对象下拉 */
 export const customObjects = (c: GmCustom): GmObject[] =>
@@ -27,7 +20,10 @@ export const customObjects = (c: GmCustom): GmObject[] =>
 
 /** 「会执行」：商店界面.BuyItem(2003, 1, 店主)，对象名画成小块 */
 function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
-  const parts = Object.values(args)
+  // 按签名列全部参数：没填的写参数名（灰色），执行时不传、用函数的默认值
+  const names = paramNames(c)
+  const extra = Object.keys(args).filter((k) => !names.includes(k))
+  const parts = [...names, ...extra].map((k) => ({ k, set: k in args, v: args[k] }))
   return (
     <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-1.5 ue:rounded-(--c-row-radius) ue:bg-field ue:px-3 ue:py-2 ue:text-footnote ue:text-fg">
       {c.kind === 'get' ? (
@@ -40,9 +36,13 @@ function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
           {/* 写成方法调用的样子：商店界面.BuyItem(2003, 1, 店主) */}
           <ObjName name={c.obj} />
           <span className="ue:font-mono">.{c.function}(</span>
-          {parts.map((v, i) => (
-            <span key={i} className="ue:inline-flex ue:items-center ue:gap-1">
-              {isObjArg(v) ? (
+          {parts.map(({ k, set, v }, i) => (
+            <span key={k} className="ue:inline-flex ue:items-center ue:gap-1">
+              {!set ? (
+                <span className="ue:font-mono ue:text-subtle" title={t('执行时填')}>
+                  {k}
+                </span>
+              ) : isObjArg(v) ? (
                 <ObjName name={v.$obj} />
               ) : (
                 <span className="ue:font-mono">{typeof v === 'string' ? v : JSON.stringify(v)}</span>
@@ -93,7 +93,7 @@ export function CustomDetail(p: {
   const { ui, cn } = h()
   const c = p.c
   const target = c.objects[c.obj]
-  const sig = `(${Object.keys(c.args).join(', ')})`
+  const sig = `(${paramNames(c).join(', ')})`
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       <header className="ue:flex ue:min-h-10 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-4 ue:py-1.5">
@@ -144,7 +144,13 @@ export function CustomDetail(p: {
             {c.kind === 'call' && (
               <Section
                 title={t('调用')}
-                aside={c.editable.length ? t('只有「执行时可改」的参数能改') : t('参数都是存好的')}
+                aside={
+                  !c.editable.length
+                    ? t('参数都是存好的')
+                    : paramNames(c).every((n) => c.editable.includes(n))
+                      ? t('参数执行时填')
+                      : t('只有「执行时可改」的参数能改')
+                }
               >
                 <SigCard sig={{ name: c.function ?? '', sig }} />
                 {p.presets}

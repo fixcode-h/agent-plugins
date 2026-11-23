@@ -1,5 +1,6 @@
 import { Wand2 } from 'lucide-react'
 import { useState } from 'react'
+import { paramNames } from '../../../../shared/gm/custom.ts'
 import type { GmRef } from '../../../../shared/gt-script/gm/expand.ts'
 import { h, t } from '../../../host.ts'
 import { useGm } from '../../gm/use-gm.ts'
@@ -14,13 +15,22 @@ const DYNAMIC_OK = new Set(['cpp', 'custom'])
  * 参数照 GM 页的定义列：C++ / Lua 按顺序，自定义 GM 只列它的可改参数（不能改的灰着显示存的值）。
  * withRet：附带 GM 的成功后 / 失败时那两组，参数提示里写上 $ret
  */
-export function GmRefEditor({ value, onChange, withRet }: { value: GmRef; onChange: (v: GmRef) => void; withRet?: boolean }) {
+export function GmRefEditor({
+  value,
+  onChange,
+  withRet,
+}: {
+  value: GmRef
+  onChange: (v: GmRef) => void
+  withRet?: boolean
+}) {
   const { ui } = h()
   const data = useGm(0)
   const [picking, setPicking] = useState(!value.name)
   const entry = value.name ? entryOfRef(value, data.entries) : undefined
   const macro = value.kind === 'macro' ? data.gm.macros.find((m) => m.id === value.name) : undefined
-  const missing = !!value.name && !entry && !macro && !(value.kind === 'console') && !data.lua.loading && !data.cpp.loading
+  const missing =
+    !!value.name && !entry && !macro && !(value.kind === 'console') && !data.lua.loading && !data.cpp.loading
   const Icon = KIND_ICON[value.kind] ?? Wand2
   const hint = DYNAMIC_OK.has(value.kind)
     ? withRet
@@ -65,7 +75,9 @@ export function GmRefEditor({ value, onChange, withRet }: { value: GmRef; onChan
           {t('宏 {n} 步：{s}', {
             n: macro.steps.length,
             s: macro.steps
-              .map((s) => (s.wait !== undefined ? t('等 {n} 秒', { n: s.wait }) : (s.gm ?? s.lua ?? s.console ?? s.custom)))
+              .map((s) =>
+                s.wait !== undefined ? t('等 {n} 秒', { n: s.wait }) : (s.gm ?? s.lua ?? s.console ?? s.custom),
+              )
               .join(' → '),
           })}
         </span>
@@ -86,7 +98,8 @@ export function GmRefEditor({ value, onChange, withRet }: { value: GmRef; onChan
         ))}
       {value.kind === 'custom' &&
         entry?.custom &&
-        Object.entries(entry.custom.args).map(([k, v]) => {
+        paramNames(entry.custom).map((k) => {
+          const v = entry.custom!.args[k]
           const editable = entry.custom!.editable.includes(k)
           const cur = value.args && !Array.isArray(value.args) && k in value.args ? value.args[k] : undefined
           return (
@@ -97,7 +110,7 @@ export function GmRefEditor({ value, onChange, withRet }: { value: GmRef; onChan
                 spellCheck={false}
                 disabled={!editable}
                 className="ue:min-w-0 ue:flex-1 ue:font-mono"
-                placeholder={editable ? `${text(v)} · ${hint}` : t('存的值，执行时不能改')}
+                placeholder={editable ? (v === undefined ? hint : `${text(v)} · ${hint}`) : t('存的值，执行时不能改')}
                 value={editable ? text(cur) : text(v)}
                 onChange={(e: { target: { value: string } }) => setArg(k, e.target.value)}
               />
@@ -105,7 +118,9 @@ export function GmRefEditor({ value, onChange, withRet }: { value: GmRef; onChan
           )
         })}
       {value.kind === 'cpp' && !entry && value.name && (
-        <span className="ue:text-caption ue:text-subtle">{t('UE 没在运行，列不出 C++ GM 的参数；参数照存的：{a}', { a: refText(value) })}</span>
+        <span className="ue:text-caption ue:text-subtle">
+          {t('UE 没在运行，列不出 C++ GM 的参数；参数照存的：{a}', { a: refText(value) })}
+        </span>
       )}
       {picking && (
         <GmPickDialog

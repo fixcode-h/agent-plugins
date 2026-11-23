@@ -1,11 +1,9 @@
-import { Folder, SquareFunction } from 'lucide-react'
+import { Folder, SquareFunction, Table2 } from 'lucide-react'
 import { useState } from 'react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import type { GmModule } from '../../../../shared/gm/schema.ts'
 import { useAsk } from '../../../ask.tsx'
-import { Checkbox } from '../../../details/controls.tsx'
 import { h, t } from '../../../host.ts'
-import { argText } from '../../../obj-kit/CallForm.tsx'
 import { ObjName, ObjRule, type ObjLike } from './ObjRule.tsx'
 
 const NEW = '§new'
@@ -16,12 +14,12 @@ export interface SaveGmResult {
   module: string
   newModule?: string
   note: string
-  editable: string[]
 }
 
 /**
  * 「保存为 GM」（规格第 7 节、效果图 4）：名字、模块（必选，下拉末尾「新建模块…」）、分类固定「自定义」、说明、
- * 「存进去的」摘要（对象、函数、每个参数和「执行时可改」）。对象和对象参数存的都是匹配规则，由调用方复制进 custom.objects
+ * 「存进去的」摘要（对象、函数、参数表）。只存参数的定义不存值（用户 2026-11-23）：值在执行 GM 时填；
+ * 对象参数存当时选的对象当默认（匹配规则，由调用方复制进 custom.objects），执行时也能换
  */
 export function SaveGmDialog({
   init,
@@ -29,18 +27,27 @@ export function SaveGmDialog({
   obj,
   fn,
   args,
+  params,
   props,
+  tables,
   onClose,
   onSave,
 }: {
-  init: { name: string; note?: string; module?: string; editable?: string[] }
+  init: { name: string; note?: string; module?: string }
   modules: GmModule[]
   obj: { name: string; o: ObjLike }
   /** 调函数时的函数名；取对象时不给 */
   fn?: string
   args: Record<string, unknown>
+  /** 函数的全部参数：没填的也列出来（存进去后执行时用函数的默认值，勾了「执行时可改」的执行时能填） */
+  params?: { name: string; type?: string; obj?: unknown }[]
   /** 取对象时读的属性 */
   props?: string[]
+  /**
+   * 参数已关联的表格列：参数名 → 「表格 · 列」。关联存在 gm.json 的 tableBindings，键是「函数名.参数名」，
+   * 对象调用和保存出来的 GM 读的是同一份，一处改了另一处跟着变，所以这里只显示、不复制
+   */
+  tables?: Record<string, string>
   onClose: () => void
   onSave: (r: SaveGmResult) => void
 }) {
@@ -50,10 +57,8 @@ export function SaveGmDialog({
   const [note, setNote] = useState(init.note ?? '')
   const [mod, setMod] = useState(init.module ?? modules[0]?.id ?? '')
   const [newMod, setNewMod] = useState<string>()
-  // 默认非对象参数都能改：对象参数换了就是另一件事，执行时改它多半是误操作
-  const [editable, setEditable] = useState<string[]>(
-    init.editable ?? Object.keys(args).filter((k) => !isObjArg(args[k])),
-  )
+  const names = params?.length ? params.map((p) => p.name) : Object.keys(args)
+  const typeOf = (k: string) => params?.find((p) => p.name === k)?.type ?? ''
   const opts = [
     ...modules.map((m) => ({ value: m.id, label: m.name })),
     ...(newMod ? [{ value: NEW, label: newMod }] : []),
@@ -79,7 +84,6 @@ export function SaveGmDialog({
                 module: mod === NEW ? '' : mod,
                 ...(mod === NEW ? { newModule: newMod } : {}),
                 note: note.trim(),
-                editable,
               })
             }
           >
@@ -144,23 +148,36 @@ export function SaveGmDialog({
             </div>
           )}
           <div className="ue:flex ue:flex-col ue:gap-1 ue:pl-14">
-            {Object.entries(args).map(([k, v]) => (
-              <div key={k} className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
-                <span className="ue:w-24 ue:truncate ue:font-mono ue:text-muted">{k}</span>
-                <span className="ue:w-28 ue:truncate ue:text-fg">
-                  {isObjArg(v) ? <ObjName name={v.$obj} /> : <span className="ue:font-mono">{argText(v) || '—'}</span>}
-                </span>
-                <Checkbox
-                  checked={editable.includes(k)}
-                  label={t('执行时可改')}
-                  onChange={(c) => setEditable(c ? [...editable, k] : editable.filter((x) => x !== k))}
-                />
-                <span className="ue:text-caption ue:text-muted">{t('执行时可改')}</span>
-              </div>
-            ))}
+            {names.map((k) => {
+              const v = args[k]
+              return (
+                <div key={k} className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
+                  <span className="ue:w-28 ue:truncate ue:font-mono ue:text-fg">{k}</span>
+                  <span className="ue:w-24 ue:truncate ue:font-mono ue:text-subtle">{typeOf(k)}</span>
+                  {isObjArg(v) ? (
+                    <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:text-caption ue:text-muted">
+                      {t('默认')} <ObjName name={v.$obj} />
+                    </span>
+                  ) : (
+                    <span className="ue:text-caption ue:text-muted">{t('执行时填')}</span>
+                  )}
+                  {tables?.[k] && (
+                    <span
+                      className="ue:ml-auto ue:flex ue:min-w-0 ue:items-center ue:gap-1 ue:text-caption ue:text-accent"
+                      title={t('和对象调用共用这份关联，在任一处改都会同步')}
+                    >
+                      <Table2 className="ue:h-3 ue:w-3 ue:shrink-0" />
+                      <span className="ue:truncate">{tables[k]}</span>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
           <span className="ue:text-caption ue:text-subtle">
-            {t('对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找')}
+            {names.length
+              ? t('只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找')
+              : t('对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找')}
           </span>
         </div>
       </div>

@@ -63,6 +63,7 @@ export async function listGm(ctx: OpCtx, source: string, filter: string) {
         obj: c.obj,
         ...(c.function ? { function: c.function } : {}),
         args: c.args,
+        ...(c.params?.length ? { params: c.params.map((p) => p.name) } : {}),
         ...(c.editable.length ? { editable: c.editable } : {}),
         ...(c.many !== 'error' ? { many: c.many } : {}),
         ...(c.props?.length ? { props: c.props } : {}),

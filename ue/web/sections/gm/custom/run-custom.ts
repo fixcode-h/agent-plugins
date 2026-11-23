@@ -2,6 +2,7 @@ import { callStep, getQuery, invokesOf, stepOk, type InvokeReport } from '../../
 import type { GmCustom } from '../../../../shared/gm/schema.ts'
 import type { Target } from '../../../../server/types.ts'
 import { op } from '../../../api.ts'
+import { argValue } from '../../../obj-kit/CallForm.tsx'
 
 /**
  * 调一次对象函数 / 取一次对象（GM 页的自定义 GM、对象调用工作台共用）。拼参数用 shared/gm/custom.ts，和 ue_gm 同一份；
@@ -88,11 +89,20 @@ export function coerceLike(orig: unknown, v: unknown): unknown {
   return v
 }
 
-/** 这次执行实际要改的参数：只挑 editable 里、和存的不一样的 */
-export function overrides(c: Pick<GmCustom, 'args' | 'editable'>, values: Record<string, unknown>) {
+/**
+ * 这次执行实际要改的参数：只挑 editable 里、和存的不一样的。保存时没填的参数（不在 args 里）空着就不传、
+ * 用函数的默认值；填了按签名里的类型转（存了 params 的才知道类型）
+ */
+export function overrides(c: Pick<GmCustom, 'args' | 'editable' | 'params'>, values: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
   for (const k of c.editable)
     if (k in values) {
+      if (!(k in c.args)) {
+        const raw = values[k]
+        if (raw === undefined || raw === '') continue
+        out[k] = argValue(c.params?.find((p) => p.name === k)?.type ?? '', raw)
+        continue
+      }
       const v = coerceLike(c.args[k], values[k])
       if (JSON.stringify(v) !== JSON.stringify(c.args[k])) out[k] = v
     }
