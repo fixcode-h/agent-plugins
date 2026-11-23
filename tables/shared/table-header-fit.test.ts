@@ -108,3 +108,17 @@ test('按通配的按文件指定也要对得上，不然往下找；只管这�
   // 不给内容（还没读到）：和以前一样按优先级取
   assert.equal(pickHeader(s, 'Config/说明.xlsx', 'Sheet1').source.kind, 'project')
 })
+
+test('导出端写 Public、Client 混着的表照样套项目表头', () => {
+  const s = schema()
+  const rows = [
+    ['optional', 'optional', 'optional', 'repeated', 'optional'],
+    ['Public', 'Client', 'Public', 'Public', 'Client'],
+    ['int32', 'FVector', 'EColor', 'int32', 'string'],
+    ['ID', 'Position', 'Color', 'Slots', 'Note'],
+    ['全局唯一插槽ID', '世界位置', '颜色', '插槽', '备注'],
+    ['8020001', '1#2#3', 'Red', '1;2', ''],
+  ]
+  assert.deepEqual(headerFit(s, s.style.header, rows), { ok: true })
+  assert.equal(pickHeader(s, 'Config/Home.xlsx', 'SlotTable', rows).source.kind, 'project')
+})
