@@ -1,5 +1,5 @@
 import { Folder, SquareFunction, Table2 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import type { GmModule } from '../../../../shared/gm/schema.ts'
 import { useAsk } from '../../../ask.tsx'
@@ -49,7 +49,7 @@ export function SaveGmDialog({
    */
   tables?: Record<string, string>
   onClose: () => void
-  onSave: (r: SaveGmResult) => void
+  onSave: (r: SaveGmResult) => void | Promise<void>
 }) {
   const { ui } = h()
   const [dialog, ask] = useAsk()
@@ -58,6 +58,7 @@ export function SaveGmDialog({
   const [mod, setMod] = useState(init.module ?? modules[0]?.id ?? '')
   const [newMod, setNewMod] = useState<string>()
   const names = params?.length ? params.map((p) => p.name) : Object.keys(args)
+  const sent = useRef(false)
   const typeOf = (k: string) => params?.find((p) => p.name === k)?.type ?? ''
   const opts = [
     ...modules.map((m) => ({ value: m.id, label: m.name })),
@@ -78,14 +79,22 @@ export function SaveGmDialog({
           </ui.Button>
           <ui.Button
             disabled={!ok}
-            onClick={() =>
-              onSave({
-                name: name.trim(),
-                module: mod === NEW ? '' : mod,
-                ...(mod === NEW ? { newModule: newMod } : {}),
-                note: note.trim(),
+            onClick={() => {
+              // 点一次就锁住：同一帧里的连点、或者调用方还没关掉弹窗时再点，都不会再存一遍（用户 2026-11-23 点了几下存了几次）
+              if (sent.current) return
+              sent.current = true
+              // 存不成（比如对象不在列表里）时调用方提示错误、弹窗留着，这时解锁让人改了再点
+              void Promise.resolve(
+                onSave({
+                  name: name.trim(),
+                  module: mod === NEW ? '' : mod,
+                  ...(mod === NEW ? { newModule: newMod } : {}),
+                  note: note.trim(),
+                }),
+              ).finally(() => {
+                sent.current = false
               })
-            }
+            }}
           >
             {t('保存')}
           </ui.Button>

@@ -7,7 +7,7 @@ import { blockOf, type GtRef, type GtStep } from '../../../../shared/gt-script/i
 import type { GtScript } from '../../../../shared/gt-script/types.ts'
 import { h, t } from '../../../host.ts'
 import { copyText, openMenu } from '../../../menu.tsx'
-import { HitBadge, ObjRule, iconOf } from '../../gm/custom/ObjRule.tsx'
+import { HitBadge, ObjRowLabel, iconOf, objRuleTitle } from '../../gm/custom/ObjRule.tsx'
 import { GT_STEPS_MIME } from '../gt-flow/dnd.ts'
 import { useRefHits } from '../gt-ref/live.ts'
 import { RefDialog } from '../gt-ref/RefDialog.tsx'
@@ -127,7 +127,8 @@ export function ObjectsTab({ project, live, q }: { project: string; live: boolea
           const hit = hits[(isLocal(o) ? '#' : '') + o.name]
           return o.ref && live ? <HitBadge n={hit?.count} error={hit?.error} /> : null
         }}
-        leafSub={(o) => <ObjRule o={o} small noIcon />}
+        leafLabel={(o) => <ObjRowLabel o={o} name={o.name} />}
+        leafTitle={(o) => objRuleTitle(o, o.name)}
         onLeafMenu={(e, _p, o) => menu(e, o)}
         onMove={onMove}
         dragData={drag}

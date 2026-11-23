@@ -382,9 +382,10 @@ export function useObjCallState(d: GmData, live: boolean) {
               // 对象从这条 GM 自己的副本里取（对象列表里可能已经改了、删了）
               const objs = Object.entries(c.objects).map(([name, o]) => ({ name, ...o }) as GmObject)
               const res = addCustom(d.gm, { ...c, objects: objs, args: saving.args }, r)
-              await d.saveGm(res.g)
+              // 先关弹窗再等写盘：GM 列表里马上就有（saveGm 先改页面上的），写完再提示；
+              // 以前等写完才关，请求慢时点了像没反应，连点几下就存几遍
               setSaving(false)
-              toast.success(t('已存成 GM「{n}」', { n: r.name }))
+              if (await d.saveGm(res.g)) toast.success(t('已存成 GM「{n}」', { n: r.name }))
             } catch (e) {
               toast.error((e as Error).message)
             }
@@ -409,9 +410,8 @@ export function useObjCallState(d: GmData, live: boolean) {
             try {
               const x = def()
               const res = addCustom(d.gm, { ...x, objects }, r)
-              await d.saveGm(res.g)
               setSaving(false)
-              toast.success(t('已存成 GM「{n}」', { n: r.name }))
+              if (await d.saveGm(res.g)) toast.success(t('已存成 GM「{n}」', { n: r.name }))
             } catch (e) {
               toast.error((e as Error).message)
             }

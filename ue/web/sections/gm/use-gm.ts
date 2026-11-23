@@ -113,14 +113,16 @@ export function useGm(nonce: number) {
     [lua.data, cpp.data, gm.custom, consoleCmds],
   )
   luaSeen.items = entries.filter((e) => e.src === 'lua')
-  /** 整份存回去（服务端按契约校验，存完推 gm 事件）；返回存好的 */
+  /** 整份存回去（服务端按契约校验，存完推 gm 事件）：页面上马上生效；存成了返回 true，出错已经提示过、返回 false */
   const saveGm = async (next: GmStore) => {
     store.setData(next)
     try {
       store.setData(await ppost<GmStore>(project.id, 'gm', next))
+      return true
     } catch (e) {
       h().toast.error((e as Error).message)
       void store.reload()
+      return false
     }
   }
   const recent = local.data?.gmRecent ?? []

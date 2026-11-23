@@ -23,7 +23,7 @@ import { copyText, openMenu, openMenuAt, type MenuItem } from '../../../menu.tsx
 import type { RefHits } from '../../uekit/gt-ref/live.ts'
 import { FileTree, type TreeLeaf } from '../../uekit/tree.tsx'
 import type { DragSrc } from '../../uekit/tree-dnd.ts'
-import { AgentBadge, HitBadge, ObjRule, iconOf } from '../custom/ObjRule.tsx'
+import { AgentBadge, HitBadge, ObjRowLabel, iconOf, objRuleTitle } from '../custom/ObjRule.tsx'
 
 type SrcKind = 'pawn' | 'sub' | 'luaMod'
 
@@ -187,7 +187,8 @@ export function ObjList({
               {o.ref && live ? <HitBadge n={hits[o.name]?.count} error={hits[o.name]?.error} /> : null}
             </>
           )}
-          leafSub={(o) => <ObjRule o={o} small noIcon />}
+          leafLabel={(o) => <ObjRowLabel o={o} name={o.name} />}
+          leafTitle={(o) => objRuleTitle(o, o.name)}
           onLeafMenu={(e, _p, o) => menu(e, o)}
           onFolderMenu={folderMenu}
           onMove={onMove}
