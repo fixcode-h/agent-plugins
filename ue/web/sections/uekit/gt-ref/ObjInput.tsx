@@ -123,6 +123,8 @@ export function ObjInput({
         : kind === 'name'
           ? name
           : classShort(ref?.class) || t('对象')
+  const cls = classShort(ref?.class)
+  const sameAsTitle = !!cls && (cls === title || cls === classShort(title))
   const sub =
     kind === 'var'
       ? ref
@@ -149,7 +151,7 @@ export function ObjInput({
           (canEdit || kind === 'empty') && 'ue:cursor-pointer ue:hover:border-accent',
         )}
       >
-        <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+        <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5 ue:overflow-hidden">
           {kind === 'var' ? (
             <Variable className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
           ) : kind === 'empty' ? (
@@ -159,17 +161,20 @@ export function ObjInput({
           )}
           <span
             className={cn(
-              'ue:max-w-[60%] ue:shrink-0 ue:truncate ue:text-body',
+              // 后面还跟类名小块时给它留地方，不跟就占满
+              ref?.class && kind !== 'inline' && !sameAsTitle ? 'ue:max-w-[60%]' : 'ue:max-w-full',
+              'ue:shrink-0 ue:truncate ue:text-body',
               kind === 'empty' ? 'ue:text-accent-text' : 'ue:font-medium ue:text-fg',
               kind === 'var' && 'ue:font-mono',
             )}
           >
             {title}
           </span>
-          {ref?.class && kind !== 'inline' && (
+          {/* 名字就是类名（多数对象库条目这样起名）时不再重复；放不下时类名先截断，不撑出框（用户 2026-11-23 报） */}
+          {ref?.class && kind !== 'inline' && !sameAsTitle && (
             <span
               title={ref.class}
-              className="ue:shrink-0 ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:font-mono ue:text-caption ue:text-muted"
+              className="ue:min-w-0 ue:truncate ue:rounded-(--c-badge-radius) ue:bg-hover ue:px-1.5 ue:font-mono ue:text-caption ue:text-muted"
             >
               {classShort(ref.class)}
             </span>

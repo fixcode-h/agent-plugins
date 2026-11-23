@@ -139,7 +139,7 @@ export function SaveGmDialog({
             <span className="ue:w-12 ue:shrink-0 ue:text-subtle">{t('对象')}</span>
             <ObjName name={obj.name} />
             <span className="ue:min-w-0 ue:truncate">
-              <ObjRule o={obj.o} small />
+              <ObjRule o={obj.o} small name={obj.name} />
             </span>
           </div>
           {fn ? (

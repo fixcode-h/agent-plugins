@@ -120,7 +120,9 @@ export function CustomDetail(p: {
             >
               <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2 ue:rounded-(--c-row-radius) ue:border ue:border-line ue:bg-card ue:px-3 ue:py-2">
                 <ObjName name={c.obj} />
-                <span className="ue:min-w-0 ue:flex-1 ue:truncate">{target && <ObjRule o={target} />}</span>
+                <span className="ue:min-w-0 ue:flex-1 ue:truncate">
+                  {target && <ObjRule o={target} name={c.obj} />}
+                </span>
                 {target?.ref && (
                   <ui.Button size="sm" variant="ghost" onClick={p.onEditRule}>
                     <Crosshair className="ue:h-3.5 ue:w-3.5" />

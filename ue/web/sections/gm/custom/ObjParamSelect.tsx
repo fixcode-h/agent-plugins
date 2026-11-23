@@ -75,7 +75,7 @@ export function ObjParamSelect({
         <>
           <ObjName name={cur.name} />
           <span className="ue:min-w-0 ue:flex-1 ue:truncate">
-            <ObjRule o={cur} small />
+            <ObjRule o={cur} small name={cur.name} />
           </span>
         </>
       ) : (
