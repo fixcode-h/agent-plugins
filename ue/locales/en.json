@@ -4451,7 +4451,6 @@
   "对象调用保存的 GM 都在「自定义」下": "GMs saved from object calls go under \"Custom\"",
   "存进去的": "Saved",
   "只取命中的实例": "Only list matched instances",
-  "执行时可改": "Editable at run time",
   "对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找": "Objects and object arguments are stored as match rules (class + identity) and looked up at run time",
   "对象调用": "Object calls",
   "对象名、类名": "Object or class name",
@@ -4987,5 +4986,8 @@
   "引擎类 {name} 及以上的成员要连上编辑器才列得出": "Members of engine class {name} and above can only be listed with the editor connected",
   "项目源码里没找到这个类": "This class wasn't found in the project source",
   "脚本根里没找到这个 Lua 模块的源文件": "No source file for this Lua module was found under the script root",
-  "没填，用默认值": "Not set, uses the default"
+  "执行时填": "Filled when run",
+  "参数执行时填": "Parameters are filled when run",
+  "只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找": "Only the parameters are saved, not their values: fill them in when you run this GM. Objects are saved as match rules (class + unique identifiers) and looked up when run",
+  "和对象调用共用这份关联，在任一处改都会同步": "Shared with Object Call: change it in either place and both update"
 }

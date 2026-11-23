@@ -39,7 +39,7 @@ function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
           {parts.map(({ k, set, v }, i) => (
             <span key={k} className="ue:inline-flex ue:items-center ue:gap-1">
               {!set ? (
-                <span className="ue:font-mono ue:text-subtle" title={t('没填，用默认值')}>
+                <span className="ue:font-mono ue:text-subtle" title={t('执行时填')}>
                   {k}
                 </span>
               ) : isObjArg(v) ? (
@@ -144,7 +144,13 @@ export function CustomDetail(p: {
             {c.kind === 'call' && (
               <Section
                 title={t('调用')}
-                aside={c.editable.length ? t('只有「执行时可改」的参数能改') : t('参数都是存好的')}
+                aside={
+                  !c.editable.length
+                    ? t('参数都是存好的')
+                    : paramNames(c).every((n) => c.editable.includes(n))
+                      ? t('参数执行时填')
+                      : t('只有「执行时可改」的参数能改')
+                }
               >
                 <SigCard sig={{ name: c.function ?? '', sig }} />
                 {p.presets}
