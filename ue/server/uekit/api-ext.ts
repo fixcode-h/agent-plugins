@@ -8,7 +8,9 @@ import { extensionStatus } from './catalog.ts'
 import { keyRulesAction, readKeyFields } from './gt-keys.ts'
 import { tidyAction } from './gt-tidy.ts'
 import { readAliases } from './gt-vars-file.ts'
-import { luaGroup } from './gt-author/lua-vars.ts'
+import { luaChainGroups, luaGroup } from './gt-author/lua-vars.ts'
+import { cppMembers } from './gt-ref/offline/cpp-members.ts'
+import { luaClassOf } from '../../shared/gt-script/ref/ref.ts'
 import { luaRoot } from './gt-author/lua-files.ts'
 import { apiSettingsAction } from './gt-author/api-settings.ts'
 import { libraryAction } from './gt-library/index.ts'
@@ -98,6 +100,16 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
       // 代码变量弹窗、对象标识的 Lua 组：游戏没开时扫界面绑的 Lua 文件（和 Agent 工具同一份 gt-author/lua-vars.ts）
       const g = await luaGroup(luaRoot(p), String(b.module ?? ''), '')
       return { module: String(b.module ?? ''), file: g?.file, items: g?.items ?? [] }
+    }
+    case 'POST ext/gt/offlinemembers': {
+      // GM 对象调用「只按类」、UE 没连上时的成员（用户 2026-11-23）：Lua 类读源码连同父类，C++ / 蓝图读项目头文件
+      const cls = String(b.class ?? '')
+      const lua = luaClassOf(cls)
+      if (lua !== undefined) {
+        const groups = await luaChainGroups(luaRoot(p), lua)
+        return { groups, ...(groups.length ? {} : { note: t('脚本根里没找到这个 Lua 模块的源文件') }) }
+      }
+      return { ...(await cppMembers(p, cls)) }
     }
     case 'POST ext/gt/aliases':
       // 条件里的「常用」：场景根 _vars.json 的常用名（gt-vars-file.ts）；save 时加一条

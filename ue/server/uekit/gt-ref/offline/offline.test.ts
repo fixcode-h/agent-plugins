@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { luaChainGroups } from '../../gt-author/lua-vars.ts'
 import { pickClasses } from './classes.ts'
+import { parseUClass } from './cpp-members.ts'
 import { parseLuaHead } from './lua-parents.ts'
 import { parseBpTags } from './uasset-tags.ts'
 
@@ -64,4 +69,72 @@ test('离线 Lua 类：按目录列', () => {
     ['/Module/A/X'],
   )
   assert.deepEqual(a.dirs, [{ name: 'Module/A/Sub', count: 1 }])
+})
+
+test('离线读 C++ 头文件里的 UPROPERTY / UFUNCTION', () => {
+  const h = `
+UCLASS(Blueprintable)
+class MYGAME_API AHomeDecoration : public AActor
+{
+  GENERATED_BODY()
+public:
+  /** 摆放时的格子大小 */
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Placement")
+  int32 GridSize = 4;
+
+  UPROPERTY(VisibleAnywhere, Category = Components)
+  TObjectPtr<UStaticMeshComponent> Mesh;
+
+  // 放下一个装饰
+  UFUNCTION(BlueprintCallable, Category = "Placement")
+  bool Place(const FVector& Where, int32 Count = 1, AActor* Owner = nullptr);
+
+  UFUNCTION(BlueprintPure)
+  FString GetLabel() const;
+
+  UFUNCTION(BlueprintCallable)
+  void ReadState(TArray<int32>& OutIds) { OutIds.Reset(); }
+};`
+  const r = parseUClass(h, 'HomeDecoration')!
+  assert.equal(r.parent, 'Actor')
+  const by = new Map(r.items.map((x) => [x.name, x]))
+  assert.deepEqual([...by.keys()], ['GridSize', 'Mesh', 'Place', 'GetLabel', 'ReadState'])
+  assert.equal(by.get('GridSize')!.type, 'int32')
+  assert.equal(by.get('GridSize')!.cat, 'Placement')
+  assert.equal(by.get('GridSize')!.note, '摆放时的格子大小')
+  assert.equal(by.get('Mesh')!.readOnly, true)
+  const place = by.get('Place')!
+  assert.equal(place.kind, 'fn')
+  assert.equal(place.note, '放下一个装饰')
+  assert.equal(place.sig, '(Where: const FVector&, Count: int32, Owner: AActor*) → bool')
+  assert.equal(place.args![2].object, true)
+  assert.equal(by.get('GetLabel')!.readOnly, true)
+  assert.equal(by.get('ReadState')!.args![0].out, true)
+  assert.equal(parseUClass(h, 'Other'), undefined)
+})
+
+test('Lua 类离线连同父类列成员', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'lua-chain-'))
+  try {
+    await mkdir(path.join(dir, 'UI'), { recursive: true })
+    await writeFile(
+      path.join(dir, 'UI', 'Base.lua'),
+      '---@class Base\nlocal M = {}\n---@field Visible boolean\nfunction M:Show() end\nfunction M:Init(a) end\nreturn M\n',
+    )
+    await writeFile(
+      path.join(dir, 'UI', 'Shop.lua'),
+      'local Base = require("UI.Base")\n---@class Shop : Base\nlocal M = Class(Base)\n---@field Gold integer 金币\nfunction M:Init(a, b) end\nfunction M:Buy(id) end\nreturn M\n',
+    )
+    const groups = await luaChainGroups(dir, '/UI/Shop')
+    assert.deepEqual(
+      groups.map((g) => [g.title, g.items.map((x) => x.name)]),
+      [
+        ['Shop', ['Gold', 'Init', 'Buy']],
+        ['Base', ['Visible', 'Show']],
+      ],
+    )
+    assert.equal(groups[0].items[0].path, '@.Gold')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

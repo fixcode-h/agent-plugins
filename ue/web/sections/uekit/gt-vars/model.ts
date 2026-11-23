@@ -27,6 +27,8 @@ export interface VarItem {
     why?: string
   }[]
   note?: string
+  /** C++ 属性的 UPROPERTY Category（离线读头文件时有） */
+  cat?: string
   line?: number
   value?: unknown
   /** 像动画、计时的（Anim / Time / Tick / Hover）：默认收起变灰 */
@@ -53,6 +55,10 @@ export interface VarsReply {
   total?: number
   hasMore?: boolean
   truncated?: boolean
+  /** UE 没连上、按类从源码读的（ext/gt/offlinemembers）：界面写清只能看不能调 */
+  offline?: boolean
+  /** 离线读不出来的部分（蓝图自己的、引擎类的） */
+  note?: string
 }
 
 /** 范围：界面、玩家对象、子系统、Lua 模块、类、对象引用 */
@@ -89,7 +95,17 @@ export function useVars(project: string, scope: VarScope | undefined, live: bool
     setError('')
     void (async () => {
       let reply: VarsReply = { groups: [] }
-      if (live && scope.scope !== 'lua')
+      // UE 没连上、按类列：面板读源码（Lua 文件连同父类、项目头文件），只给人看有什么（用户 2026-11-23）
+      if (!live && scope.scope === 'class')
+        try {
+          reply = {
+            ...(await ppost<VarsReply>(project, 'ext/gt/offlinemembers', { class: scope.name })),
+            offline: true,
+          }
+        } catch (e) {
+          setError((e as Error).message)
+        }
+      else if (live && scope.scope !== 'lua')
         try {
           const { scope: kind, ...rest } = scope
           reply = await op<VarsReply>(project, 'gt.vars', {

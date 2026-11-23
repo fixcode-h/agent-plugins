@@ -102,7 +102,7 @@ async function pool<T, R>(list: T[], fn: (x: T) => Promise<R>): Promise<R[]> {
 const BP_TYPES = new Set(['Blueprint', 'WidgetBlueprint', 'AnimBlueprint', 'EditorUtilityWidgetBlueprint'])
 
 /** 对象路径 /Game/UI/W_Shop.W_Shop → 磁盘上的 .uasset */
-function assetFile(objectPath: string, mounts: { mount: string; dir: string }[]) {
+export function assetFile(objectPath: string, mounts: { mount: string; dir: string }[]) {
   const pkg = objectPath.slice(0, objectPath.lastIndexOf('.'))
   for (const m of mounts)
     if (pkg.startsWith(m.mount + '/')) return path.join(m.dir, `${pkg.slice(m.mount.length + 1)}.uasset`)

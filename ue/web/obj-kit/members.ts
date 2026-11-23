@@ -88,3 +88,24 @@ export function propsOf(data: PropsData | undefined, which: 'props' | 'states' |
       })),
   )
 }
+
+/** 离线按类读到的 C++ 属性（VarItem）→ Details 的属性：只能看，按 UPROPERTY Category 分组，没有值 */
+export function declPropsOf(groups: VarGroup[], why: string): Prop[] {
+  return groups
+    .filter((g) => g.src !== 'lua')
+    .flatMap((g) =>
+      g.items
+        .filter((it) => it.kind === 'prop')
+        .map((it) => ({
+          name: it.path,
+          displayName: it.name,
+          type: it.type ?? '',
+          category: it.cat || g.class || g.title,
+          value: undefined,
+          ...(it.note ? { help: it.note } : {}),
+          readOnly: true,
+          readOnlyWhy: why,
+          edit: true,
+        })),
+    )
+}
