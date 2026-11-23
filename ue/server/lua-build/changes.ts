@@ -1,6 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
+import { indexedTree } from '../file-index.ts'
 import { c, readJson, run, writeJson } from '../util.ts'
 
 /**
@@ -49,6 +50,15 @@ export async function patchBuildState(projectId: string, f: (s: BuildState) => v
 /** 脚本目录下所有 .lua 和修改时间（跳过 . 开头的目录） */
 export async function luaFiles(dir: string): Promise<{ path: string; mtime: number }[]> {
   const out: { path: string; mtime: number }[] = []
+  // 面板有项目文件索引时文件清单直接取，只 stat 这些 .lua 拿修改时间
+  const listed = await indexedTree(dir, /(^|\/)[^.][^/]*\.lua$/i)
+  if (listed && !listed.some((r) => r.split('/').slice(0, -1).some((s) => s.startsWith('.')))) {
+    for (const rel of listed.slice(0, MAX_FILES)) {
+      const st = await stat(path.join(dir, ...rel.split('/'))).catch(() => undefined)
+      if (st) out.push({ path: rel, mtime: st.mtimeMs })
+    }
+    return out
+  }
   async function walk(d: string) {
     if (out.length >= MAX_FILES) return
     const entries = await readdir(d, { withFileTypes: true }).catch(() => [])

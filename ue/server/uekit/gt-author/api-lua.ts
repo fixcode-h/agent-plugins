@@ -1,6 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { parseLuaModule, type LuaFunction } from './lua-parse.ts'
+import { indexedDirs } from '../../file-index.ts'
 import { listLua, moduleName, readLua, relToRoot } from './lua-files.ts'
 
 /**
@@ -81,6 +82,17 @@ export async function resolveFolders(root: string, folder: string): Promise<stri
   const name = f.slice(star + 2).replace(/^\/+/, '')
   if (!name || name.includes('/')) return [] // 只支持 **/名字 这一种，复杂的通配写具体目录
   const out: string[] = []
+  // 面板有项目文件索引时直接从目录清单里挑同名的
+  const listed = await indexedDirs(base)
+  if (listed)
+    return listed
+      // 和下面走目录一样：找到同名的就不再往它里面找
+      .filter((d) => {
+        const segs = d.toLowerCase().split('/')
+        return segs.length <= 13 && segs.indexOf(name.toLowerCase()) === segs.length - 1
+      })
+      .slice(0, 51)
+      .map((d) => path.join(base, ...d.split('/')))
   const walk = async (d: string, depth: number) => {
     if (depth > 12 || out.length > 50) return
     for (const e of await readdir(d, { withFileTypes: true }).catch(() => [])) {

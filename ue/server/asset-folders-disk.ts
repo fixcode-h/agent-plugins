@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { Card } from './instances.ts'
+import { indexedTree } from './file-index.ts'
 import { exists, t } from './util.ts'
 
 /**
@@ -85,6 +86,25 @@ const SKIP_DIRS = new Set(['binaries', 'intermediate', 'saved', 'source', 'conte
 /** 项目插件里能放内容的（CanContainContent 且有 Content 目录），按名字排 */
 export async function projectPlugins(root: string): Promise<Mount[]> {
   const out: Mount[] = []
+  // 面板有项目文件索引时直接拿 Plugins 下的 .uplugin（只认最外层的：插件里面不会再有插件）
+  const plugins = path.join(root, 'Plugins')
+  const listed = await indexedTree(plugins, /\.uplugin$/i)
+  if (listed) {
+    const dirs = listed
+      .map((r) => r.split('/').slice(0, -1).join('/'))
+      .filter((d, _i, all) => d.split('/').length <= MAX_DEPTH && !all.some((o) => o !== d && d.startsWith(`${o}/`)))
+    for (const d of [...new Set(dirs)]) {
+      const dir = path.join(plugins, ...d.split('/'))
+      const up = listed.find((r) => r.split('/').slice(0, -1).join('/') === d)!
+      const desc = await readFile(path.join(plugins, ...up.split('/')), 'utf8')
+        .then((s) => JSON.parse(s.replace(/^﻿/, '')) as { CanContainContent?: boolean })
+        .catch(() => ({}) as { CanContainContent?: boolean })
+      const content = path.join(dir, 'Content')
+      if (desc.CanContainContent && exists(content))
+        out.push({ name: up.split('/').pop()!.replace(/\.uplugin$/i, ''), dir: content })
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name))
+  }
   const walk = async (dir: string, depth: number) => {
     const ents = await readdir(dir, { withFileTypes: true }).catch(() => [])
     const up = ents.find((e) => e.isFile() && /\.uplugin$/i.test(e.name))

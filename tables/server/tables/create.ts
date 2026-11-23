@@ -12,6 +12,7 @@ import type { TablesConfig } from '../../shared/tables.ts'
 import { safeRel, tableRoot } from './files.ts'
 import { forgetLists } from './list-index.ts'
 import { HttpError } from './http-error.ts'
+import { touchIndexed } from './file-index.ts'
 import { buildZip } from './zip.ts'
 
 const esc = (s: string) =>
@@ -122,6 +123,7 @@ export async function createTable(dir: string, cfg: TablesConfig, body: TableCre
         writeCsv(body.rows, { delimiter: ext === 'tsv' ? '\t' : ',', eol: 'crlf', bom: true })
   // wx：写的一瞬间有人建了同名文件也不覆盖
   await writeFile(full, data, { flag: 'wx' })
+  touchIndexed([full])
   forgetLists()
   return { path: rel }
 }

@@ -1,6 +1,7 @@
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { t } from '../../util.ts'
+import { indexedDirs, indexedTree } from '../../file-index.ts'
 import { insideProject, within } from '../gt-paths.ts'
 
 /**
@@ -47,6 +48,12 @@ export function stemOf(name: string) {
 
 /** 场景根下全部 .json（含 _settings.json 这类配置：它们的守护里也可能 call 脚本）；. 开头的目录（.git）不进 */
 export async function walkJson(dir: string, out: string[] = []) {
+  // 面板有项目文件索引、场景根在索引里时直接取（. 开头的目录照样不进）
+  const listed = await indexedTree(dir, /\.json$/i)
+  if (listed) {
+    for (const r of listed) if (!r.split('/').some((s) => s.startsWith('.'))) out.push(path.join(dir, ...r.split('/')))
+    return out
+  }
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
     if (e.name.startsWith('.')) continue
     const abs = path.join(dir, e.name)
@@ -58,6 +65,13 @@ export async function walkJson(dir: string, out: string[] = []) {
 
 /** 场景根下全部文件夹（相对路径，空的也算）：场景库里空文件夹也要显示 */
 export async function walkDirs(rootAbs: string, dir = rootAbs, out: string[] = []) {
+  if (dir === rootAbs) {
+    const listed = await indexedDirs(rootAbs)
+    if (listed) {
+      out.push(...listed.filter((d) => !d.split('/').some((s) => s.startsWith('.'))))
+      return out
+    }
+  }
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
     if (!e.isDirectory() || e.name.startsWith('.')) continue
     const abs = path.join(dir, e.name)

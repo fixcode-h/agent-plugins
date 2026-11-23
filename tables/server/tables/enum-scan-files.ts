@@ -6,6 +6,7 @@
 import path from 'node:path'
 import { readdir, stat } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
+import { indexedFiles } from './file-index.ts'
 import { pathGlobRe, splitGlobs } from '../../shared/table-enum-scan.ts'
 
 /** 一条规则最多读这么多个文件、这么大 */
@@ -91,7 +92,30 @@ export async function findSources(dir: string, files: string, exclude: string): 
     const ok = await stat(root)
       .then((s) => s.isDirectory())
       .catch(() => false)
-    if (ok) await walk(root)
+    // 面板有项目文件索引时直接取这棵目录的文件，再按通配、排除和上限筛（只 stat 对上的）
+    const listed = ok ? await indexedFiles(root) : undefined
+    if (listed) {
+      for (const r of listed) {
+        const segs = r.split('/')
+        if (segs.slice(0, -1).some((s) => SKIP_DIRS.has(s) || s.startsWith('.'))) continue
+        const full = path.join(root, ...segs)
+        const rel = relOf(full)
+        if (!re.test(rel) || out.has(full)) continue
+        if (excl.some((x) => x.test(rel) || x.test(segs[segs.length - 1]))) continue
+        const st = await stat(full).catch(() => null)
+        if (!st) continue
+        bytes += st.size
+        if (out.size >= MAX_FILES || bytes > MAX_BYTES)
+          throw new Error(
+            t('「{glob}」对上的文件太多（超过 {n} 个或 {mb} MB），把通配写窄一点，比如只指到放枚举的目录', {
+              glob: g,
+              n: MAX_FILES,
+              mb: MAX_BYTES / 1024 / 1024,
+            }),
+          )
+        out.set(full, { rel, full, mtime: st.mtime.toISOString(), size: st.size })
+      }
+    } else if (ok) await walk(root)
   }
   return [...out.values()].sort((a, b) => a.rel.localeCompare(b.rel))
 }

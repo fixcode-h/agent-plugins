@@ -20,6 +20,7 @@ import {
 import type { SheetData } from '../../shared/files.ts'
 import { byTablePath, type TablesListProgress } from '../../shared/table-list.ts'
 import { MAX_XLSX_BYTES, readXlsx, type XlsxLimits } from '../xlsx.ts'
+import { indexedFiles } from './file-index.ts'
 import { resolvePath } from '../fs.ts'
 
 /**
@@ -172,7 +173,28 @@ export async function walkTables(
     }
     const before = files.length
     dirs.push(root.key)
-    await walk(root.key)
+    // 面板有项目文件索引时直接取这棵目录的文件，按同样的规则筛；没有时照旧逐层读
+    const listed = await indexedFiles(root.full)
+    if (listed) {
+      seenDirs++
+      for (const r of listed) {
+        const child = root.key ? `${root.key}/${r}` : r
+        const segs = r.split('/')
+        // 和逐层读一样：根目录以下每一层目录都按跳过名单和排除规则看
+        const under = (i: number) => [root.key, ...segs.slice(0, i + 1)].filter(Boolean).join('/')
+        if (segs.slice(0, -1).some((d, i) => SKIP_DIRS.has(d) || globHit(under(i), exclude))) continue
+        if (seen.has(child)) continue
+        const kind = tableKind(segs[segs.length - 1])
+        if (!kind || !globHit(child, include) || globHit(child, exclude)) continue
+        if (files.length >= MAX_FILES) {
+          truncated = true
+          break
+        }
+        seen.add(child)
+        files.push({ path: child, kind })
+      }
+      onProgress?.({ found: files.length, dirs: seenDirs, at: root.key })
+    } else await walk(root.key)
     roots.push({ dir: d, full: root.full, found: true, files: files.length - before })
   }
   files.sort(byTablePath)

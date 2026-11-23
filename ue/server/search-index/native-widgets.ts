@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { dirFileIndex, indexedTree } from '../file-index.ts'
 
 /**
  * 项目里哪些 C++ 类是 UserWidget 的子类（用户 2026-11-18：界面只按「是不是 UUserWidget 的子类」认，不按名字认）。
@@ -83,6 +84,25 @@ export async function nativeParents(root: string) {
 
 /** 项目 Source 和 Plugins 下的全部头文件（离线读类成员也用，见 gt-ref/offline/cpp-members.ts） */
 export async function projectHeaders(root: string) {
+  // 面板有项目文件索引时直接取（离线读类成员、GM 离线列成员、选对象的类树都走这里），不再逐层走 Source / Plugins
+  const idx = await dirFileIndex(root)
+  if (idx) {
+    const got: string[] = []
+    for (const sub of ['Source', 'Plugins']) {
+      const dir = path.join(root, sub)
+      const rels = await indexedTree(dir, /\.h$/i, idx)
+      // 不在索引里（目录不存在或被排除）：这一份照旧自己走
+      if (!rels) {
+        await headers(dir, got)
+        continue
+      }
+      for (const r of rels) {
+        if (r.split('/').some((seg) => SKIP.has(seg.toLowerCase()))) continue
+        got.push(path.join(dir, ...r.split('/')))
+      }
+    }
+    return got.slice(0, MAX_HEADERS)
+  }
   const files: string[] = []
   await headers(path.join(root, 'Source'), files)
   await headers(path.join(root, 'Plugins'), files)
