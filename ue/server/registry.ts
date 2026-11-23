@@ -46,6 +46,15 @@ export async function getProject(id: string): Promise<UeProject | undefined> {
   return p ? load(p) : undefined
 }
 
+/**
+ * 只读登记里的引擎目录：不走 load（load 要问面板文档根，P4 项目会跑 p4），给面板文件索引问外部目录这种
+ * 频繁、只要一个字段的地方用
+ */
+export async function projectEngineDir(id: string): Promise<string | undefined> {
+  const p = await readJson<Partial<UeProject> | null>(file(id), null)
+  return p?.engineDir || p?.engine?.dir || undefined
+}
+
 /** 登记文件里以前有、已经不用的字段：读到时搬家（load）再从文件里去掉 */
 type Stored = UeProject & { favStore?: string }
 
