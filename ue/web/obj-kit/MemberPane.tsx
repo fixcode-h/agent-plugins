@@ -7,7 +7,7 @@ import { copyText, openMenu } from '../menu.tsx'
 import { useConnState } from '../conn/ConnPill.tsx'
 import { useProps } from '../sections/uekit/gt-ref/live.ts'
 import { useVars, type VarScope } from '../sections/uekit/gt-vars/model.ts'
-import { fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
+import { declPropsOf, fnsOf, propsOf, scopeOf, type FnInfo } from './members.ts'
 import { VarList, type VarSel } from './VarList.tsx'
 
 export type MemberTab = 'fns' | 'props' | 'lua' | 'states'
@@ -90,7 +90,12 @@ export function MemberPane({
   const fns = useMemo(() => fnsOf(groups.filter((g) => g.src !== 'lua')), [groups])
   const luaFns = useMemo(() => fnsOf(groups.filter((g) => g.src === 'lua')), [groups])
   const luaFields = groups.filter((g) => g.src === 'lua').flatMap((g) => g.items.filter((i) => i.kind === 'prop'))
-  const propList = useMemo(() => propsOf(props.data, 'props'), [props.data])
+  // UE 没连上、按类从源码读（用户 2026-11-23）：只给看，调用和改值要连上编辑器
+  const fromSource = !live && byClass && !!vars.data?.offline
+  const srcWhy = t('UE 没连上：这是从源码读的声明，连上编辑器、游戏在跑才能读值和改')
+  const declProps = useMemo(() => (fromSource ? declPropsOf(groups, srcWhy) : []), [fromSource, groups, srcWhy])
+  const liveProps = useMemo(() => propsOf(props.data, 'props'), [props.data])
+  const propList = fromSource ? declProps : liveProps
   const stateList = useMemo(() => propsOf(props.data, 'states'), [props.data])
   const luaProps = useMemo(() => propsOf(props.data, 'lua'), [props.data])
   // gt.props 没给 Lua 组时：Lua 文件里声明的字段（gt.vars + luafields），路径补成 obj.set 认的 @.字段
@@ -101,13 +106,20 @@ export function MemberPane({
         displayName: f.name,
         type: f.type ?? 'any',
         value: f.value,
-        readOnly: !obj.ref || !!f.readOnly,
-        readOnlyWhy: !obj.ref ? t('来源对象不能直接改字段') : undefined,
+        readOnly: !obj.ref || !live || !!f.readOnly,
+        readOnlyWhy: !obj.ref ? t('来源对象不能直接改字段') : !live ? srcWhy : undefined,
         edit: true,
       })),
-    [luaFields, obj.ref],
+    [luaFields, obj.ref, live, srcWhy],
   )
   const luaVars = luaProps.length ? luaProps : luaDecl
+  // 离线的 Lua 类只有 Lua 成员：停在空的「方法」页像是什么都没读到，换对象时直接翻到 Lua 页
+  const toLua = fromSource && !fns.length && luaFns.length + luaVars.length > 0
+  useEffect(() => {
+    if (toLua && tab === 'fns') onTab('lua')
+    // 只在换对象、刚读到成员时翻一次，之后用户自己点回「方法」不再跳
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [obj.name, toLua])
   useEffect(() => {
     if (!needSig || !fn) return
     const f = [...fns, ...luaFns].find((x) => x.name === fn)
@@ -176,7 +188,17 @@ export function MemberPane({
     </div>
   )
   const note = (s: string) => <p className="ue:p-3 ue:text-footnote ue:text-subtle">{s}</p>
-  const offline = !live ? note(t('UE 没连上：连上编辑器才列得出这个对象的成员，值要游戏在跑才读得到')) : null
+  // 按类的对象离线也从源码列（fromSource），只有按来源（@pawn 之类）的才真的列不出
+  const offline =
+    !live && !byClass ? note(t('UE 没连上：连上编辑器才列得出这个对象的成员，值要游戏在跑才读得到')) : null
+  const srcBanner = fromSource ? (
+    <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
+      {t(
+        'UE 没连上：成员是从源码读的（Lua 文件、项目 C++ 头文件），能先看、先填参数；调用和改值要连上编辑器，读值要游戏在跑',
+      )}
+      {vars.data?.note ? <span className="ue:mt-0.5 ue:block">{vars.data.note}</span> : null}
+    </p>
+  ) : null
   const defaults =
     live && byClass && (tab === 'props' || tab === 'states') ? (
       <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
@@ -211,11 +233,21 @@ export function MemberPane({
       </div>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col ue:overflow-y-auto ue:p-1">
         {defaults}
+        {srcBanner}
         {(vars.error || props.error) && (
           <p className="ue:p-2 ue:text-footnote ue:text-danger">{vars.error || props.error}</p>
         )}
         {tab === 'fns' &&
-          (offline ?? (fns.length ? fnList(fns) : note(vars.loading ? t('读取中…') : t('没有能调的函数'))))}
+          (offline ??
+            (fns.length
+              ? fnList(fns)
+              : note(
+                  vars.loading
+                    ? t('读取中…')
+                    : fromSource && luaFns.length
+                      ? t('这是 Lua 类：函数在「Lua」页')
+                      : t('没有能调的函数'),
+                )))}
         {tab === 'lua' && (
           // 函数和变量分成两组（用户 2026-11-22：以前混在一个列表里），搜索两组都筛
           <>
@@ -241,9 +273,11 @@ export function MemberPane({
           (obj.src
             ? note(t('来源对象只列方法；属性在 GameTest 的选对象面板里看'))
             : (offline ??
-              ((tab === 'props' ? propList : stateList).length
-                ? varList(tab === 'props' ? propList : stateList, false)
-                : note(props.loading ? t('读取中…') : t('没有属性')))))}
+              (fromSource && tab === 'states'
+                ? note(t('运行状态要游戏在跑才有'))
+                : (tab === 'props' ? propList : stateList).length
+                  ? varList(tab === 'props' ? propList : stateList, false)
+                  : note(props.loading || vars.loading ? t('读取中…') : t('没有属性')))))}
       </div>
     </div>
   )

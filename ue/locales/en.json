@@ -4978,5 +4978,13 @@
   "找不到这条 GM：UE 没在运行时 C++ GM 列不出来": "Can't find this GM: C++ GMs aren't listed while UE isn't running",
   "和 GM 页同一棵树：C++ GM 要 UE 在运行才列得出来。存的是「哪条 GM + 参数」，GM 库里改了，存盘和运行前会跟上。": "Same tree as the GM page: C++ GMs are listed only while UE is running. This stores which GM plus its arguments; if the GM library changes, saving and running pick up the change.",
   "对象调用不能直接加：在 GM 页把它存成 GM 再选": "Object calls can't be added directly: save it as a GM on the GM page, then pick it",
-  "最近在 GM 页调过（带当时的参数）": "Recently run on the GM page (with those arguments)"
+  "最近在 GM 页调过（带当时的参数）": "Recently run on the GM page (with those arguments)",
+  "UE 没连上：这是从源码读的声明，连上编辑器、游戏在跑才能读值和改": "UE isn't connected: this is the declaration read from source; connect the editor and run the game to read or change the value",
+  "UE 没连上：成员是从源码读的（Lua 文件、项目 C++ 头文件），能先看、先填参数；调用和改值要连上编辑器，读值要游戏在跑": "UE isn't connected: members are read from source (Lua files, project C++ headers), so you can browse and fill in arguments now; calling and changing values need the editor connected, and reading values needs the game running",
+  "这是 Lua 类：函数在「Lua」页": "This is a Lua class: its functions are on the Lua tab",
+  "运行状态要游戏在跑才有": "Runtime state is only available while the game is running",
+  "蓝图 {names} 自己的变量和函数要连上编辑器才读得到": "Variables and functions defined in blueprint {names} can only be read with the editor connected",
+  "引擎类 {name} 及以上的成员要连上编辑器才列得出": "Members of engine class {name} and above can only be listed with the editor connected",
+  "项目源码里没找到这个类": "This class wasn't found in the project source",
+  "脚本根里没找到这个 Lua 模块的源文件": "No source file for this Lua module was found under the script root"
 }

@@ -26,15 +26,12 @@ export interface LuaDeclared {
 const MAX_CHAIN = 8
 
 export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaDeclared | undefined> {
-  const first = await readModule(luaRootAbs, mod)
-  if (!first) return undefined
+  const chain = await luaChain(luaRootAbs, mod)
+  if (!chain.length) return undefined
   // 函数顺着父类链收（子类覆盖的同名函数只留子类的），父类写法认 lua-parents.ts 那几种
   const functions: LuaDeclared['functions'] = []
   const seen = new Set<string>()
-  const visited = new Set<string>()
-  let cur: typeof first | undefined = first
-  for (let level = 0; cur && level < MAX_CHAIN && !visited.has(cur.file); level++) {
-    visited.add(cur.file)
+  chain.forEach((cur, level) => {
     for (const f of cur.info.functions) {
       if (seen.has(f.name)) continue
       seen.add(f.name)
@@ -46,12 +43,24 @@ export async function luaDeclared(luaRootAbs: string, mod: string): Promise<LuaD
         ...(f.returns ? { ret: f.returns } : {}),
       })
     }
+  })
+  return { file: chain[0].file, fields: chain[0].info.fields, functions }
+}
+
+/** 一个 Lua 模块和它顺着父类往上的各层（自己在第一个）：没有这个文件时空数组 */
+export async function luaChain(luaRootAbs: string, mod: string) {
+  const out: NonNullable<Awaited<ReturnType<typeof readModule>>>[] = []
+  const visited = new Set<string>()
+  let cur = await readModule(luaRootAbs, mod)
+  for (let level = 0; cur && level < MAX_CHAIN && !visited.has(cur.file); level++) {
+    visited.add(cur.file)
+    out.push(cur)
     const parent: string | undefined = parseLuaHead(cur.text).parent
     cur = parent
       ? ((await readModule(luaRootAbs, parent)) ?? (await byRequire(luaRootAbs, cur.text, parent)))
       : undefined
   }
-  return { file: first.file, fields: first.info.fields, functions }
+  return out
 }
 
 /**

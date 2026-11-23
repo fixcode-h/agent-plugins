@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
-import { parseLuaModule } from './lua-parse.ts'
+import { parseLuaModule, type LuaModuleInfo } from './lua-parse.ts'
+import { luaChain } from '../gt-ref/lua-props.ts'
 import { moduleFile, readLua, relToRoot } from './lua-files.ts'
 
 /**
@@ -14,8 +15,10 @@ export interface VarItem {
   kind: 'prop' | 'fn'
   readOnly: boolean
   sig?: string
-  args?: { name: string; type: string; constructible: boolean; note?: string }[]
+  args?: { name: string; type: string; constructible: boolean; note?: string; out?: boolean; object?: boolean }[]
   note?: string
+  /** C++ 属性的 UPROPERTY Category（离线读头文件时有，gt-ref/offline/cpp-members.ts） */
+  cat?: string
   line?: number
   value?: unknown
   dim?: boolean
@@ -44,10 +47,15 @@ export async function luaGroup(root: string, mod: string, prefix: string, filter
     return undefined
   }
   if (!(await stat(abs).catch(() => undefined))?.isFile()) return undefined
-  const info = parseLuaModule(await readLua(abs))
+  const items = luaItems(parseLuaModule(await readLua(abs)), prefix, filter)
+  return { src: 'lua', title: relToRoot(root, abs), file: relToRoot(root, abs), items }
+}
+
+/** 解析结果 → 组里的项：字段在前、函数在后（下划线开头的私有函数不列） */
+function luaItems(info: LuaModuleInfo, prefix: string, filter = ''): VarItem[] {
   const f = filter.toLowerCase()
   const keep = (name: string) => !f || name.toLowerCase().includes(f)
-  const items: VarItem[] = [
+  return [
     ...info.fields
       .filter((x) => keep(x.name))
       .map(
@@ -84,7 +92,27 @@ export async function luaGroup(root: string, mod: string, prefix: string, filter
         }),
       ),
   ]
-  return { src: 'lua', title: relToRoot(root, abs), file: relToRoot(root, abs), items }
+}
+
+/**
+ * Lua 类连同父类的各层，一层一组（组名是模块名，方法页按它分组）；子类已经有的同名字段、函数不在父类组里重复。
+ * GM 对象调用里「只按类」的 Lua 对象 UE 没连上时靠它列成员（用户 2026-11-23：编辑器没开也该读得到 Lua 的函数和成员变量）
+ */
+export async function luaChainGroups(root: string, mod: string): Promise<VarGroup[]> {
+  const seen = new Set<string>()
+  const out: VarGroup[] = []
+  for (const level of await luaChain(root, mod)) {
+    const items = luaItems(level.info, '@.').filter((x) => !seen.has(x.name))
+    for (const x of items) seen.add(x.name)
+    // 组名只留最后一段（SM_HD_HomeDecoration），全路径在 file 里
+    const name =
+      level.mod
+        .split(/[./\\]/)
+        .filter(Boolean)
+        .at(-1) ?? level.mod
+    if (items.length) out.push({ src: 'lua', title: name, class: name, file: level.file, items })
+  }
+  return out
 }
 
 /** 文件扫出的组 + UE 按实例表给的组：按名字带上此刻的值；只在实例表里的（动态加的字段）补在后面 */
