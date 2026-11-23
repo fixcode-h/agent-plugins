@@ -459,6 +459,21 @@
       }
     }
   ],
+  "hooks": [
+    {
+      "id": "gt-offer-track",
+      "name": "记下编译和 GameTest 提问",
+      "description": "UE 项目里记下这个对话跑没跑过 UE 编译、问没问过用户要不要写 GameTest，给「编译后问一次」用",
+      "event": "tool.after",
+      "match": { "tool": "any" }
+    },
+    {
+      "id": "gt-offer",
+      "name": "编译后问一次要不要写 GameTest",
+      "description": "UE 项目里这个对话编译过、还没问过用户时，结束前拦一次，让 Agent 问用户要不要写 GameTest 测试脚本；每个对话只拦一次",
+      "event": "turn.beforeEnd"
+    }
+  ],
   "testSteps": [
     {
       "id": "compile-bp",
