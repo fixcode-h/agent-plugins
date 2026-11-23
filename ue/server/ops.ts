@@ -1,4 +1,5 @@
-import { offlineClasses } from './uekit/gt-ref/offline/classes.ts'
+import { offlineClasses, offlineRows } from './uekit/gt-ref/offline/classes.ts'
+import { classIndex } from './uekit/gt-ref/class-index/index.ts'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { assetChildren } from './asset-folders.ts'
@@ -486,6 +487,23 @@ export async function runOp(
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
   // GameTest 对象引用：几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）。gt.migrate 随 v5 删掉（旧脚本不迁移）
   if (op === 'gt.migrate') throw new BridgeError(t('旧格式不再支持，请按新写法重写'))
+  // 「类」下拉的本地索引：整张类表记在面板、网页本地建树和搜（uekit/gt-ref/class-index/）
+  if (op === 'gt.classes' && args.all === true)
+    return {
+      ...(await classIndex(ctx.project, args, {
+        live: async (lua, fresh) => {
+          const card = await chooseCard(ctx, op, args)
+          await luaReady(ctx, card, op)
+          return (await rpc(
+            card,
+            op,
+            { all: true, ...(lua ? { lua: true } : {}), ...(fresh ? { fresh: true } : {}) },
+            timeoutMs,
+          )) as Record<string, unknown>
+        },
+        disk: (lua, fresh) => offlineRows(ctx.project, lua, fresh),
+      })),
+    }
   if (GT_REF_OPS.has(op))
     return gtRefOp(op, args, {
       project: ctx.project,

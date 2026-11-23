@@ -4534,7 +4534,6 @@
   "只看此刻有实例的": "Only classes with live instances",
   "· 引擎自带的类压灰": "· engine classes are dimmed",
   "读类树…": "Loading class tree…",
-  "只列了前 {n} 个，多打几个字缩小范围": "Showing the first {n} only. Type more to narrow it down",
   "UObject 类树": "UObject class tree",
   "加进唯一标识组": "Add to identifier group",
   "属性 / 方法 / Lua / 运行状态": "Properties / Methods / Lua / Runtime state",
@@ -4991,5 +4990,11 @@
   "执行时填": "Filled when run",
   "参数执行时填": "Parameters are filled when run",
   "只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找": "Only the parameters are saved, not their values: fill them in when you run this GM. Objects are saved as match rules (class + unique identifiers) and looked up when run",
-  "和对象调用共用这份关联，在任一处改都会同步": "Shared with Object Call: change it in either place and both update"
+  "和对象调用共用这份关联，在任一处改都会同步": "Shared with Object Call: change it in either place and both update",
+  "UE 没在运行，没有此刻实例数": "UE is not running, so there are no live instance counts",
+  "编辑器里的 GameTest 旧于 2.4.0：类树先按项目文件列（引擎类只有常见的几个），升级 GameTest 后列出全部已加载的类": "GameTest in the editor is older than 2.4.0: the class tree is read from project files (only common engine classes). Upgrade GameTest to list every loaded class",
+  "读不到类表": "Could not read the class list",
+  "没有类": "No classes",
+  "命中 {total} 个，只列了前 {n} 个，多打几个字缩小范围": "{total} matches, showing the first {n}. Type more to narrow it down",
+  "正在核对类表有没有变…": "Checking whether the class list changed…"
 }

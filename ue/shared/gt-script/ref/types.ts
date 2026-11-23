@@ -231,6 +231,22 @@ export interface GtClassItem {
   /** Lua 类的源文件（相对项目，`Content/Script/UI/Shop.lua`） */
   file?: string
 }
+/** gt.classes all: true（GameTest 2.4.0）的一行：[名字, 父类, kind, 资产包名或 Lua 文件, 此刻实例数]，空的是 '' 和 0 */
+export type GtClassRow = [name: string, parent: string, kind: GtClassItem['kind'], ref: string, live: number]
+/**
+ * 面板的类索引（网页 gt.classes all: true）：整张类表给网页本地建树、本地搜（用户 2026-11-23 嫌每次打开都重读、搜索慢）。
+ * 带 v（内容指纹）来问、没变时回 same 不重发 rows；refreshing 表示回的是记住的旧表、后台正在重建，再带 wait 问一次拿新的
+ */
+export interface GtClassIndexResult {
+  v: string
+  rows?: GtClassRow[]
+  same?: boolean
+  refreshing?: boolean
+  /** ue：编辑器 / 游戏给的整表；disk：从项目文件读的（UE 没开或 GameTest 旧） */
+  source: 'ue' | 'disk'
+  total: number
+  note?: string
+}
 export interface GtClassesResult {
   items: GtClassItem[]
   total: number

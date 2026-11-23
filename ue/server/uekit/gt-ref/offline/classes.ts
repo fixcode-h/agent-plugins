@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { GtClassItem, GtClassesResult } from '../../../../shared/gt-script/ref/types.ts'
+import type { GtClassItem, GtClassRow, GtClassesResult } from '../../../../shared/gt-script/ref/types.ts'
 import { searchText } from '../../../../shared/gt-script/ref/search-text.ts'
 import { nativeParents } from '../../../search-index/native-widgets.ts'
 import { projectMounts } from '../../../search-index/mounts.ts'
@@ -306,4 +306,10 @@ function cachedNodes(p: UeProject, lua: boolean, fresh: boolean) {
 export async function offlineClasses(p: UeProject, args: OfflineArgs, note: string): Promise<GtClassesResult> {
   const nodes = await cachedNodes(p, !!args.lua, !!args.fresh)
   return { ...pickClasses(nodes, args, args.lua ? undefined : ROOT), note }
+}
+
+/** 面板类索引（class-index/）要的整表：磁盘上的类表摊成行，形状和 UE 的 gt.classes all 一致，没有此刻实例数 */
+export async function offlineRows(p: UeProject, lua: boolean, fresh: boolean): Promise<GtClassRow[]> {
+  const nodes = await cachedNodes(p, lua, fresh)
+  return [...nodes.values()].map((n) => [n.name, n.parent ?? '', n.kind ?? 'object', n.asset ?? n.file ?? '', 0])
 }
