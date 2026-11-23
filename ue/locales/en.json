@@ -4991,5 +4991,8 @@
   "执行时填": "Filled when run",
   "参数执行时填": "Parameters are filled when run",
   "只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找": "Only the parameters are saved, not their values: fill them in when you run this GM. Objects are saved as match rules (class + unique identifiers) and looked up when run",
-  "和对象调用共用这份关联，在任一处改都会同步": "Shared with Object Call: change it in either place and both update"
+  "和对象调用共用这份关联，在任一处改都会同步": "Shared with Object Call: change it in either place and both update",
+  "搜索…": "Search…",
+  "搜分组": "Search groups",
+  "搜模块": "Search modules"
 }

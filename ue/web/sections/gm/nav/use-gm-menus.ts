@@ -2,7 +2,6 @@ import {
   ArrowDown,
   Braces,
   ArrowUp,
-  Check,
   Copy,
   CopyPlus,
   Crosshair,
@@ -145,27 +144,34 @@ export function useGmMenus(ctx: GmMenuCtx) {
     ])
   }
 
-  const moveItems = (entry: GmEntry): MenuList => {
+  /** 「移到模块 ▸」：模块一多（几十个）平铺会占满一屏，收进子菜单，项多了自动带搜索 */
+  const moveItem = (entry: GmEntry): MenuItem => {
     const cur = entry.custom ? entry.custom.module : placeOf(entry.key, entry.group, d.gm).module
-    const move = (id: string) => void save(moveToModule(d.gm, entry.key, id))
-    return [
-      { title: t('移到模块') },
-      ...modsOf(d).map((m) => ({
-        label: m.name,
-        icon: m.id === cur ? Check : Package,
-        checked: m.id === cur,
-        disabled: m.id === cur,
-        onClick: () => move(m.id),
-      })),
-      {
-        label: t('新建模块…'),
-        icon: Plus,
-        onClick: async () => {
-          const r = await newModule()
-          if (r) await save(moveToModule(r.g, entry.key, r.id))
+    const mods = modsOf(d)
+    return {
+      label: t('移到模块'),
+      icon: Package,
+      hint: mods.find((m) => m.id === cur)?.name,
+      search: t('搜模块'),
+      sub: [
+        {
+          label: t('新建模块…'),
+          icon: Plus,
+          onClick: async () => {
+            const r = await newModule()
+            if (r) await save(moveToModule(r.g, entry.key, r.id))
+          },
         },
-      },
-    ]
+        'sep',
+        ...mods.map((m) => ({
+          label: m.name,
+          icon: Package,
+          checked: m.id === cur,
+          disabled: m.id === cur,
+          onClick: () => void save(moveToModule(d.gm, entry.key, m.id)),
+        })),
+      ],
+    }
   }
 
   /** 自定义 GM 自己的：改匹配规则（这条 GM 里的副本）、重命名、复制一份 */
@@ -238,8 +244,7 @@ export function useGmMenus(ctx: GmMenuCtx) {
       'sep',
       ...(entry.custom ? customItems(entry.custom) : []),
       'sep',
-      ...(cat === 'gm' ? moveItems(entry) : []),
-      'sep',
+      cat === 'gm' && moveItem(entry),
       {
         label: fav ? t('移出常用') : t('加到常用'),
         icon: fav ? StarOff : Star,

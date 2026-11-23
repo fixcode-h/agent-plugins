@@ -1,4 +1,5 @@
-import { Check, Copy, Play, Trash2, type LucideIcon } from 'lucide-react'
+import { Copy, Play, Trash2, type LucideIcon } from 'lucide-react'
+import { filterItems, isAction, isPick, isSub, MenuRows, MenuSearch, SUB_SEARCH_AT, tidy } from './menu-rows.tsx'
 import {
   useEffect,
   useId,
@@ -20,24 +21,42 @@ import { h, t } from './host.ts'
  * （挂在 body 上不被分栏的 overflow 裁掉，也不受父级动画的 transform 影响定位）。
  * 打开时从鼠标处淡入放大；点外面、Esc、滚动、窗口失焦都关；上下键选、回车执行。
  */
-export type MenuItem =
-  | {
-      label: string
-      icon?: LucideIcon
-      onClick: () => void
-      disabled?: boolean
-      danger?: boolean
-      /** 右侧的快捷键 / 说明 */
-      hint?: string
-      /** 打勾（开关类的菜单项） */
-      checked?: boolean
-      /** 名字前面的小标记（「最近看过」里的实例 / 资源徽标） */
-      lead?: ReactNode
-      /** 淡显（还能点，例如换了世界、对象可能已经不在的历史记录） */
-      dim?: boolean
-    }
-  | { title: string }
-  | 'sep'
+export interface MenuAction {
+  label: string
+  icon?: LucideIcon
+  onClick: () => void
+  disabled?: boolean
+  danger?: boolean
+  /** 右侧的快捷键 / 说明 */
+  hint?: string
+  /** 打勾（开关类的菜单项） */
+  checked?: boolean
+  /** 名字前面的小标记（「最近看过」里的实例 / 资源徽标） */
+  lead?: ReactNode
+  /** 淡显（还能点，例如换了世界、对象可能已经不在的历史记录） */
+  dim?: boolean
+}
+
+/** 子菜单里能放的项（子菜单不再套子菜单） */
+export type MenuLeaf = MenuAction | { title: string } | 'sep'
+
+/**
+ * 子菜单（「移到模块 ▸」）：长列表（模块、分组、宏……）不平铺在主菜单里——用户 2026-11-23：
+ * 几十个模块平铺，菜单占满一屏、遮住树、下面的「删除」都看不到。悬停或点它在旁边展开，
+ * 超过 SUB_SEARCH_AT 项自动带搜索框，限高可滚
+ */
+export interface MenuSub {
+  label: string
+  icon?: LucideIcon
+  /** 右侧的说明（例如现在在哪个模块） */
+  hint?: string
+  disabled?: boolean
+  sub: (MenuLeaf | false | '' | undefined | null)[]
+  /** 项多到带搜索框时，框里的提示字（默认「搜索…」） */
+  search?: string
+}
+
+export type MenuItem = MenuLeaf | MenuSub
 
 interface State {
   x: number
@@ -56,26 +75,6 @@ export interface MenuOptions {
   onClose?: () => void
 }
 
-/** 搜索：留下名字、说明里带关键字的项，小标题只在它下面还有项时留着 */
-function filterItems(items: MenuItem[], q: string): MenuItem[] {
-  const k = q.trim().toLowerCase()
-  if (!k) return items
-  const out: MenuItem[] = []
-  let title: MenuItem | undefined
-  for (const it of items) {
-    if (it === 'sep') continue
-    if ('title' in it) {
-      title = it
-      continue
-    }
-    if (!`${it.label} ${it.hint ?? ''}`.toLowerCase().includes(k)) continue
-    if (title) out.push(title)
-    title = undefined
-    out.push(it)
-  }
-  return out
-}
-
 let state: State | undefined
 let seq = 0
 const subs = new Set<() => void>()
@@ -89,14 +88,7 @@ export function openMenu(
 ) {
   e.preventDefault()
   e.stopPropagation()
-  // 去掉条件不满足的项，以及开头、结尾、连着的分隔线
-  const list: MenuItem[] = []
-  for (const it of items) {
-    if (!it) continue
-    if (it === 'sep' && (!list.length || list.at(-1) === 'sep')) continue
-    list.push(it)
-  }
-  while (list.at(-1) === 'sep') list.pop()
+  const list = tidy(items)
   if (!list.length) {
     o.onClose?.()
     return
@@ -177,59 +169,180 @@ export function MenuHost() {
   return createPortal(<Menu key={cur.seq} s={cur} />, document.body)
 }
 
-const isAction = (it: MenuItem): it is Extract<MenuItem, { onClick: () => void }> =>
-  typeof it === 'object' && 'onClick' in it && !it.disabled
+/** 子菜单紧贴主菜单的哪一边、多高：按那一行的位置算，放不下就翻到左边，上下夹在窗口里 */
+interface SubPos {
+  left: number
+  top: number
+  ox: 'left' | 'right'
+}
+const EDGE = 8
+/** 悬停多久展开 / 收起子菜单：鼠标斜着划向子菜单时会擦过别的行，不能一擦就收 */
+const HOVER_MS = 150
 
 /** inline：设置 →「组件」里的示例，原地画一份不响应外部点击的菜单 */
 function Menu({ s, inline }: { s: State; inline?: boolean }) {
   const { cn } = h()
   const ref = useRef<HTMLDivElement>(null)
+  const subRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: s.x, top: s.y, ox: 'left', oy: 'top' })
   const [q, setQ] = useState('')
   const items = s.search === undefined ? s.items : filterItems(s.items, q)
   const [act, setAct] = useState(-1)
+  // 子菜单：开着第几项、键盘在哪一列、子菜单里选中哪项、搜索字
+  const [open, setOpen] = useState(-1)
+  const [inSub, setInSub] = useState(false)
+  const [subAct, setSubAct] = useState(-1)
+  const [subQ, setSubQ] = useState('')
+  const [subPos, setSubPos] = useState<SubPos>()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const subInput = useRef<HTMLInputElement>(null)
+  const subItem = open >= 0 ? items[open] : undefined
+  const sub = subItem && isSub(subItem) ? subItem : undefined
+  const subAll = sub ? tidy(sub.sub) : []
+  const subSearch = sub && subAll.filter(isAction).length > SUB_SEARCH_AT ? (sub.search ?? t('搜索…')) : undefined
+  const subItems = subSearch === undefined ? subAll : filterItems(subAll, subQ)
+
   // 搜索时默认选中第一项：打几个字直接回车
   useEffect(() => {
-    if (s.search !== undefined) setAct(items.findIndex(isAction))
+    if (s.search !== undefined) setAct(items.findIndex(isPick))
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 只在关键字变时重选，items 每次渲染都是新数组
   }, [q])
+  useEffect(() => {
+    if (subSearch !== undefined && subQ) setSubAct(subItems.findIndex(isAction))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 同上，只在子菜单的关键字变时重选
+  }, [subQ])
+  useEffect(() => () => clearTimeout(timer.current), [])
+  // 键盘上下选到看不见的项（长菜单在里面滚）时滚过去
+  useEffect(() => {
+    ref.current?.querySelector(`[data-menu-row="${act}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [act])
+  useEffect(() => {
+    if (inSub) subRef.current?.querySelector(`[data-menu-row="${subAct}"]`)?.scrollIntoView({ block: 'nearest' })
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 鼠标悬停也会改 subAct，那时项本来就看得见，滚不滚都一样
+  }, [subAct])
 
-  // 贴着屏幕边时往左 / 往上翻，动画的原点跟着换
+  // 贴着屏幕边时往左 / 往上翻，动画的原点跟着换；比窗口还高时贴顶，里面滚（菜单本身限高）
   useLayoutEffect(() => {
     const el = ref.current
     if (!el || inline) return
-    const r = el.getBoundingClientRect()
-    const flipX = s.x + r.width > innerWidth - 8
-    const flipY = s.y + r.height > innerHeight - 8
+    // 用 offset 尺寸：淡入动画的 scale 会让 getBoundingClientRect 量小，算出来的位置偏下、超出窗口
+    const r = { width: el.offsetWidth, height: el.offsetHeight }
+    const flipX = s.x + r.width > innerWidth - EDGE
+    const flipY = s.y + r.height > innerHeight - EDGE
+    const up = s.y - r.height
     setPos({
-      left: flipX ? Math.max(8, s.x - r.width) : s.x,
-      top: flipY ? Math.max(8, s.y - r.height) : s.y,
+      left: flipX ? Math.max(EDGE, s.x - r.width) : s.x,
+      top: !flipY ? s.y : up >= EDGE ? up : Math.max(EDGE, innerHeight - EDGE - r.height),
       ox: flipX ? 'right' : 'left',
       oy: flipY ? 'bottom' : 'top',
     })
   }, [s])
 
+  // 子菜单贴着那一行的右边展开，右边放不下翻到主菜单左边；上下夹在窗口里
+  useLayoutEffect(() => {
+    const el = subRef.current
+    const row = ref.current?.querySelector<HTMLElement>(`[data-menu-row="${open}"]`)
+    const box = ref.current?.getBoundingClientRect()
+    if (!el || !row || !box) return setSubPos(undefined)
+    const rr = row.getBoundingClientRect()
+    const r = { width: el.offsetWidth, height: el.offsetHeight }
+    // 主菜单的左右边按它定下的位置和真实宽度算（同上，动画中量到的是缩放后的）
+    const left = pos.left
+    const right0 = pos.left + (ref.current?.offsetWidth ?? box.width)
+    const right = right0 + 2 + r.width <= innerWidth - EDGE
+    setSubPos({
+      left: right ? right0 + 2 : Math.max(EDGE, left - 2 - r.width),
+      top: Math.max(EDGE, Math.min(rr.top - 5, innerHeight - EDGE - r.height)),
+      ox: right ? 'left' : 'right',
+    })
+  }, [open, pos, subItems.length])
+
+  // 长子菜单定好位置、显示出来后把光标放进它的搜索框：直接打字就能筛（悬停展开的也一样）
+  useEffect(() => {
+    if (subPos) subInput.current?.focus()
+    // 只在换了子菜单、或刚定好位置时聚焦；位置随筛选微调时不用再聚焦
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, !!subPos])
+
+  const openSub = (i: number, focus: boolean) => {
+    clearTimeout(timer.current)
+    if (i !== open) {
+      setSubQ('')
+      setSubAct(-1)
+    }
+    setOpen(i)
+    setInSub(focus)
+    if (focus) {
+      const it = items[i]
+      if (it && isSub(it)) setSubAct(tidy(it.sub).findIndex(isAction))
+    }
+  }
+  const closeSub = () => {
+    clearTimeout(timer.current)
+    setOpen(-1)
+    setInSub(false)
+  }
+  const pick = (it: MenuAction) => {
+    closeMenu()
+    it.onClick()
+  }
+  // 悬停：停在子菜单那一行上一会儿就展开，停到别的行上一会儿就收起（鼠标进了子菜单就取消）
+  const hover = (i: number) => {
+    setAct(i)
+    setInSub(false)
+    clearTimeout(timer.current)
+    const it = items[i]
+    if (it && isSub(it) && isPick(it)) {
+      if (i !== open) timer.current = setTimeout(() => openSub(i, false), open < 0 ? 0 : HOVER_MS)
+    } else if (open >= 0) timer.current = setTimeout(closeSub, HOVER_MS)
+  }
+
   useEffect(() => {
     if (inline) return
+    const inside = (e: Event) =>
+      e.target instanceof Node && !!(ref.current?.contains(e.target) || subRef.current?.contains(e.target))
     const away = (e: Event) => {
-      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return
-      closeMenu()
+      if (!inside(e)) closeMenu()
+    }
+    const move = (list: MenuItem[], cur: number, down: boolean, ok: (x: MenuItem) => boolean) => {
+      const idx = list.map((x, i) => (ok(x) ? i : -1)).filter((i) => i >= 0)
+      if (!idx.length) return cur
+      const at = idx.indexOf(cur)
+      if (at < 0) return down ? idx[0] : idx[idx.length - 1]
+      return idx[down ? (at + 1) % idx.length : (at - 1 + idx.length) % idx.length]
     }
     const key = (e: KeyboardEvent) => {
+      const vert = e.key === 'ArrowDown' || e.key === 'ArrowUp'
+      if (open >= 0 && inSub) {
+        // 键盘在子菜单里：Esc / ← 只收子菜单，回到主菜单那一行
+        if (e.key === 'Escape' || (e.key === 'ArrowLeft' && !subQ)) {
+          e.preventDefault()
+          setAct(open)
+          return closeSub()
+        }
+        if (vert) {
+          e.preventDefault()
+          setSubAct(move(subItems, subAct, e.key === 'ArrowDown', isAction))
+        } else if (e.key === 'Enter' && subAct >= 0) {
+          e.preventDefault()
+          const it = subItems[subAct]
+          if (it && isAction(it)) pick(it)
+        }
+        return
+      }
       if (e.key === 'Escape') return closeMenu()
-      const idx = items.map((x, i) => (isAction(x) ? i : -1)).filter((i) => i >= 0)
-      if (!idx.length) return
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (vert) {
         e.preventDefault()
-        const at = idx.indexOf(act)
-        const next = e.key === 'ArrowDown' ? (at + 1) % idx.length : (at - 1 + idx.length) % idx.length
-        setAct(idx[at < 0 && e.key === 'ArrowUp' ? idx.length - 1 : next])
-      } else if (e.key === 'Enter' && act >= 0) {
-        e.preventDefault()
+        if (open >= 0) closeSub()
+        setAct(move(items, act, e.key === 'ArrowDown', isPick))
+      } else if ((e.key === 'Enter' || e.key === 'ArrowRight') && act >= 0) {
         const it = items[act]
-        if (isAction(it)) {
-          closeMenu()
-          it.onClick()
+        if (it && isSub(it) && isPick(it)) {
+          e.preventDefault()
+          openSub(act, true)
+        } else if (e.key === 'Enter' && it && isAction(it)) {
+          e.preventDefault()
+          pick(it)
         }
       }
     }
@@ -238,87 +351,90 @@ function Menu({ s, inline }: { s: State; inline?: boolean }) {
     addEventListener('keydown', key)
     addEventListener('blur', closeMenu)
     addEventListener('resize', closeMenu)
-    // 菜单里面滚（带搜索的长菜单）不关
-    const wheel = (e: Event) => {
-      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return
-      closeMenu()
-    }
-    addEventListener('wheel', wheel, { passive: true })
+    // 菜单里面滚（带搜索的长菜单、子菜单）不关
+    addEventListener('wheel', away, { passive: true })
     return () => {
       removeEventListener('pointerdown', away, true)
       removeEventListener('contextmenu', away, true)
       removeEventListener('keydown', key)
       removeEventListener('blur', closeMenu)
       removeEventListener('resize', closeMenu)
-      removeEventListener('wheel', wheel)
+      removeEventListener('wheel', away)
     }
-  }, [s, act, inline, items])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- openSub / closeSub / pick 每次渲染新建，读的都是这里列出的状态
+  }, [s, act, inline, items, open, inSub, subAct, subItems, subQ])
 
+  const box = cn(
+    'ue:flex ue:flex-col ue:min-w-48 ue:max-w-80 ue:rounded-(--c-menu-radius) ue:border-(length:--c-menu-border) ue:border-pop-edge ue:bg-(--c-menu-bg) ue:p-1 ue:text-footnote ue:shadow-pop ue:motion-safe:animate-pop',
+  )
+  // 不论有没有搜索框都限高：再长的菜单也不超出窗口，里面滚
+  const maxH = inline ? undefined : `calc(100vh - ${EDGE * 2}px)`
   return (
-    <div
-      ref={ref}
-      role="menu"
-      // 弹出的那个（设置里的示例是画在页里的同一个组件）：蓝图画布拖线弹菜单时按它找菜单摆在哪
-      data-floating={inline ? undefined : ''}
-      onContextMenu={(e) => e.preventDefault()}
-      className={cn(
-        inline ? 'ue:relative' : 'ue:fixed ue:z-[1000]',
-        'ue:min-w-48 ue:max-w-80 ue:rounded-(--c-menu-radius) ue:border-(length:--c-menu-border) ue:border-pop-edge ue:bg-(--c-menu-bg) ue:p-1 ue:text-footnote ue:shadow-pop ue:motion-safe:animate-pop',
-      )}
-      style={inline ? undefined : { left: pos.left, top: pos.top, transformOrigin: `${pos.oy} ${pos.ox}` }}
-    >
-      {s.search !== undefined && (
-        <input
-          autoFocus
-          value={q}
-          placeholder={s.search}
-          onChange={(e) => setQ(e.target.value)}
-          className="ue:mb-1 ue:h-7 ue:w-full ue:rounded-(--c-menu-itemRadius) ue:border-b ue:border-line ue:bg-transparent ue:px-2 ue:text-footnote ue:text-fg ue:outline-none ue:placeholder:text-subtle"
-        />
-      )}
-      <div className={cn(s.search !== undefined && 'ue:max-h-[min(420px,60vh)] ue:overflow-y-auto')}>
-        {!items.length && <div className="ue:px-2 ue:py-1.5 ue:text-caption ue:text-subtle">{t('没有对上的')}</div>}
-        {items.map((it, i) => {
-          if (it === 'sep') return <div key={i} className="ue:mx-1 ue:my-1 ue:h-px ue:bg-line" />
-          if ('title' in it)
-            return (
-              <div key={i} className="ue:truncate ue:px-2 ue:pt-1.5 ue:pb-1 ue:text-caption ue:text-subtle">
-                {it.title}
-              </div>
-            )
-          const Icon = it.icon
-          return (
-            <button
-              key={i}
-              type="button"
-              role="menuitem"
-              disabled={it.disabled}
-              onPointerEnter={() => setAct(i)}
-              onClick={() => {
-                closeMenu()
-                it.onClick()
-              }}
-              className={cn(
-                'ue:flex ue:w-full ue:items-center ue:gap-2 ue:rounded-(--c-menu-itemRadius) ue:px-2 ue:py-1 ue:text-left ue:transition-colors ue:duration-100 ue:disabled:opacity-40',
-                act === i && !it.disabled && 'ue:bg-hover',
-                it.danger ? 'ue:text-danger' : 'ue:text-fg',
-              )}
-            >
-              <span className="ue:flex ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:items-center ue:justify-center ue:text-subtle">
-                {it.checked ? (
-                  <Check className="ue:h-3.5 ue:w-3.5 ue:text-accent" />
-                ) : Icon ? (
-                  <Icon className={cn('ue:h-3.5 ue:w-3.5', it.danger && 'ue:text-danger')} />
-                ) : null}
-              </span>
-              {it.lead}
-              <span className={cn('ue:min-w-0 ue:flex-1 ue:truncate', it.dim && 'ue:opacity-50')}>{it.label}</span>
-              {it.hint && <span className="ue:shrink-0 ue:pl-3 ue:text-caption ue:text-subtle">{it.hint}</span>}
-            </button>
-          )
-        })}
+    <>
+      <div
+        ref={ref}
+        role="menu"
+        // 弹出的那个（设置里的示例是画在页里的同一个组件）：蓝图画布拖线弹菜单时按它找菜单摆在哪
+        data-floating={inline ? undefined : ''}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cn(inline ? 'ue:relative' : 'ue:fixed ue:z-[1000]', box)}
+        style={
+          inline ? undefined : { left: pos.left, top: pos.top, maxHeight: maxH, transformOrigin: `${pos.oy} ${pos.ox}` }
+        }
+      >
+        {s.search !== undefined && <MenuSearch value={q} placeholder={s.search} onChange={setQ} />}
+        <div
+          className={cn(
+            'ue:flex ue:min-h-0 ue:flex-col ue:overflow-y-auto',
+            s.search !== undefined && 'ue:max-h-[min(420px,60vh)]',
+          )}
+        >
+          <MenuRows items={items} act={act} open={open} onHover={hover} onPick={pick} onSub={(i) => openSub(i, true)} />
+        </div>
       </div>
-    </div>
+      {sub && !inline && (
+        <div
+          ref={subRef}
+          role="menu"
+          onContextMenu={(e) => e.preventDefault()}
+          // 鼠标进了子菜单：取消「停到别的行上要收起」的计时
+          onPointerEnter={() => {
+            clearTimeout(timer.current)
+            setAct(open)
+          }}
+          className={cn('ue:fixed ue:z-[1001]', box, !subPos && 'ue:invisible')}
+          style={{
+            left: subPos?.left ?? 0,
+            top: subPos?.top ?? 0,
+            maxHeight: `min(440px, ${maxH})`,
+            transformOrigin: `top ${subPos?.ox ?? 'left'}`,
+          }}
+        >
+          {subSearch !== undefined && (
+            <MenuSearch
+              ref={subInput}
+              value={subQ}
+              placeholder={subSearch}
+              onChange={(v) => {
+                setSubQ(v)
+                setInSub(true)
+              }}
+            />
+          )}
+          <div className="ue:flex ue:min-h-0 ue:flex-col ue:overflow-y-auto">
+            <MenuRows
+              items={subItems}
+              act={inSub ? subAct : -1}
+              onHover={(i) => {
+                setInSub(true)
+                setSubAct(i)
+              }}
+              onPick={pick}
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
