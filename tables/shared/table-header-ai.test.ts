@@ -44,3 +44,25 @@ test('结果块按 tables-header 认，和整项目分析的块分开', () => {
   assert.equal(r.proposal?.draft.style.exceptions?.[0]?.sheet, 'Slot')
   assert.equal(tablesJsonOf(reply, () => ({ error: 'none' })).error, 'none')
 })
+
+test('AI 照着 @types 把枚举名写成 @Side 时去掉 @，enums 写成数组也认', () => {
+  const r = resolveTablesProposal({
+    style: {
+      header: {
+        start: 0,
+        rows: [
+          { kind: 'side', values: '@sides' },
+          { kind: 'type', values: '@types' },
+        ],
+      },
+    },
+    enums: { sides: ['Client', 'Everyone'] },
+  })
+  const rows = r.proposal?.draft.style.header?.rows ?? []
+  assert.equal(rows[0]?.values, 'sides')
+  assert.equal(rows[1]?.values, '@types')
+  assert.deepEqual(
+    r.proposal?.draft.enums.sides?.values.map((v) => v.name),
+    ['Client', 'Everyone'],
+  )
+})

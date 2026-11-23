@@ -16,6 +16,9 @@ export function askHeaderAi(projectId: string, file: string, sheet: string) {
     prompt: async () => (await tablesApi.headerPrompt(projectId, file, sheet)).prompt,
     analysis: 'run',
     resolve: async (reply) => {
+      // 实测 DeepSeek 给完结果块常再补一句「已给出，在右侧勾选」：最后这条没有结果块不算错，右侧按最新的结果块画，
+      // 不然会催它重发一遍、来回好几轮
+      if (!reply.includes('```' + TABLE_HEADER_LANG)) return {}
       const ex = tablesJsonOf(reply, extractJson, TABLE_HEADER_LANG)
       if (ex.error) return { error: ex.error }
       const r = resolveTablesProposal(ex.json)
