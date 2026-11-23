@@ -74,7 +74,7 @@ export function ObjRule({
   return (
     <span
       className={cn(
-        'ue:inline-flex ue:min-w-0 ue:items-center ue:gap-1 ue:whitespace-nowrap',
+        'ue:inline-flex ue:min-w-0 ue:max-w-full ue:items-center ue:gap-1 ue:whitespace-nowrap',
         small ? 'ue:text-caption' : 'ue:text-footnote',
       )}
     >
