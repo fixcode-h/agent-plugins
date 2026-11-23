@@ -8,6 +8,8 @@ import { ErrorText, PageHead, SearchBox } from '../ui.tsx'
 import { LineDetail, clock, collapse, lineText, type Line } from './LogParts.tsx'
 import { ClearDialog, Crashes } from './LogsExtra.tsx'
 import { SubNav, SubRows } from '../nav/slot.tsx'
+import { LogEntryRow } from '../log-view/LogEntryRow.tsx'
+import { layoutRows, visibleRange } from '../log-view/layout.ts'
 
 interface TailRes {
   live: boolean
@@ -34,7 +36,7 @@ const MAX_CATS = 200
  */
 export function Logs() {
   const { project, sub, state } = useUe()
-  const { cn, ui, toast } = h()
+  const { ui, toast } = h()
   const chat = useToChat()
   // 子位置 crash 直接开崩溃记录（空页面「看崩溃记录」），error 只看错误（概览的日志块）
   const [tab, setTab] = useState<'log' | 'crash'>(sub === 'crash' ? 'crash' : 'log')
@@ -87,8 +89,9 @@ export function Logs() {
         if (stop) return
         setError('')
         const { lines: raw, ...rest } = r
+        // 收到的时间只给在跑的日志兜底（旧桥接没有时间）；读日志文件时每秒整份重取，用收到的时间会让没时间的行一直在走
         const rx = Date.now()
-        const got = raw.map((l) => ({ ...l, rx }))
+        const got = r.live ? raw.map((l) => ({ ...l, rx })) : raw
         setInfo(rest)
         if (got.length)
           setCats((old) => {
@@ -136,6 +139,8 @@ export function Logs() {
   }, [pieOn])
 
   const rows = useMemo(() => collapse(lines), [lines])
+  // 多行记录（调用栈、崩溃 JSON）按行数占高度
+  const layout = useMemo(() => layoutRows(rows, ROW), [rows])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -148,16 +153,13 @@ export function Logs() {
     setScroll({ top: el.scrollTop, height: el.clientHeight })
     setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < ROW * 2)
   }
-  const first = Math.max(0, Math.floor(scroll.top / ROW) - 10)
-  const last = Math.min(rows.length, Math.ceil((scroll.top + scroll.height) / ROW) + 10)
+  const { first, last } = visibleRange(layout.tops, layout.total, scroll.top, scroll.height, ROW * 10)
 
   const picked = rows.filter((r) => !r.mark && sel.has(r.seq))
   const pickedText = () => picked.map((r) => (r.count > 1 ? `${lineText(r)}  (×${r.count})` : lineText(r))).join('\n')
   const copy = () =>
-    void navigator.clipboard.writeText(pickedText()).then(() => toast.success(t('已复制 {n} 行', { n: picked.length })))
+    void navigator.clipboard.writeText(pickedText()).then(() => toast.success(t('已复制 {n} 条', { n: picked.length })))
   const focused = rows.find((r) => r.seq === focus && !r.mark)
-  const tone = (v: string) =>
-    /Error|Fatal/.test(v) ? 'ue:text-danger' : v === 'Warning' ? 'ue:text-warning' : 'ue:text-term-fg'
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -259,12 +261,12 @@ export function Logs() {
               onScroll={onScroll}
               className="ue:absolute ue:inset-0 ue:overflow-auto ue:bg-term-bg ue:font-mono ue:text-footnote"
             >
-              <div style={{ height: rows.length * ROW, position: 'relative' }}>
+              <div style={{ height: layout.total, position: 'relative' }}>
                 {rows.slice(first, last).map((l, i) =>
                   l.mark ? (
                     <div
                       key={l.seq}
-                      style={{ top: (first + i) * ROW, height: ROW }}
+                      style={{ top: layout.tops[first + i], height: ROW }}
                       className="ue:absolute ue:inset-x-0 ue:flex ue:items-center ue:gap-3 ue:px-4 ue:text-caption ue:text-term-subtle"
                     >
                       <span className="ue:h-px ue:flex-1 ue:bg-term-subtle/30" />
@@ -272,8 +274,16 @@ export function Logs() {
                       <span className="ue:h-px ue:flex-1 ue:bg-term-subtle/30" />
                     </div>
                   ) : (
-                    <div
+                    <LogEntryRow
                       key={l.seq}
+                      time={clock(l.at ?? l.rx)}
+                      category={l.category}
+                      verbosity={l.verbosity}
+                      text={l.text}
+                      count={l.count}
+                      selected={sel.has(l.seq)}
+                      top={layout.tops[first + i]}
+                      rowH={ROW}
                       onClick={(e) => {
                         setFocus(l.seq)
                         setSel((s) => {
@@ -283,22 +293,7 @@ export function Logs() {
                           return n
                         })
                       }}
-                      style={{ top: (first + i) * ROW, height: ROW }}
-                      className={cn(
-                        'ue:absolute ue:inset-x-0 ue:flex ue:cursor-default ue:gap-2 ue:truncate ue:px-4 ue:leading-5',
-                        tone(l.verbosity),
-                        sel.has(l.seq) && 'ue:bg-term-hover',
-                      )}
-                    >
-                      <span className="ue:w-15 ue:shrink-0 ue:text-term-subtle">{clock(l.at ?? l.rx)}</span>
-                      <span className="ue:shrink-0 ue:text-term-subtle">{l.category}</span>
-                      <span className="ue:truncate">{l.text}</span>
-                      {l.count > 1 && (
-                        <span className="ue:ml-auto ue:shrink-0 ue:rounded ue:bg-term-hover ue:px-1.5 ue:text-caption ue:text-term-fg">
-                          ×{l.count}
-                        </span>
-                      )}
-                    </div>
+                    />
                   ),
                 )}
               </div>
@@ -310,7 +305,7 @@ export function Logs() {
             </div>
             {picked.length > 0 ? (
               <div className="ue:absolute ue:bottom-4 ue:left-1/2 ue:flex ue:h-9 ue:-translate-x-1/2 ue:items-center ue:gap-1 ue:rounded-full ue:border ue:border-line ue:bg-card ue:pr-1 ue:pl-3.5 ue:text-footnote ue:text-fg ue:shadow-pop">
-                <span className="ue:mr-1 ue:text-muted">{t('已选 {n} 行', { n: picked.length })}</span>
+                <span className="ue:mr-1 ue:text-muted">{t('已选 {n} 条', { n: picked.length })}</span>
                 <button
                   type="button"
                   onClick={copy}
