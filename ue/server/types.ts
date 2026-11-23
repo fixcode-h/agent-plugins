@@ -275,6 +275,8 @@ export interface ProjectState {
   bridge: string
   /** 包里带的桥接版本（有新版本时提示升级） */
   bundled: string
+  /** Plugins/UELink 里缺 Build.cs 的模块（升级时删到一半失败过），完整时不带 */
+  bridgeMissing?: string[]
   background: {
     running: boolean
     starting: boolean

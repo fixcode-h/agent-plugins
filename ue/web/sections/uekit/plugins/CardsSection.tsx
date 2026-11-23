@@ -12,6 +12,7 @@ import {
   Loader2,
   Settings2,
   Trash2,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
@@ -19,7 +20,7 @@ import type { Job } from '../../../../server/types.ts'
 import { h, t } from '../../../host.ts'
 import { openMenu } from '../../../menu.tsx'
 import type { InstallMode, PluginActions } from '../Plugins.tsx'
-import { cardState, isStale, type PluginView } from './model.ts'
+import { cardState, isBroken, isStale, type PluginView } from './model.ts'
 import { PluginCard } from './PluginCard.tsx'
 import { isSettingsPlugin } from './PluginSettings.tsx'
 
@@ -90,6 +91,16 @@ export function CardsSection({
             />
           )}
         </>
+      ) : isBroken(v) ? (
+        // 目录不全（缺模块的 Build.cs）：版本号没变也要能重新装一遍，否则编译一直报找不到模块
+        <ui.Button size="sm" disabled={busy || blocked} onClick={() => actions.install(v)}>
+          {working ? (
+            <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
+          ) : (
+            <Wrench className="ue:h-3.5 ue:w-3.5" />
+          )}
+          {t('重新安装')}
+        </ui.Button>
       ) : null
     return (
       <>
@@ -189,6 +200,12 @@ export function CardsSection({
                         <li key={b}>{b}</li>
                       ))}
                     </ul>
+                  ) : st.key === 'broken' ? (
+                    <p className="ue:px-4 ue:pb-2.5 ue:text-footnote ue:text-danger">
+                      {t('缺模块 {mods} 的源码（Build.cs），编译会报找不到模块定义：点「重新安装」', {
+                        mods: v.installed!.missing!.join('、'),
+                      })}
+                    </p>
                   ) : st.key === 'running' ? (
                     <p className="ue:px-4 ue:pb-2.5 ue:text-footnote ue:text-run">{t('正在升级，输出在页面最下面')}</p>
                   ) : offering && v.withUELink ? (

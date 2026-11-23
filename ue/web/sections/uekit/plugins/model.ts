@@ -25,7 +25,8 @@ export interface PluginView {
   base: boolean
   /** 面板有专门页面的扩展（能「打开」） */
   known: boolean
-  installed?: { version: string; rel: string; mode?: string }
+  /** missing：.uplugin 里有、Build.cs 不在的模块（安装不完整，要重新安装） */
+  installed?: { version: string; rel: string; mode?: string; missing?: string[] }
   /** 能装 / 升到的那一版；pre：UELink 走 UEKit 目录里的预发布 */
   offer?: { version: string; prerelease: boolean; blockers: string[]; notes?: string; pre?: string }
   /** 装着的比能装的旧 */
@@ -75,7 +76,12 @@ export function uelinkView(project: UeProject, s: ProjectState | undefined, ext:
     base: true,
     known: false,
     installed: installed
-      ? { version: installed, rel: 'Plugins/UELink', mode: project.install?.mode === 'vcs' ? 'vcs' : 'local' }
+      ? {
+          version: installed,
+          rel: 'Plugins/UELink',
+          mode: project.install?.mode === 'vcs' ? 'vcs' : 'local',
+          missing: s?.bridgeMissing,
+        }
       : undefined,
     offer,
     upgrade: !!installed && !!offer && canUpgrade(installed, offer.version),
@@ -110,10 +116,19 @@ export function extView(x: ExtensionStatus, link: PluginView): PluginView {
   }
 }
 
-export type StateKey = 'running' | 'queued' | 'unpublished' | 'blocked' | 'missing' | 'upgrade' | 'stale' | 'latest'
+export type StateKey =
+  | 'running'
+  | 'queued'
+  | 'unpublished'
+  | 'blocked'
+  | 'missing'
+  | 'broken'
+  | 'upgrade'
+  | 'stale'
+  | 'latest'
 export type CardTone = 'ok' | 'warn' | 'danger' | 'run' | 'muted'
 
-/** 卡片右上角唯一的状态：全部升级进行中 > 装不了 > 未安装 > 可升级 > 编辑器里还是旧版 > 已是最新 */
+/** 卡片右上角唯一的状态：全部升级进行中 > 装不了 > 未安装 > 安装不完整 > 可升级 > 编辑器里还是旧版 > 已是最新 */
 export function cardState(v: PluginView, job?: Job): { tone: CardTone; key: StateKey } {
   const step = job?.status === 'running' ? job.steps?.find((s) => s.name === v.name) : undefined
   if (step?.status === 'run') return { tone: 'run', key: 'running' }
@@ -123,6 +138,7 @@ export function cardState(v: PluginView, job?: Job): { tone: CardTone; key: Stat
     if (v.offer.blockers.length) return { tone: 'danger', key: 'blocked' }
     return { tone: 'muted', key: 'missing' }
   }
+  if (v.installed.missing?.length) return { tone: 'danger', key: 'broken' }
   if (v.upgrade) return { tone: 'warn', key: 'upgrade' }
   if (v.loaded && v.loaded !== v.installed.version) return { tone: 'warn', key: 'stale' }
   return { tone: 'ok', key: 'latest' }
@@ -138,6 +154,9 @@ export function upgradePlan(link: PluginView, exts: PluginView[]) {
     count: list.length + (uelink ? 1 : 0),
   }
 }
+
+/** 插件目录不全（缺模块的 Build.cs），编译会报找不到模块定义 */
+export const isBroken = (v: PluginView) => !!v.installed?.missing?.length
 
 /** 编辑器里实际加载的版本和装的不一样：编译后重启编辑器才用上 */
 export const isStale = (v: PluginView) => !!v.installed && !!v.loaded && v.loaded !== v.installed.version

@@ -1,4 +1,6 @@
+import path from 'node:path'
 import { installedIn, KNOWN_EXTENSIONS } from './uekit/catalog.ts'
+import { missingModules } from './install-files.ts'
 import { busyFromLog } from './busy/activity.ts'
 import { lastLogOf } from './busy/state.ts'
 import { backgroundState } from './editor.ts'
@@ -49,6 +51,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
       }),
     )
   ).filter((x) => !!x)
+  const bridgeMissing = bridge ? await missingModules(path.join(p.root, 'Plugins', 'UELink'), 'UELink') : []
   return {
     project: p,
     instances,
@@ -56,6 +59,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     unlua: instances.some((i) => i.lua) || (await hasUnLua(p)),
     bridge,
     bundled,
+    ...(bridgeMissing.length && { bridgeMissing }),
     background: backgroundState(p, cards),
     jobs: projectJobs(p.id),
     extensions,
