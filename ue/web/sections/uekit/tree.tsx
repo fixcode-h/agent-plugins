@@ -106,6 +106,7 @@ export function FileTree<T>({
   leafIcon,
   leafRight,
   leafSub,
+  leafTitle,
   leafDim,
   leafLabel,
   keepOrder,
@@ -133,6 +134,8 @@ export function FileTree<T>({
   leafRight?: (d: T) => ReactNode
   /** 叶子名字下面的第二行（GM 对象列表的匹配规则）；给了的叶子行高随内容 */
   leafSub?: (d: T) => ReactNode
+  /** 叶子行的悬停提示（不写就是路径）：一行里放不下的完整信息放这里 */
+  leafTitle?: (d: T) => string
   /** 变灰的行（没有配置的资产） */
   leafDim?: (d: T) => boolean
   /** 叶子显示的名字（不写就是路径最后一段）：路径里放的是编号这类不给人看的键时用 */
@@ -221,7 +224,7 @@ export function FileTree<T>({
           aria-level={depth + 1}
           aria-expanded={leaf !== undefined ? undefined : open}
           aria-selected={leaf !== undefined ? n.path === active : n.path === activeFolder}
-          title={n.path}
+          title={(leaf !== undefined && leafTitle?.(leaf)) || n.path}
           {...dnd?.row({ path: n.path, dir: leaf === undefined, data: leaf }, !open)}
           onClick={(e) => {
             if (leaf !== undefined) {
