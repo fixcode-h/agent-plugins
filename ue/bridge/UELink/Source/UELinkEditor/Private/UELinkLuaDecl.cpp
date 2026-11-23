@@ -17,6 +17,7 @@
 #include "StructUtils/UserDefinedStruct.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Hash/CityHash.h"
+#include "HAL/CriticalSection.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Interfaces/IPluginManager.h"
@@ -25,6 +26,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Misc/ScopeLock.h"
 #include "Modules/ModuleManager.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonReader.h"
@@ -100,8 +102,8 @@ namespace UELinkLuaDecl
 			TArray<FAssetData> AssetQueue;
 			int32 AssetIndex = 0;
 			TSet<FString> AssetSeen;
+			// 只在游戏线程上读写；引擎回调先记进下面的收件箱，Tick 开头再并进来
 			TSet<FName> DirtyPackages;
-			TSet<FName> CompilingPackages;
 
 			// 加载没加载过的蓝图（luadecl.run loadBlueprints）
 			TArray<FSoftObjectPath> LoadQueue;
@@ -123,6 +125,77 @@ namespace UELinkLuaDecl
 		{
 			static FState State;
 			return State;
+		}
+
+		/**
+		 * 引擎回调的收件箱。蓝图编译、资源加载这些事件不一定在游戏线程上广播：异步加载线程（FAsyncLoadingThread2）
+		 * 建导出时会就地 FlushCompilationQueue，OnBlueprintPreCompile / OnBlueprintCompiled / OnAssetLoaded 都在那个线程上发，
+		 * 和游戏线程上 Tick 遍历、MoveTemp 脏列表同时进行时 TSet 扩容重排就会写坏内存，编辑器崩在 TSet::Append。
+		 * 所以回调只碰这里（加锁），游戏线程在 Tick 开头一次性取走；引擎同步广播回到我们自己的遍历里也不会再改到正在用的集合。
+		 */
+		struct FInbox
+		{
+			FCriticalSection Lock;
+			TSet<FName> Dirty;
+			TSet<FName> Compiling;
+		};
+
+		FInbox& Inbox()
+		{
+			static FInbox Box;
+			return Box;
+		}
+
+		void InboxAdd(FName Package)
+		{
+			FInbox& Box = Inbox();
+			FScopeLock Guard(&Box.Lock);
+			Box.Dirty.Add(Package);
+		}
+
+		void InboxAddCompiling(FName Package)
+		{
+			FInbox& Box = Inbox();
+			FScopeLock Guard(&Box.Lock);
+			Box.Compiling.Add(Package);
+		}
+
+		/** 编译完：编译中的包都算脏（OnBlueprintCompiled 不带参数） */
+		void InboxCompiled()
+		{
+			FInbox& Box = Inbox();
+			FScopeLock Guard(&Box.Lock);
+			Box.Dirty.Append(Box.Compiling);
+			Box.Compiling.Reset();
+		}
+
+		/** 游戏线程上调用：把收件箱并进脏列表 */
+		void DrainInbox()
+		{
+			check(IsInGameThread());
+			TSet<FName> Taken;
+			{
+				FInbox& Box = Inbox();
+				FScopeLock Guard(&Box.Lock);
+				Taken = MoveTemp(Box.Dirty);
+				Box.Dirty.Reset();
+			}
+			S().DirtyPackages.Append(Taken);
+		}
+
+		int32 InboxNum()
+		{
+			FInbox& Box = Inbox();
+			FScopeLock Guard(&Box.Lock);
+			return Box.Dirty.Num();
+		}
+
+		void ResetInbox()
+		{
+			FInbox& Box = Inbox();
+			FScopeLock Guard(&Box.Lock);
+			Box.Dirty.Reset();
+			Box.Compiling.Reset();
 		}
 
 		UE::Tasks::FPipe& Pipe()
@@ -663,8 +736,8 @@ namespace UELinkLuaDecl
 			FState& St = S();
 			St.AssetQueue.Reset();
 			// 先把脏列表整个搬出来再遍历：GetAssetsByPackageName 会顺手处理资源注册表攒着的更新并同步广播
-			// OnAssetAdded / OnAssetRemoved 等事件，我们的回调往 DirtyPackages 里加包会让集合扩容重排，
-			// 直接遍历成员集合时迭代器失效，编辑器崩在这里。遍历期间新进来的包留到下一遍处理。
+			// OnAssetAdded / OnAssetRemoved 等事件。回调现在只写收件箱，不会再改到这里，但搬出来遍历仍是最稳的写法；
+			// 遍历期间新进来的包留在收件箱，下一遍处理。
 			const TSet<FName> Packages = MoveTemp(St.DirtyPackages);
 			St.DirtyPackages.Reset();
 			IAssetRegistry& Registry = IAssetRegistry::GetChecked();
@@ -800,6 +873,7 @@ namespace UELinkLuaDecl
 			{
 				return true;
 			}
+			DrainInbox();
 			const bool bForeground = FSlateApplication::IsInitialized() && FSlateApplication::Get().IsActive();
 			// 编辑器在前台时少占一点，切到 IDE 写代码时（编辑器在后台）多做一些
 			const double Budget = IsPlaying() ? 0.001 : (bForeground ? 0.004 : 0.02);
@@ -872,12 +946,15 @@ namespace UELinkLuaDecl
 			St.NativeDirtyAt = FPlatformTime::Seconds();
 		}
 
-		/** 蓝图开关关着时资源事件一律不记：保存地图、改别的资源也会触发，记了只会白查注册表（关着时的旧声明由整遍扫描删） */
+		/**
+		 * 蓝图开关关着时资源事件一律不记：保存地图、改别的资源也会触发，记了只会白查注册表（关着时的旧声明由整遍扫描删）。
+		 * 回调可能在任意线程上，只写收件箱。
+		 */
 		void MarkPackageDirty(FName Package)
 		{
 			if (GBlueprints && !Package.IsNone())
 			{
-				S().DirtyPackages.Add(Package);
+				InboxAdd(Package);
 			}
 		}
 
@@ -897,24 +974,24 @@ namespace UELinkLuaDecl
 
 				St.AssetLoaded = FCoreUObjectDelegates::OnAssetLoaded.AddLambda([](UObject* Obj)
 				{
+					// 异步加载线程上也会发，只写收件箱
 					if (IsRelevantObject(Obj))
 					{
-						S().DirtyPackages.Add(Obj->GetOutermost()->GetFName());
+						InboxAdd(Obj->GetOutermost()->GetFName());
 					}
 				});
-				// 编译前记下是哪个蓝图，编译完（OnBlueprintCompiled 不带参数）再生成，拿到的是编译后的类
+				// 编译前记下是哪个蓝图，编译完（OnBlueprintCompiled 不带参数）再生成，拿到的是编译后的类。
+				// 加载时的编译在异步加载线程上广播（见 FInbox），所以两头都只碰收件箱
 				St.PreCompile = GEditor->OnBlueprintPreCompile().AddLambda([](UBlueprint* BP)
 				{
 					if (BP)
 					{
-						S().CompilingPackages.Add(BP->GetOutermost()->GetFName());
+						InboxAddCompiling(BP->GetOutermost()->GetFName());
 					}
 				});
 				St.Compiled = GEditor->OnBlueprintCompiled().AddLambda([]()
 				{
-					FState& State = S();
-					State.DirtyPackages.Append(State.CompilingPackages);
-					State.CompilingPackages.Reset();
+					InboxCompiled();
 				});
 				// 用户定义结构体 / 枚举改完没有编译事件，按保存算
 				St.Saved = UPackage::PackageSavedWithContextEvent.AddLambda([](const FString&, UPackage* Package, FObjectPostSaveContext)
@@ -998,7 +1075,7 @@ namespace UELinkLuaDecl
 			St.LoadQueue.Reset();
 			St.LoadIndex = 0;
 			St.DirtyPackages.Reset();
-			St.CompilingPackages.Reset();
+			ResetInbox();
 			SaveManifest();
 			Pipe().WaitUntilEmpty(FTimespan::FromSeconds(10));
 		}
@@ -1036,7 +1113,7 @@ namespace UELinkLuaDecl
 			Out->SetNumberField(TEXT("stubs"), Stubs);
 			Out->SetNumberField(TEXT("written"), St.Written);
 			Out->SetNumberField(TEXT("deleted"), St.Deleted);
-			Out->SetNumberField(TEXT("pending"), St.DirtyPackages.Num() + (St.bNativeDirty ? 1 : 0));
+			Out->SetNumberField(TEXT("pending"), St.DirtyPackages.Num() + InboxNum() + (St.bNativeDirty ? 1 : 0));
 			if (!St.LastPassAt.IsEmpty())
 			{
 				Out->SetStringField(TEXT("lastPassAt"), St.LastPassAt);

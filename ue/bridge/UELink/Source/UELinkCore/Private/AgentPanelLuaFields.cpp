@@ -66,9 +66,15 @@ namespace AgentPanelLuaFields
 			return Out;
 		}
 		// 只读一层时子表本来就不进，不用走第二遍
-		for (int32 Pass = 0; Pass < (Depth > 1 ? 2 : 1) && Budget.Left > 0; ++Pass)
+		const int32 Passes = Depth > 1 ? 2 : 1;
+		for (int32 Pass = 0; Pass < Passes; ++Pass)
 		{
+			// 名额在第一遍正好用完时也要走第二遍：碰到子表时它会标 bMore，调用方才知道没读全（#96 评审）
 			ReadPass(L, T, Depth, Pass == 1, Out, Budget);
+			if (Budget.bMore)
+			{
+				break;
+			}
 		}
 		return Out;
 	}
