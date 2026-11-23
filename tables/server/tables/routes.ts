@@ -23,8 +23,9 @@ import { HttpError } from './http-error.ts'
 import { backup, saveTable } from './write.ts'
 import { shiftReasons } from './xlsx-write.ts'
 import { SheetEdit, TableSave } from '../../shared/table-edit.ts'
-import { detectVcs } from '../projects-analyze.ts'
+import { detectVcs } from '../vcs/detect.ts'
 import { p4Runner } from '../p4-split.ts'
+import { p4Open, p4WritePlan } from '../vcs/p4-plan.ts'
 import { headerValues, sampleOne, tableSample } from './sample.ts'
 import { checkTables } from './check.ts'
 import { tableAt, tableHistory } from './history.ts'
@@ -76,11 +77,14 @@ export async function projectOf(deps: TablesDeps, id: string) {
 }
 
 /** 版本命令在哪个目录跑：项目目录里的表格在项目目录跑，项目目录外的在它所在的目录跑（那边自己的仓库） */
-/** P4 管着的只读文件：先签出（不是 P4 项目时返回 false） */
+/** P4 项目里写表格前签出：规则在面板（server/vcs/p4-plan.ts，和 Agent 改文件、UE 保存同一份）；不是 P4 项目时返回 false */
 const p4Edit = (dir: string) => async (full: string) => {
   if ((await detectVcs(dir)).vcs !== 'p4') return false
-  const r = await p4Runner(dir)(['edit', full])
-  return { ok: r.ok, err: r.err || r.out }
+  const run = p4Runner(dir)
+  const plan = await p4WritePlan(run, [full])
+  if (plan.error) return { ok: false, err: plan.error }
+  const err = await p4Open(run, 'edit', plan.edit)
+  return { ok: !err, err: err ?? '' }
 }
 
 const vcsPath = (dir: string, p: { rel: string; full: string }) =>

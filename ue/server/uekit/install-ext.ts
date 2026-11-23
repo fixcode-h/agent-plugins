@@ -7,8 +7,9 @@ import { endJob, jobLog, newJob } from '../jobs.ts'
 import type { InstallMode, UeProject } from '../types.ts'
 import { unzipTo } from '../unzip.ts'
 import { downloadZip, findPluginDirs } from '../uelink.ts'
-import { c, exists, run, t } from '../util.ts'
+import { c, exists, t } from '../util.ts'
 import { blockers, installedIn, manifestFor } from './catalog.ts'
+import { vcsCmd } from '../vcs.ts'
 
 /**
  * 装、升级、卸载 UEKit 的扩展插件（AssetForge、GameTest），约定和 UELink 一样（UEKit docs/protocol.md 第 5 节）：
@@ -36,7 +37,7 @@ export async function installExtension(p: UeProject, name: string, opts: { versi
     for (const old of manifest.replaces ?? []) {
       for (const dir of await findPluginDirs(p.root, old)) {
         if (p.vcs === 'p4') {
-          const r = await run('p4', ['-d', p.root, 'delete', '-c', 'default', path.join(dir, '...')], {
+          const r = await vcsCmd('p4', ['-d', p.root, 'delete', '-c', 'default', path.join(dir, '...')], {
             cwd: p.root,
             timeout: 60000,
           })
@@ -79,13 +80,17 @@ export async function uninstallExtension(p: UeProject, name: string) {
     for (const dest of await findPluginDirs(p.root, name)) {
       const rel = path.relative(p.root, dest)
       if (p.vcs === 'p4') {
-        const r = await run('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], {
+        const r = await vcsCmd('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], {
           cwd: p.root,
           timeout: 60000,
         })
         jobLog(job, r.out + r.err)
       } else if (p.vcs === 'git') {
-        const r = await run('git', ['-C', p.root, 'rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', rel])
+        const r = await vcsCmd(
+          'git',
+          ['-C', p.root, 'rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', rel],
+          { cwd: p.root },
+        )
         jobLog(job, r.out + r.err)
       }
       await removeDir(dest)

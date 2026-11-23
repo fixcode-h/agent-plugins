@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
-import { exists, run } from '../util.ts'
+import { exists } from '../util.ts'
+import { vcsCmd } from '../vcs.ts'
 
 /**
  * GM 参数关联表格的路径相对谁存（用户 2026-11-21，写法见 shared/gm/table-path.ts）：项目在版本管理里时相对版本管理根，
@@ -33,7 +34,7 @@ export function findVcsRoot(start: string): string | undefined {
 }
 
 async function p4Root(root: string) {
-  const r = await run('p4', ['-F', '%clientRoot%', '-ztag', 'info'], { cwd: root, timeout: 4000 })
+  const r = await vcsCmd('p4', ['-F', '%clientRoot%', '-ztag', 'info'], { cwd: root, timeout: 4000 })
   const got = r.code === 0 ? r.out.trim().split(/\r?\n/)[0]?.trim() : ''
   if (!got || got === '*unknown*' || got === 'null') return undefined
   const rel = path.relative(path.resolve(got), root)

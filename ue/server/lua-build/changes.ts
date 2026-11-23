@@ -2,7 +2,8 @@ import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
 import { indexedTree } from '../file-index.ts'
-import { c, readJson, run, writeJson } from '../util.ts'
+import { c, readJson, writeJson } from '../util.ts'
+import { vcsCmd } from '../vcs.ts'
 
 /**
  * 增量编译编哪些文件（设计稿四.3）：比文件修改时间，晚于「上次编译成功」的算改过；P4 项目再加上已经签出的 .lua。
@@ -52,7 +53,15 @@ export async function luaFiles(dir: string): Promise<{ path: string; mtime: numb
   const out: { path: string; mtime: number }[] = []
   // 面板有项目文件索引时文件清单直接取，只 stat 这些 .lua 拿修改时间
   const listed = await indexedTree(dir, /(^|\/)[^.][^/]*\.lua$/i, undefined, ['lua'])
-  if (listed && !listed.some((r) => r.split('/').slice(0, -1).some((s) => s.startsWith('.')))) {
+  if (
+    listed &&
+    !listed.some((r) =>
+      r
+        .split('/')
+        .slice(0, -1)
+        .some((s) => s.startsWith('.')),
+    )
+  ) {
     for (const rel of listed.slice(0, MAX_FILES)) {
       const st = await stat(path.join(dir, ...rel.split('/'))).catch(() => undefined)
       if (st) out.push({ path: rel, mtime: st.mtimeMs })
@@ -79,7 +88,7 @@ export async function luaFiles(dir: string): Promise<{ path: string; mtime: numb
 /** P4 里签出的 .lua（相对脚本目录）：p4 不在或没登录时返回原因，网页上照样列按时间找到的 */
 async function p4Opened(p: UeProject, dir: string): Promise<{ files: string[]; error?: string }> {
   if (p.vcs !== 'p4') return { files: [] }
-  const r = await run('p4', ['-d', dir, '-ztag', 'fstat', '-Ro', '-T', 'clientFile', path.join(dir, '....lua')], {
+  const r = await vcsCmd('p4', ['-d', dir, '-ztag', 'fstat', '-Ro', '-T', 'clientFile', path.join(dir, '....lua')], {
     cwd: dir,
     timeout: 8000,
   })

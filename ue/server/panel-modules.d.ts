@@ -143,3 +143,61 @@ declare module '@panel/web/src/components/ui/UnifiedDiff' {
     label?: string
   }): ReactElement
 }
+
+/** 面板唯一的 git 入口（按行收输出，退出码不为 0 也不抛） */
+declare module '@panel/server/exec/git' {
+  export function gitRun(
+    cwd: string,
+    args: string[],
+    o?: { env?: NodeJS.ProcessEnv; timeoutMs?: number },
+  ): Promise<{ code: number | null; stdout: string; stderr: string; spawnError?: string }>
+}
+
+/** 版本管理服务（面板 ADR 0073）：p4 / svn 的唯一运行入口（设 PWD、限流、计数） */
+declare module '@panel/server/vcs/run' {
+  export interface VcsResult {
+    ok: boolean
+    code: number | null
+    stdout: Buffer
+    stderr: string
+    spawnError?: string
+    timedOut?: boolean
+    tooLarge?: boolean
+  }
+  export function vcsExec(
+    cmd: 'p4' | 'svn',
+    args: string[],
+    cwd: string,
+    o?: { stdin?: string; timeoutMs?: number; maxBytes?: number },
+  ): Promise<VcsResult>
+  export function vcsWhy(cmd: 'p4' | 'svn', args: string[], r: VcsResult): string
+}
+
+/** 版本管理服务：一个目录归哪种版本管理（面板和插件只用这一套判断） */
+declare module '@panel/server/vcs/detect' {
+  export function detectVcs(dir: string): Promise<{ vcs: 'git' | 'p4' | 'svn' | 'none'; root: string }>
+}
+
+/** 版本管理服务：P4 改文件前后的签出规则（Agent 改文件的钩子、UE 保存、表格保存共用） */
+declare module '@panel/server/vcs/p4-plan' {
+  export type P4Run = (args: string[], stdin?: string) => Promise<{ ok: boolean; out: string; err: string }>
+  export interface P4Stale {
+    file: string
+    have: number
+    head: number
+  }
+  export interface P4WritePlan {
+    edit: string[]
+    add: string[]
+    opened: string[]
+    stale: P4Stale[]
+    error?: string
+  }
+  export function p4WritePlan(run: P4Run, files: string[], exists?: (f: string) => boolean): Promise<P4WritePlan>
+  export function p4Open(run: P4Run, verb: 'edit' | 'add', files: string[]): Promise<string | undefined>
+}
+
+/** 在目录里跑 p4（走版本管理服务的统一入口） */
+declare module '@panel/server/p4-split' {
+  export function p4Runner(cwd: string): import('@panel/server/vcs/p4-plan').P4Run
+}

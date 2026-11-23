@@ -2,7 +2,7 @@
  * 保存表格页的改动：在磁盘上的文件上照做「行操作 + 改格子」，写到临时文件、重新解析、
  * 和预期逐格比对，对上了才备份原文件、替换。文件格式（xlsx / CSV 的分隔符、换行、BOM）保持原样。
  * 保存前检查：项目设了只读、文件正被 Excel / WPS 打开、打开后被外面改过（修改时间对不上）。
- * P4 管着的只读文件先 p4 edit。
+ * P4 管着的文件先 p4 edit（不论只不只读，规则在面板 server/vcs/p4-plan.ts）。
  */
 import path from 'node:path'
 import { access, constants, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -21,7 +21,7 @@ import { HttpError } from './http-error.ts'
 const KEEP_BACKUPS = 20
 
 export interface SaveDeps {
-  /** P4 管着的文件：签出（p4 edit）；不是 P4 项目时返回 false */
+  /** P4 管着的文件：按面板的签出规则 p4 edit（已打开、不在库里的不动）；不是 P4 项目时返回 false */
   p4Edit?: (full: string) => Promise<{ ok: boolean; err: string } | false>
 }
 
@@ -52,6 +52,21 @@ function expected(sheets: { name: string; rows: string[][] }[], body: TableSave)
   return out
 }
 
+/**
+ * 写之前：P4 项目里在库里、还没打开的先签出进 default（不论只不只读：allwrite 的 client、手动去掉过只读的文件以前不签，
+ * 改动不进任何 changelist，用户 2026-11-23 报）；不是 P4 项目、文件又是只读的才报没权限
+ */
+export async function ensureWritable(full: string, deps: SaveDeps) {
+  const p4 = deps.p4Edit ? await deps.p4Edit(full) : false
+  if (p4 && !p4.ok) throw new HttpError(t('p4 edit 失败：{err}', { err: p4.err }), 409)
+  if (p4) return
+  const writable = await access(full, constants.W_OK).then(
+    () => true,
+    () => false,
+  )
+  if (!writable) throw new HttpError(t('文件是只读的，没有权限写入'), 409)
+}
+
 export async function saveTable(
   dir: string,
   projectId: string,
@@ -60,16 +75,7 @@ export async function saveTable(
   deps: SaveDeps = {},
 ): Promise<TableDoc> {
   const { rel, full, next, sheets } = await prepareSave(dir, cfg, body)
-  // P4 管着的文件是只读的：先签出
-  const writable = await access(full, constants.W_OK).then(
-    () => true,
-    () => false,
-  )
-  if (!writable) {
-    const p4 = deps.p4Edit ? await deps.p4Edit(full) : false
-    if (p4 && !p4.ok) throw new HttpError(t('p4 edit 失败：{err}', { err: p4.err }), 409)
-    if (!p4) throw new HttpError(t('文件是只读的，没有权限写入'), 409)
-  }
+  await ensureWritable(full, deps)
   await backup(projectId, rel, full)
   // 同目录的临时文件再改名替换：写到一半断电也不会留下半个文件
   const tmp = path.join(path.dirname(full), `.${path.basename(full)}.${process.pid}.agentpanel-tmp`)
