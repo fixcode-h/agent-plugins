@@ -80,7 +80,10 @@ export function MemberPane({
   const game = useConnState().state === 'game'
   const cls = (obj.ref as { class?: string } | undefined)?.class
   const byClass = !game && !!cls
-  const vars = useVars(project, scope ?? (byClass ? { scope: 'class', name: cls! } : scopeOf(obj)), live)
+  // Lua 类（lua:模块）的成员一律从源码读（用户 2026-11-23）：纯 Lua 模块类不在 UE 的类表里，问 gt.vars 只会报
+  // 「找不到类…蓝图类要加载过」，而源码里的函数、self 字段是全的；游戏开着时值照旧由 gt.props 读实例补上
+  const luaCls = !!cls?.startsWith('lua:')
+  const vars = useVars(project, scope ?? (byClass || luaCls ? { scope: 'class', name: cls! } : scopeOf(obj)), live)
   const props = useProps(
     project,
     obj.ref && live ? (game ? { target: { obj: obj.ref as { class: string } } } : { class: cls! }) : undefined,
@@ -91,11 +94,15 @@ export function MemberPane({
   const luaFns = useMemo(() => fnsOf(groups.filter((g) => g.src === 'lua')), [groups])
   const luaFields = groups.filter((g) => g.src === 'lua').flatMap((g) => g.items.filter((i) => i.kind === 'prop'))
   // UE 没连上、按类从源码读（用户 2026-11-23）：只给看，调用和改值要连上编辑器
-  const fromSource = !live && byClass && !!vars.data?.offline
-  const srcWhy = t('UE 没连上：这是从源码读的声明，连上编辑器、游戏在跑才能读值和改')
-  const declProps = useMemo(() => (fromSource ? declPropsOf(groups, srcWhy) : []), [fromSource, groups, srcWhy])
+  const fromSource = (byClass || luaCls) && !!vars.data?.offline
+  // UE 没连上时属性、运行状态也只能从源码看；连着时照旧问 UE
+  const srcOnly = fromSource && !live
+  const srcWhy = !live
+    ? t('UE 没连上：这是从源码读的声明，连上编辑器、游戏在跑才能读值和改')
+    : t('游戏没在运行：这是从源码读的声明，开 PIE 后才能读值和改')
+  const declProps = useMemo(() => (srcOnly ? declPropsOf(groups, srcWhy) : []), [srcOnly, groups, srcWhy])
   const liveProps = useMemo(() => propsOf(props.data, 'props'), [props.data])
-  const propList = fromSource ? declProps : liveProps
+  const propList = srcOnly ? declProps : liveProps
   const stateList = useMemo(() => propsOf(props.data, 'states'), [props.data])
   const luaProps = useMemo(() => propsOf(props.data, 'lua'), [props.data])
   // gt.props 没给 Lua 组时：Lua 文件里声明的字段（gt.vars + luafields），路径补成 obj.set 认的 @.字段
@@ -106,13 +113,18 @@ export function MemberPane({
         displayName: f.name,
         type: f.type ?? 'any',
         value: f.value,
-        readOnly: !obj.ref || !live || !!f.readOnly,
-        readOnlyWhy: !obj.ref ? t('来源对象不能直接改字段') : !live ? srcWhy : undefined,
+        readOnly: !obj.ref || !game || !!f.readOnly,
+        readOnlyWhy: !obj.ref ? t('来源对象不能直接改字段') : !game ? srcWhy : undefined,
         edit: true,
       })),
-    [luaFields, obj.ref, live, srcWhy],
+    [luaFields, obj.ref, game, srcWhy],
   )
-  const luaVars = luaProps.length ? luaProps : luaDecl
+  // 游戏开着：实例上读到的值在前，源码里声明了、实例上还没有的补在后面；游戏没开：源码里的全（UE 按类只给得出一部分）
+  const luaVars = useMemo(() => {
+    if (!game) return luaDecl.length ? luaDecl : luaProps
+    const have = new Set(luaProps.map((p) => p.displayName ?? p.name))
+    return [...luaProps, ...luaDecl.filter((d) => !have.has(d.displayName ?? d.name))]
+  }, [game, luaProps, luaDecl])
   // 离线的 Lua 类只有 Lua 成员：停在空的「方法」页像是什么都没读到，换对象时直接翻到 Lua 页
   const toLua = fromSource && !fns.length && luaFns.length + luaVars.length > 0
   useEffect(() => {
@@ -158,7 +170,7 @@ export function MemberPane({
           <button
             type="button"
             aria-disabled={!f.callable}
-            title={f.callable ? f.sig : f.why || t('这个函数调不了')}
+            title={[f.callable ? `${f.name}${f.sig}` : f.why || t('这个函数调不了'), f.note].filter(Boolean).join('\n')}
             onClick={() => f.callable && onFn(f)}
             onContextMenu={(e) =>
               openMenu(e, [
@@ -191,14 +203,17 @@ export function MemberPane({
   // 按类的对象离线也从源码列（fromSource），只有按来源（@pawn 之类）的才真的列不出
   const offline =
     !live && !byClass ? note(t('UE 没连上：连上编辑器才列得出这个对象的成员，值要游戏在跑才读得到')) : null
-  const srcBanner = fromSource ? (
-    <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
-      {t(
-        'UE 没连上：成员是从源码读的（Lua 文件、项目 C++ 头文件），能先看、先填参数；调用和改值要连上编辑器，读值要游戏在跑',
-      )}
-      {vars.data?.note ? <span className="ue:mt-0.5 ue:block">{vars.data.note}</span> : null}
-    </p>
-  ) : null
+  const srcBanner =
+    fromSource && !game ? (
+      <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
+        {!live
+          ? t(
+              'UE 没连上：成员是从源码读的（Lua 文件、项目 C++ 头文件），能先看、先填参数；调用和改值要连上编辑器，读值要游戏在跑',
+            )
+          : t('游戏没在运行：Lua 成员是从源码读的，能先看、先填参数；调用和改值要开 PIE')}
+        {vars.data?.note ? <span className="ue:mt-0.5 ue:block">{vars.data.note}</span> : null}
+      </p>
+    ) : null
   const defaults =
     live && byClass && (tab === 'props' || tab === 'states') ? (
       <p className="ue:mx-1 ue:my-1 ue:rounded-(--c-row-radius) ue:bg-hover ue:px-2 ue:py-1.5 ue:text-caption ue:text-muted">
@@ -273,7 +288,7 @@ export function MemberPane({
           (obj.src
             ? note(t('来源对象只列方法；属性在 GameTest 的选对象面板里看'))
             : (offline ??
-              (fromSource && tab === 'states'
+              (srcOnly && tab === 'states'
                 ? note(t('运行状态要游戏在跑才有'))
                 : (tab === 'props' ? propList : stateList).length
                   ? varList(tab === 'props' ? propList : stateList, false)

@@ -96,7 +96,8 @@ export function useVars(project: string, scope: VarScope | undefined, live: bool
     void (async () => {
       let reply: VarsReply = { groups: [] }
       // UE 没连上、按类列：面板读源码（Lua 文件连同父类、项目头文件），只给人看有什么（用户 2026-11-23）
-      if (!live && scope.scope === 'class')
+      // Lua 类（lua:模块）连着 UE 也读源码：纯 Lua 模块类 UE 的类表里没有，gt.vars 只会报找不到类
+      if (scope.scope === 'class' && (!live || scope.name.startsWith('lua:')))
         try {
           reply = {
             ...(await ppost<VarsReply>(project, 'ext/gt/offlinemembers', { class: scope.name })),

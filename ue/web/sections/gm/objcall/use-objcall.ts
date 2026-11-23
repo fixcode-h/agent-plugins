@@ -5,6 +5,7 @@ import { useUe } from '../../../ctx.tsx'
 import { t } from '../../../host.ts'
 import { useTargetInfo } from '../../../ui.tsx'
 import { useRefHits } from '../../uekit/gt-ref/live.ts'
+import { useConnState } from '../../../conn/ConnPill.tsx'
 import type { ObjLike } from '../custom/ObjRule.tsx'
 
 /** 项目装了 GameTest、UE 在运行：对象调用、自定义 GM 的命中数和执行都要它（规格第 7 节） */
@@ -20,7 +21,13 @@ export function useGameTest() {
  * 来源字符串（@pawn）不是匹配规则，不数
  */
 export function useObjHits(project: string, live: boolean, objs: { name: string; o: ObjLike }[]) {
-  const refs = objs.flatMap((x) => (x.o.ref ? [{ id: x.name, ref: x.o.ref as GmRef & { class: string } }] : []))
+  // Lua 类的实例只在游戏里有：游戏没开时不数（UE 认不出纯 Lua 模块类，会报「找不到类」，左栏标红「找不到」，用户 2026-11-23）
+  const game = useConnState().state === 'game'
+  const refs = objs.flatMap((x) =>
+    x.o.ref && (game || !x.o.ref.class.startsWith('lua:'))
+      ? [{ id: x.name, ref: x.o.ref as GmRef & { class: string } }]
+      : [],
+  )
   const r = useRefHits(project, live, refs)
   return { hits: r.hits, error: r.error }
 }

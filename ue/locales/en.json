@@ -4999,5 +4999,7 @@
   "正在核对类表有没有变…": "Checking whether the class list changed…",
   "搜索…": "Search…",
   "搜分组": "Search groups",
-  "搜模块": "Search modules"
+  "搜模块": "Search modules",
+  "游戏没在运行：这是从源码读的声明，开 PIE 后才能读值和改": "The game isn't running: this is the declaration read from source; start PIE to read or change the value",
+  "游戏没在运行：Lua 成员是从源码读的，能先看、先填参数；调用和改值要开 PIE": "The game isn't running: Lua members are read from source, so you can browse and fill in arguments now; start PIE to call or change values"
 }
