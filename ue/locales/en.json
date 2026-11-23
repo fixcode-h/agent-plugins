@@ -4480,8 +4480,6 @@
   "对每个都调一遍": "Call on each",
   "取对象时读这个属性": "Read this property when getting the object",
   "这个函数调不了": "This function can't be called",
-  "方法 / 属性 / Lua / 运行状态": "Methods / Properties / Lua / Runtime state",
-  "方法 {n}": "Methods {n}",
   "运行状态 {n}": "Runtime state {n}",
   "搜函数": "Search functions",
   "这个对象没绑 Lua，或 Lua 文件里没有声明": "This object has no Lua binding, or the Lua file declares nothing",
@@ -4672,7 +4670,6 @@
   "声明在 {at}": "Declared at {at}",
   "游戏没开：值是源码里的初始值": "Game not running; the value is the initial value in the source",
   "函数 {n}": "Functions {n}",
-  "搜函数和变量": "Search functions and variables",
   "在这里加对象…": "Add object here…",
   "在这里加来源": "Add source here",
   "移到文件夹…": "Move to folder…",
@@ -5004,5 +5001,11 @@
   "游戏没在运行：Lua 成员是从源码读的，能先看、先填参数；调用和改值要开 PIE": "The game isn't running: Lua members are read from source, so you can browse and fill in arguments now; start PIE to call or change values",
   "{file}：本地 #{have}，P4 上最新 #{head}": "{file}: local #{have}, latest in P4 #{head}",
   "要改的资源本地版本落后（资源没法合并）": "The asset to change is behind the latest version (assets can’t be merged)",
-  "同意：不更新，直接签出修改（之后提交会和 P4 上的新版本冲突）。拒绝：这次先不改，在 P4 里更新这几个资源后再让 Agent 改。": "Allow: check out and change it without updating (submitting will conflict with the newer version in P4). Deny: skip this change for now; update these assets in P4, then let the agent change them."
+  "同意：不更新，直接签出修改（之后提交会和 P4 上的新版本冲突）。拒绝：这次先不改，在 P4 里更新这几个资源后再让 Agent 改。": "Allow: check out and change it without updating (submitting will conflict with the newer version in P4). Deny: skip this change for now; update these assets in P4, then let the agent change them.",
+  "UE / Lua / 运行状态": "UE / Lua / Runtime state",
+  "函数 / 属性": "Functions / Properties",
+  "函数 / 变量": "Functions / Variables",
+  "搜变量": "Search variables",
+  "Lua 文件里没有函数，变量在「变量」栏": "No functions in the Lua file; variables are under \"Variables\"",
+  "Lua 文件里没有声明变量": "No variables declared in the Lua file"
 }
