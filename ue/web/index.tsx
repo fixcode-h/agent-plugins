@@ -41,6 +41,7 @@ import { TaskPanel } from './TaskPanel.tsx'
 import { VsDebugSpecimen } from './vs-debug/Specimen.tsx'
 import { SuggestInputSpecimen } from './SuggestInput.tsx'
 import { UePage } from './UePage.tsx'
+import { registerPrefs } from '@panel/web/src/lib/prefs/index'
 
 /** 接入了 UE 的面板项目（对话右栏的「UE」页签按它判断）：激活时取一次，之后每分钟刷新 */
 let ueProjects = new Set<string>()
@@ -56,6 +57,24 @@ async function refresh() {
  */
 const activate: ActivateWeb = (host) => {
   setHost(host)
+  // UE 页记在本机的界面状态（分栏用面板的 pane: 前缀，面板已登记）：设置 → 外观 →「界面状态」里按项重置
+  registerPrefs([
+    { id: 'ue:ui', prefix: 'ue:', label: () => t('UE 页的折叠、页签和筛选'), group: 'view', owner: 'ue' },
+    {
+      id: 'ue:gametest',
+      prefix: 'ue.gt.',
+      label: () => t('GameTest 编辑器的视图、断点和上次的参数'),
+      group: 'other',
+      owner: 'ue',
+    },
+    {
+      id: 'ue:perf-channels',
+      key: 'ue-perf-custom-channels',
+      label: () => t('性能页自定义的通道'),
+      group: 'other',
+      owner: 'ue',
+    },
+  ])
   void refresh()
   setInterval(() => void refresh(), 60000)
   return {

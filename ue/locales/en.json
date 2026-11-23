@@ -5006,5 +5006,8 @@
   "找不到模块 {mod}：装它的插件目录不全，到 UE 页「UE 插件」重新安装这个插件再编译": "Module {mod} not found: the plugin that provides it is incomplete. Reinstall that plugin on the UE page under UE Plugins, then build again",
   "重新安装": "Reinstall",
   "缺模块 {mods} 的源码（Build.cs），编译会报找不到模块定义：点「重新安装」": "Source (Build.cs) for module {mods} is missing, so the build will fail with 'Could not find definition for module'. Click Reinstall",
-  "安装不完整": "Incomplete install"
+  "安装不完整": "Incomplete install",
+  "UE 页的折叠、页签和筛选": "UE page folding, tabs and filters",
+  "GameTest 编辑器的视图、断点和上次的参数": "GameTest editor view, breakpoints and last parameters",
+  "性能页自定义的通道": "Custom channels on the performance page"
 }

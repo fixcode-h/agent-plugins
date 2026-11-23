@@ -556,3 +556,25 @@ declare module '@panel/shared/mirrors/registry' {
   export function mirrorUrl(id: MirrorId, path: string, useMirror: boolean): string
   export function toMirror(id: MirrorId, url: string, useMirror: boolean): string
 }
+
+/** 网页：本机偏好（localStorage 带兜底的读写 + 按族登记，设置 → 外观 →「界面状态」据此按项重置；面板 web/src/lib/prefs/index.ts） */
+declare module '@panel/web/src/lib/prefs/index' {
+  export type PrefGroup = 'layout' | 'view' | 'settings' | 'other'
+  export interface PrefFamily {
+    id: string
+    key?: string
+    prefix?: string
+    label: string | (() => string)
+    group: PrefGroup
+    owner?: string
+  }
+  export const local: {
+    get(key: string): string | null
+    set(key: string, value: string): void
+    remove(key: string): void
+    json<T>(key: string, fallback: T): T
+    setJson(key: string, value: unknown): void
+    keys(): string[]
+  }
+  export function registerPrefs(list: PrefFamily[]): () => void
+}
