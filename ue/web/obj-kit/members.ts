@@ -44,7 +44,15 @@ function paramOf(a: Arg, lua: boolean): CallParam {
   const type = a.type ?? ''
   if (a.objectClass || a.object)
     return { name: a.name, type, obj: { cls: a.objectClass ?? type.replace(/\*$/, ''), lua: false } }
-  if (lua && type && !LUA_PRIMS.test(type)) return { name: a.name, type, obj: { cls: type, lua: true } }
+  // 「number[]|nil」「Foo?」这类可空写法先去掉 nil 再看：剩下一个、且不是 Lua 基本类型的才是 Lua 对象参数
+  // （以前整串去比，number[]|nil 被当成对象参数出了对象下拉，2026-11-23 实测发现）
+  const parts = type
+    .replace(/\?$/, '')
+    .split('|')
+    .map((x) => x.trim())
+    .filter((x) => x && x !== 'nil')
+  if (lua && parts.length === 1 && !LUA_PRIMS.test(parts[0]))
+    return { name: a.name, type, obj: { cls: parts[0], lua: true } }
   return { name: a.name, type }
 }
 
