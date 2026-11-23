@@ -90,7 +90,7 @@ export async function projectHeaders(root: string) {
     const got: string[] = []
     for (const sub of ['Source', 'Plugins']) {
       const dir = path.join(root, sub)
-      const rels = await indexedTree(dir, /\.h$/i, idx)
+      const rels = await indexedTree(dir, /\.h$/i, idx, ['h'])
       // 不在索引里（目录不存在或被排除）：这一份照旧自己走
       if (!rels) {
         await headers(dir, got)

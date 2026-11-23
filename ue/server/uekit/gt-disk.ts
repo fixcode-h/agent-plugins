@@ -96,7 +96,7 @@ function validate(doc: Record<string, unknown>) {
 
 async function walkJson(dir: string, out: string[]) {
   // 面板有项目文件索引、场景根在索引里时直接取
-  const listed = await indexedTree(dir, /\.json$/i)
+  const listed = await indexedTree(dir, /\.json$/i, undefined, ['json'])
   if (listed) {
     for (const r of listed) out.push(path.join(dir, ...r.split('/')))
     return

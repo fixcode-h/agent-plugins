@@ -37,10 +37,16 @@ const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
  * root 下所有符合 want 的文件，返回相对 root 的路径（/ 分隔）；root 不在索引里返回 undefined。
  * idx 不给时按 root 找
  */
-export async function indexedTree(root: string, want: RegExp, idx?: PluginFileIndex): Promise<string[] | undefined> {
+export async function indexedTree(
+  root: string,
+  want: RegExp,
+  idx?: PluginFileIndex,
+  ext?: string[],
+): Promise<string[] | undefined> {
   const index = idx ?? (await dirFileIndex(root))
   if (!index || index.has(root) !== 'dir') return undefined
-  const r = await index.list(root, { recursive: true }).catch(() => undefined)
+  // 能按扩展名先筛就先筛：整棵子树（大项目整个 Content）全拿出来再用正则挑，几个请求一并发就是几个 GB（用户 2026-11-23 面板内存耗尽）
+  const r = await index.list(root, { recursive: true, ...(ext ? { ext } : {}) }).catch(() => undefined)
   if (!r) return undefined
   const pre = `${slash(root)}/`
   const ci = process.platform === 'win32'
@@ -68,7 +74,8 @@ export function touchIndexed(paths: string[]) {
 export async function indexedDirs(root: string): Promise<string[] | undefined> {
   const index = await dirFileIndex(root)
   if (!index || index.has(root) !== 'dir') return undefined
-  const r = await index.list(root, { recursive: true }).catch(() => undefined)
+  // 只要目录：不让面板拼出整棵的文件路径
+  const r = await index.list(root, { recursive: true, dirsOnly: true }).catch(() => undefined)
   if (!r) return undefined
   const pre = `${slash(root)}/`
   return r.dirs.map((d) => slash(d)).filter((d) => d.toLowerCase().startsWith(pre.toLowerCase())).map((d) => d.slice(pre.length))

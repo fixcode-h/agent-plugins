@@ -180,7 +180,9 @@ export async function matchFiles(root: string, patterns: string[]) {
       continue
     }
     // 面板有项目文件索引、这个目录也在索引里时直接按模式取（不走目录）；GM 文件内容变了照旧靠 scan.ts 盯目录
-    const fromIndex = await indexedTree(baseAbs, re)
+    // 模式以「.扩展名」结尾（*.lua 这种）时让面板先按扩展名筛，不把整棵目录的文件都拿出来
+    const extM = /\.([A-Za-z0-9]+)$/.exec(pat)
+    const fromIndex = await indexedTree(baseAbs, re, undefined, extM ? [extM[1]] : undefined)
     if (fromIndex) {
       for (const r of fromIndex.slice(0, MAX_FILES)) {
         const abs = path.join(baseAbs, ...r.split('/'))
