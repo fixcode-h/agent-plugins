@@ -1,4 +1,4 @@
-import { newCustomId, objNamesInArgs } from '../../../../shared/gm/custom.ts'
+import { isObjArg, newCustomId, objNamesInArgs } from '../../../../shared/gm/custom.ts'
 import { newModuleId } from '../../../../shared/gm/modules.ts'
 import type { GmCustom, GmCustomObj, GmCustomParam, GmMany, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import type { SaveGmResult } from './SaveGmDialog.tsx'
@@ -39,7 +39,15 @@ export function addCustom(
     module = newModuleId(modules)
     modules = [...modules, { id: module, name: r.newModule }]
   }
-  const names = [src.obj, ...objNamesInArgs(src.args)]
+  // 只存参数的定义，普通参数的值不存（用户 2026-11-23：值在执行 GM 时选）；对象参数留着当时选的对象当默认，
+  // 它是匹配规则不是值，执行时也能换。全部参数执行时都能填
+  const args =
+    src.kind === 'call'
+      ? Object.fromEntries(
+          Object.entries(src.args).filter(([, v]) => isObjArg(v) || (typeof v === 'string' && v.startsWith('@'))),
+        )
+      : {}
+  const names = [src.obj, ...objNamesInArgs(args)]
   const objects: Record<string, GmCustomObj> = {}
   for (const n of names) {
     const o = src.objects.find((x) => x.name === n)
@@ -63,8 +71,9 @@ export function addCustom(
           ...(src.params?.length ? { params: src.params.map(toParam) } : {}),
         }
       : {}),
-    args: src.kind === 'call' ? src.args : {},
-    editable: src.kind === 'call' ? r.editable : [],
+    args,
+    editable:
+      src.kind === 'call' ? [...new Set([...(src.params ?? []).map((p) => p.name), ...Object.keys(src.args)])] : [],
     many: src.many,
     ...(src.kind === 'get' ? { props: src.props ?? [] } : {}),
   }

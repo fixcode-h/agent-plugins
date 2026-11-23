@@ -3,7 +3,7 @@ import type { GmRun } from '../../../../server/store.ts'
 import { argsText, dropCommon, inCommon, objKey, renameCommonKey, toggleCommon } from '../../../../shared/gm/common.ts'
 import { callText } from '../../../../shared/gm/custom.ts'
 import type { GtRef } from '../../../../shared/gt-script/ref/types.ts'
-import type { GmCustom, GmCustomObj, GmMany, GmObject } from '../../../../shared/gm/schema.ts'
+import type { GmCustom, GmCustomObj, GmMany, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import { allModules } from '../../../../shared/gm/modules.ts'
 import { CUSTOM_FOLDER } from '../../../../shared/gm/obj-folders.ts'
 import { narrowMany, narrowRef } from '../../../../shared/gm/pick.ts'
@@ -25,6 +25,15 @@ import type { MemberTab } from '../../../obj-kit/MemberPane.tsx'
 import type { VarSel } from '../../../obj-kit/VarList.tsx'
 import { useObjFolders } from './use-obj-folders.tsx'
 import { useObjHits, type ParamClass } from './use-objcall.ts'
+
+/** 函数参数已关联的表格（tableBindings 键「函数名.参数名」，和参数表单读的同一份）→ 参数名 → 「表格 · 列」 */
+const tablesOf = (g: GmStore, fn?: string) => {
+  const out: Record<string, string> = {}
+  if (!fn) return out
+  for (const [k, b] of Object.entries(g.tableBindings ?? {}))
+    if (k.startsWith(`${fn}.`)) out[k.slice(fn.length + 1)] = `${b.table.split('/').pop()} · ${b.key}`
+  return out
+}
 
 /** 对象列表 → 调用时的 objects：只要用到的那几个 */
 const objectsFor = (list: GmObject[], names: string[]) => {
@@ -358,13 +367,13 @@ export function useObjCallState(d: GmData, live: boolean) {
             name: saving.c.name,
             note: saving.c.note,
             module: saving.c.module,
-            editable: saving.c.editable,
           }}
           modules={allModules(d.gm, [])}
           obj={{ name: saving.c.obj, o: saving.c.objects[saving.c.obj] ?? {} }}
           fn={saving.c.kind === 'call' ? saving.c.function : undefined}
           args={saving.c.kind === 'call' ? saving.args : {}}
           params={saving.c.kind === 'call' ? customParams(saving.c) : undefined}
+          tables={saving.c.kind === 'call' ? tablesOf(d.gm, saving.c.function) : undefined}
           props={saving.c.kind === 'get' ? saving.c.props : undefined}
           onClose={() => setSaving(false)}
           onSave={async (r) => {
@@ -393,6 +402,7 @@ export function useObjCallState(d: GmData, live: boolean) {
           fn={mode === 'call' ? fn?.name : undefined}
           args={mode === 'call' ? def().args : {}}
           params={mode === 'call' ? fn?.params : undefined}
+          tables={mode === 'call' ? tablesOf(d.gm, fn?.name) : undefined}
           props={mode === 'get' ? picked : undefined}
           onClose={() => setSaving(false)}
           onSave={async (r) => {
