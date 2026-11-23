@@ -3,6 +3,7 @@ import { CircleCheck } from 'lucide-react'
 import { t } from '@shared/i18n'
 import { extractJson } from '@shared/assist'
 import { resolveTablesProposal, tablesJsonOf } from '@shared/tables-assist'
+import { TABLE_HEADER_LANG } from '@shared/table-header-ai'
 import { tablesApi } from '@/lib/tables-api'
 import { Button } from '@/components/ui/button'
 import { applyAnalysis } from './TablesAnalyze'
@@ -37,17 +38,20 @@ export function TablesAnalysisReport({
   task,
   messageId,
   text,
+  single,
 }: {
   task: { projectId: string; messages?: { id: string; role: string; text: string; at?: string }[] }
   messageId: string
   text: string
+  /** 一张表的「AI 识别表头」（tables-header 块）：不当整项目的分析结果存进 analysis.json，也不记分析时间 */
+  single?: boolean
 }) {
   const parsed = useMemo(() => {
-    const ex = tablesJsonOf(text, extractJson)
+    const ex = tablesJsonOf(text, extractJson, single ? TABLE_HEADER_LANG : undefined)
     if (ex.error) return { error: ex.error }
     const r = resolveTablesProposal(ex.json)
     return r.proposal ? { draft: r.proposal.draft } : { error: r.error ?? t('没有找到结果') }
-  }, [text])
+  }, [text, single])
   const [applied, setApplied] = useState(() => readApplied().includes(messageId))
   // 面板只画最新一条带结果块的回复：后面还有回复却没给新的结果块（用户补充后 AI 只用文字说了改什么），
   // 这里摆的还是旧结果，照实提醒，免得用户以为补充的内容已经在里面了（用户 2026-11-16）
@@ -58,7 +62,7 @@ export function TablesAnalysisReport({
   const [store, setStore] = useState<{ ok?: boolean; error?: string }>({})
   const at = msgs[idx]?.at
   useEffect(() => {
-    if (!parsed.draft || stale || !task.projectId) return
+    if (single || !parsed.draft || stale || !task.projectId) return
     let live = true
     tablesApi
       .saveAnalysis(task.projectId, { at: at ?? new Date().toISOString(), messageId, draft: parsed.draft })
@@ -67,7 +71,7 @@ export function TablesAnalysisReport({
     return () => {
       live = false
     }
-  }, [task.projectId, messageId, parsed, stale, at])
+  }, [task.projectId, messageId, parsed, stale, at, single])
   const storeNote = store.error ? (
     <p className="tb:px-[1.125rem] tb:pt-3 tb:text-footnote tb:text-danger">
       {t('结果没能存进项目：{error}', { error: store.error })}
@@ -122,7 +126,7 @@ export function TablesAnalysisReport({
           fill
           draft={parsed.draft}
           onApply={async (picked) => {
-            if (!(await applyAnalysis(task.projectId, parsed.draft, picked))) return
+            if (!(await applyAnalysis(task.projectId, parsed.draft, picked, { single }))) return
             markApplied(messageId)
             setApplied(true)
           }}

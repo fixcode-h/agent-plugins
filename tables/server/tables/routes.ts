@@ -39,7 +39,8 @@ import { markResolved, mergeSources, submitTable, vcsStatus } from './vcs-ops.ts
 import type { EnumRename } from '../../shared/table-enum-rename.ts'
 import { stream } from 'hono/streaming'
 import type { TableWatcher } from './watch.ts'
-import { withPromptLangRules } from '../../shared/prompt-lang.ts'
+import { promptLangWord, withPromptLangRules } from '../../shared/prompt-lang.ts'
+import { buildHeaderPrompt, headerVerdict } from '../../shared/table-header-ai.ts'
 import { SavedAnalysis, buildTablesBody } from '../../shared/tables-assist.ts'
 import { readAnalysis, writeAnalysis } from './analysis-store.ts'
 import { TableCreate } from '../../shared/table-create.ts'
@@ -237,6 +238,28 @@ export function tablesApi(deps: TablesDeps) {
           return c.json({
             prompt: withPromptLangRules(buildTablesBody({ sample: sample.text, headerStats, previous }, [])),
           })
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
+      // 一张表的「AI 识别表头」：这张表开头几行 + 项目现在的表头配置 + 面板核对的结论（shared/table-header-ai.ts）
+      .get('/:id/header-prompt', async (c) => {
+        try {
+          const { dir, cfg, schemaAt } = await projectOf(deps, c.req.param('id'))
+          const doc = await openTable(dir, c.req.query('path') ?? '', cfg)
+          const name = c.req.query('sheet')
+          const sheet = (name ? doc.sheets.find((x) => x.name === name) : doc.sheets[0]) ?? doc.sheets[0]
+          if (!sheet) throw new HttpError(t('这个表格里没有工作表'))
+          const schema = await readSchema(schemaAt)
+          const prompt = buildHeaderPrompt({
+            file: doc.path,
+            sheet: sheet.name,
+            rows: sheet.rows,
+            schema,
+            verdict: headerVerdict(schema, doc.path, sheet.name, sheet.rows),
+            langWord: promptLangWord(),
+          })
+          return c.json({ prompt: withPromptLangRules(prompt) })
         } catch (e) {
           return fail(c, e)
         }

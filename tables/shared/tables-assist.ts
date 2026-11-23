@@ -29,8 +29,10 @@ export const TABLES_STYLE_LANG = 'tables-style'
 export function tablesJsonOf(
   text: string,
   fallback: (text: string) => { json?: unknown; error?: string },
+  /** 一张表的「AI 识别表头」用 tables-header（shared/table-header-ai.ts），同一种 JSON */
+  lang: string = TABLES_STYLE_LANG,
 ): { json?: unknown; error?: string } {
-  const blocks = [...text.matchAll(new RegExp('```' + TABLES_STYLE_LANG + '[^\\n]*\\n([\\s\\S]*?)```', 'g'))]
+  const blocks = [...text.matchAll(new RegExp('```' + lang + '[^\\n]*\\n([\\s\\S]*?)```', 'g'))]
   const raw = blocks.at(-1)?.[1]
   if (raw === undefined) return fallback(text)
   try {
@@ -305,7 +307,13 @@ export function draftItemIds(d: TablesDraft): string[] {
  * 把勾上的几项并进结构文件：表头、主键这类单值直接换；按文件指定的按 glob + 工作表换掉同一条；枚举、列按名字整项换
  * （手写的从枚举表取值的设置保留）。没勾的不动，记下分析时间
  */
-export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Set<string>, at: string): TableSchema {
+export function applyTablesDraft(
+  schema: TableSchema,
+  d: TablesDraft,
+  picked: Set<string>,
+  /** 记成分析时间；一张表的「AI 识别表头」不是整项目分析，传空不改 */
+  at: string,
+): TableSchema {
   const s = d.style
   const style = { ...schema.style }
   if (picked.has('header') && s.header?.rows.length) style.header = s.header
@@ -343,7 +351,7 @@ export function applyTablesDraft(schema: TableSchema, d: TablesDraft, picked: Se
       mapStore: { ...f.mapStore, ...d.formats.mapStore },
     })
   }
-  return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, analyzedAt: at }
+  return { ...schema, style, enums, scans: scans.slice(0, 50), columns, types, ...(at ? { analyzedAt: at } : {}) }
 }
 
 /**

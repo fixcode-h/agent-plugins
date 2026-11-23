@@ -5,6 +5,7 @@ import { t } from '@shared/i18n'
 import type { Project } from '@shared/schema'
 import { tablesOf } from '@shared/tables'
 import { TABLES_STYLE_LANG } from '@shared/tables-assist'
+import { TABLE_HEADER_LANG } from '@shared/table-header-ai'
 import { TablesAnalysisReport } from '@/components/tables/TablesAnalysisReport'
 import { TableIcon } from '@/components/layout/rail-icons'
 import { ProjectTablesSection } from '@/components/projects/ProjectTablesSection'
@@ -93,6 +94,17 @@ const plugin = (): WebPlugin => ({
       desc: t('分析出的表头、类型、枚举逐项勾选，应用后直接写进项目的表格结构文件'),
       icon: Sheet,
       Report: ({ task, messageId, text }) => <TablesAnalysisReport task={task} messageId={messageId} text={text} />,
+    },
+    {
+      // 一张表的「AI 识别表头」（表格页「调整表头」里的按钮）：同一个勾选列表，只是不当整项目的分析结果存
+      id: 'header',
+      lang: TABLE_HEADER_LANG,
+      title: t('表头规则'),
+      desc: t('AI 看这张表给出的表头规则，勾选后写进项目的表格结构文件'),
+      icon: Sheet,
+      Report: ({ task, messageId, text }) => (
+        <TablesAnalysisReport task={task} messageId={messageId} text={text} single />
+      ),
     },
   ],
   // 面板文件弹窗里的表格文件：表格目录里的多「在表格页打开」，表头按项目的表格设置

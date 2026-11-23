@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal, Sparkles } from 'lucide-react'
 import { t } from '@shared/i18n'
 import type { SheetHeader } from '@shared/sheet-header'
 import type { TableSchema } from '@shared/tables'
@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu'
 import type { SheetHeaderStore } from '@/components/files/use-sheet-view'
 import { roleShort } from '@/components/files/sheet-roles'
 import { HeaderRowsEditor, ruleText } from './HeaderRowsEditor'
+import { askHeaderAi } from './header-ai'
 
 /** 只管这一个工作表的「按文件指定」写进去（已有就换掉，没有就放最前面）；h 为空就删掉，改回按配置 */
 function putSheetRule(schema: TableSchema, file: string, sheet: string, h: HeaderRule | null): TableSchema {
@@ -58,6 +59,7 @@ export function tableHeaderOf(
  * 也可以直接改它现在用的那份（项目表头或那条按文件指定），所有用这份的表一起变
  */
 export function TableHeaderSetup({
+  projectId,
   schema,
   file,
   sheet,
@@ -67,6 +69,7 @@ export function TableHeaderSetup({
   onSchema,
   disabled,
 }: {
+  projectId: string
   schema: TableSchema
   file: string
   sheet: string
@@ -120,7 +123,22 @@ export function TableHeaderSetup({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="tb:w-[640px] tb:max-w-[calc(100vw-32px)] tb:p-3" align="end">
-        <div className="tb:mb-1 tb:text-body tb:font-medium tb:text-fg">{t('表头设置')}</div>
+        <div className="tb:mb-1 tb:flex tb:items-center tb:gap-2">
+          <span className="tb:flex-1 tb:text-body tb:font-medium tb:text-fg">{t('表头设置')}</span>
+          {/* 认不准、没套上的表交给 AI 看开头几行，给出补的规则（用户 2026-11-23） */}
+          <Button
+            size="sm"
+            variant="ghost"
+            title={t('把这张表开头几行和项目的表头配置交给 AI，让它说哪里对不上、给出要补的表头规则，勾选后才写进去')}
+            onClick={() => {
+              setOpen(false)
+              askHeaderAi(projectId, file, sheet)
+            }}
+          >
+            <Sparkles className="tb:h-3.5 tb:w-3.5" />
+            {t('AI 识别表头')}
+          </Button>
+        </div>
         <p className="tb:mb-3 tb:text-caption tb:text-subtle">
           {source.kind === 'unfit' ? from : `${from} · ${ruleText(rule)}`}
         </p>
