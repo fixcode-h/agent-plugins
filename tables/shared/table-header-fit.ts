@@ -5,7 +5,7 @@
  *
  * 「对得上」只看表头每一行是不是它该有的样子（不按内容猜表头，只验证配置）：
  * - 修饰行：格子是这一行设的通用枚举里的值，或 arrayMarks、optional / repeated 这类修饰词；空格子不算
- * - 导出端行：格子是这一行设的通用枚举里的值，或 Client / Server / C|S 这类写法；空格子不算
+ * - 导出端行：格子是这一行设的通用枚举里的值，或 Client / Server / Public / C|S 这类写法；空格子不算
  * - 类型行：格子按类型表认得出来（基础类型、结构、枚举、TArray<…>、int[]），或是大驼峰的类型名
  * - 字段名行：不能整行空；格子是标识符（或中文列名）、不是数字，基本不重复，并且盖住这张表一半以上的列
  * - 注释、其它行：什么都能写，不比
@@ -21,7 +21,26 @@ const RATIO = 0.8
 const WIDTH_SCAN = 10
 
 const MODIFIERS = new Set(['optional', 'repeated', 'required', 'packed', 'map', 'key', 'list', 'array']) // 模块状态：常量
-const SIDES = new Set(['client', 'server', 'editor', 'all', 'both', 'none', 'c', 's', 'e', 'cs', 'sc', 'ce', 'se']) // 模块状态：常量
+// public / private 这类写法也常用来标导出端（两端都导 / 都不导）：漏了它，Public、Client 混着写的表整份表头套不上（用户 2026-11-23）
+const SIDES = new Set([
+  'client',
+  'server',
+  'editor',
+  'all',
+  'both',
+  'none',
+  'public',
+  'private',
+  'shared',
+  'common',
+  'c',
+  's',
+  'e',
+  'cs',
+  'sc',
+  'ce',
+  'se',
+]) // 模块状态：常量
 const IDENT = /^[A-Za-z_][A-Za-z0-9_.]*$/
 const CJK = /[㐀-鿿豈-﫿]/
 const NUM = /^[-+]?\d+(\.\d+)?$/
