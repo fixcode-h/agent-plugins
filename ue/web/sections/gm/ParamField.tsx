@@ -1,10 +1,10 @@
-import { Table } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../server/lua-gm/types.ts'
 import type { GmStore } from '../../../server/types.ts'
 import { op, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
+import { BindButton, bindWhere } from './BindButton.tsx'
 import { bindingOf, type GmEntry, type GmParam } from './data.ts'
 import { TablePick } from './TablePick.tsx'
 import { labelOf, resolveHint, searchRows } from './tables.ts'
@@ -158,47 +158,47 @@ function TableField({
               : t('读不到关联的表：{msg}', { msg: resolved.error })}
           </span>
         ) : null}
-        <button
-          type="button"
+        <BindButton
           title={
             legacy
               ? t('以前绑的 DataTable：{dt}。点这里改成关联表格的列（下拉里能搜）', { dt: legacy })
               : t('关联表格的列：下拉里按主列、描述列搜')
           }
           onClick={() => onEditBinding(p, undefined)}
-          className="ue:grid ue:shrink-0 ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
-        >
-          <Table className="ue:h-3.5 ue:w-3.5" />
-        </button>
+        />
       </>
     )
-  const where = `${b.table.split('/').pop()}${b.sheet ? ` · ${b.sheet}` : ''}`
+  const where = bindWhere(b)
   return (
-    <TablePick
-      value={value}
-      label={label}
-      binding={b}
-      load={(q) => searchRows(project.id, b, q)}
-      onChange={(v, l) => {
-        setLabel(l)
-        onChange(v)
-      }}
-      footer={
-        <>
-          <span className="ue:min-w-0 ue:truncate">
-            {edited
-              ? t('关联 {p} → {table} 的 {key}', { p: p.name, table: where, key: b.key })
-              : t('关联 {p} → {table} 的 {key}（扫描脚本按注释给的）', { p: p.name, table: where, key: b.key })}
-          </span>
-          <button
-            type="button"
-            onClick={() => onEditBinding(p, b)}
-            className="ue:ml-auto ue:shrink-0 ue:cursor-pointer ue:text-accent-text ue:hover:underline"
-          >
-            {t('改关联')}
-          </button>
-        </>
-      }
-    />
+    <>
+      <TablePick
+        value={value}
+        label={label}
+        binding={b}
+        load={(q) => searchRows(project.id, b, q)}
+        onChange={(v, l) => {
+          setLabel(l)
+          onChange(v)
+        }}
+        footer={
+          <>
+            <span className="ue:min-w-0 ue:truncate">
+              {edited
+                ? t('关联 {p} → {table} 的 {key}', { p: p.name, table: where, key: b.key })
+                : t('关联 {p} → {table} 的 {key}（扫描脚本按注释给的）', { p: p.name, table: where, key: b.key })}
+            </span>
+            <button
+              type="button"
+              onClick={() => onEditBinding(p, b)}
+              className="ue:ml-auto ue:shrink-0 ue:cursor-pointer ue:text-accent-text ue:hover:underline"
+            >
+              {t('改关联')}
+            </button>
+          </>
+        }
+      />
+      {/* 选了值、关联好了按钮也一直在：点它改关联（用户 2026-11-23） */}
+      <BindButton binding={b} title="" onClick={() => onEditBinding(p, b)} />
+    </>
   )
 }

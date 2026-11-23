@@ -1,8 +1,8 @@
-import { Table } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { LuaGmBinding } from '../../../../server/lua-gm/types.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
+import { BindButton } from '../../gm/BindButton.tsx'
 import { TableBindDialog } from '../../gm/TableBindDialog.tsx'
 import { TablePick } from '../../gm/TablePick.tsx'
 import { labelOf, listTables, searchRows, storedTable, tableShape } from '../../gm/tables.ts'
@@ -55,39 +55,37 @@ export function ParamTable({
   }
   return (
     <>
-      {b ? (
-        <TablePick
-          value={value}
-          label={label}
+      {/* 关联前后都留着表格按钮：关联了点它改关联（用户 2026-11-23） */}
+      <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
+        {b ? (
+          <TablePick
+            value={value}
+            label={label}
+            binding={b}
+            load={(q) => searchRows(project, b, q)}
+            onChange={(v, l) => {
+              setLabel(l)
+              onChange(v)
+            }}
+            footer={
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="ue:ml-auto ue:shrink-0 ue:cursor-pointer ue:text-accent-text ue:hover:underline"
+              >
+                {t('改关联')}
+              </button>
+            }
+          />
+        ) : (
+          input
+        )}
+        <BindButton
           binding={b}
-          load={(q) => searchRows(project, b, q)}
-          onChange={(v, l) => {
-            setLabel(l)
-            onChange(v)
-          }}
-          footer={
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="ue:ml-auto ue:shrink-0 ue:cursor-pointer ue:text-accent-text ue:hover:underline"
-            >
-              {t('改关联')}
-            </button>
-          }
+          title={t('关联表格的列：运行时下拉里按主列、描述列搜（和 GM 参数同一种关联，团队共用）')}
+          onClick={() => setEditing(true)}
         />
-      ) : (
-        <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-1.5">
-          {input}
-          <button
-            type="button"
-            title={t('关联表格的列：运行时下拉里按主列、描述列搜（和 GM 参数同一种关联，团队共用）')}
-            onClick={() => setEditing(true)}
-            className="ue:grid ue:shrink-0 ue:cursor-pointer ue:text-subtle ue:hover:text-fg"
-          >
-            <Table className="ue:h-3.5 ue:w-3.5" />
-          </button>
-        </span>
-      )}
+      </span>
       {editing && (
         <TableBindDialog
           param={param}

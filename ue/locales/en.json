@@ -1856,6 +1856,8 @@
   "删除宏": "Delete macro",
   "留空用默认 {v}": "Leave empty for default {v}",
   "改关联": "Change link",
+  "关联表格": "Link a table",
+  "已关联 {where} 的 {key}，点这里改关联": "Linked to {key} in {where}. Click to change the link",
   "读不到关联的表：{msg}": "Can't read the linked table: {msg}",
   "关联 {p} → {table} 的 {key}（扫描脚本按注释给的）": "{p} → {key} of {table} (from the scan script, per comments)",
   "{file} · 前 {n} 行": "{file} · first {n} rows",

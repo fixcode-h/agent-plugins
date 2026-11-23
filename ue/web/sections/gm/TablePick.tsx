@@ -1,7 +1,8 @@
-import { Table2 } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { LuaGmBinding } from '../../../server/lua-gm/types.ts'
 import { t } from '../../host.ts'
+import { bindWhere } from './BindButton.tsx'
 import { SearchPick } from './SearchPick.tsx'
 import type { TableRow } from './tables.ts'
 
@@ -12,7 +13,7 @@ export function colsText(b: LuaGmBinding) {
 
 /**
  * 关联了表格列的参数：可搜索的下拉（设计稿 4.2，效果图 1）。按主列、描述列、辅助描述列搜，
- * 一行显示主列的值、描述和辅助描述。数据由 load 给（GM 页里是 tables.ts 经面板动作读表格插件），
+ * 一行显示主列的值、描述和辅助描述；改关联走框右边的 BindButton。数据由 load 给（GM 页里是 tables.ts 经面板动作读表格插件），
  * 组件本身不管从哪来，设置 →「组件」里用假数据展示。搜不到时回车用输入的文字当值
  */
 export function TablePick({
@@ -34,8 +35,7 @@ export function TablePick({
   footer?: ReactNode
   placeholder?: string
 }) {
-  const fileName = binding.table.split('/').pop() ?? ''
-  const where = binding.sheet ? `${fileName} · ${binding.sheet}` : fileName
+  const where = bindWhere(binding)
   const cols = colsText(binding)
   return (
     <SearchPick
@@ -54,14 +54,8 @@ export function TablePick({
           <span className="ue:text-subtle">{placeholder ?? t('搜 {cols}', { cols })}</span>
         )
       }
-      side={
-        <>
-          <Table2 className="ue:h-3 ue:w-3 ue:shrink-0" />
-          <span className="ue:truncate">
-            {where} · {binding.key}
-          </span>
-        </>
-      }
+      // 关联来源（文件 · 页签 · 主列）不再挤在框里：放在框右边表格按钮的悬停提示和下拉顶上的说明（用户 2026-11-23 嫌太长）
+      side={<ChevronDown className="ue:h-3.5 ue:w-3.5 ue:shrink-0" />}
       summary={({ q, n, total }) =>
         q ? t('{file} · 含「{q}」· {n} 行', { file: where, q, n: total }) : t('{file} · 前 {n} 行', { file: where, n })
       }
