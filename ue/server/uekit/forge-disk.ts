@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { readIni } from '../editor-tools/config-layers.ts'
 import { docsSubDir } from './docs-sub.ts'
+import { indexedTree } from '../file-index.ts'
 
 /**
  * AssetForge 页的快速清单：配置根和配置根下的 JSON 直接从磁盘读，不经 UE。
@@ -85,10 +86,21 @@ export function normalizeAsset(p: string) {
  * 也跳过 `.` 开头的（`.schema/` 是 AssetForge 写给编辑器做格式检查的 JSON Schema，设计稿 4.3.5，不是配置）
  */
 async function walk(dir: string, out: string[]) {
+  // 面板的项目文件索引里有这个目录（文档根也收进索引）就直接取，不现走目录：P4 的文档根在网络盘、文件多时走一遍要好几秒
+  const listed = await indexedTree(dir, /\.json$/i, undefined, ['json'])
+  if (listed) {
+    for (const r of listed)
+      if (!r.split('/').some((s) => s.startsWith('_') || s.startsWith('.'))) out.push(path.join(dir, ...r.split('/')))
+    return
+  }
+  await walkDisk(dir, out)
+}
+
+async function walkDisk(dir: string, out: string[]) {
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
     if (e.name.startsWith('_') || e.name.startsWith('.')) continue
     const abs = path.join(dir, e.name)
-    if (e.isDirectory()) await walk(abs, out)
+    if (e.isDirectory()) await walkDisk(abs, out)
     else if (e.isFile() && /\.json$/i.test(e.name)) out.push(abs)
   }
 }
