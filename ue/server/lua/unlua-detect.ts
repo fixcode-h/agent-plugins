@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
+import { ueMemo } from '../memo.ts'
 
 /**
  * 项目用没用 UnLua。不按固定的插件目录判断：用户的 UnLua 常是二次开发过的分支，可能放在 Plugins 的子目录里、
@@ -126,32 +127,23 @@ export async function detectUnLua(
 
 /**
  * 带缓存的版本：概况每次刷新都要问，扫引擎的插件树要几百次 stat。
- * 键里带 .uproject 和 Plugins/ 的修改时间：改了启用的插件、在 Plugins/ 下直接装或删插件马上重新认；
- * 装进更深的子目录、引擎里的变化一分钟内复用旧结果
+ * 缓存走面板的派生缓存（server/memo，面板 ADR 0074）：.uproject 改了、Plugins/ 下装或删了插件（.uplugin 变化）马上重新认，
+ * 盯不住时和引擎里的变化一样十分钟后重认；设置 →「数据」能看到和清空
  */
-const cache = new Map<string, { at: number; value: Promise<UnLuaFound> }>()
-const TTL = 60_000
+type UnLuaProject = Pick<UeProject, 'root' | 'uproject' | 'engine' | 'engineDir'>
+const memo = ueMemo<UnLuaProject, UnLuaFound>({
+  name: 'ue.unlua-detect',
+  keyOf: (p) => [p.root, p.uproject, p.engine?.dir || p.engineDir || ''].join('|'),
+  load: (p) => detectUnLua(p).catch(() => ({ found: false }) as UnLuaFound),
+  ttlMs: 10 * 60_000,
+  watch: (p) => ({
+    files: p.uproject ? [p.uproject] : [],
+    trees: [path.join(p.root, 'Plugins')],
+    exts: ['uplugin'],
+  }),
+})
 
-export async function unluaOf(p: Pick<UeProject, 'root' | 'uproject' | 'engine' | 'engineDir'>): Promise<UnLuaFound> {
-  const mtime = (f: string) =>
-    stat(f).then(
-      (s) => s.mtimeMs,
-      () => 0,
-    )
-  const key = [
-    p.root,
-    p.uproject,
-    p.engine?.dir || p.engineDir || '',
-    await mtime(p.uproject || ''),
-    await mtime(path.join(p.root, 'Plugins')),
-  ].join('|')
-  const hit = cache.get(key)
-  if (hit && Date.now() - hit.at < TTL) return hit.value
-  const value = detectUnLua(p).catch(() => ({ found: false }) as UnLuaFound)
-  for (const k of cache.keys()) if (k.startsWith(p.root + '|')) cache.delete(k)
-  cache.set(key, { at: Date.now(), value })
-  return value
-}
+export const unluaOf = (p: UnLuaProject): Promise<UnLuaFound> => memo.get(p)
 
 export const hasUnLua = async (p: Pick<UeProject, 'root' | 'uproject' | 'engine' | 'engineDir'>) =>
   (await unluaOf(p)).found

@@ -201,3 +201,58 @@ declare module '@panel/server/vcs/p4-plan' {
 declare module '@panel/server/p4-split' {
   export function p4Runner(cwd: string): import('@panel/server/vcs/p4-plan').P4Run
 }
+
+/** 文件监听：盯几个文件的内容改动（共用目录监听、停手 300 毫秒、比修改时间，面板 ADR 0074） */
+declare module '@panel/server/watch/files' {
+  export interface FileStamp {
+    file: string
+    mtime: string
+  }
+  export function watchFiles(
+    files: string[],
+    onChange: (changed: FileStamp[]) => void,
+    o?: { settleMs?: number; known?: Record<string, string> },
+  ): { close(): void; unwatched: string[] }
+}
+
+/** 文件监听：盯整棵目录树（Windows / macOS 递归句柄，Linux 逐目录） */
+declare module '@panel/server/watch/tree' {
+  export const TREE_SKIP: Set<string>
+  export function watchTree(
+    root: string,
+    on: (rel: string | null) => void,
+    o?: { skipDir?: (name: string) => boolean; onLost?: (why: string) => void; maxDirs?: number },
+  ): { close(): void } | undefined
+}
+
+/** 派生缓存：同一个键只算一遍、失败不记、过期或依赖的文件变了才重算，设置里能看到和清空 */
+declare module '@panel/server/memo/index' {
+  export interface MemoWatch {
+    trees?: string[]
+    exts?: string[]
+    files?: string[]
+  }
+  export interface Memo<K, V> {
+    get(key: K, o?: { fresh?: boolean }): Promise<V>
+    peek(key: K): Promise<V> | undefined
+    invalidate(key?: K): void
+    size(): number
+  }
+  export function createMemo<K, V>(o: {
+    name: string
+    load: (key: K) => Promise<V>
+    keyOf?: (key: K) => string
+    ttlMs?: number
+    max?: number
+    watch?: (key: K) => MemoWatch | undefined
+  }): Memo<K, V>
+}
+
+/** 文件监听：订阅一个目录的改动（所有订阅者共用一个系统监听） */
+declare module '@panel/server/watch/dir' {
+  export function watchDir(
+    dir: string,
+    on: (name: string | null) => void,
+    o?: { recursive?: boolean; onLost?: (why: string) => void },
+  ): { close(): void } | undefined
+}

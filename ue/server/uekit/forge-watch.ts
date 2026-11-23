@@ -1,4 +1,3 @@
-import { watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { c, t } from '../util.ts'
@@ -8,12 +7,10 @@ import { c, t } from '../util.ts'
  * 被编辑器或 Agent 存盘了就经面板的推送通道（ctx.pages）告诉这个页面，页面重拉差异、重新演练。不轮询。
  *
  * - 一个页面连接只盯一份（右栏只显示一份）；换了选中项整份替换，取消选中就不盯了。连接断了面板回调 onClose，一起清掉。
- * - 盯所在目录而不是文件本身：VS Code、Excel 一类编辑器保存是先写临时文件再改名替换，盯文件的话改名后就盯丢了。
- * - 保存时会连着来好几下事件：等它停 SETTLE_MS 再看修改时间，和上次推过的不一样才推，同一次保存只推一次。
+ * - 监听走面板共用的 server/watch/files（面板 ADR 0074）：盯所在目录（改名替换保存不丢）、停手后比修改时间，同一次保存只推一次。
  * - 配置 include 了片段文件（设计稿 4.3.4）时页面把片段一起报上来（extra）：片段存盘也算这份配置变了，推的还是主文件的路径。
  */
-const SETTLE_MS = 300
-/** 同时最多盯这么多个页面连接：每个占一个系统句柄 */
+/** 同时最多盯这么多个页面连接 */
 const MAX_CONNS = 64
 /** 一份配置最多连带盯这么多个片段文件 */
 const MAX_EXTRA = 50
@@ -28,9 +25,7 @@ interface Sub {
   rel: string
   /** 主文件和 include 的片段文件（绝对路径），第一个是主文件 */
   files: string[]
-  mtime: string
-  watchers: FSWatcher[]
-  timer?: ReturnType<typeof setTimeout>
+  close: () => void
 }
 
 const subs = new Map<string, Sub>()
@@ -40,31 +35,14 @@ function stop(conn: string) {
   const s = subs.get(conn)
   if (!s) return
   subs.delete(conn)
-  if (s.timer) clearTimeout(s.timer)
-  for (const w of s.watchers)
-    try {
-      w.close()
-    } catch {
-      // 已经关了
-    }
+  s.close()
 }
 
-async function mtimeOf(full: string) {
-  const st = await stat(full).catch(() => undefined)
-  return st?.isFile() ? st.mtime.toISOString() : ''
-}
-
-/** 主文件的修改时间（推给页面的）+ 片段的：任何一个变了都算变了 */
-async function stampOf(files: string[]) {
-  return (await Promise.all(files.map(mtimeOf))).join('|')
-}
-
-async function check(conn: string, s: Sub) {
-  s.timer = undefined
-  const stamp = await stampOf(s.files)
-  if (subs.get(conn) !== s || stamp === s.mtime) return
-  s.mtime = stamp
-  const mtime = stamp.split('|')[0]
+/** 主文件或片段任何一个变了：推主文件现在的修改时间 */
+async function changed(conn: string, s: Sub) {
+  if (subs.get(conn) !== s) return
+  const st = await stat(s.files[0]).catch(() => undefined)
+  const mtime = st?.isFile() ? st.mtime.toISOString() : ''
   s.push({ project: s.project, event: 'forge.file', path: s.rel, ...(mtime ? { mtime } : { missing: true }) }, conn)
 }
 
@@ -104,39 +82,17 @@ export async function forgeWatch(project: string, rootAbs: string, b: Record<str
   stop(conn)
   if (subs.size >= MAX_CONNS) return { watching: false }
 
-  // 按目录盯，一个目录一个 watcher，事件里的文件名对上这个目录里要盯的才算
-  const byDir = new Map<string, Set<string>>()
-  for (const f of files) {
-    const d = path.dirname(f)
-    if (!byDir.has(d)) byDir.set(d, new Set())
-    byDir.get(d)!.add(path.basename(f).toLowerCase())
+  const { watchFiles } = await import('@panel/server/watch/files')
+  // 等加载的时候同一个连接可能又登记了别的
+  if (subs.has(conn)) stop(conn)
+  const sub: Sub = { project, push, rel, files, close: () => {} }
+  const w = watchFiles(files, () => void changed(conn, sub))
+  // 盯不了（目录不存在、网络盘、权限）：主文件的目录盯不了就不盯，页面照旧能手动刷新；片段的目录盯不了跳过
+  if (w.unwatched.includes(full)) {
+    w.close()
+    return { watching: false }
   }
-  const watchers: FSWatcher[] = []
-  const sub: Sub = { project, push, rel, files, mtime: '', watchers }
-  for (const [dir, names] of byDir) {
-    let watcher: FSWatcher
-    try {
-      watcher = watch(dir, { persistent: false }, (_e, f) => {
-        if (subs.get(conn) !== sub) return
-        // 有的系统不给文件名：当成可能是它，修改时间没变的不会推
-        if (f && !names.has(path.basename(String(f)).toLowerCase())) return
-        if (sub.timer) clearTimeout(sub.timer)
-        sub.timer = setTimeout(() => void check(conn, sub), SETTLE_MS)
-      })
-    } catch {
-      // 盯不了（目录不存在、网络盘、权限）：主文件的目录盯不了就不盯，页面照旧能手动刷新；片段的目录盯不了跳过
-      if (dir === path.dirname(full)) {
-        for (const w of watchers) w.close()
-        return { watching: false }
-      }
-      continue
-    }
-    watcher.on('error', () => {
-      if (subs.get(conn) === sub) stop(conn)
-    })
-    watchers.push(watcher)
-  }
-  sub.mtime = await stampOf(files)
+  sub.close = w.close
   subs.set(conn, sub)
   return { watching: true }
 }

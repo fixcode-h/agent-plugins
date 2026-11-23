@@ -1,8 +1,10 @@
+import path from 'node:path'
 import type { McpResult } from '../../../sdk/server.ts'
 import { runOp, type OpCtx } from '../ops.ts'
 import { installedIn } from './catalog.ts'
 import { editedAsset } from './forge-edited.ts'
 import { withTip } from '../json-result.ts'
+import { ueMemo } from '../memo.ts'
 
 /**
  * Agent 用 ue_set / ue_asset / ue_blueprint 直接改了 AssetForge 纳管的资产时，在结果后面提醒一句：
@@ -10,15 +12,14 @@ import { withTip } from '../json-result.ts'
  * 是否纳管问 forge.describe（AssetForge 自己按资产找配置，和页面同一个判据）；没装 AssetForge、问不到时不提醒。
  */
 
-/** 装没装 AssetForge 要扫磁盘：同一个项目 30 秒内复用结果，免得每次改属性都扫 */
-const installCache = new Map<string, { at: number; on: boolean }>()
-async function forgeInstalled(root: string) {
-  const hit = installCache.get(root)
-  if (hit && Date.now() - hit.at < 30000) return hit.on
-  const on = !!(await installedIn(root, 'AssetForge').catch(() => undefined))
-  installCache.set(root, { at: Date.now(), on })
-  return on
-}
+/** 装没装 AssetForge 要扫磁盘：Plugins/ 下的 .uplugin 变了才重扫，盯不住时 30 秒重扫（面板派生缓存，ADR 0074），免得每次改属性都扫 */
+const installed = ueMemo<string, boolean>({
+  name: 'ue.forge-installed',
+  load: async (root) => !!(await installedIn(root, 'AssetForge').catch(() => undefined)),
+  ttlMs: 30_000,
+  watch: (root) => ({ trees: [path.join(root, 'Plugins')], exts: ['uplugin'] }),
+})
+const forgeInstalled = (root: string) => installed.get(root)
 
 export async function forgeNotice(tool: string, a: Record<string, unknown>, ctx: OpCtx, r: McpResult) {
   if (r.isError) return r

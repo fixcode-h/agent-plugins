@@ -4,6 +4,7 @@ import { projectMounts } from '../../../search-index/mounts.ts'
 import { searchIndex } from '../../../search-index/index.ts'
 import { shortClass } from '../../../search-index/uetovs.ts'
 import type { UeProject } from '../../../types.ts'
+import { headerTrees, ueMemo } from '../../../memo.ts'
 import { t } from '../../../util.ts'
 import type { VarGroup, VarItem } from '../../gt-author/lua-vars.ts'
 import { assetFile } from './classes.ts'
@@ -18,31 +19,28 @@ import { readBpTags } from './uasset-tags.ts'
 
 /** 往上最多几层（防绕圈） */
 const MAX_CHAIN = 12
-/** 类名 → 头文件的表多久重建一次（和离线类树一样） */
-const FRESH_MS = 30_000
+/** 项目里 UCLASS 的类名（去掉 U / A 前缀）→ 头文件：.h 改了就重建，盯不住时五分钟重建（面板派生缓存，ADR 0074） */
+const classMap = ueMemo<string, Map<string, string>>({
+  name: 'ue.class-files',
+  load: (root) => buildClassFiles(root),
+  ttlMs: 5 * 60_000,
+  watch: headerTrees,
+})
+const classFiles = (root: string) => classMap.get(root)
 
-const classMap = new Map<string, { at: number; map: Promise<Map<string, string>> }>()
-
-/** 项目里 UCLASS 的类名（去掉 U / A 前缀）→ 头文件 */
-function classFiles(root: string) {
-  const hit = classMap.get(root)
-  if (hit && Date.now() - hit.at < FRESH_MS) return hit.map
-  const map = (async () => {
-    const out = new Map<string, string>()
-    const files = await projectHeaders(root)
-    for (let i = 0; i < files.length; i += 64) {
-      const batch = files.slice(i, i + 64)
-      const texts = await Promise.all(batch.map((f) => readFile(f, 'utf8').catch(() => '')))
-      texts.forEach((text, k) => {
-        if (!text.includes('UCLASS')) return
-        for (const m of text.matchAll(/\bclass\s+(?:\w+_API\s+)?[UA]?(\w+)\s*(?:final\s*)?:\s*public\s+\w+/g))
-          if (!out.has(m[1])) out.set(m[1], batch[k])
-      })
-    }
-    return out
-  })()
-  classMap.set(root, { at: Date.now(), map })
-  return map
+async function buildClassFiles(root: string) {
+  const out = new Map<string, string>()
+  const files = await projectHeaders(root)
+  for (let i = 0; i < files.length; i += 64) {
+    const batch = files.slice(i, i + 64)
+    const texts = await Promise.all(batch.map((f) => readFile(f, 'utf8').catch(() => '')))
+    texts.forEach((text, k) => {
+      if (!text.includes('UCLASS')) return
+      for (const m of text.matchAll(/\bclass\s+(?:\w+_API\s+)?[UA]?(\w+)\s*(?:final\s*)?:\s*public\s+\w+/g))
+        if (!out.has(m[1])) out.set(m[1], batch[k])
+    })
+  }
+  return out
 }
 
 /** 注释和字符串换成等长空格：数括号时不被里面的 { ( 带偏，位置还和原文一一对应 */
