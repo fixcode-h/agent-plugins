@@ -1,3 +1,4 @@
+import { useUeState } from './state-feed.ts'
 import {
   Blocks,
   Box,
@@ -139,11 +140,7 @@ export function UePage({ path, project: fixed }: { path: string; project?: strin
     }
     route.go('main', [project?.id ?? '', section, s ?? ''].map(encodeURIComponent).join('/').replace(/\/+$/, ''))
   }
-  const state = useLoad(
-    () => (project ? pget<ProjectState>(project.id, 'state') : Promise.resolve(undefined)),
-    [project?.id],
-    3000,
-  )
+  const state = useUeState(project?.id)
   // 选目标：内存里记 PID（同类进程有多个时分得开），项目登记里存类型和世界
   const [pidTarget, setPidTarget] = useState<number>()
   const [shot, setShot] = useState(false)
