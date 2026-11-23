@@ -582,11 +582,11 @@ try {
   assert.equal(off.live, false)
   assert.equal(off.lines.length, 1)
   assert.equal(off.lines[0].verbosity, 'Error')
-  // 网页的级别分段只看这一级：警告不混错误、错误不混警告；续行跟着上一条的级别；计数不随筛选变
+  // 网页的级别分段只看这一级：警告不混错误、错误不混警告；续行并进上一条成一条多行记录；计数不随筛选变
   const offWarn = await api('POST', '/p/p2/logs', { verbosity: 'Warning', exact: true })
   assert.deepEqual(
-    offWarn.lines.map((l) => [l.verbosity, l.category]),
-    Array(3).fill(['Warning', 'LogScript']),
+    offWarn.lines.map((l) => [l.verbosity, l.category, l.text]),
+    [['Warning', 'LogScript', 'Script Msg: careful\nScript call stack:\n    /Game/Foo.Foo:Bar']],
   )
   assert.deepEqual([offWarn.errors, offWarn.warnings], [1, 1])
   const offErr = await api('POST', '/p/p2/logs', { verbosity: 'Error', exact: true })
@@ -597,7 +597,7 @@ try {
   assert.deepEqual([offErr.errors, offErr.warnings], [1, 1])
   // Agent 的 ue_log 仍按最低级别：Warning 连错误也给
   const offMin = await api('POST', '/p/p2/logs', { verbosity: 'Warning' })
-  assert.equal(offMin.lines.length, 4)
+  assert.equal(offMin.lines.length, 2)
   // 运行时操作给出说明，不起后台编辑器（参数里关了）
   const noUe = await plugin.tools({
     taskId: 't2',

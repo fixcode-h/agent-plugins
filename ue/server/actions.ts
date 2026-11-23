@@ -105,7 +105,14 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
       (l) => !mark || typeof l.seq !== 'number' || l.seq > mark,
     )
     const lines = a.exact && a.verbosity ? got.filter((l) => levelMatches(l.verbosity ?? '', a.verbosity, true)) : got
-    return { live: true, ...r, lines: withWallTime(lines, r.now as number | undefined) }
+    return {
+      live: true,
+      ...r,
+      lines: withWallTime(
+        lines.map((l) => multiline(l)),
+        r.now as number | undefined,
+      ),
+    }
   }
   // UE 没在运行：没筛选时只读文件尾部；有筛选时流式搜索最后 64 MB（大文件不整个读进内存）
   const filtered = !!(a.category || a.verbosity || a.contains)
@@ -114,7 +121,7 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
     : { ...(await tailFile(logFile(ctx.project), a.limit ?? 300)), truncated: false }
   return {
     live: false,
-    lines: r.lines.map(({ cont: _, ...l }: LogLine & { cont?: boolean }) => ({ ...l, at: fileTime(l.time) })),
+    lines: r.lines.map((l: LogLine) => ({ ...l, at: fileTime(l.time) })),
     cursor: 0,
     // 按读到的整段算（不是筛选后的行），和在跑时桥接给的总数一样不随筛选变
     errors: r.errors,
@@ -123,6 +130,16 @@ export async function logTail(ctx: OpCtx, a: LogArgs) {
     size: r.size,
     truncated: r.truncated,
   }
+}
+
+/**
+ * 在跑时一条多行消息（调用栈、崩溃 JSON）桥接本来就当一条给，文字里带换行：统一成 \n、去掉结尾的空行，
+ * 网页按行数画成一条多行记录（和读日志文件时并好的续行一样）
+ */
+function multiline<T extends RawLine>(l: T): T {
+  return typeof l.text === 'string' && /[\r\n]/.test(l.text)
+    ? { ...l, text: l.text.replace(/\r\n?/g, '\n').replace(/\n+$/, '') }
+    : l
 }
 
 interface RawLine {
