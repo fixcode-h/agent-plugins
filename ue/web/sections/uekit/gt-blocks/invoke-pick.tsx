@@ -139,7 +139,7 @@ function FnDialog({ step, onClose, onPick }: { step: GtStep; onClose: () => void
             live={ctx.live}
             tab={tab}
             onTab={setTab}
-            tabs={['fns', 'lua']}
+            tabs={['fns', 'luaFns']}
             fn={cur}
             onFn={(f) => onPick(applyFn(step, f))}
           />
