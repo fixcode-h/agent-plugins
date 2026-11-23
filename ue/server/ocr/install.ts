@@ -1,6 +1,7 @@
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { downloadFile } from '@panel/server/download'
+import { mirrorUrls } from '@panel/shared/mirrors/registry'
 import { c, t } from '../util.ts'
 import { ocrInstalled, unloadOcr } from './engine.ts'
 import { dirSize, installedFile, MODEL_VERSION, ocrDir, ORT_VERSION } from './files.ts'
@@ -25,7 +26,6 @@ export interface OcrState {
   needRestart?: boolean
 }
 
-const NPM = ['https://registry.npmmirror.com', 'https://registry.npmjs.org']
 const MS = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/master'
 
 interface Item {
@@ -42,7 +42,8 @@ function ortItems(): Item[] {
   const plat = `bin/napi-v6/${process.platform}/${process.arch}/`
   const pkg = (name: string, keep: (rel: string) => boolean, approx: number): Item => ({
     what: name,
-    urls: NPM.map((r) => `${r}/${name}/-/${name}-${ORT_VERSION}.tgz`),
+    // npmmirror 在前、官方兜底（地址在面板的镜像注册表）
+    urls: mirrorUrls('npm', `${name}/-/${name}-${ORT_VERSION}.tgz`, true),
     approx,
     place: async (file, staging) => {
       const n = await extractTgz(file, path.join(staging, 'runtime', 'node_modules', name), (entry) => {

@@ -9,6 +9,7 @@
  */
 import { z } from 'zod'
 import { FrameShape, NamedRange, type VideoPrefs } from './video-tools.ts'
+import { mirrorUrl } from './mirrors/registry.ts'
 
 /** 认作视频的扩展名（和 web/src/lib/file-ref.ts 的 media 类里视频那几种一致，另加常见录屏格式） */
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|mkv|avi|wmv|flv|mpg|mpeg|ts|3gp)$/i
@@ -351,10 +352,8 @@ const FFMPEG_PLATFORMS = [
 export function ffmpegDownloadUrl(platform: string, arch: string, mirror: boolean) {
   const key = `${platform}-${arch}`
   if (!FFMPEG_PLATFORMS.includes(key)) return ''
-  const base = mirror
-    ? 'https://registry.npmmirror.com/-/binary/ffmpeg-static'
-    : 'https://github.com/eugeneware/ffmpeg-static/releases/download'
-  return `${base}/${FFMPEG_RELEASE}/ffmpeg-${key}.gz`
+  // 官方 GitHub Release 和 npmmirror 的二进制镜像，地址在面板的镜像注册表
+  return mirrorUrl('ffmpeg-static', `${FFMPEG_RELEASE}/ffmpeg-${key}.gz`, mirror)
 }
 
 /** FFmpeg 的状态：弹窗里没有 FFmpeg 时显示下载 */

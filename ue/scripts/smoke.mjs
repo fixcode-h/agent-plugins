@@ -60,6 +60,8 @@ const ctx = {
   },
 }
 const enabledFor = new Set()
+// 面板源码（npm run panel 准备，CI 里也有）
+const PANEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.panel')
 const bridge = await startFakeBridge(proj)
 // 面板开放给插件的模块（server/download）：冒烟测试不连外网，给一份用 fetch 写文件的替身
 globalThis.__agentPanelServer = {
@@ -144,6 +146,11 @@ globalThis.__agentPanelServer = {
       touchIndexed: () => {},
       extsOfGlob: () => undefined,
     },
+    // 纯函数的开放模块（文本匹配、镜像注册表）：直接用 .panel 里面板的源码（Node 22 能直接跑 .ts）
+    'shared/text-match/index': await import(pathToFileURL(path.join(PANEL, 'shared/text-match/index.ts')).href),
+    'shared/mirrors/registry': await import(pathToFileURL(path.join(PANEL, 'shared/mirrors/registry.ts')).href),
+    // 出网请求（面板 server/net）：冒烟测试不走代理，直接 fetch
+    'server/net': { netFetch: (url, init) => fetch(url, init) },
     'server/download': {
       downloadFile: async (url, to) => {
         const res = await fetch(url)

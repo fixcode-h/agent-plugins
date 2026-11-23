@@ -543,3 +543,16 @@ declare module '@panel/shared/text-match/index' {
   export function textHit(fields: string | (string | undefined | null)[], query: string): boolean
   export function textScore(text: string, query: string): number
 }
+
+declare module '@panel/server/net' {
+  /** 和 fetch 一样用，走面板的代理设置和 GitHub 下载来源；timeoutMs 只限制等到响应头的时间 */
+  export function netFetch(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<Response>
+}
+
+declare module '@panel/shared/mirrors/registry' {
+  export type MirrorId = 'npm' | 'huggingface' | 'pypi' | 'ffmpeg-static'
+  /** 候选地址：用镜像时镜像在前、官方兜底，不用时只给官方 */
+  export function mirrorUrls(id: MirrorId, path: string, useMirror: boolean): string[]
+  export function mirrorUrl(id: MirrorId, path: string, useMirror: boolean): string
+  export function toMirror(id: MirrorId, url: string, useMirror: boolean): string
+}
