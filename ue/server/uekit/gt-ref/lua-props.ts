@@ -3,7 +3,7 @@ import { comparable, opsFor, whyNotComparable } from '../../../shared/gt-script/
 import type { GtPropGroup, GtPropItem, GtPropKind } from '../../../shared/gt-script/ref/types.ts'
 import { parseLuaModule, type LuaField } from '../gt-author/lua-parse.ts'
 import { moduleFile, readLua, relToRoot } from '../gt-author/lua-files.ts'
-import { parseLuaHead } from './offline/lua-parents.ts'
+import { parseLuaHead } from '../../catalog/lua-parents.ts'
 import { t } from '../../util.ts'
 import { liveItem, type LuaLive } from './lua-live.ts'
 

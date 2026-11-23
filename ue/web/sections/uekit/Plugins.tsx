@@ -4,8 +4,7 @@ import type { DiagItem } from '../../../server/editor-tools/diagnose.ts'
 import { pget, ppost, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { MenuHost } from '../../menu.tsx'
-import { STACK } from '../../split.tsx'
+import { STACK } from '@panel/web/src/components/ui/split-pane'
 import { Confirm, ErrorText, PageHead } from '../../ui.tsx'
 import { DiagPanel } from './LinkDiagnose.tsx'
 import { CardsSection } from './plugins/CardsSection.tsx'
@@ -208,7 +207,6 @@ function PluginList() {
         )}
         <StrayBuilds job={job.data} onJob={started} />
       </div>
-      <MenuHost />
       {notesOf && <NotesModal view={notesOf} onClose={() => setNotesOf(undefined)} />}
       <Confirm
         open={!!removing}

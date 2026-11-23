@@ -4,7 +4,7 @@ import type { GmObject } from '../../../../shared/gm/schema.ts'
 import type { GtScript } from '../../../../shared/gt-script/index.ts'
 import { useUe } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { ObjDialog } from '../../../obj-kit/ObjDialog.tsx'
 import { objOfInstance, openObjCall, saveObjToLib } from '../../../obj-kit/obj-lib-actions.ts'
 import type { MemberTab } from '../../../obj-kit/MemberPane.tsx'
@@ -94,7 +94,11 @@ function ObjRowActions({
         onClick={(e: MouseEvent) =>
           openMenu(e, [
             { label: t('改值…'), icon: Pencil, onClick: () => onOpen(obj, 'props') },
-            { label: t('在 GM 对象调用里打开'), icon: ExternalLink, onClick: () => void openObjCall(ue.project.id, obj, ue.go) },
+            {
+              label: t('在 GM 对象调用里打开'),
+              icon: ExternalLink,
+              onClick: () => void openObjCall(ue.project.id, obj, ue.go),
+            },
             { label: t('存进对象库'), icon: BookmarkPlus, onClick: () => void saveObjToLib(ue.project.id, obj) },
           ])
         }

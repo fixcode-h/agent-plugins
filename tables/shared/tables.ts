@@ -3,6 +3,7 @@
  * 硬约束：表格文件本身只在用户保存改动时原地改写单元格，结构信息一律存在表格之外（见设计稿 designs/表格管理与在线编辑-设计稿.md）。
  */
 import { z } from 'zod'
+import { globRe, splitPatterns } from './text-match/index.ts'
 import { HeaderException, HeaderRule, emptyRule } from './table-header.ts'
 import type { SheetData } from './files.ts'
 import { TableExport } from './table-export.ts'
@@ -19,7 +20,7 @@ export const TablesConfig = z.object({
   dirs: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
   include: z.string().trim().max(300).default(TABLE_INCLUDE),
   exclude: z.string().trim().max(300).default(TABLE_EXCLUDE),
-  /** project：项目目录 .agentpanel/tables/（能提交给团队）；data：只存本机数据目录 */
+  /** project：文档根/AgentPanel/Tables/（能提交给团队，值名沿用旧的）；data：只存本机数据目录 */
   store: z.enum(['project', 'data']).default('project'),
   /** 只读：表格页只能看、搜、对比，不能改 */
   readOnly: z.boolean().default(false),
@@ -49,38 +50,13 @@ export function tableKind(file: string): TableKind | null {
   return null
 }
 
-/** 一个通配写法（* 任意字符、? 一个字符）转成正则；不带 / 的只比文件名，带 / 的比相对路径 */
-const GLOB_CACHE = new Map<string, RegExp>() // 模块状态：缓存，丢了重算
-function globRe(glob: string) {
-  // 列几万个文件时每个文件都要比一遍：编译好的正则留着复用
-  const hit = GLOB_CACHE.get(glob)
-  if (hit) return hit
-  const re = compileGlob(glob)
-  if (GLOB_CACHE.size > 500) GLOB_CACHE.clear()
-  GLOB_CACHE.set(glob, re)
-  return re
-}
-function compileGlob(glob: string) {
-  const esc = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-  // ** 跨目录：先拆开，各段里的 * 和 ? 不跨 /，再用 .* 接起来
-  const body = esc
-    .split(/\*\*\/?/)
-    .map((part) => part.replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]'))
-    .join('.*')
-  return new RegExp(`^${body}$`, 'i')
-}
-
 /** 逗号或换行分隔的一组通配 */
-export const globList = (s: string) =>
-  s
-    .split(/[,\n]/)
-    .map((x) => x.trim())
-    .filter(Boolean)
+export const globList = splitPatterns
 
-/** rel 是不是命中这一组通配（rel 用 / 分隔） */
+/** rel 是不是命中这一组通配（rel 用 / 分隔）：不带 / 的只比文件名，带 / 的比相对路径；不分大小写 */
 export function globHit(rel: string, globs: string[]) {
   const name = rel.slice(rel.lastIndexOf('/') + 1)
-  return globs.some((g) => globRe(g).test(g.includes('/') ? rel : name))
+  return globs.some((g) => globRe(g, { ignoreCase: true }).test(g.includes('/') ? rel : name))
 }
 
 /** 表格页左侧的一个文件 */

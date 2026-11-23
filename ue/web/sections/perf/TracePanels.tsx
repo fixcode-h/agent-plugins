@@ -4,7 +4,7 @@ import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { ErrorText } from '../../ui.tsx'
-import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { copyText, openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { Empty, PctBar, Section, Skeleton, TREE_COLS, Tree, fmtAt, fmtMs, type TreeNode } from './parts.tsx'
 import {
   traceQuery,
@@ -236,7 +236,9 @@ export function StackView({
                   x.name,
                   `${t('包含')} ${fmtMs(x.ms)} · ${t('独占')} ${fmtMs(x.excl)}`,
                   parent ? `${t('占父')} ${pct.toFixed(2)}%（${parent.name}）` : '',
-                  stack[0] ? `${t('占根')} ${((x.ms / Math.max(stack[0].ms, 1e-6)) * 100).toFixed(2)}%（${stack[0].name}）` : '',
+                  stack[0]
+                    ? `${t('占根')} ${((x.ms / Math.max(stack[0].ms, 1e-6)) * 100).toFixed(2)}%（${stack[0].name}）`
+                    : '',
                   `${t('深度')} ${x.depth} · ${t('开始')} ${fmtAt(x.start)}`,
                   t('双击看调用者 / 被调用者，右键更多'),
                 ]
@@ -385,7 +387,8 @@ export function InstancesView({
               >
                 <span className="ue:font-mono ue:text-caption ue:text-subtle">#{i + 1}</span>
                 <span className="ue:truncate ue:text-muted">
-                  {laneName(x.lane)} <span className="ue:font-mono ue:text-caption ue:text-subtle">@ {fmtAt(x.start)}</span>
+                  {laneName(x.lane)}{' '}
+                  <span className="ue:font-mono ue:text-caption ue:text-subtle">@ {fmtAt(x.start)}</span>
                 </span>
                 <span className="ue:text-right ue:font-mono ue:text-caption ue:text-fg ue:tabular-nums">
                   {fmtMs(x.ms)}

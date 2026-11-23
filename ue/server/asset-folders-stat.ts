@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { ChildItem } from './asset-folders-disk.ts'
-import { run } from './util.ts'
+import { vcsCmd } from './vcs.ts'
 
 /**
  * 资源页右栏「文件夹内容」表的状态列（设计稿「UE 插件优化与扩展」三.3、二 P1 资源整理）里不碰桥接的那一半：
@@ -85,7 +85,7 @@ export function parseFstat(out: string) {
 /** 一层目录（不递归）里文件的 P4 签出状态。p4 报错时把原因带回去，不抛：大小、未保存照样能看 */
 export async function p4Stats(root: string, dir: string) {
   if (!dir) return { map: new Map<string, NonNullable<ItemStat['vcs']>>() }
-  const r = await run('p4', ['-ztag', '-d', root, 'fstat', path.join(dir, '*')], { cwd: root, timeout: 20000 })
+  const r = await vcsCmd('p4', ['-ztag', '-d', root, 'fstat', path.join(dir, '*')], { cwd: root, timeout: 20000 })
   const map = parseFstat(r.out)
   // 「no such file(s)」「not in client view」是这一层没有入库的文件，不算出错
   const err = r.err

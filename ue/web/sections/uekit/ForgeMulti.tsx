@@ -2,7 +2,7 @@ import { Braces, Copy, Download, ExternalLink, Info, Upload } from 'lucide-react
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import type { ForgeEntry } from './Forge.tsx'
 import { canExport, canImport, fileName } from './forge-actions.ts'
 import { kindMeta, STATES } from './kinds.ts'

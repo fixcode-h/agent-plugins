@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { BridgeError } from '../instances.ts'
 import { runOp, type OpCtx } from '../ops.ts'
-import { run, t } from '../util.ts'
+import { t } from '../util.ts'
+import { vcsCmd } from '../vcs.ts'
 
 /**
  * 资源页文件夹右键「修复重定向器」（设计稿「UE 插件优化与扩展」二 P1 资源整理）：先列出来给人看，确认后修。
@@ -29,7 +30,7 @@ export async function listRedirectors(ctx: OpCtx, folder: string) {
 }
 
 async function p4(root: string, args: string[]) {
-  const r = await run('p4', ['-d', root, ...args], { cwd: root, timeout: 120000 })
+  const r = await vcsCmd('p4', ['-d', root, ...args], { cwd: root, timeout: 120000 })
   return r.code === 0 ? '' : (r.err || r.out).trim() || `exit ${r.code}`
 }
 

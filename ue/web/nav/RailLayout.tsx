@@ -2,7 +2,7 @@ import { Camera, Search, type LucideIcon } from 'lucide-react'
 import { useRef, type ReactNode } from 'react'
 import { h, t } from '../host.ts'
 import { useUe } from '../ctx.tsx'
-import { SplitHandle, usePane } from '../split.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { SlotCtx, useSlot } from './slot.tsx'
 
 /**
@@ -115,7 +115,7 @@ export function RailLayout({
             !slot.used
               ? 'ue:hidden'
               : slot.wide
-                ? 'ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:md:w-(--ue-w) ue:md:max-w-(--ue-max)'
+                ? 'ue:relative ue:flex ue:min-h-0 ue:shrink-0 ue:md:w-(--pane-w) ue:md:max-w-(--pane-max)'
                 : 'ue:flex ue:min-h-0 ue:w-max ue:shrink-0'
           }
         >

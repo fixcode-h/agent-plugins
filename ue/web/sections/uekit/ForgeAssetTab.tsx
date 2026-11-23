@@ -11,7 +11,7 @@ import { Hint } from './forge-parts.tsx'
 import { useFragmentAt, type ForgeExpanded } from './forge-config/use-expanded.ts'
 import { ConfigEditCtx, type ConfigEdit } from '../../inspect/layouts/umg/edit/ctx.ts'
 import type { AssetConfig } from '../../inspect/layouts/types.ts'
-import { LoadingMask } from '../../loading-mask/LoadingMask.tsx'
+import { LoadingMask } from '@panel/web/src/components/ui/loading-mask'
 
 /** 上一份画完的离线预览：切到还没读完的配置时先接着显示它（模块级，整页刷新才清） */
 let lastOffline: { path: string; config: AssetConfig } | undefined

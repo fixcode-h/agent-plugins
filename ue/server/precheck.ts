@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { runOp, type OpCtx } from './ops.ts'
-import { run, t } from './util.ts'
+import { t } from './util.ts'
+import { vcsCmd } from './vcs.ts'
 
 /**
  * 资源页「提交前检查」（设计稿「UE 插件优化与扩展」二 P1）：把这次要提交的资源一次校验完。
@@ -32,7 +33,7 @@ export async function precheck(ctx: OpCtx) {
 async function changedFiles(root: string, vcs: string): Promise<string[]> {
   const isAsset = (f: string) => /\.(uasset|umap)$/i.test(f)
   if (vcs === 'p4') {
-    const r = await run('p4', ['-ztag', '-d', root, 'opened', '-c', 'default'], { cwd: root, timeout: 30000 })
+    const r = await vcsCmd('p4', ['-ztag', '-d', root, 'opened', '-c', 'default'], { cwd: root, timeout: 30000 })
     if (r.code !== 0) return []
     // -ztag 给的是 depot 路径；clientFile 是工作区语法，用 p4 where 太慢，这里按 Content/ 之后的相对路径拼回项目
     return [...r.out.matchAll(/^\.\.\. depotFile (.+)$/gm)]
@@ -45,9 +46,9 @@ async function changedFiles(root: string, vcs: string): Promise<string[]> {
       .filter(Boolean)
   }
   if (vcs === 'git') {
-    const r = await run('git', ['status', '--porcelain', '--', 'Content'], { cwd: root, timeout: 30000 })
+    const r = await vcsCmd('git', ['status', '--porcelain', '--', 'Content'], { cwd: root, timeout: 30000 })
     if (r.code !== 0) return []
-    const top = await run('git', ['rev-parse', '--show-toplevel'], { cwd: root })
+    const top = await vcsCmd('git', ['rev-parse', '--show-toplevel'], { cwd: root })
     const base = top.code === 0 ? top.out.trim() : root
     return r.out
       .split('\n')

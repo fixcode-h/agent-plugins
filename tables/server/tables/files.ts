@@ -21,6 +21,9 @@ import type { SheetData } from '../../shared/files.ts'
 import { byTablePath, type TablesListProgress } from '../../shared/table-list.ts'
 import { MAX_XLSX_BYTES, readXlsx, type XlsxLimits } from '../xlsx.ts'
 import { indexedFiles } from './file-index.ts'
+
+/** 表格的扩展名（和 tableKind 认的一样）：问索引时只要这几种，不拿整棵树 */
+const TABLE_EXTS = ['xlsx', 'xlsm', 'csv', 'tsv', 'xls', 'et']
 import { resolvePath } from '../fs.ts'
 
 /**
@@ -174,7 +177,7 @@ export async function walkTables(
     const before = files.length
     dirs.push(root.key)
     // 面板有项目文件索引时直接取这棵目录的文件，按同样的规则筛；没有时照旧逐层读
-    const listed = await indexedFiles(root.full)
+    const listed = await indexedFiles(root.full, TABLE_EXTS)
     if (listed) {
       seenDirs++
       for (const r of listed) {

@@ -15,7 +15,7 @@
 
 - 面板接口 6 的扩展点（面板 ADR 0059 第 12 条）：整页 `pages`（`keep: true`，打开过就一直挂着，`Page` 的 `active` 说明是不是显示着）、项目设置的「表格」页（`projectSections`）、设置 →「组件」里的表格编辑器示例（`specimens`）、`table.*` 面板动作（`ServerPlugin.actions`，`server/actions.ts`）、评审里的 xlsx 差异（`ServerPlugin.textify` 的 `diff`，`server/review.ts` + `shared/review-tables.ts`）。
 - 地址：页面 `#/plugin/tables/tables/<项目 id>`（面板把旧的 `#/tables/<项目>` 转过来）；接口挂在 `/api/plugins/tables/api/tables/…`（`web/src/lib/tables-api.ts` 的 `BASE`，动作里的 `API`）。
-- 项目设置存在 `project.plugins.tables`（`shared/tables.ts` 的 `tablesOf`）：面板的数据迁移 0005 把原来的 `project.tables` 挪了过来。结构文件和保存前的备份还在原来的位置（项目目录 `.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`），插件删了也照样留着。
+- 项目设置存在 `project.plugins.tables`（`shared/tables.ts` 的 `tablesOf`）：面板的数据迁移 0005 把原来的 `project.tables` 挪了过来。结构文件的位置由面板的项目数据入口给（`projectData(id, 'Tables')`，面板 ADR 0078）：文档根 `AgentPanel/Tables/` 或数据目录 `project-data/Tables/<项目 id>/`；旧位置（`.agentpanel/tables/`、数据目录 `tables/<项目 id>/`）在新目录还空着时复制过去（`schema-legacy.ts`），旧文件不删。插件删了也照样留着。
 - 「AI 分析表格风格」不再走面板配置助手：服务端 `/analyze-prompt` 读样本拼提示词（带面板的回复语言规则），网页用面板开放的 `runPromptInProject` 开分析对话，回复用 `extractJson` + `resolveTablesProposal` 解析。
 - 文件预览里的表格（`SheetTable`、`SheetHeaderBar`、表头识别 `shared/sheet-header.ts`、格子差异 `shared/sheet-diff.ts` 和后台线程 `web/src/lib/sheet-diff-async.ts`、`server/xlsx.ts`、`shared/csv.ts`）留在面板，插件经开放模块用同一份。
 - 类名一律带前缀 `tb:`（`web/index.css`）；`sheet-*` 这些是面板 `sheet-table.css` 的类，不加前缀。
@@ -31,7 +31,7 @@
 | `server/tables/files.ts`                                   | 走表格目录（`walkTables`）、解析（按 mtime + 大小缓存）、锁文件检查、路径越界检查；列表走 `list-index.ts` |
 | `server/tables/search.ts`、`shared/table-search.ts`        | 跨表搜索（`/search`）：「字段名:值」、区分大小写 / 整格 / 正则，匹配规则和替换共用                        |
 | `server/tables/bulk-replace.ts`                            | 跨表批量替换（`/replace`）：预览时试一遍保存、列出拒绝原因，勾选后逐个文件原地保存                        |
-| `server/tables/schema-store.ts`                            | 结构文件读写：`.agentpanel/tables/` 或数据目录 `tables/<项目 id>/`，拆成 4 个 json                        |
+| `server/tables/schema-store.ts`                            | 结构文件读写：文档根 `AgentPanel/Tables/` 或本机目录，拆成几个 json，写入照 P4 签出规则                   |
 | `server/tables/routes.ts`                                  | `/api/plugins/tables/api/tables/:id`（列表）、`/probe`、`/file`、`/search`、`/schema`                     |
 | `web/src/lib/tables-api.ts`                                | 页面调接口                                                                                                |
 | `web/src/lib/tables-nav.ts`                                | 侧栏「表格」入口打开哪个项目（上次看的 / 第一个设了表格目录的）                                           |

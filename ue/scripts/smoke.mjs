@@ -8,6 +8,7 @@
 // 评审转 .uasset（textify）：临时文件位置、包名、同内容走缓存、没接入的项目报错（真正的加载导出只有引擎里有）。
 // 用法：npm run build -- ue && node ue/scripts/smoke.mjs
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 /** 目录里还剩下的东西 */
@@ -59,6 +60,8 @@ const ctx = {
   },
 }
 const enabledFor = new Set()
+// 面板源码（npm run panel 准备，CI 里也有）
+const PANEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.panel')
 const bridge = await startFakeBridge(proj)
 // 面板开放给插件的模块（server/download）：冒烟测试不连外网，给一份用 fetch 写文件的替身
 globalThis.__agentPanelServer = {
@@ -73,6 +76,81 @@ globalThis.__agentPanelServer = {
       },
       VcsInputError: class extends Error {},
     },
+    // 版本管理服务（面板 ADR 0073）：冒烟测试的假项目不在版本管理里
+    'server/vcs/detect': { detectVcs: async (d) => ({ vcs: 'none', root: d }) },
+    'server/vcs/run': {
+      vcsExec: async () => ({
+        ok: false,
+        code: -1,
+        stdout: Buffer.alloc(0),
+        stderr: '',
+        spawnError: '冒烟测试里没有 p4 / svn',
+      }),
+      vcsWhy: (cmd) => `冒烟测试里没有 ${cmd}`,
+    },
+    'server/vcs/p4-plan': {
+      p4WritePlan: async () => ({ edit: [], add: [], opened: [], stale: [] }),
+      p4Open: async () => undefined,
+    },
+    'server/p4-split': { p4Runner: () => async () => ({ ok: false, out: '', err: '冒烟测试里没有 p4' }) },
+    'server/exec/git': {
+      gitRun: async () => ({ code: 1, stdout: '', stderr: '', spawnError: '冒烟测试里没有 git' }),
+    },
+    // 缓存和文件监听（面板 ADR 0074）：缓存照常算（不过期、不盯文件），监听不开
+    'server/memo/index': {
+      createMemo: (o) => {
+        const m = new Map()
+        const keyOf = o.keyOf ?? String
+        return {
+          get: (k, g) => {
+            const key = keyOf(k)
+            if (!g?.fresh && m.has(key)) return m.get(key)
+            const v = o.load(k)
+            m.set(key, v)
+            v.catch(() => m.delete(key))
+            return v
+          },
+          peek: (k) => m.get(keyOf(k)),
+          invalidate: (k) => (k === undefined ? m.clear() : m.delete(keyOf(k))),
+          size: () => m.size,
+        }
+      },
+    },
+    'server/watch/dir': { watchDir: () => undefined },
+    'server/watch/files': { watchFiles: (files) => ({ close: () => {}, unwatched: files }) },
+    'server/watch/tree': { watchTree: () => undefined, TREE_SKIP: new Set() },
+    // 后台作业表（面板 ADR 0075）：冒烟测试不看侧栏，给个只记不推的替身
+    'server/jobs/registry': {
+      startJob: () => ({ id: 'smoke', log: () => {}, progress: () => {}, end: () => {}, canceled: false }),
+    },
+    // 文档根变化事件：冒烟测试里文档根不会变
+    'server/docs/root-cache': { onDocRootChange: () => () => {} },
+    // 外部进程入口（面板 ADR 0076）：冒烟测试起的是真进程，只是不登记
+    'server/exec/tracked': {
+      spawnTracked: (cmd, args, o) => {
+        const { source: _s, title: _t, tag: _g, ...opts } = o
+        return spawn(cmd, args, { windowsHide: true, ...opts })
+      },
+      stopTree: async (pid) => {
+        try {
+          process.kill(pid, 'SIGTERM')
+        } catch {}
+        return { ok: true }
+      },
+    },
+    // 文件索引帮助函数：冒烟测试没有索引，一律退回自己走目录
+    'server/file-index/indexed': {
+      readyIndex: async () => undefined,
+      indexedTree: async () => undefined,
+      indexedDirs: async () => undefined,
+      touchIndexed: () => {},
+      extsOfGlob: () => undefined,
+    },
+    // 纯函数的开放模块（文本匹配、镜像注册表）：直接用 .panel 里面板的源码（Node 22 能直接跑 .ts）
+    'shared/text-match/index': await import(pathToFileURL(path.join(PANEL, 'shared/text-match/index.ts')).href),
+    'shared/mirrors/registry': await import(pathToFileURL(path.join(PANEL, 'shared/mirrors/registry.ts')).href),
+    // 出网请求（面板 server/net）：冒烟测试不走代理，直接 fetch
+    'server/net': { netFetch: (url, init) => fetch(url, init) },
     'server/download': {
       downloadFile: async (url, to) => {
         const res = await fetch(url)

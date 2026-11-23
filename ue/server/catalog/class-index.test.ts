@@ -3,11 +3,11 @@ import { before, test } from 'node:test'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import type { PluginServerContext } from '../../../../../sdk/server.ts'
-import type { GtClassRow } from '../../../../shared/gt-script/ref/types.ts'
-import type { UeProject } from '../../../types.ts'
-import { setCtx } from '../../../util.ts'
-import { classIndex, mergeRows, type ClassIndexDeps } from './index.ts'
+import type { PluginServerContext } from '../../../sdk/server.ts'
+import type { GtClassRow } from '../../shared/gt-script/ref/types.ts'
+import type { UeProject } from '../types.ts'
+import { setCtx } from '../util.ts'
+import { classIndex, mergeRows, type ClassIndexDeps } from './class-index.ts'
 
 let dataDir = ''
 before(async () => {
@@ -95,7 +95,7 @@ test('从数据目录读回来的算旧的：马上回它、标 refreshing，带
   )
   await new Promise((r) => setTimeout(r, 50))
   // 换一个「进程」：清掉内存里的（用新的项目对象同 id 不行，内存按 id 记）→ 直接改存盘时间模拟重启后的旧表
-  const { _forgetForTest } = await import('./index.ts')
+  const { _forgetForTest } = await import('./class-index.ts')
   _forgetForTest()
   const calls2: string[] = []
   const next: GtClassRow[] = [...ROWS, ['W_Shop', 'Object', 'umg', '/Game/W_Shop', 0]]

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { GmObject } from '../../shared/gm/schema.ts'
 import type { Prop } from '../details/model.ts'
 import { h, t } from '../host.ts'
-import { copyText, openMenu } from '../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { useConnState } from '../conn/ConnPill.tsx'
 import { useProps } from '../sections/uekit/gt-ref/live.ts'
 import { useVars, type VarScope } from '../sections/uekit/gt-vars/model.ts'
@@ -13,7 +13,8 @@ import { VarList, type VarSel } from './VarList.tsx'
 /** 页签里具体看的那一栏：UE 页分函数 / 属性，Lua 页分函数 / 变量（用户 2026-11-23：方法和属性合成一个 UE 页，和 Lua 页一样里面再分两栏） */
 export type MemberTab = 'fns' | 'props' | 'luaFns' | 'luaVars' | 'states'
 type MemberGroup = 'ue' | 'lua' | 'states'
-const groupOf = (t: MemberTab): MemberGroup => (t === 'fns' || t === 'props' ? 'ue' : t === 'luaFns' || t === 'luaVars' ? 'lua' : 'states')
+const groupOf = (t: MemberTab): MemberGroup =>
+  t === 'fns' || t === 'props' ? 'ue' : t === 'luaFns' || t === 'luaVars' ? 'lua' : 'states'
 
 /**
  * 对象调用中栏（规格第 7 节、效果图 2）：UE（函数 | 属性）· Lua（函数 | 变量）· 运行状态。方法按声明类分组，名字 + 签名，

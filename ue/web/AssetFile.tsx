@@ -1,8 +1,9 @@
+import { useUeState } from './state-feed.ts'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import type { FileViewerProps } from '../../sdk/web.ts'
-import type { ProjectState, Target, UeProject } from '../server/types.ts'
-import { get, op, pget, useLoad } from './api.ts'
+import type { Target, UeProject } from '../server/types.ts'
+import { get, op, useLoad } from './api.ts'
 import { AssetInfo } from './AssetInfo.tsx'
 import { BlueprintView } from './Blueprint.tsx'
 import { Ctx, type UeCtx } from './ctx.tsx'
@@ -66,7 +67,7 @@ export function AssetFile({ path, projectId, close }: FileViewerProps) {
 }
 
 function Loaded({ project, file, openPage }: { project: UeProject; file: string; openPage: (sub?: string) => void }) {
-  const state = useLoad(() => pget<ProjectState>(project.id, 'state'), [project.id], 5000)
+  const state = useUeState(project.id)
   const s = state.data
   // 编辑器开着就读编辑器里的（可能有没保存的改动，和用户眼前的一致）；没开时不指定，服务端起后台编辑器
   const hasEditor = !!s?.instances.some((i) => i.kind === 'editor' && i.online)

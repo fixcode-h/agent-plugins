@@ -4,12 +4,13 @@ import { ppost, useAction, useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { useKept } from '../../keep.ts'
-import { copyText } from '../../menu.tsx'
+import { copyText } from '@panel/web/src/components/ui/item-menu'
 import { setPending } from '../../pending.ts'
 import { DockCol, DockHead } from '../../nav/slot.tsx'
-import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
-import { TreeList, type TreeLine } from '../../TreeList.tsx'
-import { Badge, Card, ErrorText, Note, SearchBox } from '../../ui.tsx'
+import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { Badge, Card, ErrorText, Note } from '../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 
 interface TagRow {
   tag: string

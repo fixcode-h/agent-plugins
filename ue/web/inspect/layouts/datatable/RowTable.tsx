@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Copy, Plus, Table2, Trash2 } from 'lucide-react'
 import { h, t } from '../../../host.ts'
-import { Card, ErrorText, SearchBox } from '../../../ui.tsx'
+import { Card, ErrorText } from '../../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { EntryTable, type EntryCol } from '../shell/EntryTable.tsx'
 import { CellView } from './Cells.tsx'
 import { nextSort, sortRows, type Sort, type Table, type TableRow } from './model.ts'

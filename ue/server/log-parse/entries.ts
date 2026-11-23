@@ -19,6 +19,9 @@ export interface LogLine {
 const PREFIX = /^\[([\d.:\- ]+)\]\[\s*\d+\]/
 const LINE = /^(\w+):\s(?:(Fatal|Error|Warning|Display|Log|Verbose|VeryVerbose):\s)?(.*)$/s
 
+/** 去掉行首的 [时间][帧]（判忙等只看文字的地方用，和解析认同一个前缀） */
+export const stripLogPrefix = (raw: string) => raw.replace(PREFIX, '')
+
 export function parseLine(raw: string, seq: number): LogLine {
   const p = PREFIX.exec(raw)
   const rest = p ? raw.slice(p[0].length) : raw
@@ -27,6 +30,10 @@ export function parseLine(raw: string, seq: number): LogLine {
   if (!m) return { seq, time, category: '', verbosity: 'Log', text: rest }
   return { seq, time, category: m[1], verbosity: m[2] ?? 'Log', text: m[3] }
 }
+
+/** 级别是不是错误（Fatal 也算）/ 警告：计数和筛选共用 */
+export const isErrorLevel = (v: string) => /^(error|fatal)$/i.test(v)
+export const isWarningLevel = (v: string) => /^warning$/i.test(v)
 
 /** 一条记录最多并多少行：几万行的大段转储并成一条网页也画不完，多的只记个数 */
 const MAX_LINES = 400

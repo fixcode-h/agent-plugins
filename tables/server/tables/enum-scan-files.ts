@@ -7,6 +7,7 @@ import path from 'node:path'
 import { readdir, stat } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
 import { indexedFiles } from './file-index.ts'
+import { extsOfGlob } from '../file-index/indexed.ts'
 import { pathGlobRe, splitGlobs } from '../../shared/table-enum-scan.ts'
 
 /** 一条规则最多读这么多个文件、这么大 */
@@ -93,7 +94,8 @@ export async function findSources(dir: string, files: string, exclude: string): 
       .then((s) => s.isDirectory())
       .catch(() => false)
     // 面板有项目文件索引时直接取这棵目录的文件，再按通配、排除和上限筛（只 stat 对上的）
-    const listed = ok ? await indexedFiles(root) : undefined
+    // 通配最后一段看得出扩展名（*.h）就只要那几种：源码大目录整棵拿出来很占内存
+    const listed = ok ? await indexedFiles(root, extsOfGlob(g)) : undefined
     if (listed) {
       for (const r of listed) {
         const segs = r.split('/')

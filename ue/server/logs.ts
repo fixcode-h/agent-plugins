@@ -1,62 +1,24 @@
 import { createReadStream } from 'node:fs'
-import { open, readdir, readFile, stat, truncate } from 'node:fs/promises'
+import { readdir, readFile, stat, truncate } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
-import { entryReader, type LogLine } from './log-parse/entries.ts'
+import { entryReader, isErrorLevel as isError, isWarningLevel as isWarning, type LogLine } from './log-parse/entries.ts'
 import type { UeProject } from './types.ts'
 import { t } from './util.ts'
 
 /**
  * UE 没在运行（或没装桥接）时的日志：直接读 Saved/Logs/<项目>.log（设计文档 3.1「编辑器没开时读」）；
  * 清空：没人占着文件时外面就能清（3.5）；崩溃记录读 Saved/Crashes。
- * 按「条」解析，多行消息的续行并进第一行（log-parse/entries.ts）。
+ * 按「条」解析，多行消息的续行并进第一行（log-parse/entries.ts）；没筛选时的文件尾部走共用的增量读取（log-tail/）。
  */
 export type { LogLine } from './log-parse/entries.ts'
 export { parseLine } from './log-parse/entries.ts'
 
-const isError = (v: string) => /^(error|fatal)$/i.test(v)
-const isWarning = (v: string) => /^warning$/i.test(v)
-
-const reader = () => entryReader((n) => t('…（还有 {n} 行没列出，完整内容看日志文件）', { n }))
-
-/** 一段记录里的错误、警告条数（多行消息是一条，只算一次） */
-export function countLevels(lines: LogLine[]) {
-  let errors = 0
-  let warnings = 0
-  for (const l of lines) {
-    if (isError(l.verbosity)) errors++
-    else if (isWarning(l.verbosity)) warnings++
-  }
-  return { errors, warnings }
-}
+/** 一条多行消息太长、只列了前面几百行时补的一句（文件读取和增量读取共用） */
+export const moreNote = (n: number) => t('…（还有 {n} 行没列出，完整内容看日志文件）', { n })
+const reader = () => entryReader(moreNote)
 
 export const logFile = (p: UeProject) => path.join(p.root, 'Saved', 'Logs', `${p.uname}.log`)
-
-/** 读文件尾部（最多 maxBytes），按条解析，给最后 limit 条；seq 用这条第一行的行号，离线日志没有桥接的游标 */
-export async function tailFile(file: string, limit = 500, maxBytes = 2 * 1024 * 1024) {
-  const st = await stat(file).catch(() => null)
-  if (!st) return { lines: [] as LogLine[], size: 0, file, errors: 0, warnings: 0 }
-  const fh = await open(file, 'r')
-  try {
-    const start = Math.max(0, st.size - maxBytes)
-    const buf = Buffer.alloc(st.size - start)
-    await fh.read(buf, 0, buf.length, start)
-    const all = buf.toString('utf8').split(/\r?\n/)
-    if (start > 0) all.shift()
-    // 整段（最多 maxBytes）都解析：续行要看前一行，计数也按读到的整段算，不只算最后 limit 条
-    const r = reader()
-    const parsed: LogLine[] = []
-    all.forEach((raw, i) => {
-      const l = raw && r.push(raw, i + 1)
-      if (l) parsed.push(l)
-    })
-    const last = r.end()
-    if (last) parsed.push(last)
-    return { lines: parsed.slice(-limit), size: st.size, file, ...countLevels(parsed) }
-  } finally {
-    await fh.close()
-  }
-}
 
 export interface LineFilter {
   category?: string

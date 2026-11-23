@@ -1,7 +1,7 @@
 import { BookmarkPlus, CopyPlus, Sparkles } from 'lucide-react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import type { MenuItem } from '../../menu.tsx'
+import type { MenuItem } from '@panel/web/src/components/ui/item-menu'
 import type { ForgeEntry } from './Forge.tsx'
 import { parseDoc } from './forge-doc.ts'
 

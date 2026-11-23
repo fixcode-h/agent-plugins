@@ -1,4 +1,5 @@
 import { readdir, rm } from 'node:fs/promises'
+import { kickState } from './state-feed/feed.ts'
 import path from 'node:path'
 import { adoptProjectStore, refreshDocsRoot } from './doc-root.ts'
 import { localPart, mergeLuaBuild } from './lua-build/store.ts'
@@ -79,6 +80,8 @@ async function load(raw: Stored): Promise<UeProject> {
 /** 存项目登记：Lua 编译设置只存个人那部分，团队共用的在文档根（lua-build/store.ts） */
 export async function saveProject(p: UeProject) {
   await writeJson(file(p.id), { ...p, luaBuild: localPart(p.luaBuild), addedAt: p.addedAt || now() })
+  // 打开着的 UE 页马上拿到新的概况（state-feed），不等下一拍
+  kickState(p.id)
 }
 
 export async function patchProject(id: string, patch: Partial<UeProject>) {

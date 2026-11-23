@@ -8,10 +8,11 @@
  *   和上次推过的不一样才推，同一次保存只推一次。
  * - 页面按连接登记（网页 host.events.onConnect 给的 id）：连接断了面板回调 onClose，这个页面的登记一起清掉；
  *   没人盯的目录关掉 watcher。
+ * - 目录监听走面板共用的 server/watch/dir（ADR 0074）：和枚举扫描、文件索引盯同一个目录时共用一个系统句柄。
  */
-import { watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
+import { watchDir, type DirWatch as SharedDirWatch } from '../watch/dir.ts'
 import type { PluginPages } from '../../../sdk/server.ts'
 
 /** 同一时刻最多盯这么多个目录：每个 watcher 占一个系统句柄，开几百个标签页也不能把句柄用光 */
@@ -37,7 +38,7 @@ interface Sub {
 }
 
 interface DirWatch {
-  watcher: FSWatcher
+  watcher: SharedDirWatch
   /** 文件名 → 盯着它的完整路径（不同大小写写法在 Windows 上是同一个文件，按名字分） */
   files: Map<string, Set<string>>
 }
@@ -78,7 +79,7 @@ export function tableWatcher(pages: PluginPages | undefined) {
     for (const g of groups.values()) pages?.push('file-changed', g.data, g.to)
   }
 
-  const onEvent = (dir: string, name: string | Buffer | null) => {
+  const onEvent = (dir: string, name: string | null) => {
     const d = dirs.get(dir)
     if (!d) return
     // 有的系统不给文件名（或给的是临时文件名）：目录里盯着的文件都看一遍，修改时间没变的不会推
@@ -96,14 +97,9 @@ export function tableWatcher(pages: PluginPages | undefined) {
     let d = dirs.get(dir)
     if (d) return d
     if (dirs.size >= MAX_DIRS) return undefined
-    let watcher: FSWatcher
-    try {
-      watcher = watch(dir, { persistent: false }, (_e, name) => onEvent(dir, name))
-    } catch {
-      // 盯不了（网络盘、权限）：不报错，保存时还有修改时间检查兜底
-      return undefined
-    }
-    watcher.on('error', () => closeDir(dir))
+    // 盯不了（网络盘、权限）返回空：不报错，保存时还有修改时间检查兜底
+    const watcher = watchDir(dir, (name) => onEvent(dir, name), { onLost: () => closeDir(dir) })
+    if (!watcher) return undefined
     d = { watcher, files: new Map() }
     dirs.set(dir, d)
     return d
@@ -113,11 +109,7 @@ export function tableWatcher(pages: PluginPages | undefined) {
     const d = dirs.get(dir)
     if (!d) return
     dirs.delete(dir)
-    try {
-      d.watcher.close()
-    } catch {
-      // 已经关了
-    }
+    d.watcher.close()
   }
 
   const drop = (full: string, key: string) => {

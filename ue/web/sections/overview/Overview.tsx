@@ -5,7 +5,7 @@ import { op, pget, ppost, useAction, useLoad } from '../../api.ts'
 import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { PANE_FIXED, PANE_FIXED_H, STACK, SplitHandle, usePane, usePaneHeight } from '../../split.tsx'
+import { PANE_FIXED, PANE_FIXED_H, STACK, SplitHandle, usePane, usePaneHeight } from '@panel/web/src/components/ui/split-pane'
 import { Card, Confirm, PageHead, fmtTime, kindLabel } from '../../ui.tsx'
 import { RunBar } from '../RunBar.tsx'
 import type { GtRunSummary } from '../uekit/gt-run/types.ts'
@@ -146,7 +146,7 @@ export function Overview() {
         {/*
           用户 2026-11-21：整页分成左右两栏。左栏「需要你处理」「最近发生的」「实例」，右栏 VS 调试、编辑器选中、扩展、常用；
           宽屏时两栏占满剩下的高度、各自在里面滚，数据隔几秒刷一次条数变了也不让整页跳（用户 2026-11-18）。
-          左右分界和「需要你处理」的高度都能拖、记在本机（split.tsx），双击恢复默认；窄屏上下排、整页滚
+          左右分界和「需要你处理」的高度都能拖、记在本机（面板 split-pane），双击恢复默认；窄屏上下排、整页滚
         */}
         <div className="ue:flex ue:shrink-0 ue:flex-col ue:divide-y ue:divide-line ue:lg:min-h-[36rem] ue:lg:flex-1 ue:lg:flex-row ue:lg:divide-y-0">
           <div className="ue:flex ue:min-w-0 ue:flex-col ue:lg:min-h-0 ue:lg:flex-1">

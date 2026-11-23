@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { UnifiedDiff } from '@panel/web/src/components/ui/UnifiedDiff'
 import type { GraphDiff, NodeMod, SnapNode } from '../../shared/asset-diff/types.ts'
 import { h, t } from '../host.ts'
-import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
+import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { Mark } from './PropGrid.tsx'
 
 /**

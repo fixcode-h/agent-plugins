@@ -1,7 +1,7 @@
 import { Folder, FolderOpen, SquareTerminal, Wand2 } from 'lucide-react'
 import { createElement, type MouseEvent } from 'react'
 import { t } from '../../../host.ts'
-import type { TreeLine } from '../../../TreeList.tsx'
+import type { TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
 import { groupKey, groupPath, type GmEntry } from '../data.ts'
 
 /**

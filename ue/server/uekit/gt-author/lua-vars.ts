@@ -17,7 +17,7 @@ export interface VarItem {
   sig?: string
   args?: { name: string; type: string; constructible: boolean; note?: string; out?: boolean; object?: boolean }[]
   note?: string
-  /** C++ 属性的 UPROPERTY Category（离线读头文件时有，gt-ref/offline/cpp-members.ts） */
+  /** C++ 属性的 UPROPERTY Category（离线读头文件时有，catalog/cpp-members.ts） */
   cat?: string
   line?: number
   value?: unknown

@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import { useClassSearch } from './catalog/class-search.ts'
 import { useState } from 'react'
 import { op, useLoad } from './api.ts'
 import { ClassPicker, type ClassOpt } from './ClassPicker.tsx'
@@ -42,6 +43,17 @@ export function ObjectArg({
   const [src, setSrc] = useState(self)
   const [srcInput, setSrcInput] = useState(self)
   const { project, target } = useUe()
+  // 在 cls 的子类里搜：走本地类索引（catalog/，和 GameTest 选类同一份），索引还没到时才问 UE
+  const loadSubs = useClassSearch(project.id, {
+    base: cls,
+    fallback: (s) =>
+      op<{ items: { name: string; path: string; parent?: string }[] }>(
+        project.id,
+        'classes',
+        { base: clsPath || cls, q: s, limit: 50 },
+        target,
+      ).then((r) => r.items.map((c) => ({ name: c.name, path: c.path, note: c.parent }))),
+  })
   const [q, setQ] = useState<{ cls: ClassOpt; prefix: string }>()
   const found = useLoad(
     () =>
@@ -126,14 +138,7 @@ export function ObjectArg({
             common={[base]}
             free={false}
             placeholder={t('在 {c} 的子类里搜类名', { c: cls })}
-            load={(s) =>
-              op<{ items: { name: string; path: string; parent?: string }[] }>(
-                project.id,
-                'classes',
-                { base: clsPath || cls, q: s, limit: 50 },
-                target,
-              ).then((r) => r.items.map((c) => ({ name: c.name, path: c.path, note: c.parent })))
-            }
+            load={loadSubs}
             onChange={(c) => {
               setPick(c)
               setQ({ cls: c, prefix: prefix.trim() })

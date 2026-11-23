@@ -1,5 +1,5 @@
 import { Plus, type LucideIcon } from 'lucide-react'
-import { HelpTip } from './HelpTip.tsx'
+import { HelpTip } from '@panel/web/src/components/ui/help-tip'
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { h, t } from './host.ts'
 
@@ -101,7 +101,7 @@ export function SettingsPage({ children, scrollKey }: { children: ReactNode; scr
   )
 }
 
-/** 标题旁的问号：共用组件在 HelpTip.tsx（属性树、判断条件也用） */
+/** 标题旁的问号：面板的共用组件（web/src/components/ui/help-tip.tsx，属性树、判断条件也用） */
 export { HelpTip }
 
 /** 卡片底色：和面板 .settings-card 一样是前景色 3.5% 叠在背景上 */

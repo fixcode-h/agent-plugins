@@ -10,7 +10,7 @@ import {
   type GtStep,
 } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { COMMANDS, commandMenuItems, runKey, type CmdCtx } from '../gt-edit/commands.ts'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { insertMenuItems, insertPlace, insertStep, openInsertAt } from '../gt-edit/insert-menu.ts'

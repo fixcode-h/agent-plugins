@@ -4,8 +4,8 @@ import { op, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { t } from '../host.ts'
 import { useKept } from '../keep.ts'
-import { TreeList, type TreeLine } from '../TreeList.tsx'
-import { Hit, hitText, keepSet, TreeSearch } from '../tree-search.tsx'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { Hit, hitText, keepSet, TreeSearch } from '@panel/web/src/components/ui/tree/tree-search'
 import { ErrorText, Note } from '../ui.tsx'
 
 interface Node {

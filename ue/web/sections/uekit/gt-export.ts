@@ -1,6 +1,6 @@
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText } from '../../menu.tsx'
+import { copyText } from '@panel/web/src/components/ui/item-menu'
 
 /**
  * 场景（含录制出来的）导出成 JSON：用户 2026-11-16 要把录到的指令拿出去用。

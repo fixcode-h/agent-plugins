@@ -4,7 +4,7 @@ import type { RedirectorItem } from '../../../server/editor-tools/redirectors.ts
 import { ppost, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import type { MenuItem } from '../../menu.tsx'
+import type { MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { Badge, ErrorText, Note } from '../../ui.tsx'
 
 /**
@@ -93,12 +93,17 @@ export function RedirectorDialog({ onFixed }: { onFixed?: (path: string) => void
       <div className="ue:flex ue:flex-col ue:gap-3">
         <ErrorText>{err}</ErrorText>
         {!list && !err && <p className="ue:text-footnote ue:text-subtle">{t('正在列出…')}</p>}
-        {list && !list.items.length && <p className="ue:text-footnote ue:text-subtle">{t('这个文件夹下没有重定向器')}</p>}
+        {list && !list.items.length && (
+          <p className="ue:text-footnote ue:text-subtle">{t('这个文件夹下没有重定向器')}</p>
+        )}
         {list && list.items.length > 0 && !done && (
           <Note>
-            {t('会改写并保存 {refs} 个引用方资源，删掉修好的重定向器（和内容浏览器右键「修复重定向器」一样），不能自动撤回。', {
-              refs: refCount,
-            })}
+            {t(
+              '会改写并保存 {refs} 个引用方资源，删掉修好的重定向器（和内容浏览器右键「修复重定向器」一样），不能自动撤回。',
+              {
+                refs: refCount,
+              },
+            )}
             {project.vcs === 'p4' && ` ${t('P4 项目会先签出只读的文件，改动留在默认变更列表里，不提交。')}`}
             {list.more && ` ${t('一共 {n} 个，超过一次能修的数量：选更小的文件夹分批修。', { n: list.total })}`}
           </Note>
@@ -127,7 +132,9 @@ export function RedirectorDialog({ onFixed }: { onFixed?: (path: string) => void
                 )}
               </div>
               <span className="ue:text-caption ue:text-subtle" title={i.referencers.map((r) => r.package).join('\n')}>
-                {i.referencers.length ? t('{n} 个资源还在引用', { n: i.referencers.length }) : t('没有资源引用，直接删')}
+                {i.referencers.length
+                  ? t('{n} 个资源还在引用', { n: i.referencers.length })
+                  : t('没有资源引用，直接删')}
               </span>
             </li>
           ))}

@@ -27,7 +27,7 @@ import {
 import type { GmFav, GmStore } from '../../../../shared/gm/schema.ts'
 import type { useAsk } from '../../../ask.tsx'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { FileTree, type TreeLeaf } from '../../uekit/tree.tsx'
 import type { GmEntry } from '../data.ts'
 import type { MenuList } from './use-gm-menus.ts'

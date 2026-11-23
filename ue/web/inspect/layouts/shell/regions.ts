@@ -1,4 +1,4 @@
-import { forgetPane, storedPane, usePane } from '../../../split.tsx'
+import { forgetPane, storedPane, usePane } from '@panel/web/src/components/ui/split-pane'
 import type { LayoutDef, RegionDef } from '../types.ts'
 
 /**

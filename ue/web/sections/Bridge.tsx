@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UeProject } from '../../server/types.ts'
 import { pget, ppost, useAction, useLoad } from '../api.ts'
-import { STACK } from '../split.tsx'
+import { STACK } from '@panel/web/src/components/ui/split-pane'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Card, Confirm, PageHead } from '../ui.tsx'

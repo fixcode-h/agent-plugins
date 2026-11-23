@@ -17,7 +17,7 @@ export function reviewTextifier(projects: Projects): Textifier {
   const schemaOf = async (f: TextifyFile) => {
     const cfg = tablesOf(await projects.get(f.project.id).catch(() => null))
     if (!cfg || !f.project.path) return TableSchema.parse({})
-    return readSchema(schemaDir(f.project.path, f.project.id, cfg)).catch(() => TableSchema.parse({}))
+    return readSchema(await schemaDir(f.project.path, f.project.id, cfg)).catch(() => TableSchema.parse({}))
   }
   const sheetsOf = async (file: string, buf: Buffer | null): Promise<SheetData[] | null> =>
     buf ? (await parseTableBuffer(file, buf)).sheets : null

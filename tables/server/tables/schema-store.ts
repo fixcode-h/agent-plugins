@@ -1,15 +1,18 @@
 /**
  * 表格的结构文件：表头、枚举、列的结构。全部存在表格之外——
- * 项目目录 .agentpanel/tables/（能提交给团队）或数据目录 tables/<项目 id>/（只在本机），由项目设置决定。
+ * 文档根/AgentPanel/Tables/（能提交给团队，和 UE 插件的收藏、GM 同一处）或数据目录 project-data/Tables/<项目 id>/（只在本机），
+ * 由项目设置决定；位置由面板的项目数据入口（server/project-data，用户 2026-11-23 定）给，写入照它的 P4 签出规则。
+ * 以前在项目目录 .agentpanel/tables/ 或数据目录 tables/<项目 id>/：新位置还没有结构文件时一次性复制过来（legacy.ts）。
  * 拆成几个文件（types.json 是类型表，enum-scans.json 是枚举扫描规则，扫描结果在 enum-scan-results.json），多人各改各的部分不容易冲突；JSON 两格缩进，版本控制里看得出改了什么。
  * 旧版还有 files.json（单张表的表头覆盖）：读的时候并进 style 的「按文件指定」，下次保存时删掉。
  */
 import path from 'node:path'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { TableSchema, type TablesConfig } from '../../shared/tables.ts'
 import { EnumScan } from '../../shared/table-enum-scan.ts'
 import { upgradeSchemaRaw } from '../../shared/table-schema-upgrade.ts'
-import { DATA_DIR } from '../store.ts'
+import { projectData, writeTracked } from '../project-data/index.ts'
+import { migrateLegacySchema } from './schema-legacy.ts'
 import { mergeScanned, readScanResults, stripScanned } from './enum-scan-store.ts'
 
 /** 结构文件的几部分：文件名 → TableSchema 里的键（扫描规则存 enum-scans.json） */
@@ -24,10 +27,12 @@ const KEY: Record<(typeof PARTS)[number], string> = {
 /** 旧版的单表表头覆盖，只读不写 */
 const LEGACY = 'files'
 
-export function schemaDir(projectDir: string, projectId: string, cfg: Pick<TablesConfig, 'store'>) {
-  return cfg.store === 'data'
-    ? path.join(DATA_DIR, 'tables', projectId)
-    : path.join(projectDir, '.agentpanel', 'tables')
+/** 结构文件目录（异步：文档根要按项目算）；旧位置的结构文件第一次用到时复制过来 */
+export async function schemaDir(projectDir: string, projectId: string, cfg: Pick<TablesConfig, 'store'>) {
+  const pd = await projectData(projectId, 'Tables')
+  const dir = cfg.store === 'data' ? pd.local : pd.shared
+  await migrateLegacySchema(dir, projectDir, projectId, cfg.store)
+  return dir
 }
 
 export async function readSchema(dir: string): Promise<TableSchema> {
@@ -54,12 +59,6 @@ export async function readSchema(dir: string): Promise<TableSchema> {
   return mergeScanned(got.success ? got.data : TableSchema.parse({}), await readScanResults(dir))
 }
 
-async function writeAtomic(file: string, text: string) {
-  const tmp = `${file}.${process.pid}.tmp`
-  await writeFile(tmp, text)
-  await rename(tmp, file)
-}
-
 /** 整份写回；内容没变的部分不写（不让版本控制里出现无意义的改动） */
 export async function writeSchema(dir: string, s: TableSchema) {
   // 页面交回来的枚举带着扫描结果（scanned）：结果不归这里写，去掉；只靠扫描才有的枚举整个不写
@@ -79,7 +78,7 @@ export async function writeSchema(dir: string, s: TableSchema) {
     if (old === text) continue
     // 空的部分且文件本来就没有：不建空文件
     if (old === null && (text === '{}\n' || text === '[]\n')) continue
-    await writeAtomic(file, text)
+    await writeTracked(file, text)
   }
   // 旧版的单表覆盖已经并进 style 写下去了：留着的话下次读又会并一遍，用户在设置里删掉的又回来
   await rm(path.join(dir, `${LEGACY}.json`), { force: true })

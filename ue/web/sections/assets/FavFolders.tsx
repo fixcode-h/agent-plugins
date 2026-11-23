@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, Copy, Crosshair, Star, StarOff } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
-import { Caret } from '../../details/controls.tsx'
+import { Caret } from '@panel/web/src/components/ui/tree/caret'
 import { h, t } from '../../host.ts'
-import { copyText, MenuHost, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 
 /** 收藏区最多露几行，再多在区里滚：别把下面的文件夹树挤没了 */
 const MAX_ROWS = 8
@@ -189,7 +189,6 @@ export function FavFoldersSpecimen() {
         <FavStar on={false} onClick={() => undefined} />
         <FavStar on onClick={() => undefined} />
       </div>
-      <MenuHost />
     </div>
   )
 }

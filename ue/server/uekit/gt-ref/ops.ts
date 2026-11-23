@@ -54,7 +54,7 @@ export interface GtRefDeps<C extends CardLike> {
   /** 挑进程（ops.ts 的 chooseCard：没有游戏进程时抛错） */
   pick: () => Promise<C>
   send: (card: C, args: A) => Promise<A>
-  /** gt.classes 连不上 UE（没开、GameTest 太旧）时改从磁盘读类树（offline/classes.ts）；note 是给界面看的原因 */
+  /** gt.classes 连不上 UE（没开、GameTest 太旧）时改从磁盘读类树（catalog/classes.ts）；note 是给界面看的原因 */
   offlineClasses?: (args: A, note: string) => Promise<A>
   /** 读对象实例表这一层（UELink lua.get，回 {fields}）：gt.props 按对象路径读时补 UE 没给的 Lua 字段此刻的值 */
   luaFields?: (card: C, path: string) => Promise<A>

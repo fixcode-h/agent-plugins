@@ -4,11 +4,11 @@
  * 内容本来就一样时什么都不写
  */
 import path from 'node:path'
-import { access, constants, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { t } from '../../shared/i18n.ts'
 import { forgetTable, lockedByOffice } from './files.ts'
 import { forgetLists } from './list-index.ts'
-import { backup, type SaveDeps } from './write.ts'
+import { backup, ensureWritable, type SaveDeps } from './write.ts'
 import { HttpError } from './http-error.ts'
 
 /** 返回是否真的写了 */
@@ -25,15 +25,7 @@ export async function replaceTableBytes(
     throw new HttpError(t('文件正在 Excel / WPS 里打开，先在那边关掉再切换（不然那边保存时会把切换的内容盖掉）'), 409)
   if (info && buf.equals(await readFile(full))) return false
   if (info) {
-    const writable = await access(full, constants.W_OK).then(
-      () => true,
-      () => false,
-    )
-    if (!writable) {
-      const p4 = deps.p4Edit ? await deps.p4Edit(full) : false
-      if (p4 && !p4.ok) throw new HttpError(t('p4 edit 失败：{err}', { err: p4.err }), 409)
-      if (!p4) throw new HttpError(t('文件是只读的，没有权限写入'), 409)
-    }
+    await ensureWritable(full, deps)
     await backup(projectId, rel, full)
   } else await mkdir(path.dirname(full), { recursive: true })
   // 同目录的临时文件再改名替换：写到一半断电也不会留下半个文件

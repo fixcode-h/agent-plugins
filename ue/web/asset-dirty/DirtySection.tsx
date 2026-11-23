@@ -2,7 +2,7 @@ import { ExternalLink, FilePenLine, History, LocateFixed, Save, Undo2 } from 'lu
 import { useState, type MouseEvent } from 'react'
 import { openAssetDiff } from '../asset-diff/store.ts'
 import { h, t } from '../host.ts'
-import { openMenu } from '../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { useOpenInEditor } from '../sections/assets/asset-menu.ts'
 import { useDirtyActions } from './actions.tsx'
 import { DirtyList } from './DirtyList.tsx'

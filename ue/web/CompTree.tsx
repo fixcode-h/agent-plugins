@@ -23,7 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { Caret } from './details/controls.tsx'
+import { Caret } from '@panel/web/src/components/ui/tree/caret'
 import { h, t } from './host.ts'
 
 export interface Comp {

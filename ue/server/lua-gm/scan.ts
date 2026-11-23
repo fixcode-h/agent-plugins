@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, watch, type FSWatcher } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { UeProject } from '../types.ts'
 import { c, t } from '../util.ts'
@@ -176,7 +176,7 @@ async function doScan(p: UeProject): Promise<LuaGmScan> {
   res.ms = Date.now() - t0
   if (my !== gen) return res
   cache.set(p.id, res)
-  follow(p, [...dirs, storeDir(p), path.dirname(script)])
+  void follow(p, [...dirs, storeDir(p), path.dirname(script)]).catch(() => undefined)
   return res
 }
 
@@ -187,17 +187,24 @@ export async function current(p: UeProject, fresh = false) {
 
 /**
  * 文件变了自动重扫：逐个目录盯（Linux 上 Node 22 的递归 watch 按文件盯，编辑器保存时改名替换会丢事件，表格枚举扫描踩过）。
- * 只盯扫描时走过的目录、脚本和设置所在目录；最多 300 个目录，GM 文件不会散在比这更多的地方
+ * 只盯扫描时走过的目录、脚本和设置所在目录；最多 300 个目录，GM 文件不会散在比这更多的地方。
+ * 目录监听走面板共用的 server/watch/dir（面板 ADR 0074）：和文件索引、GM 文件监听盯同一个目录时共用句柄
  */
-const watchers = new Map<string, { dirs: string; list: FSWatcher[]; timer?: ReturnType<typeof setTimeout> }>()
+interface Follow {
+  dirs: string
+  list: { close(): void }[]
+  timer?: ReturnType<typeof setTimeout>
+}
+const watchers = new Map<string, Follow>() // 模块状态：运行时，丢了下次扫描时重盯
 
-function follow(p: UeProject, dirs: string[]) {
+async function follow(p: UeProject, dirs: string[]) {
   const uniq = [...new Set(dirs.map((d) => path.resolve(d)))].filter((d) => existsSync(d)).slice(0, 300)
   const sig = uniq.join('|')
   const cur = watchers.get(p.id)
   if (cur?.dirs === sig) return
   unfollow(p.id)
-  const w: { dirs: string; list: FSWatcher[]; timer?: ReturnType<typeof setTimeout> } = { dirs: sig, list: [] }
+  const w: Follow = { dirs: sig, list: [] }
+  watchers.set(p.id, w)
   const kick = (name: string | null) => {
     // 只认 Lua、扫描脚本和设置文件；新建子目录也重扫一次（模式里有 ** 时新目录要盯上）
     if (name && !/\.(lua|mjs|json)$/i.test(name) && path.extname(name)) return
@@ -210,18 +217,14 @@ function follow(p: UeProject, dirs: string[]) {
     }, 400)
     w.timer.unref?.()
   }
+  const { watchDir } = await import('@panel/server/watch/dir')
+  // 等加载的时候又换了一组目录：这一组作废
+  if (watchers.get(p.id) !== w) return
   for (const d of uniq) {
-    try {
-      const fw = watch(d, (_e, name) => kick(name ? String(name) : null))
-      fw.on('error', () => fw.close())
-      // 盯文件不该让进程一直活着（面板本来就常驻；单测跑完要能退出）
-      fw.unref()
-      w.list.push(fw)
-    } catch {
-      // 目录刚被删、没权限：少盯一个，手动「重新扫描」照样能用
-    }
+    // 目录刚被删、没权限：少盯一个，手动「重新扫描」照样能用
+    const fw = watchDir(d, kick)
+    if (fw) w.list.push(fw)
   }
-  watchers.set(p.id, w)
 }
 
 function unfollow(id: string) {

@@ -6,7 +6,7 @@ import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { useLaunch } from '../launch.ts'
 import { LaunchButton } from '../launch-progress/LaunchButton.tsx'
-import { openMenuAt } from '../menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import { kindLabel, useTargetInfo, worldLabel } from '../ui.tsx'
 
 /** 三态：游戏在跑（PIE 或独立游戏进程）/ 编辑器连着但游戏没开 / UE 没在运行 */

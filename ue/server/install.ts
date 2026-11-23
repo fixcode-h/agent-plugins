@@ -19,7 +19,8 @@ import {
   pluginVersion,
   UELINK,
 } from './uelink.ts'
-import { c, exists, run, t } from './util.ts'
+import { c, exists, t } from './util.ts'
+import { vcsCmd } from './vcs.ts'
 
 export { bundledVersion }
 
@@ -51,7 +52,7 @@ async function removeLine(file: string, line: string) {
 
 /** git 的本机忽略文件（worktree 也指到主仓库的 info/exclude） */
 async function gitExclude(root: string) {
-  const r = await run('git', ['-C', root, 'rev-parse', '--git-path', 'info/exclude'])
+  const r = await vcsCmd('git', ['-C', root, 'rev-parse', '--git-path', 'info/exclude'], { cwd: root })
   if (r.code !== 0) return ''
   const p = r.out.trim()
   return path.isAbsolute(p) ? p : path.join(root, p)
@@ -59,7 +60,7 @@ async function gitExclude(root: string) {
 
 /** 相对 git 仓库根的插件路径（UE 项目可能在仓库的子目录里） */
 async function gitRel(root: string, name: string) {
-  const r = await run('git', ['-C', root, 'rev-parse', '--show-prefix'])
+  const r = await vcsCmd('git', ['-C', root, 'rev-parse', '--show-prefix'], { cwd: root })
   return `/${(r.out.trim() + ignoreLine(name)).replace(/\\/g, '/')}`
 }
 
@@ -92,14 +93,14 @@ export async function vcsAdd(job: Job, p: UeProject, name = UELINK) {
   const dir = path.join(p.root, rel)
   const r =
     p.vcs === 'git'
-      ? await run('git', ['-C', p.root, 'add', '--', rel])
+      ? await vcsCmd('git', ['-C', p.root, 'add', '--', rel], { cwd: p.root })
       : p.vcs === 'p4'
-        ? await run('p4', ['-d', p.root, 'add', '-c', 'default', path.join(dir, '...')], {
+        ? await vcsCmd('p4', ['-d', p.root, 'add', '-c', 'default', path.join(dir, '...')], {
             cwd: p.root,
             timeout: 60000,
           })
         : p.vcs === 'svn'
-          ? await run('svn', ['add', '--force', dir], { cwd: p.root, timeout: 60000 })
+          ? await vcsCmd('svn', ['add', '--force', dir], { cwd: p.root, timeout: 60000 })
           : { code: 0, out: '', err: '' }
   jobLog(job, r.out + r.err)
   if (r.code !== 0) throw new Error(t('加入版本管理失败：{msg}', { msg: (r.err || r.out).trim() }))
@@ -140,7 +141,7 @@ async function removeOldPlugins(job: Job, p: UeProject) {
   for (const name of OLD_PLUGINS) {
     for (const dir of await findPluginDirs(p.root, name)) {
       if (p.vcs === 'p4') {
-        const r = await run('p4', ['-d', p.root, 'delete', '-c', 'default', path.join(dir, '...')], {
+        const r = await vcsCmd('p4', ['-d', p.root, 'delete', '-c', 'default', path.join(dir, '...')], {
           cwd: p.root,
           timeout: 60000,
         })
@@ -215,13 +216,17 @@ export async function uninstall(p: UeProject) {
       const rel = path.relative(p.root, dest)
       if (p.install?.mode === 'vcs' && p.vcs === 'p4') {
         // 已经 p4 add 过还没提交的先撤掉；提交过的要删就交给用户（不自动提交，设计文档 3.6）
-        const r = await run('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], {
+        const r = await vcsCmd('p4', ['-d', p.root, 'revert', '-k', path.join(dest, '...')], {
           cwd: p.root,
           timeout: 60000,
         })
         jobLog(job, r.out + r.err)
       } else if (p.install?.mode === 'vcs' && p.vcs === 'git') {
-        const r = await run('git', ['-C', p.root, 'rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', rel])
+        const r = await vcsCmd(
+          'git',
+          ['-C', p.root, 'rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', rel],
+          { cwd: p.root },
+        )
         jobLog(job, r.out + r.err)
       }
       try {

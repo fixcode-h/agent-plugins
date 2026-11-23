@@ -1,9 +1,9 @@
 import { Box, Eye, EyeOff, Folder, FolderOpen } from 'lucide-react'
 import type { GtClassItem } from '../../../../../shared/gt-script/index.ts'
 import { t } from '../../../../host.ts'
-import { openMenu } from '../../../../menu.tsx'
-import type { TreeLine } from '../../../../TreeList.tsx'
-import { ancestors, luaDirOf, searchIndex, type ClassIndex } from './class-index-model.ts'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
+import type { TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { ancestors, luaDirOf, searchIndex, type ClassIndex } from '../../../../catalog/class-index-model.ts'
 import type { ClassKind } from './data.ts'
 import { KIND_ICON } from './kind-icon.ts'
 

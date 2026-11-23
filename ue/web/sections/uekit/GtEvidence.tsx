@@ -1,7 +1,7 @@
 import { Copy, FileText, Loader2, MessageSquare } from 'lucide-react'
 import { useState } from 'react'
 import { h, t } from '../../host.ts'
-import { copyText } from '../../menu.tsx'
+import { copyText } from '@panel/web/src/components/ui/item-menu'
 import { ErrorText, Note, Term } from '../../ui.tsx'
 import { ShotImage } from './GtRecordShot.tsx'
 import { EvidenceObject } from './gt-debug/EvidenceObject.tsx'

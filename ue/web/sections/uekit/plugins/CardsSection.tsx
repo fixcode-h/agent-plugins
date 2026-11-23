@@ -18,7 +18,7 @@ import {
 import { useState, type MouseEvent } from 'react'
 import type { Job } from '../../../../server/types.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import type { InstallMode, PluginActions } from '../Plugins.tsx'
 import { cardState, isBroken, isStale, type PluginView } from './model.ts'
 import { PluginCard } from './PluginCard.tsx'

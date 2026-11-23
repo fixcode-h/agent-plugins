@@ -17,8 +17,8 @@ import { setListStore } from './tables/list-index.ts'
  * 表格页的接口挂在 /api/plugins/tables/api/tables/ 下，Agent 用的 table.* 面板动作登记进面板的动作表，
  * 评审里的 .xlsx 差异由 textify 按格子比。按项目生效（插件接口 9）：目录里有表格时推荐打开，没设表格目录时提示去选。
  *
- * 数据还放在原来的位置：结构文件在项目目录 .agentpanel/tables/ 或数据目录 tables/<项目 id>/，保存前的备份在数据目录里。
- * 原来面板自带时就在那里，搬过来不用挪；插件删了这些也照样留着，重装后接着用。项目上的表格设置在 project.plugins.tables
+ * 结构文件在文档根/AgentPanel/Tables/ 或数据目录 project-data/Tables/<项目 id>/（面板的项目数据入口给位置，
+ * 旧的 .agentpanel/tables/ 第一次用到时复制过来，见 tables/schema-legacy.ts），保存前的备份在数据目录里；插件删了这些也照样留着，重装后接着用。项目上的表格设置在 project.plugins.tables
  * （面板的数据迁移 0005 从 project.tables 挪过来的）。
  */
 

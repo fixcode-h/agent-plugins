@@ -1,6 +1,7 @@
+import { useUeState } from './state-feed.ts'
 import { Camera, ExternalLink, Undo2 } from 'lucide-react'
 import { useState } from 'react'
-import type { HistoryItem, ProjectState } from '../server/types.ts'
+import type { HistoryItem } from '../server/types.ts'
 import { op, pget, ppost, useAction, useLoad } from './api.ts'
 import { h, t } from './host.ts'
 import { Badge, Dot, ErrorText, LinkBtn, fmtTime, kindLabel, worldLabel } from './ui.tsx'
@@ -10,7 +11,7 @@ export function TaskPanel({ taskId, projectId }: { taskId: string; projectId: st
   const { ui, hooks } = h()
   const nav = hooks.useNav()
   const { busy, run } = useAction()
-  const state = useLoad(() => pget<ProjectState>(projectId, 'state'), [projectId], 5000)
+  const state = useUeState(projectId)
   const hist = useLoad(() => pget<{ items: HistoryItem[] }>(projectId, 'history'), [projectId], 5000)
   const [shot, setShot] = useState<{ png: string; world: string }>()
   const mine = (hist.data?.items ?? []).filter((i) => i.actor.kind === 'agent' && i.actor.taskId === taskId)

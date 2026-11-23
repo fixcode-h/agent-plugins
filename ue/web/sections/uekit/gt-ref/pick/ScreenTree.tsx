@@ -2,7 +2,7 @@ import { AppWindow } from 'lucide-react'
 import { useMemo } from 'react'
 import type { GtClassItem, GtTreeNode } from '../../../../../shared/gt-script/index.ts'
 import { t } from '../../../../host.ts'
-import { TreeList, type TreeLine } from '../../../../TreeList.tsx'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
 import { classShort } from '../describe.ts'
 import { useTree } from '../live.ts'
 

@@ -10,9 +10,8 @@ import { splitSub } from '../../inspect/nav-state.ts'
 import { keep, useKept } from '../../keep.ts'
 import { takePending } from '../../pending.ts'
 import { DockCol } from '../../nav/slot.tsx'
-import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../../split.tsx'
+import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { Card, PageHead } from '../../ui.tsx'
-import { MenuHost } from '../../menu.tsx'
 import { AssetFolders } from './Folders.tsx'
 import { FolderView } from './FolderView.tsx'
 import { PrecheckButton } from '../../precheck/PrecheckButton.tsx'
@@ -148,7 +147,6 @@ export function Assets() {
           />
         )}
       </div>
-      <MenuHost />
     </div>
   )
 }

@@ -4,8 +4,8 @@ import { op, useLoad } from './api.ts'
 import { useUe } from './ctx.tsx'
 import { h, t } from './host.ts'
 import { Props } from './Props.tsx'
-import { SplitHandle, usePane } from './split.tsx'
-import { Hit, hitText, keepSet, TreeSearch } from './tree-search.tsx'
+import { SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
+import { Hit, hitText, keepSet, TreeSearch } from '@panel/web/src/components/ui/tree/tree-search'
 import { Badge } from './ui.tsx'
 
 interface Node {
@@ -72,7 +72,7 @@ export function Inspect({
       <div
         ref={treeRef}
         style={pane.style('calc(100% - 280px)')}
-        className="ue:relative ue:flex ue:max-h-[40%] ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--ue-w) ue:md:max-w-(--ue-max) ue:md:border-r ue:md:border-b-0"
+        className="ue:relative ue:flex ue:max-h-[40%] ue:min-h-0 ue:shrink-0 ue:flex-col ue:border-b ue:border-line ue:md:max-h-none ue:md:w-(--pane-w) ue:md:max-w-(--pane-max) ue:md:border-r ue:md:border-b-0"
       >
         <div className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line ue:px-3 ue:py-2.5">
           <span className="ue:text-footnote ue:font-medium ue:text-muted">{t('控件树')}</span>

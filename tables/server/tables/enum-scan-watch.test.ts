@@ -3,8 +3,6 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { EventEmitter } from 'node:events'
-import type { FSWatcher } from 'node:fs'
 import { test } from 'node:test'
 import { EnumScan } from '../../shared/table-enum-scan.ts'
 import { TableSchema, TablesConfig } from '../../shared/tables.ts'
@@ -15,6 +13,7 @@ test('跳过的目录', () => {
   assert.equal(ignoredChange('.git/index'), true)
   assert.equal(ignoredChange('Source/Intermediate/x.h'), true)
   assert.equal(ignoredChange('.agentpanel/tables/enum-scan-results.json'), true)
+  assert.equal(ignoredChange('docs/AgentPanel/Tables/enum-scan-results.json'), true)
 })
 
 test('按 watch 规则开目录，改了就扫、推给页面；规则关掉就收', async () => {
@@ -33,9 +32,7 @@ test('按 watch 规则开目录，改了就扫、推给页面；规则关掉就�
     projectIds: async () => ['p1'],
     watchFn: (d, on) => {
       cbs.set(d, on)
-      const e = new EventEmitter() as unknown as FSWatcher
-      ;(e as unknown as { close: () => void }).close = () => cbs.delete(d)
-      return e
+      return { close: () => void cbs.delete(d) }
     },
     log: () => undefined,
   })
@@ -68,7 +65,7 @@ test('Linux 逐目录盯：文件被改名替换（sed -i、编辑器保存）�
   mkdirSync(path.join(dir, 'a'))
   writeFileSync(path.join(dir, 'a/f.h'), '1')
   const seen: string[] = []
-  const w = treeWatch(dir, (f) => seen.push(f))
+  const w = treeWatch(dir, (f) => seen.push(f))!
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
   await wait(200)
   writeFileSync(path.join(dir, 'a/tmp'), '2')

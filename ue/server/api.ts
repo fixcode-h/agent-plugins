@@ -1,4 +1,6 @@
 import { clearLogs, logTail, logTargets, projectState, runMacro, undo } from './actions.ts'
+import { watchState } from './state-feed/feed.ts'
+import { watchLogs } from './log-tail/feed.ts'
 import { detect } from './detect.ts'
 import { closeBackground, ensureBackground, launchEditor, stopBackground } from './editor.ts'
 import { badges } from './badges.ts'
@@ -134,6 +136,9 @@ export async function handle(req: Request): Promise<Response> {
     switch (`${req.method} ${route}`) {
       case 'GET state':
         return json(await projectState(project))
+      // 登记 / 取消推送概况（state-feed/feed.ts）：打开着 UE 页、资源查看页、对话侧栏时登记，不再各自定时取
+      case 'POST state/watch':
+        return json(await watchState(project, String(b.conn ?? ''), b.on !== false))
       case 'POST settings': {
         const patch: Partial<UeProject> = {}
         for (const k of ['perms', 'gmStore', 'buildCmd', 'engineDir', 'target', 'name', 'perfLua'] as const)
@@ -249,6 +254,8 @@ export async function handle(req: Request): Promise<Response> {
         return json(await pushGmRecent(project.id, b as unknown as GmRun))
       case 'POST logs':
         return json(await logTail(ctx, b))
+      case 'POST logs/watch':
+        return json(watchLogs(project.id, String(b.conn ?? ''), b.on !== false))
       case 'GET logs/targets':
         return json(await logTargets(project))
       case 'POST logs/clear':

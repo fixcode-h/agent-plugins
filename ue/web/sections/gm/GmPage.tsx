@@ -19,7 +19,7 @@ import {
   SplitHandle,
   usePane,
   usePaneHeight,
-} from '../../split.tsx'
+} from '@panel/web/src/components/ui/split-pane'
 import { ErrorText } from '../../ui.tsx'
 import { GmBar } from './bar/GmBar.tsx'
 import { QuickRun } from './quick/QuickRun.tsx'
@@ -39,7 +39,6 @@ import { TableBindDialog } from './TableBindDialog.tsx'
 import { listTables, searchRows, storedTable, tableShape } from './tables.ts'
 import { useGm } from './use-gm.ts'
 import { useGmRun } from './use-gm-run.ts'
-import { MenuHost } from '../../menu.tsx'
 import { AddToTestHost } from '../uekit/gt-gm/AddToTest.tsx'
 
 /**
@@ -288,7 +287,6 @@ export function GmPage() {
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
       {/* GM 页的右键菜单（对象列表、模块树、常用）都靠它画；同一页挂了几个时只有第一个画 */}
-      <MenuHost />
       <AddToTestHost />
       {dialog}
       {chat.dialog}

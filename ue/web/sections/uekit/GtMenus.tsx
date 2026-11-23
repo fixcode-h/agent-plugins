@@ -2,7 +2,7 @@ import { Copy, CopyPlus, Download, FileJson, FolderOpen, Pencil, Play, Trash2 } 
 import type { MouseEvent } from 'react'
 import { ppost } from '../../api.ts'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { copyText, openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import type { GtRunSummary } from './gt-run/types.ts'
 import { copyScenarioJson, downloadScenarioJson } from './gt-export.ts'
 

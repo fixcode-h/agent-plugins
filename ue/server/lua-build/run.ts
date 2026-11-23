@@ -1,10 +1,10 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { createWriteStream, type WriteStream } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
 import type { LuaBuildRun } from '../types.ts'
-import { c, run, t, uid } from '../util.ts'
+import { c, t, uid } from '../util.ts'
 import { compileErrorPattern, inProject, luaBuildConfig } from './config.ts'
 import { changedFiles, luaFiles, moduleName, patchBuildState } from './changes.ts'
 import { errorKey, parseErrorLine, stripAnsi, type ErrorDirs } from './errors.ts'
@@ -160,7 +160,15 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
   addLine(p.id, live, `> ${command}`, NONE, dirs)
 
   // 命令行是用户在设置里写的整行（可能带管道、.bat），交给 shell 执行；非 Windows 单独成组，停止时连子进程一起结束
-  const child = spawn(command, { cwd, shell: true, windowsHide: true, detached: process.platform !== 'win32' })
+  // 经面板的外部进程入口起（ADR 0076）：进孤儿登记，面板被强杀后下次启动会清掉留下的编译进程
+  const { spawnTracked } = await import('@panel/server/exec/tracked')
+  const child = spawnTracked(command, [], {
+    cwd,
+    shell: true,
+    detached: process.platform !== 'win32',
+    source: 'ue',
+    title: t('Lua 编译'),
+  })
   live.child = child
   let buf = { out: '', err: '' }
   const feed = (k: 'out' | 'err', d: Buffer) => {
@@ -229,21 +237,14 @@ async function afterBuild(ctx: OpCtx, live: Live, mtimes: Map<string, number>, r
 
 const stopping = new Set<string>()
 
-/** 停止正在跑的编译：Windows 用 taskkill /T 连子进程一起结束（.bat 里起的 luac 是孙进程） */
+/** 停止正在跑的编译：连子进程一起结束（.bat 里起的 luac 是孙进程） */
 export async function stopLuaBuild(projectId: string) {
   const l = lives.get(projectId)
   if (!l || l.run.status !== 'running' || !l.child?.pid) throw new Error(t('没有正在跑的 Lua 编译'))
   stopping.add(l.run.id)
-  if (process.platform === 'win32') {
-    const r = await run('taskkill.exe', ['/PID', String(l.child.pid), '/T', '/F'], { timeout: 15000 })
-    if (r.code !== 0) throw new Error(t('没能结束编译进程：{msg}', { msg: (r.err || r.out).trim() }))
-  } else {
-    try {
-      process.kill(-l.child.pid, 'SIGTERM')
-    } catch {
-      l.child.kill('SIGTERM')
-    }
-  }
+  const { stopTree } = await import('@panel/server/exec/tracked')
+  const r = await stopTree(l.child.pid, { waitMs: 15000 })
+  if (!r.ok) throw new Error(t('没能结束编译进程：{msg}', { msg: r.error ?? '' }))
   return { ok: true }
 }
 

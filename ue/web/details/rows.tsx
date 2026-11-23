@@ -2,19 +2,10 @@ import { Copy, CopyPlus, ListPlus, Pin, RotateCcw, Trash2, Undo2 } from 'lucide-
 import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { usePropAnim, usePropMark } from './marks.ts'
 import { show } from '../api.ts'
-import { HelpTip } from '../HelpTip.tsx'
+import { HelpTip } from '@panel/web/src/components/ui/help-tip'
 import { h, t } from '../host.ts'
-import {
-  Caret,
-  Checkbox,
-  Collapse,
-  ContainerHead,
-  EnumSelect,
-  Muted,
-  TextField,
-  VecField,
-  vecKeys,
-} from './controls.tsx'
+import { Checkbox, Collapse, ContainerHead, EnumSelect, Muted, TextField, VecField, vecKeys } from './controls.tsx'
+import { Caret } from '@panel/web/src/components/ui/tree/caret'
 import { isNumberType, looksLikePath, toDisplay, type MemberMeta, type Prop } from './model.ts'
 import { RefChip, type OpenHow } from './RefChip.tsx'
 

@@ -1,6 +1,6 @@
 import { Copy } from 'lucide-react'
 import { h, t } from './host.ts'
-import { copyText } from './menu.tsx'
+import { copyText } from '@panel/web/src/components/ui/item-menu'
 
 /**
  * 一行放不下的长路径（配置根、场景根这类本机绝对路径）：前面的目录省略成「…」，最后几段一直看得见，

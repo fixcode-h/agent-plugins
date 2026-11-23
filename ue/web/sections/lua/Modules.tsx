@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { op, useAction } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { Badge, ErrorText, SearchBox } from '../../ui.tsx'
+import { Badge, ErrorText } from '../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { clock, useLuaErrors, useModules, useOpenLua, type LuaModule } from './lua-data.ts'
 
 /**

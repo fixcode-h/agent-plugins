@@ -1,6 +1,6 @@
 import { ListFilter } from 'lucide-react'
 import { h } from './host.ts'
-import { openMenuAt } from './menu.tsx'
+import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 
 export interface FilterOpt<T extends string> {
   id: T

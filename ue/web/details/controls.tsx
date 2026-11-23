@@ -399,24 +399,6 @@ export function Muted({ children, title }: { children: ReactNode; title?: string
   )
 }
 
-/** 打开 / 关上时箭头转 90°（分类条、可展开的行都用） */
-export function Caret({ open, className }: { open: boolean; className?: string }) {
-  const { cn } = h()
-  return (
-    <svg
-      viewBox="0 0 10 10"
-      aria-hidden
-      className={cn(
-        'ue:h-2.5 ue:w-2.5 ue:shrink-0 ue:fill-current ue:transition-transform ue:duration-150',
-        open && 'ue:rotate-90',
-        className,
-      )}
-    >
-      <path d="M3 1.5 L7.5 5 L3 8.5 Z" />
-    </svg>
-  )
-}
-
 /** 展开收起的动画外壳：grid 行高 0fr ↔ 1fr，内容不用量高度 */
 export function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
   const { cn } = h()

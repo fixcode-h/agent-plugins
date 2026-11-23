@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useLoad } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { ErrorText, SearchBox } from '../../ui.tsx'
+import { ErrorText } from '../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { LineChart } from './charts.tsx'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { Empty, Skeleton, fmtAt } from './parts.tsx'
 import { luaCounterLabel } from './lua-trace.ts'
 import { traceQuery, useDebounced, type Range, type TraceBase } from './trace.ts'
@@ -131,7 +132,12 @@ export function Counters({
               on.includes(n) && 'ue:text-fg',
             )}
           >
-            <input type="checkbox" className="ue:accent-(--accent)" checked={on.includes(n)} onChange={() => toggle(n)} />
+            <input
+              type="checkbox"
+              className="ue:accent-(--accent)"
+              checked={on.includes(n)}
+              onChange={() => toggle(n)}
+            />
             <span className="ue:truncate">
               {luaCounterLabel(n) && <span className="ue:mr-1.5 ue:text-fg">{luaCounterLabel(n)}</span>}
               {n}

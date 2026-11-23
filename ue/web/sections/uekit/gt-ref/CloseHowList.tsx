@@ -15,7 +15,7 @@ import {
 import type { MouseEvent } from 'react'
 import type { GtCloseHow, GtCloseVerify } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu } from '../../../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { parseScalar, scalarText } from '../gt-cond/compare.tsx'
 import { ArgsEdit } from '../gt-api/ApiPick.tsx'
 import { PartInput } from './PartInput.tsx'

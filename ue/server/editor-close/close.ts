@@ -46,24 +46,16 @@ export async function closeInstance(p: UeProject, pid: number, force: boolean): 
   }
   const win = process.platform === 'win32'
   if (force) {
-    if (win) {
-      const r = await run('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { timeout: FORCE_MS })
-      if (r.code !== 0 && alive(pid))
-        throw new Error(
-          t('强制结束 PID {pid} 失败：{msg}（编辑器是用管理员权限打开的话，面板也要用管理员权限运行）', {
-            pid,
-            msg: (r.err || r.out).trim() || `exit ${r.code}`,
-          }),
-        )
-    } else {
-      try {
-        process.kill(pid, 'SIGKILL')
-      } catch {
-        // 已经退出了
-      }
-    }
-    if (await waitExit(pid, FORCE_MS)) return { closed: true }
-    throw new Error(t('已经强制结束 PID {pid}，{s} 秒后还没退出', { pid, s: FORCE_MS / 1000 }))
+    // 连 Live Coding 控制台这类子进程一起结束，等真的退出：走面板的外部进程入口（ADR 0076）
+    const { stopTree } = await import('@panel/server/exec/tracked')
+    const r = await stopTree(pid, { waitMs: FORCE_MS })
+    if (r.ok) return { closed: true }
+    throw new Error(
+      t('强制结束 PID {pid} 失败：{msg}（编辑器是用管理员权限打开的话，面板也要用管理员权限运行）', {
+        pid,
+        msg: r.error ?? '',
+      }),
+    )
   }
   let note = ''
   if (win) {

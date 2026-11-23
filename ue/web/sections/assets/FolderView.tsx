@@ -4,7 +4,7 @@ import { useToChat } from '../../chat.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { InspectorBar, type BarCrumb } from '../../inspect/InspectorBar.tsx'
-import { copyText, MenuHost, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { ErrorText, fmtSize } from '../../ui.tsx'
 import { useOpenInEditor } from './asset-menu.ts'
 import { useFolderContents, type StatItem } from './folder-contents.ts'
@@ -146,7 +146,6 @@ export function FolderView({
         />
       ) : null}
       {chat.dialog}
-      <MenuHost />
     </section>
   )
 }

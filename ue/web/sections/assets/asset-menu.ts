@@ -3,7 +3,7 @@ import type { MouseEvent } from 'react'
 import { op } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { openAssetDiff } from '../../asset-diff/store.ts'
 import { pkgOf } from './folder-data.ts'
 

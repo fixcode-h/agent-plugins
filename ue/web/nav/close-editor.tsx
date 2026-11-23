@@ -5,7 +5,7 @@ import type { CloseResult } from '../../server/editor-close/close.ts'
 import { ppost } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
-import { MenuHost, openMenu } from '../menu.tsx'
+import { openMenu } from '@panel/web/src/components/ui/item-menu'
 import { Confirm, kindLabel } from '../ui.tsx'
 
 interface Ask {
@@ -61,7 +61,6 @@ export function useCloseEditor() {
 
   const dialog = (
     <>
-      <MenuHost />
       <Confirm
         open={!!ask}
         title={

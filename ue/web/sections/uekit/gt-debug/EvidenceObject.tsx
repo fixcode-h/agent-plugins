@@ -1,7 +1,7 @@
 import { Box, Copy, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { h, t } from '../../../host.ts'
-import { copyText } from '../../../menu.tsx'
+import { copyText } from '@panel/web/src/components/ui/item-menu'
 import { ErrorText } from '../../../ui.tsx'
 import type { PropsData } from '../gt-ref/live.ts'
 import { normalizeGroups } from '../gt-ref/props-shape.ts'
@@ -48,7 +48,13 @@ export function EvidenceObject({
         </span>
         <ui.IconButton icon={Copy} size="sm" label={t('复制对象路径')} onClick={() => copyText(o.path)} />
         {o.props && (
-          <ui.Button size="sm" variant="secondary" className="ue:ml-auto" disabled={!loadText || loading} onClick={open}>
+          <ui.Button
+            size="sm"
+            variant="secondary"
+            className="ue:ml-auto"
+            disabled={!loadText || loading}
+            onClick={open}
+          >
             {loading && <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />}
             {data ? t('重新读') : t('看失败时的属性')}
           </ui.Button>

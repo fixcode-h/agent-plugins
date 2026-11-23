@@ -22,7 +22,7 @@ import {
 import { wantsObject } from '../../../../shared/gm/type-match.ts'
 import { Ctx } from '../../../ctx.tsx'
 import { h, t } from '../../../host.ts'
-import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '../../../split.tsx'
+import { PANE_FILL, PANE_FIXED, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
 import { defaultIdent } from './compare-table.ts'
 import { classShort, inText } from './describe.ts'
 import { highlight, RefRpcProvider, useRefRpc, type RefHits } from './live.ts'

@@ -1,5 +1,5 @@
-import { offlineClasses, offlineRows } from './uekit/gt-ref/offline/classes.ts'
-import { classIndex } from './uekit/gt-ref/class-index/index.ts'
+import { offlineClasses, offlineRows } from './catalog/classes.ts'
+import { classIndex } from './catalog/class-index.ts'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -19,9 +19,11 @@ import { GT_DISK_OPS, gtFromDisk } from './uekit/gt-disk.ts'
 import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
 import { ensureLuaConfig } from './lua/settings.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
-import { c, run, t, wildcard } from './util.ts'
-import { gameFileOf, p4SavePlan, type P4Exec, type P4Stale } from './p4-checkout.ts'
+import { c, t } from './util.ts'
+import { wildcard } from '@panel/shared/text-match/index'
+import { gameFileOf, p4EditFiles, p4SavePlan, type P4Stale } from './p4-checkout.ts'
 import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
+import { vcsCmd } from './vcs.ts'
 
 /**
  * 所有对 UE 的操作都走这里（网页和 Agent 工具共用）：选目标进程、按权限放行或请你确认、危险命令确认、
@@ -186,7 +188,7 @@ export function dangerousMatch(command: string) {
     .split(/[,\n]/)
     .map((s) => s.trim())
     .filter(Boolean)
-  return list.find((p) => wildcard(p, command) || wildcard(p, command.split(/\s+/)[0]))
+  return list.find((p) => wildcard(command, p) || wildcard(command.split(/\s+/)[0], p))
 }
 
 async function ask(ctx: OpCtx, req: PluginConfirm) {
@@ -412,23 +414,16 @@ async function checkout(ctx: OpCtx, card: Card, packages: string[]): Promise<str
   const added = mine.filter((i) => i.isNew).map((i) => i.file)
   // 磁盘上已有的不论只不只读都问 P4（见 p4-checkout.ts）：可写但没打开的文件以前被跳过，改动不进任何变更列表
   const plan = await p4SavePlan(
-    p4Exec(p),
+    p.root,
     mine.filter((i) => !i.isNew).map((i) => i.file),
   )
   if (plan.error) throw new BridgeError(t('P4 签出失败：{msg}', { msg: plan.error }))
   // 改之前没问到的（Python、批量这类不经过占用的改法）保存前补问一次
   await askStale(ctx, plan.stale)
-  if (plan.edit.length) {
-    const r = await p4Exec(p)(['edit', '-c', 'default', ...plan.edit])
-    if (r.code !== 0) throw new BridgeError(t('P4 签出失败：{msg}', { msg: (r.err || r.out).trim() }))
-  }
+  const bad = await p4EditFiles(p.root, plan.edit)
+  if (bad) throw new BridgeError(t('P4 签出失败：{msg}', { msg: bad }))
   return [...added, ...plan.add]
 }
-
-const p4Exec =
-  (p: UeProject): P4Exec =>
-  (args) =>
-    run('p4', ['-d', p.root, ...args], { cwd: p.root, timeout: 60000 })
 
 // 会话：每个对话问过「本地版本落后」的资源文件，同一个只问一次（插件重启后最多再问一次）
 const staleAsked = new Set<string>()
@@ -463,7 +458,7 @@ async function askStaleBefore(ctx: OpCtx, pkg: string) {
   if (ctx.project.vcs !== 'p4' || actor.kind !== 'agent') return
   const file = gameFileOf(ctx.project.root, pkg, existsSync)
   if (!file || staleAsked.has(`${actor.taskId}|${file}`)) return
-  const plan = await p4SavePlan(p4Exec(ctx.project), [file])
+  const plan = await p4SavePlan(ctx.project.root, [file])
   await askStale(ctx, plan.stale)
 }
 
@@ -471,7 +466,7 @@ async function askStaleBefore(ctx: OpCtx, pkg: string) {
 async function p4After(p: UeProject, verb: 'add' | 'delete', files: string[], keep = false) {
   if (p.vcs !== 'p4' || !files.length) return undefined
   const args = ['-d', p.root, verb, ...(keep ? ['-k'] : []), '-c', 'default', ...files]
-  const r = await run('p4', args, { cwd: p.root, timeout: 60000 })
+  const r = await vcsCmd('p4', args, { cwd: p.root, timeout: 60000 })
   return r.code === 0 ? { ok: true, verb, files } : { ok: false, verb, files, error: (r.err || r.out).trim() }
 }
 
@@ -542,7 +537,7 @@ export async function runOp(
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }
   // GameTest 对象引用：几个操作先核对 GameTest 版本，gt.props 补 Lua 声明字段（uekit/gt-ref/）。gt.migrate 随 v5 删掉（旧脚本不迁移）
   if (op === 'gt.migrate') throw new BridgeError(t('旧格式不再支持，请按新写法重写'))
-  // 「类」下拉的本地索引：整张类表记在面板、网页本地建树和搜（uekit/gt-ref/class-index/）
+  // 「类」下拉的本地索引：整张类表记在面板、网页本地建树和搜（catalog/class-index.ts）
   if (op === 'gt.classes' && args.all === true)
     return {
       ...(await classIndex(ctx.project, args, {

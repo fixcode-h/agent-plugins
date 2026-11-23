@@ -222,7 +222,7 @@ export function ProjectTablesSection({
           <Field
             label={t('存放位置')}
             tip={t(
-              '表头规则、枚举、列的引用和取值范围这些结构信息永远不写进表格。存在项目目录里可以跟着版本控制给团队共用；只存本机就不会出现在项目目录里。',
+              '表头规则、枚举、列的引用和取值范围这些结构信息永远不写进表格。存在文档根里可以跟着版本控制给团队共用；只存本机就不会出现在项目目录里。',
             )}
           >
             <div>
@@ -231,7 +231,7 @@ export function ProjectTablesSection({
                 value={cfg.store}
                 onChange={(v) => patch({ store: v as TablesConfig['store'] })}
                 options={[
-                  { id: 'project', label: t('项目目录 .agentpanel/tables（推荐）') },
+                  { id: 'project', label: t('文档根 AgentPanel/Tables（推荐）') },
                   { id: 'data', label: t('只存本机') },
                 ]}
               />

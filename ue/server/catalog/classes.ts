@@ -1,11 +1,12 @@
 import path from 'node:path'
-import type { GtClassItem, GtClassRow, GtClassesResult } from '../../../../shared/gt-script/ref/types.ts'
-import { searchText } from '../../../../shared/gt-script/ref/search-text.ts'
-import { nativeParents } from '../../../search-index/native-widgets.ts'
-import { projectMounts } from '../../../search-index/mounts.ts'
-import { searchIndex } from '../../../search-index/index.ts'
-import { shortClass } from '../../../search-index/uetovs.ts'
-import type { UeProject } from '../../../types.ts'
+import type { GtClassItem, GtClassRow, GtClassesResult } from '../../shared/gt-script/ref/types.ts'
+import { searchText } from '../../shared/gt-script/ref/search-text.ts'
+import { nativeParents } from '../search-index/native-widgets.ts'
+import { projectMounts } from '../search-index/mounts.ts'
+import { searchIndex } from '../search-index/index.ts'
+import { shortClass } from '../search-index/uetovs.ts'
+import type { UeProject } from '../types.ts'
+import { headerTrees, ueMemo } from '../memo.ts'
 import { readLuaHead } from './lua-parents.ts'
 import { readBpTags } from './uasset-tags.ts'
 
@@ -63,8 +64,6 @@ const LIMIT_MAX = 500
 /** 读结构的上限（ADR 0067、协议 7.7） */
 const MAX_CHARS = 12000
 const PARALLEL = 32
-/** 头文件几秒内不重读：展开类树会连着问好几层 */
-const FRESH_MS = 30_000
 
 type Node = Omit<GtClassItem, 'kids' | 'kind'> & { kind?: GtClassItem['kind'] }
 
@@ -80,14 +79,14 @@ export interface OfflineArgs {
   limit?: number
 }
 
-const headerCache = new Map<string, { at: number; parents: Promise<Map<string, string>> }>()
-function projectNatives(root: string) {
-  const hit = headerCache.get(root)
-  if (hit && Date.now() - hit.at < FRESH_MS) return hit.parents
-  const parents = nativeParents(root)
-  headerCache.set(root, { at: Date.now(), parents })
-  return parents
-}
+/** 项目头文件里的原生父类：Source / Plugins 下的 .h 改了就重读，盯不住时五分钟重读（面板派生缓存，ADR 0074） */
+const natives = ueMemo<string, Map<string, string>>({
+  name: 'ue.class-headers',
+  load: nativeParents,
+  ttlMs: 5 * 60_000,
+  watch: headerTrees,
+})
+const projectNatives = (root: string) => natives.get(root)
 
 async function pool<T, R>(list: T[], fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(list.length)
@@ -287,20 +286,15 @@ export function pickClasses(nodes: Map<string, Node>, args: OfflineArgs, rootNam
 
 /**
  * 建好的类表按项目缓存：面板逐层展开、再打开时定位会连着发好几次，每次都 stat 全部 Lua 文件 / 读 .uasset 标签很慢
- * （用户 2026-11-21 嫌慢）。NODES_MS 内直接复用，过期后重建（文件头按修改时间各自缓存，只重读改过的）；fresh 强制重建
+ * （用户 2026-11-21 嫌慢）。15 秒内直接复用，过期后重建（文件头按修改时间各自缓存，只重读改过的）；fresh 强制重建
  */
-const NODES_MS = 15_000
-const nodesCache = new Map<string, { at: number; nodes: Promise<Map<string, Node>> }>()
-function cachedNodes(p: UeProject, lua: boolean, fresh: boolean) {
-  const key = `${lua ? 'lua' : 'ue'}:${p.root}`
-  const hit = nodesCache.get(key)
-  if (!fresh && hit && Date.now() - hit.at < NODES_MS) return hit.nodes
-  const nodes = lua ? luaNodes(p) : ueNodes(p)
-  nodesCache.set(key, { at: Date.now(), nodes })
-  // 出错不留在缓存里，下次重试
-  nodes.catch(() => nodesCache.get(key)?.nodes === nodes && nodesCache.delete(key))
-  return nodes
-}
+const nodesMemo = ueMemo<{ p: UeProject; lua: boolean }, Map<string, Node>>({
+  name: 'ue.class-tree',
+  keyOf: ({ p, lua }) => `${lua ? 'lua' : 'ue'}:${p.root}`,
+  load: ({ p, lua }) => (lua ? luaNodes(p) : ueNodes(p)),
+  ttlMs: 15_000,
+})
+const cachedNodes = (p: UeProject, lua: boolean, fresh: boolean) => nodesMemo.get({ p, lua }, { fresh })
 
 /** UE 没开时的类树；why 是连不上 UE 的原因，写进 note 给界面显示 */
 export async function offlineClasses(p: UeProject, args: OfflineArgs, note: string): Promise<GtClassesResult> {

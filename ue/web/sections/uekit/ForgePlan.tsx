@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { h, t } from '../../host.ts'
-import { copyText, openMenu } from '../../menu.tsx'
+import { copyText, openMenu } from '@panel/web/src/components/ui/item-menu'
 import { ErrorBox, Hint, Loading } from './forge-parts.tsx'
 
 /** forge.plan 的 report（UEKit ForgePipeline::ReportToJson） */

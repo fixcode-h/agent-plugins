@@ -2,7 +2,7 @@ import { Box, CircleCheck, CircleHelp, Crosshair, Ellipsis, TriangleAlert } from
 import type { MouseEvent } from 'react'
 import type { GtMany, GtRef, GtRefLike } from '../../../../shared/gt-script/ref/types.ts'
 import { h, t } from '../../../host.ts'
-import { openMenu, type MenuItem } from '../../../menu.tsx'
+import { openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { classShort, describeRef, identShort, inText, isRefObj } from './describe.ts'
 import type { RefHits } from './live.ts'
 

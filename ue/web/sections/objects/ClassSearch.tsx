@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import { useClassSearch } from '../../catalog/class-search.ts'
 import { useEffect, useState } from 'react'
 import { op, pget, ppost, useAction, useLoad } from '../../api.ts'
 import { isInstance } from '../../CdoNote.tsx'
@@ -61,6 +62,18 @@ export function ClassSearch({ selected, onOpen }: { selected: string; onOpen: (p
   const { ui } = h()
   // 搜索条件、结果切页面时留着（keep.ts）
   const kk = `${project.id}/objects`
+  // 打字搜类走本地类索引（catalog/，和 GameTest 选类同一份）：马上出结果、UE 没开也能选；索引还没到时才问 UE
+  const loadClasses = useClassSearch(project.id, {
+    fallback: (s) =>
+      op<{ items: { name: string; path: string; parent?: string }[] }>(
+        project.id,
+        'classes',
+        { q: s, limit: 50 },
+        target,
+      ).then((r) =>
+        r.items.filter((c) => c.name !== 'Object').map((c) => ({ name: c.name, path: c.path, note: c.parent })),
+      ),
+  })
   const [cls, setCls] = useKept<ClassOpt>(`${kk}/cls`, ANY)
   const [prefix, setPrefix] = useKept(`${kk}/prefix`, '')
   const [lua, setLua] = useKept(`${kk}/lua`, false)
@@ -160,20 +173,7 @@ export function ClassSearch({ selected, onOpen }: { selected: string; onOpen: (p
           value={isAny(cls) ? ANY : cls}
           common={COMMON}
           placeholder={t('搜类名，例如 Character、MyInventorySubsystem')}
-          load={(s) =>
-            s
-              ? op<{ items: { name: string; path: string; parent?: string }[] }>(
-                  project.id,
-                  'classes',
-                  { q: s, limit: 50 },
-                  target,
-                ).then((r) =>
-                  r.items
-                    .filter((c) => c.name !== 'Object')
-                    .map((c) => ({ name: c.name, path: c.path, note: c.parent })),
-                )
-              : Promise.resolve([])
-          }
+          load={loadClasses}
           onChange={(c) => {
             setCls(c)
             // 换了类就按现在的名字开头重搜：下面的搜索始终是「在这个类里」

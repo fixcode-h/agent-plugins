@@ -8,9 +8,7 @@ import { AssetFile } from './AssetFile.tsx'
 import { setHost, t } from './host.ts'
 import { GamepadIcon } from './icon.tsx'
 import { Status } from './Status.tsx'
-import { MenuSpecimen } from './menu.tsx'
 import { PathTextSpecimen } from './path-text.tsx'
-import { LoadingMaskSpecimen } from './loading-mask/LoadingMask.tsx'
 import { CategoryBarSpecimen } from './details/CategoryBar.tsx'
 import { RefChipSpecimen } from './details/RefChip.tsx'
 import { InspectorBarSpecimen } from './inspect/BarSpecimen.tsx'
@@ -41,9 +39,9 @@ import { LuaDebugSpecimen } from './sections/lua/DebugSpecimen.tsx'
 import { LuaObjectsSpecimen } from './sections/lua/objects-tree/Specimen.tsx'
 import { TaskPanel } from './TaskPanel.tsx'
 import { VsDebugSpecimen } from './vs-debug/Specimen.tsx'
-import { TreeSearchSpecimen } from './tree-search.tsx'
 import { SuggestInputSpecimen } from './SuggestInput.tsx'
 import { UePage } from './UePage.tsx'
+import { registerPrefs } from '@panel/web/src/lib/prefs/index'
 
 /** 接入了 UE 的面板项目（对话右栏的「UE」页签按它判断）：激活时取一次，之后每分钟刷新 */
 let ueProjects = new Set<string>()
@@ -59,6 +57,24 @@ async function refresh() {
  */
 const activate: ActivateWeb = (host) => {
   setHost(host)
+  // UE 页记在本机的界面状态（分栏用面板的 pane: 前缀，面板已登记）：设置 → 外观 →「界面状态」里按项重置
+  registerPrefs([
+    { id: 'ue:ui', prefix: 'ue:', label: () => t('UE 页的折叠、页签和筛选'), group: 'view', owner: 'ue' },
+    {
+      id: 'ue:gametest',
+      prefix: 'ue.gt.',
+      label: () => t('GameTest 编辑器的视图、断点和上次的参数'),
+      group: 'other',
+      owner: 'ue',
+    },
+    {
+      id: 'ue:perf-channels',
+      key: 'ue-perf-custom-channels',
+      label: () => t('性能页自定义的通道'),
+      group: 'other',
+      owner: 'ue',
+    },
+  ])
   void refresh()
   setInterval(() => void refresh(), 60000)
   return {
@@ -90,7 +106,6 @@ const activate: ActivateWeb = (host) => {
     ],
     // 设置 →「组件」里的示例（插件接口 6）：UObject 树、控件树共用的搜索条，UE 页共用的右键菜单
     specimens: [
-      { id: 'tree-search', label: 'TreeSearch · TreeList', tune: ['input'], Specimen: TreeSearchSpecimen },
       // GameTest 流程图（定稿 9.1）：面板开放的通用画布 + 次数角标 + 节点卡片和圆点引脚，跟面板「流程图画布」「数字角标」「流程图节点」「流程图引脚」的调节项
       {
         id: 'gt-flow',
@@ -111,13 +126,11 @@ const activate: ActivateWeb = (host) => {
         Specimen: ObjOpsSpecimen,
       },
       // UE 页共用的右键菜单（性能页、GameTest）：跟面板「菜单」的调节项
-      { id: 'context-menu', label: 'UE · ContextMenu', tune: ['menu'], Specimen: MenuSpecimen },
       // 能手填也能从下拉里挑的输入框（GameTest 运行设置的阻挡界面）：跟面板「输入框」「菜单」的调节项
       { id: 'suggest-input', label: 'UE · SuggestInput', tune: ['input', 'menu'], Specimen: SuggestInputSpecimen },
       // 一行放不下的长路径（AssetForge 配置根、新建配置弹窗）：省略前面的目录，悬停看全、点一下复制
       { id: 'path-text', label: 'UE · PathText', Specimen: PathTextSpecimen },
       // 切换内容时盖住还没画完的区域（AssetForge 切配置），画完才揭开
-      { id: 'loading-mask', label: 'UE · LoadingMask', Specimen: LoadingMaskSpecimen },
       // 对象页、资源页的检视区（设计稿 designs/对象页合并与资源导航-设计稿.md 第 9 节）：「最近看过」「更多」下拉跟面板「菜单」走
       { id: 'inspect-bar', label: t('检视 · 导航条'), tune: ['menu'], Specimen: InspectorBarSpecimen },
       { id: 'inspect-ref', label: t('检视 · 引用'), Specimen: RefChipSpecimen },

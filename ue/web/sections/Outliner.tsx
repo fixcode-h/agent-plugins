@@ -5,8 +5,9 @@ import { iconOf } from '../CompTree.tsx'
 import { useUe } from '../ctx.tsx'
 import { t } from '../host.ts'
 import { useKept } from '../keep.ts'
-import { TreeList, type TreeLine } from '../TreeList.tsx'
-import { ErrorText, Note, SearchBox } from '../ui.tsx'
+import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
+import { ErrorText, Note } from '../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { useExtEvents } from './uekit/ListCol.tsx'
 
 interface OutActor {

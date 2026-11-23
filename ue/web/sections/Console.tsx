@@ -5,8 +5,9 @@ import { op, pget, ppost, useAction, useLoad } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { takePending } from '../pending.ts'
-import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '../split.tsx'
-import { Badge, Card, Confirm, PageHead, SearchBox, Term, useTargetInfo } from '../ui.tsx'
+import { PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/web/src/components/ui/split-pane'
+import { Badge, Card, Confirm, PageHead, Term, useTargetInfo } from '../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { consoleFavs, consoleKey, toggleCommon } from '../../shared/gm/common.ts'
 
 interface CVar {

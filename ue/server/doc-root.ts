@@ -15,10 +15,8 @@ import { c } from './util.ts'
  * 面板的接口是异步的，这里的调用方多是同步取路径：registry 读项目时先 refreshDocsRoot 存一份，docsRoot 同步读它；
  * 旧面板没有这个接口、或者还没取到时退回旧规则
  */
-const cache = new Map<string, { root: string; at: number }>() // 模块状态：缓存，丢了重取
-/** 项目设置里改了文档根，一分钟内跟上；每次读项目都问面板太勤（面板那边要读角色列表、判断版本管理） */
-const TTL = 60_000
-/** 这次进程里已经把哪个文档根写给 UE 了：不必每分钟都读写一遍提示文件 */
+const cache = new Map<string, { root: string; p: P }>() // 模块状态：缓存，丢了重取
+/** 这次进程里已经把哪个文档根写给 UE 了：不必每次都读写一遍提示文件 */
 const hinted = new Map<string, string>() // 模块状态：缓存，丢了重写
 
 /** 旧规则（项目外层同级的 ProjectDoc/docs 或项目里的 docs）：面板给不出时用，也是旧数据可能在的地方 */
@@ -30,31 +28,47 @@ export function docsRoot(p: P) {
   return cache.get(p.id)?.root ?? legacyDocsRoot(p.root)
 }
 
-/** 问面板要文档根存起来；面板没有这个接口、项目不在了、出错都不报，退回旧规则 */
+/**
+ * 问面板要文档根存起来；面板没有这个接口、项目不在了、出错都不报，退回旧规则。
+ * 取到一次就一直用：项目设置里改了文档根，面板会发 onDocRootChange（面板 server/docs/root-cache.ts），
+ * 这里收到就重取——以前是 60 秒 TTL 加后台重取，改了设置最多一分钟才跟上
+ */
 export async function refreshDocsRoot(p: P, force = false) {
-  const hit = cache.get(p.id)
-  if (!force && hit && Date.now() - hit.at < TTL) return
-  // 已经有一份（过期了）：先用着，后台重取。P4 项目面板算文档根要几秒，每个接口取项目都在这里等，
-  // 一分钟一过 Forge、测试页就要转好久（用户 2026-11-23）
-  if (!force && hit) {
-    if (!refreshing.has(p.id)) {
-      refreshing.add(p.id)
-      void askDocsRoot(p).finally(() => refreshing.delete(p.id))
-    }
-    return
-  }
+  follow()
+  if (!force && cache.has(p.id)) return
   await askDocsRoot(p)
 }
 
-/** 正在后台重取文档根的项目：同一个项目不叠着问 */
-const refreshing = new Set<string>() // 模块状态：运行时
+/** 订阅面板的文档根变化（只订一次）；插件停用时 stopDocsRootFollow 退订 */
+let off: (() => void) | undefined // 模块状态：运行时
+let following = false // 模块状态：运行时
+function follow() {
+  if (following) return
+  following = true
+  void import('@panel/server/docs/root-cache').then(
+    ({ onDocRootChange }) => {
+      off = onDocRootChange((id) => {
+        const hit = cache.get(id)
+        if (hit) void askDocsRoot(hit.p)
+      })
+    },
+    () => {
+      // 旧面板没有这个事件：取到的文档根一直用到插件重新加载
+    },
+  )
+}
+export function stopDocsRootFollow() {
+  off?.()
+  off = undefined
+  following = false
+}
 
 async function askDocsRoot(p: P) {
   try {
     const got = await c().projects?.docRoot?.(p.id)
     if (!got) return
     const root = path.resolve(got)
-    cache.set(p.id, { root, at: Date.now() })
+    cache.set(p.id, { root, p: { id: p.id, root: p.root } })
     // 告诉 UE 里的 AssetForge、GameTest（它们读 Saved/AgentPanel/docs-root.txt），文档根变了才重做
     if (hinted.get(p.id) !== root) {
       const moved = await syncDocsHint(p.root, root)
@@ -68,7 +82,7 @@ async function askDocsRoot(p: P) {
 
 /** 测试用 */
 export const setDocsRootForTest = (id: string, root: string | undefined) =>
-  root ? cache.set(id, { root, at: Date.now() }) : cache.delete(id)
+  root ? cache.set(id, { root, p: { id, root } }) : cache.delete(id)
 
 /**
  * 文档根下 AgentPanel/UE 里的一个文件：写在面板的文档根；读时那里没有、旧规则的位置有（升级前存的），就读旧的。

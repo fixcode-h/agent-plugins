@@ -2,8 +2,9 @@ import { ArrowDown, ChevronRight, Copy, Cpu, Filter, GitFork, Highlighter, Layer
 import { useMemo, useState, type MouseEvent } from 'react'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
-import { ErrorText, SearchBox } from '../../ui.tsx'
-import { copyText, openMenu, type MenuItem } from '../../menu.tsx'
+import { ErrorText } from '../../ui.tsx'
+import { SearchBox } from '@panel/web/src/components/ui/search-box'
+import { copyText, openMenu, type MenuItem } from '@panel/web/src/components/ui/item-menu'
 import { readTheme, useThemeTick } from './canvas.ts'
 import { luaColor, luaFullSource, luaOf, luaSource, useLuaTrace, type LuaTimer } from './lua-trace.ts'
 import { Chip } from './LuaToggles.tsx'
@@ -76,10 +77,7 @@ export function TimersTable({
     80,
   )
   const span = (res.data?.seconds ?? seconds) * 1000
-  const items = useMemo(
-    () => (res.data?.items ?? []).filter((x) => (x.gpu ? show.gpu : show.cpu)),
-    [res.data, show],
-  )
+  const items = useMemo(() => (res.data?.items ?? []).filter((x) => (x.gpu ? show.gpu : show.cpu)), [res.data, show])
   const groups = useMemo(() => {
     if (group === 'none') return [{ key: 'all', label: '', list: items }]
     const isLua = (x: TimerRow) => !x.gpu && !!luaRow(x)
@@ -127,7 +125,10 @@ export function TimersTable({
       { label: t('看调用者 / 被调用者'), icon: GitFork, onClick: () => actions.onPick(x) },
       { label: t('在时间轴上高亮'), icon: Highlighter, checked: picked === x.id, onClick: () => actions.onPick(x) },
       { label: t('找最慢的一次'), icon: Search, onClick: () => actions.onSlowest(x) },
-      { label: t('只看名字带它的'), icon: Filter, onClick: () => {
+      {
+        label: t('只看名字带它的'),
+        icon: Filter,
+        onClick: () => {
           setFilter(x.name)
           setBoxKey((k) => k + 1)
         },
@@ -196,7 +197,9 @@ export function TimersTable({
             key={k}
             type="button"
             aria-pressed={show[k]}
-            title={show[k] ? t('隐藏 {k} 计时器', { k: k.toUpperCase() }) : t('显示 {k} 计时器', { k: k.toUpperCase() })}
+            title={
+              show[k] ? t('隐藏 {k} 计时器', { k: k.toUpperCase() }) : t('显示 {k} 计时器', { k: k.toUpperCase() })
+            }
             onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}
             className={cn(
               'ue:rounded-md ue:px-1.5 ue:py-0.5 ue:font-mono ue:text-caption ue:transition-colors',
