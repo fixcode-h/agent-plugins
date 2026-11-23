@@ -1,5 +1,6 @@
 import { offlineClasses, offlineRows } from './uekit/gt-ref/offline/classes.ts'
 import { classIndex } from './uekit/gt-ref/class-index/index.ts'
+import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { assetChildren } from './asset-folders.ts'
@@ -19,6 +20,7 @@ import { GT_REF_OPS, gtRefOp } from './uekit/gt-ref/ops.ts'
 import { ensureLuaConfig } from './lua/settings.ts'
 import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, run, t, wildcard } from './util.ts'
+import { gameFileOf, p4SavePlan, type P4Exec, type P4Stale } from './p4-checkout.ts'
 import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
 
 /**
@@ -318,6 +320,8 @@ async function claim(ctx: OpCtx, card: Card, pkg: string) {
     if ((dirty.items ?? []).some((i) => i.package === pkg))
       throw new BridgeError(t('{pkg} 正被另一个对话修改、还没保存。等它保存或放弃改动后再改，不要绕过去', { pkg }))
   }
+  // 这个对话第一次改它：没法合并的资源本地落后时先问（问过的不再问）
+  if (other !== ctx.actor.taskId) await askStaleBefore(ctx, pkg)
   owners.set(key, ctx.actor.taskId)
 }
 
@@ -396,20 +400,71 @@ async function chooseCard(ctx: OpCtx, op: string, args: Record<string, unknown>)
   return card
 }
 
-/** P4 项目保存前签出（进默认变更列表，不提交）；git / svn 不用签出 */
-async function checkout(p: UeProject, card: Card, packages: string[]): Promise<string[]> {
+/** P4 项目保存前签出（进默认变更列表，不提交）；git / svn 不用签出。返回保存后要 p4 add 的文件 */
+async function checkout(ctx: OpCtx, card: Card, packages: string[]): Promise<string[]> {
+  const p = ctx.project
   if (p.vcs !== 'p4') return []
   const dirty = (await rpc(card, 'asset.dirty', {})) as {
     items?: { package: string; file: string; readOnly: boolean; isNew?: boolean }[]
   }
   const mine = (dirty.items ?? []).filter((i) => !packages.length || packages.includes(i.package))
-  const files = mine.filter((i) => i.readOnly).map((i) => i.file)
   // 还没存过盘的新资源：保存后 p4 add
   const added = mine.filter((i) => i.isNew).map((i) => i.file)
-  if (!files.length) return added
-  const r = await run('p4', ['-d', p.root, 'edit', '-c', 'default', ...files], { cwd: p.root, timeout: 60000 })
-  if (r.code !== 0) throw new BridgeError(t('P4 签出失败：{msg}', { msg: (r.err || r.out).trim() }))
-  return added
+  // 磁盘上已有的不论只不只读都问 P4（见 p4-checkout.ts）：可写但没打开的文件以前被跳过，改动不进任何变更列表
+  const plan = await p4SavePlan(
+    p4Exec(p),
+    mine.filter((i) => !i.isNew).map((i) => i.file),
+  )
+  if (plan.error) throw new BridgeError(t('P4 签出失败：{msg}', { msg: plan.error }))
+  // 改之前没问到的（Python、批量这类不经过占用的改法）保存前补问一次
+  await askStale(ctx, plan.stale)
+  if (plan.edit.length) {
+    const r = await p4Exec(p)(['edit', '-c', 'default', ...plan.edit])
+    if (r.code !== 0) throw new BridgeError(t('P4 签出失败：{msg}', { msg: (r.err || r.out).trim() }))
+  }
+  return [...added, ...plan.add]
+}
+
+const p4Exec =
+  (p: UeProject): P4Exec =>
+  (args) =>
+    run('p4', ['-d', p.root, ...args], { cwd: p.root, timeout: 60000 })
+
+// 会话：每个对话问过「本地版本落后」的资源文件，同一个只问一次（插件重启后最多再问一次）
+const staleAsked = new Set<string>()
+
+/**
+ * 没法合并的资源本地版本落后时，改之前先请用户确认（用户 2026-11-23 定）：代码文件不管远端，资源改完再更新只能丢掉一边。
+ * 同意就不更新、直接改；拒绝就这次不改，用户在 P4 里更新后再让 Agent 改。只问 Agent 的改动，你在网页上自己改不拦
+ */
+async function askStale(ctx: OpCtx, stale: P4Stale[]) {
+  const actor = ctx.actor
+  if (actor.kind !== 'agent') return
+  const fresh = stale.filter((s) => !staleAsked.has(`${actor.taskId}|${s.file}`))
+  if (!fresh.length) return
+  const lines = fresh.map((s) =>
+    t('{file}：本地 #{have}，P4 上最新 #{head}', {
+      file: path.relative(ctx.project.root, s.file),
+      have: s.have,
+      head: s.head,
+    }),
+  )
+  await ask(ctx, {
+    title: t('要改的资源本地版本落后（资源没法合并）'),
+    detail: `${lines.join('\n')}\n${t('同意：不更新，直接签出修改（之后提交会和 P4 上的新版本冲突）。拒绝：这次先不改，在 P4 里更新这几个资源后再让 Agent 改。')}`,
+  })
+  // 同意了才记住；拒绝（ask 抛错）时下次改还问
+  for (const s of fresh) staleAsked.add(`${actor.taskId}|${s.file}`)
+}
+
+/** Agent 第一次改某个 /Game 资源时（占用它的那一刻）看它是不是落后的二进制资源，是就先问 */
+async function askStaleBefore(ctx: OpCtx, pkg: string) {
+  const actor = ctx.actor
+  if (ctx.project.vcs !== 'p4' || actor.kind !== 'agent') return
+  const file = gameFileOf(ctx.project.root, pkg, existsSync)
+  if (!file || staleAsked.has(`${actor.taskId}|${file}`)) return
+  const plan = await p4SavePlan(p4Exec(ctx.project), [file])
+  await askStale(ctx, plan.stale)
 }
 
 /** P4 项目里新建和删除的文件也进默认变更列表（不提交）。失败不抛：引擎里的操作已经做完，把 P4 的报错放进结果原样给出 */
@@ -533,7 +588,7 @@ export async function runOp(
   await luaReady(ctx, card, op)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world
-  const added = op === 'asset.save' ? await checkout(ctx.project, card, (args.packages as string[]) ?? []) : []
+  const added = op === 'asset.save' ? await checkout(ctx, card, (args.packages as string[]) ?? []) : []
   const batch = isBatchArgs(args)
   // 批量：每个资源都要占住（别的对话正改着没保存的不让动）；批量一律走作业
   if (kind === 'asset' && op !== 'asset.revert' && op !== 'asset.undo')
