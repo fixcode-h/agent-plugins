@@ -1,3 +1,4 @@
+import { animDiffs, widgetDiffs } from './umg.ts'
 import type {
   AssetDiff,
   AssetSnap,
@@ -245,7 +246,7 @@ function graphDiff(name: string, a: SnapGraph | undefined, b: SnapGraph | undefi
 // ---------- 数据表的行 ----------
 
 /** GetTableAsJSON 的原文 → 行对象（键 Name 是行名）；读不出来时返回 null */
-function parseRows(text: string | undefined): SnapObject[] | null {
+export function parseRows(text: string | undefined): SnapObject[] | null {
   if (!text) return null
   try {
     const rows = JSON.parse(text) as Record<string, unknown>[]
@@ -263,6 +264,7 @@ function parseRows(text: string | undefined): SnapObject[] | null {
 }
 
 // ---------- 整份 ----------
+
 
 export function assetDiff(a: AssetSnap | null, b: AssetSnap | null): AssetDiff {
   const top = (b ?? a)!
@@ -293,6 +295,8 @@ export function assetDiff(a: AssetSnap | null, b: AssetSnap | null): AssetDiff {
     graphDiff(k, ga, gb),
   )
   const changedGraphs = graphs.filter((g) => g.change !== 'same')
+  const widgets = widgetDiffs(a?.blueprint?.widgets, b?.blueprint?.widgets, objDiff)
+  const anims = animDiffs(a?.blueprint?.anims, b?.blueprint?.anims)
   const stats: DiffStats = {
     props:
       defaults.count +
@@ -308,6 +312,10 @@ export function assetDiff(a: AssetSnap | null, b: AssetSnap | null): AssetDiff {
     nodesMod: changedGraphs.reduce((n, g) => n + g.modified.length, 0),
     rows: rows.filter((r) => r.change !== 'same').length,
     settings: settings.length,
+    widgetAdd: widgets.filter((w) => w.change === 'add').length,
+    widgetDel: widgets.filter((w) => w.change === 'del').length,
+    widgetMod: widgets.filter((w) => w.change === 'mod').length,
+    anims: anims.filter((x) => x.change !== 'same').length,
   }
   const notes = [a?.note, b?.note].filter((x): x is string => !!x)
   return {
@@ -322,6 +330,8 @@ export function assetDiff(a: AssetSnap | null, b: AssetSnap | null): AssetDiff {
     variables,
     settings,
     graphs,
+    widgets,
+    anims,
     stats,
     notes: [...new Set(notes)],
   }

@@ -59,7 +59,17 @@ export function TargetChips({ bar = false }: { bar?: boolean } = {}) {
       {`${w?.type === 'PIE' ? 'PIE' : kindLabel(inst.kind)} ${inst.pid}`}
     </Chip>
   ) : (
-    <Chip tone={conn.tone === 'ok' ? 'muted' : conn.tone} title={conn.text}>
+    <Chip
+      tone={conn.tone === 'ok' ? 'muted' : conn.tone}
+      title={
+        'unlinked' in conn
+          ? t('这个项目的编辑器开着（PID {pid}），但没有 UELink 的名片：点一下到「UE 插件」做连接诊断', {
+              pid: conn.unlinked ?? '',
+            })
+          : conn.text
+      }
+      onClick={'unlinked' in conn ? () => go('plugins') : undefined}
+    >
       {conn.text}
     </Chip>
   )

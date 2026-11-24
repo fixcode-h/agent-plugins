@@ -1,16 +1,16 @@
-import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { diffEmpty } from '../../shared/asset-diff/diff.ts'
+import type { PropRef } from '../../shared/asset-diff/prop-history.ts'
 import type { AssetDiff, PropDiff } from '../../shared/asset-diff/types.ts'
 import { op } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
+import { AnimPane } from './AnimPane.tsx'
 import { GraphPane } from './GraphPane.tsx'
 import { ObjPane } from './ObjPane.tsx'
 import { Mark } from './PropGrid.tsx'
 import { VarsPane } from './VarsPane.tsx'
 
-export type Tab = 'props' | 'vars' | 'graph' | 'rows'
+export type Tab = 'widgets' | 'anims' | 'props' | 'vars' | 'graph' | 'rows'
 
 /**
  * 一份资源差异的正文（说明条、页签、属性 / 变量 / 图表 / 行）：「版本差异」弹窗和资源页的「改动」页共用，
@@ -26,6 +26,7 @@ export function DiffBody({
   b,
   editorOn,
   onRestore,
+  onHistory,
 }: {
   pkg: string
   diff: AssetDiff
@@ -38,6 +39,8 @@ export function DiffBody({
   editorOn: boolean
   /** 行尾「改回旧值」：只有新的一边是编辑器里那份时才给 */
   onRestore?: (p: PropDiff) => void
+  /** 属性行的「这个值的来历」（版本差异弹窗才给） */
+  onHistory?: (ref: PropRef, label: string) => void
 }) {
   const { project } = useUe()
   const { toast } = h()
@@ -66,7 +69,19 @@ export function DiffBody({
           </button>
         ))}
       </nav>
-      {curTab === 'graph' ? (
+      {curTab === 'widgets' ? (
+        <ObjPane
+          mode="widgets"
+          objs={diff.widgets}
+          assetName={name}
+          only={only}
+          a={a}
+          b={b}
+          onHistory={onHistory}
+        />
+      ) : curTab === 'anims' ? (
+        <AnimPane anims={diff.anims} only={only} a={a} b={b} />
+      ) : curTab === 'graph' ? (
         <GraphPane
           graphs={diff.graphs}
           only={only}
@@ -82,7 +97,7 @@ export function DiffBody({
       ) : curTab === 'vars' ? (
         <VarsPane diff={diff} only={only} a={a} b={b} />
       ) : curTab === 'rows' ? (
-        <ObjPane mode="rows" objs={diff.rows} assetName={name} only={only} a={a} b={b} />
+        <ObjPane mode="rows" objs={diff.rows} assetName={name} only={only} a={a} b={b} onHistory={onHistory} />
       ) : (
         <ObjPane
           mode={diff.blueprint ? 'blueprint' : 'asset'}
@@ -93,6 +108,7 @@ export function DiffBody({
           a={a}
           b={b}
           onRestore={restore}
+          onHistory={onHistory}
         />
       )}
     </>
@@ -103,8 +119,15 @@ export function tabsOf(d: AssetDiff): { id: Tab; label: string; n: number }[] {
   const s = d.stats
   const objs = d.blueprint ? d.components : d.subobjects
   const props = d.defaults.count + objs.filter((o) => o.change !== 'same').length
+  const umg = d.widgets.length > 0
   return [
-    { id: 'props', label: d.blueprint ? t('类默认值与组件') : t('属性'), n: props },
+    ...(umg
+      ? [
+          { id: 'widgets' as const, label: t('控件树'), n: s.widgetAdd + s.widgetDel + s.widgetMod },
+          ...(d.anims.length ? [{ id: 'anims' as const, label: t('动画'), n: s.anims }] : []),
+        ]
+      : []),
+    { id: 'props', label: umg ? t('类默认值') : d.blueprint ? t('类默认值与组件') : t('属性'), n: props },
     ...(d.rows.length ? [{ id: 'rows' as const, label: t('行'), n: s.rows }] : []),
     ...(d.blueprint || d.settings.length
       ? [{ id: 'vars' as const, label: d.blueprint ? t('变量与设置') : t('设置'), n: s.vars + s.settings }]
@@ -136,6 +159,10 @@ export function SummaryTags({ diff, onTab }: { diff: AssetDiff; onTab?: (t: Tab)
     )
   return (
     <span className="ue:flex ue:flex-wrap ue:items-center ue:gap-1">
+      {s.widgetMod > 0 && tag('mod', t('控件 改 {n}', { n: s.widgetMod }), 'widgets')}
+      {s.widgetAdd > 0 && tag('add', t('控件 +{n}', { n: s.widgetAdd }), 'widgets')}
+      {s.widgetDel > 0 && tag('del', t('控件 −{n}', { n: s.widgetDel }), 'widgets')}
+      {s.anims > 0 && tag('mod', t('动画 {n}', { n: s.anims }), 'anims')}
       {s.props > 0 && tag('mod', t('属性 {n}', { n: s.props }), 'props')}
       {s.compAdd > 0 && tag('add', t('组件 +{n}', { n: s.compAdd }), 'props')}
       {s.compDel > 0 && tag('del', t('组件 −{n}', { n: s.compDel }), 'props')}
@@ -164,28 +191,6 @@ function Notes({ diff }: { diff: AssetDiff }) {
       {lines.map((l) => (
         <p key={String(l)}>{l}</p>
       ))}
-    </div>
-  )
-}
-
-/** 读取中：第一次要起后台编辑器，等得比较久，显示已经等了多久 */
-export function Loading({ since }: { since?: number }) {
-  const [, tick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000)
-    return () => clearInterval(id)
-  }, [])
-  const sec = since ? Math.round((Date.now() - since) / 1000) : 0
-  return (
-    <div className="ue:flex ue:flex-col ue:gap-2 ue:p-6 ue:text-body">
-      <span className="ue:flex ue:items-center ue:gap-2">
-        <Loader2 className="ue:h-4 ue:w-4 ue:animate-spin" />
-        {t('取出两版文件，在编辑器里读出组件、类默认值、变量和图表…')}
-        {sec > 2 && <span className="ue:text-caption ue:text-subtle">{t('已等 {n} 秒', { n: sec })}</span>}
-      </span>
-      <span className="ue:text-footnote ue:text-subtle">
-        {t('编辑器没开时第一次要起后台编辑器（约 20–60 秒）；读过的版本按文件内容记在数据目录，再看不用重读')}
-      </span>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { ChevronDown, Undo2 } from 'lucide-react'
+import { ChevronDown, History, Undo2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { ObjDiff, PropDiff } from '../../shared/asset-diff/types.ts'
 import { labelOf, splitCategory } from '../details/model.ts'
@@ -21,12 +21,15 @@ export function PropGrid({
   a,
   b,
   onRestore,
+  onHistory,
 }: {
   obj: ObjDiff
   only: boolean
   a: string
   b: string
   onRestore?: (p: PropDiff) => void
+  /** 属性名后面悬停出现「这个值的来历」（版本差异弹窗才给） */
+  onHistory?: (p: PropDiff) => void
 }) {
   const { cn } = h()
   const groups = new Map<string, PropDiff[]>()
@@ -55,7 +58,7 @@ export function PropGrid({
           {n > 0 && <Mark kind="mod">{t('改 {n}', { n })}</Mark>}
         </div>
         {shown.map((p) => (
-          <PropRows key={p.name} p={p} restore={onRestore} />
+          <PropRows key={p.name} p={p} restore={onRestore} history={onHistory} />
         ))}
         {only && shown.length < props.length && (
           <div className={cn(CELL, 'ue:col-span-full ue:justify-center ue:text-caption ue:text-subtle')}>
@@ -82,10 +85,19 @@ export function PropGrid({
   )
 }
 
-function PropRows({ p, restore }: { p: PropDiff; restore?: (p: PropDiff) => void }) {
+function PropRows({
+  p,
+  restore,
+  history,
+}: {
+  p: PropDiff
+  restore?: (p: PropDiff) => void
+  history?: (p: PropDiff) => void
+}) {
   const { cn, ui } = h()
   const label = labelOf({
-    name: p.name,
+    // 控件的插槽属性名带 Slot. 前缀（shared/asset-diff/umg.ts），分组已经写了「插槽」，显示时去掉
+    name: p.name.replace(/^Slot\./, ''),
     type: typeof p.a === 'boolean' ? 'bool' : '',
     displayName: p.label,
     value: null,
@@ -96,10 +108,15 @@ function PropRows({ p, restore }: { p: PropDiff; restore?: (p: PropDiff) => void
   return (
     <>
       <div
-        className={cn(CELL, changed && 'ue:shadow-[inset_3px_0_0_var(--c-grid-edited)]')}
+        className={cn(CELL, 'ue:group', changed && 'ue:shadow-[inset_3px_0_0_var(--c-grid-edited)]')}
         title={p.name !== label ? p.name : undefined}
       >
         <span className="ue:truncate">{label}</span>
+        {history && p.change !== 'del' && (
+          <span className="ue:ml-auto ue:shrink-0 ue:opacity-0 ue:group-hover:opacity-100 ue:focus-within:opacity-100">
+            <ui.IconButton icon={History} size="sm" label={t('这个值的来历')} onClick={() => history(p)} />
+          </span>
+        )}
       </div>
       <div
         className={cn(CELL, 'ue:font-mono', p.change === 'mod' || p.change === 'del' ? OLD : 'ue:text-muted')}

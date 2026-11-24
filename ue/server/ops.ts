@@ -7,6 +7,7 @@ import { assetChildren } from './asset-folders.ts'
 import { assetQuery } from './asset-query.ts'
 import { newlyDirty, pythonTxId, pythonWrapper } from './python-run.ts'
 import { autoBackground, ensureBackground, noBackgroundMsg } from './editor.ts'
+import { editorStartingWhy } from './launch/bg-guard.ts'
 import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
@@ -389,6 +390,10 @@ async function chooseCard(ctx: OpCtx, op: string, args: Record<string, unknown>)
   if (assets && !live.length && !(ctx.target?.instance && ctx.target.instance !== 'background')) {
     const bg = cards.find((x) => x.kind === 'background')
     if (bg) return bg
+    // 编辑器开着但没写名片（UELink 没加载、开的是另一份工程、还在加载）：先说这个，别让人去起后台编辑器
+    // （用户 2026-11-24：编辑器明明开着，却提示要启动后台编辑器）
+    const busy = await editorStartingWhy(ctx.project).catch(() => undefined)
+    if (busy) throw new BridgeError(busy)
     if (!autoBackground()) throw new BridgeError(noBackgroundMsg())
     return ensureBackground(ctx.project)
   }

@@ -52,6 +52,21 @@ export interface SnapVar {
   flags: string[]
 }
 
+/** 控件蓝图的一个控件（UELink 2.21）：path 是控件树里的路径（Root/Child），slot 是插槽对象的属性 */
+export interface SnapWidget extends SnapObject {
+  path: string
+  parent: string
+  slotClass?: string
+  slot?: SnapProp[]
+}
+
+/** 控件蓝图的一个动画（UELink 2.21）：通道和 umg.anims 一致，keys 是 [秒, 值] */
+export interface SnapAnim {
+  name: string
+  length: number
+  channels: { target: string; channel: string; keys: [number, number][] }[]
+}
+
 export interface AssetSnap {
   class: string
   props: SnapProp[]
@@ -62,6 +77,9 @@ export interface AssetSnap {
     variables: SnapVar[]
     components: SnapComponent[]
     graphs: SnapGraph[]
+    /** 控件蓝图才有（UELink 2.21 起） */
+    widgets?: SnapWidget[]
+    anims?: SnapAnim[]
   }
   subobjects?: SnapObject[]
   /** 数据表 / 曲线表的行：GetTableAsJSON 的原文 */
@@ -154,6 +172,9 @@ export interface AssetDiff {
   /** 父类、接口这类蓝图设置的变化：每条一句，界面直接列出来 */
   settings: { label: string; a: string; b: string }[]
   graphs: GraphDiff[]
+  /** 控件蓝图的控件树：每个控件一个 ObjDiff，parent 是父控件名；插槽的属性分类写成「插槽（类）」 */
+  widgets: ObjDiff[]
+  anims: AnimDiff[]
   stats: DiffStats
   notes: string[]
 }
@@ -172,4 +193,25 @@ export interface DiffStats {
   nodesMod: number
   rows: number
   settings: number
+  widgetAdd: number
+  widgetDel: number
+  widgetMod: number
+  /** 有变化的动画 */
+  anims: number
+}
+
+/** 一条动画通道的变化：关键帧写成「秒→值」的一串，网页直接列 */
+export interface ChannelDiff {
+  key: string
+  change: Change
+  a?: string
+  b?: string
+}
+
+export interface AnimDiff {
+  name: string
+  change: Change
+  lengthA?: number
+  lengthB?: number
+  channels: ChannelDiff[]
 }
