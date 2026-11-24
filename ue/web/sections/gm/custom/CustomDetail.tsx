@@ -88,7 +88,7 @@ export function CustomDetail(p: {
   toChat?: (text: string) => void
   gm: GmStore
   config?: LuaGmConfig
-  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
 }) {
   const { ui, cn } = h()
   const c = p.c

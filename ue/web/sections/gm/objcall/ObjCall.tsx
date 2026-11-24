@@ -29,7 +29,7 @@ export function ObjCall({
   d: GmData
   live: boolean
   canRun: string
-  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
 }) {
   const { project } = useUe()
   const mid = usePane('gm-objcall-members', '45%', 260)

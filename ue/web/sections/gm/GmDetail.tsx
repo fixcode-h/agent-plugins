@@ -51,7 +51,7 @@ export function GmDetail({
   onFav: () => void
   onMacro: () => void
   toChat?: (text: string) => void
-  onEditBinding: (p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
   /** 参数预设条（ArgPresets），有参数时才给 */
   presets?: ReactNode
 }) {

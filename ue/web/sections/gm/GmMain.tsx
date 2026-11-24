@@ -38,7 +38,7 @@ export function GmMain(p: {
   gt: { installed: boolean; known: boolean; live: boolean }
   canRun: string
   toChat?: (text: string) => void
-  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
   onMacro: (e: GmEntry) => void
   onOpenObjCall: (c: GmCustom) => void
   onEditRule: (c: GmCustom) => void
@@ -153,7 +153,7 @@ export function GmMain(p: {
         onFav={() => run.toggleFav(entry)}
         onMacro={() => p.onMacro(entry)}
         toChat={p.toChat}
-        onEditBinding={(prm, current) => p.onEditBinding(entry, prm, current)}
+        onEditBinding={(prm, current, paste) => p.onEditBinding(entry, prm, current, paste)}
         presets={
           entry.params.length
             ? presetBar(entry.key, run.argsOf(entry), (a) => Array.isArray(a) && run.fill(entry, a))

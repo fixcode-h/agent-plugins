@@ -35,8 +35,9 @@ import { useGmMenus } from './nav/use-gm-menus.ts'
 import { useObjCallState } from './objcall/use-objcall-state.tsx'
 import { useGameTest } from './objcall/use-objcall.ts'
 import { RecentRuns, type RecentRun } from './RecentRuns.tsx'
+import { saveBinding } from './save-binding.ts'
 import { TableBindDialog } from './TableBindDialog.tsx'
-import { listTables, searchRows, storedTable, tableShape } from './tables.ts'
+import { listTables, searchRows, tableShape } from './tables.ts'
 import { useGm } from './use-gm.ts'
 import { useGmRun } from './use-gm-run.ts'
 import { AddToTestHost } from '../uekit/gt-gm/AddToTest.tsx'
@@ -342,7 +343,15 @@ export function GmPage() {
               gt={gt}
               canRun={canRun}
               toChat={chat.available ? chat.send : undefined}
-              onEditBinding={(e, prm, current) => setBind({ entry: e, p: prm, current })}
+              onEditBinding={(e, prm, current, paste) =>
+                paste
+                  ? // 右键「粘贴关联」直接存，不开弹窗
+                    void saveBinding({ projectId: project.id, d }, { entry: e, p: prm }, paste).then(
+                      () => toast.success(t('已把关联粘贴到 {p}', { p: prm.name })),
+                      (err: Error) => toast.error(err.message),
+                    )
+                  : setBind({ entry: e, p: prm, current })
+              }
               onMacro={(e) => void addToMacro(e)}
               onOpenObjCall={(c) => {
                 setCat('objcall')
@@ -405,24 +414,8 @@ export function GmPage() {
           }}
           onClose={() => setBind(undefined)}
           onSave={async (raw) => {
-            // 表格路径存相对版本库根的（shared/gm/table-path.ts）；旧的绝对路径在这里换成相对的
-            const b = raw && { ...raw, table: storedTable(project.id, raw.table) }
-            const key = `${bind.entry.name}.${bind.p.name}`
             try {
-              if (bind.entry.src === 'lua') {
-                const r = await ppost<{ config: LuaGmConfig; scan: LuaGmScan }>(project.id, 'lua-gm/config', {
-                  binding: { key, value: b },
-                })
-                d.lua.setData(r)
-              } else {
-                // C++ GM 的关联存 gm.json（团队共用）；改成关联表格后旧的 DataTable 绑定一起去掉
-                const tableBindings = { ...d.gm.tableBindings }
-                const bindings = { ...d.gm.bindings }
-                delete bindings[key]
-                if (b) tableBindings[key] = b
-                else delete tableBindings[key]
-                await d.saveGm({ ...d.gm, tableBindings, bindings })
-              }
+              await saveBinding({ projectId: project.id, d }, bind, raw)
               setBind(undefined)
             } catch (e) {
               toast.error((e as Error).message)

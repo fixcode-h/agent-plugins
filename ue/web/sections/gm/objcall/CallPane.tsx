@@ -47,7 +47,7 @@ export function CallPane(p: {
   onNewRule: (param: CallParam & { obj: ParamClass }) => void
   gm: GmStore
   config?: LuaGmConfig
-  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (entry: GmEntry, p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
 }) {
   const { ui } = h()
   const multi = (p.hit?.count ?? 0) > 1

@@ -84,6 +84,7 @@ export function ParamTable({
           binding={b}
           title={t('关联表格的列：运行时下拉里按主列、描述列搜（和 GM 参数同一种关联，团队共用）')}
           onClick={() => setEditing(true)}
+          onPaste={(x) => void save(x)}
         />
       </span>
       {editing && (
