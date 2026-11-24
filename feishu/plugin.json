@@ -1,14 +1,88 @@
 {
   "id": "feishu",
   "name": "飞书",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "icon": "file-text",
-  "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli）读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
+  "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli），或你填的飞书登录 token，读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/feishu",
   "activation": "global",
-  "api": 17,
+  "api": 18,
   "settings": [
+    {
+      "key": "authMode",
+      "type": "select",
+      "group": "登录",
+      "label": "登录方式",
+      "desc": "自动：找得到 lark-cli 就用它，找不到时用下面填的 token。token 方式能读文档、知识库、表格、多维表格、评论和妙记，也能写表格、多维表格和评论；改文档正文、新建文档、改 Markdown 文件、搜妙记只能经 lark-cli",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "自动（优先 lark-cli，找不到用 token）"
+        },
+        {
+          "value": "cli",
+          "label": "只用 lark-cli"
+        },
+        {
+          "value": "token",
+          "label": "只用 token"
+        }
+      ]
+    },
+    {
+      "key": "brand",
+      "type": "select",
+      "group": "登录",
+      "label": "开放平台",
+      "desc": "token 是在哪个平台拿的",
+      "default": "feishu",
+      "options": [
+        {
+          "value": "feishu",
+          "label": "飞书（open.feishu.cn）"
+        },
+        {
+          "value": "lark",
+          "label": "Lark 国际版（open.larksuite.com）"
+        }
+      ]
+    },
+    {
+      "key": "userToken",
+      "type": "secret",
+      "group": "登录",
+      "label": "user_access_token",
+      "desc": "用户身份的令牌（u- 开头），大约 2 小时过期。加密存在本机，不进设置文件、不给 Agent 看",
+      "default": "",
+      "placeholder": "u-xxxx"
+    },
+    {
+      "key": "refreshToken",
+      "type": "secret",
+      "group": "登录",
+      "label": "refresh_token",
+      "desc": "选填：和下面的 App ID、App Secret 一起填，token 过期时自动换新的",
+      "default": ""
+    },
+    {
+      "key": "appId",
+      "type": "text",
+      "group": "登录",
+      "label": "App ID",
+      "desc": "选填：拿 token 用的飞书应用的 App ID（cli_ 开头），自动续期用",
+      "default": "",
+      "placeholder": "cli_xxxx"
+    },
+    {
+      "key": "appSecret",
+      "type": "secret",
+      "group": "登录",
+      "label": "App Secret",
+      "desc": "选填：同一个应用的 App Secret，自动续期用",
+      "default": ""
+    },
     {
       "key": "cliPath",
       "type": "path",
