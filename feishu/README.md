@@ -1,20 +1,21 @@
 # 飞书（feishu）
 
-让 Agent 经**本机已登录的飞书 CLI（lark-cli）**，或**你填的飞书登录 token**，读写飞书文档、表格、多维表格、评论、知识库和妙记。全局插件，对所有对话生效；手动安装（设置 → 插件）。
+让 Agent 经**本机已登录的飞书 CLI（lark-cli）**，或**你在面板「账号授权」里填的飞书 token**，读写飞书文档、表格、多维表格、评论、知识库和妙记。全局插件，对所有对话生效；手动安装（设置 → 插件）。
 
-## 用之前
+## 用之前：在「账号授权」里登录（1.2.0 起，要面板插件接口 19）
 
-```bash
-npx @larksuite/cli@latest install
-lark-cli auth login
-```
+面板 设置 →「账号授权」→ **飞书 CLI**：
 
-留空「lark-cli 路径」时自动找（PATH、Windows 注册表里新加的 PATH、npm 全局目录、常见安装目录），找到的位置显示在设置的「运行状态」里；装在别处就填完整路径。
+1. 「一键安装」（`npm i -g @larksuite/cli`）。
+2. 「浏览器授权」：第一次先在浏览器里建一个飞书应用（`lark-cli config init --new`），再登录授权（`lark-cli auth login --recommend`）。
 
-### 不装 lark-cli：用 token 登录（1.1.0 起，要面板插件接口 18）
+插件用账号授权检测到的 lark-cli 和登录状态（`ctx.integrations.get('feishu')`），插件参数里不再放登录信息。装在面板找不到的地方时，插件参数里的「lark-cli 路径」填完整路径。
 
-在插件参数「登录」里填 `user_access_token`（u- 开头，约 2 小时过期）；想自动续期再填 `refresh_token` 和拿 token 用的应用的 App ID、App Secret。
-令牌、App Secret 是面板的保密项：加密存在本机数据目录 `secrets/`，不进设置文件、不进环境变量、不随数据备份导出，网页上只显示末 4 位。
+### 不装 lark-cli：备用 token
+
+同一张卡片的「备用登录」里填 `user_access_token`（u- 开头，约 2 小时过期）；想自动续期再填 `refresh_token` 和拿 token 用的应用的 App ID、App Secret，用 Lark 国际版的把「开放平台」选成 Lark。
+这些由面板加密存在本机数据目录 `secrets/`（命名空间 `integration:feishu`），不进设置文件、不进环境变量、不随数据备份导出，网页上只显示末 4 位；插件续期后把新令牌写回同一处（`ctx.integrations.credentials('feishu')`）。
+1.1.0 填在插件参数「登录」里的 token，升级后第一次启动自动搬过去（`server/feishu/login.ts`）。
 
 「登录方式」：自动（找得到 lark-cli 就用它，找不到用 token）/ 只用 lark-cli / 只用 token。token 方式直接调飞书开放接口（`server/feishu/openapi/`，按「工具.动作」登记），权限闸、审计和 lark-cli 那条路是同一套：
 
