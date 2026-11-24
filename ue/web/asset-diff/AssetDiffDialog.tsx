@@ -1,16 +1,24 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { VersionDiffShell, type VersionPick } from '@panel/web/src/components/ui/version-diff'
+import type { PropRef } from '../../shared/asset-diff/prop-history.ts'
 import type { AssetDiff, PropDiff } from '../../shared/asset-diff/types.ts'
-import { op, pget, ppost } from '../api.ts'
+import { op, pget } from '../api.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
-import { DiffBody, Loading, SummaryTags, type Tab } from './DiffBody.tsx'
-import { closeAssetDiff, useAssetDiffTarget } from './store.ts'
+import { DiffBody, SummaryTags, type Tab } from './DiffBody.tsx'
+import { FailPane } from './FailPane.tsx'
+import { DiffLoading, ReaderChip } from './Progress.tsx'
+import { useDiffRun } from './use-diff-run.ts'
+import { closeAssetDiff, takeInitialRev, useAssetDiffTarget } from './store.ts'
+import { ChangeSetStrip } from './ChangeSetStrip.tsx'
+import { PropHistoryPane } from './PropHistoryPane.tsx'
+import { RevActions } from './RevActions.tsx'
 
 interface History {
   vcs: 'git' | 'p4' | 'svn' | 'none'
   base: string
-  revs: { id: string; label: string; author: string; time: string; message: string }[]
+  /** change：提交号 / 变更列表号（面板 vcs-history 给，查「同一提交里一起改的资源」用） */
+  revs: { id: string; label: string; author: string; time: string; message: string; change?: string }[]
   error?: string
   file: string
 }
@@ -37,18 +45,20 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
   const [against, setAgainst] = useState('')
   const [side, setSide] = useState<'live' | 'disk'>(editorOn ? 'live' : 'disk')
   const [only, setOnly] = useState(true)
-  const [tab, setTab] = useState<Tab>('props')
-  // 算过的差异：键是「旧|新」，这次打开里一直留着（左栏的小标签从这里来）
-  const done = useRef(new Map<string, AssetDiff>())
-  const [, bump] = useState(0)
-  const [since, setSince] = useState(0)
-  // 出错的是哪一对：换到别的版本再回来时不残留
-  const [failed, setFailed] = useState<{ key: string; msg: string } | null>(null)
-  const [nonce, setNonce] = useState(0)
+  // 默认第一个页签（控件蓝图是控件树，别的回落到属性页，见 DiffBody）
+  const [tab, setTab] = useState<Tab>('widgets')
+  const [propHist, setPropHist] = useState<{ ref: PropRef; label: string } | null>(null)
 
   useEffect(() => {
-    pget<History>(project.id, `asset-history?path=${encodeURIComponent(pkg)}`).then(setHist, (e: Error) =>
-      setHistError(e.message),
+    // 从「同一提交里一起改的资源」点过来时停在同一版
+    const want = takeInitialRev()
+    pget<History>(project.id, `asset-history?path=${encodeURIComponent(pkg)}`).then(
+      (r) => {
+        setHist(r)
+        const i = want ? r.revs.findIndex((x) => x.id === want) : -1
+        if (i >= 0) setPickRaw(i)
+      },
+      (e: Error) => setHistError(e.message),
     )
   }, [project.id, pkg])
 
@@ -62,23 +72,9 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
   const from: string | null = !hist ? null : against || (pick === 'local' ? hist.base : prevOf(pick))
   const to: string = pick === 'local' ? (editorOn ? side : 'disk') : (revs[pick]?.id ?? '')
   const key = `${from ?? '∅'}|${to}`
-  const diff = done.current.get(key)
-
-  useEffect(() => {
-    if (!hist || hist.vcs === 'none' || !to || done.current.has(key)) return
-    setSince(Date.now())
-    setFailed(null)
-    // 换了版本也让这一次算完：结果记下，点回来直接显示
-    ppost<AssetDiff>(project.id, 'asset-diff', { path: pkg, from, to }).then(
-      (d) => {
-        done.current.set(key, d)
-        bump((n) => n + 1)
-      },
-      (e: Error) => setFailed({ key, msg: e.message }),
-    )
-    // 按要比的两边和「重新读」变化重取
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, hist, nonce])
+  const run = useDiffRun(project.id, pkg, hist && hist.vcs !== 'none' && to ? { key, from, to } : null)
+  const done = run.done
+  const diff = done.get(key)
 
   const labelOf = (id: string | null) =>
     id === null
@@ -95,29 +91,38 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
   const a = labelOf(from)
   const b = labelOf(to)
 
-  const restore =
+  // 改编辑器里那份的类默认值（行尾「改回旧值」、来历栏「改回这个值」）
+  const setProp =
     pick === 'local' && to === 'live'
-      ? (p: PropDiff) => {
+      ? (prop: string, value: unknown) => {
           const objPath = diff?.blueprint ? `${pkg}.Default__${name}_C` : `${pkg}.${name}`
-          op(project.id, 'set', { path: objPath, prop: p.name, value: p.a }).then(
+          op(project.id, 'set', { path: objPath, prop, value }).then(
             () => {
               toast.success(t('已改回旧值：在资源页点「保存」才写回文件'))
-              done.current.delete(key)
-              setNonce((n) => n + 1)
+              run.retry()
             },
             (e: Error) => toast.error(e.message),
           )
         }
       : undefined
+  const restore = setProp && ((p: PropDiff) => setProp(p.name, p.a))
+  const jumpTo = (rev: string) => {
+    if (rev === 'live' || rev === 'disk') return setPick('local')
+    const i = revs.findIndex((r) => r.id === rev)
+    if (i >= 0) setPick(i)
+  }
+  const cur = typeof pick === 'number' ? revs[pick] : undefined
+  // 还原到哪一版：选中的那一版；本地改动页是最近一次提交（git HEAD / p4 #have）
+  const restoreRev = cur?.id ?? hist?.base ?? ''
 
   // 左栏小标签：这次打开里算过的（和上一版比的那一次）
   const tags: Record<string, ReactNode> = {}
   for (const [i, r] of revs.entries()) {
-    const d = done.current.get(`${prevOf(i) ?? '∅'}|${r.id}`)
+    const d = done.get(`${prevOf(i) ?? '∅'}|${r.id}`)
     if (d) tags[r.id] = <SummaryTags diff={d} />
   }
   if (hist) {
-    const d = done.current.get(`${hist.base}|${editorOn ? side : 'disk'}`)
+    const d = done.get(`${hist.base}|${editorOn ? side : 'disk'}`)
     if (d) tags.local = <SummaryTags diff={d} />
   }
 
@@ -140,7 +145,23 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
         <>
           <span className="ue:font-mono ue:text-body ue:font-medium">{`${a} → ${b}`}</span>
           {diff && <SummaryTags diff={diff} onTab={setTab} />}
+          {!diff && <ReaderChip reader={run.progress?.reader} />}
           <span className="ue:flex-1" />
+          {hist && hist.vcs !== 'none' && restoreRev && (
+            <RevActions
+              pkg={pkg}
+              rev={restoreRev}
+              revLabel={cur?.label ?? labelOf(hist.base)}
+              local={pick === 'local'}
+              diff={diff}
+              a={a}
+              b={b}
+              onRestored={() => {
+                setPropHist(null)
+                run.retry()
+              }}
+            />
+          )}
           {hist && hist.vcs !== 'none' && (
             <ui.Select
               size="sm"
@@ -180,24 +201,40 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
         </>
       }
     >
-      {failed?.key === key ? (
-        <p className="ue:p-4 ue:text-body ue:whitespace-pre-wrap ue:text-danger">{failed.msg}</p>
-      ) : !diff ? (
-        !hist || hist.vcs === 'none' ? null : (
-          <Loading since={since} />
-        )
-      ) : (
-        <DiffBody
-          pkg={pkg}
-          diff={diff}
-          only={only}
-          tab={tab}
-          onTab={setTab}
-          a={a}
-          b={b}
-          editorOn={editorOn}
-          onRestore={restore}
-        />
+      {cur?.change && <ChangeSetStrip key={cur.id} pkg={pkg} change={cur.change} label={cur.label} rev={cur.id} />}
+      {diff ? null : run.failed ? (
+        <FailPane failed={run.failed} onRetry={run.retry} onClose={onClose} />
+      ) : !hist || hist.vcs === 'none' ? null : (
+        <DiffLoading progress={run.progress} since={run.since} onCancel={run.cancel} />
+      )}
+      {diff && (
+        <div className="ue:flex ue:min-h-0 ue:flex-1">
+          <div className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">
+            <DiffBody
+              pkg={pkg}
+              diff={diff}
+              only={only}
+              tab={tab}
+              onTab={setTab}
+              a={a}
+              b={b}
+              editorOn={editorOn}
+              onRestore={restore}
+              onHistory={(ref, label) => setPropHist({ ref, label })}
+            />
+          </div>
+          {propHist && (
+            <PropHistoryPane
+              pkg={pkg}
+              propRef={propHist.ref}
+              label={propHist.label}
+              start={to}
+              onClose={() => setPropHist(null)}
+              onJump={jumpTo}
+              onSet={setProp && propHist.ref.kind === 'defaults' ? (v) => setProp(propHist.ref.prop, v) : undefined}
+            />
+          )}
+        </div>
       )}
     </VersionDiffShell>
   )

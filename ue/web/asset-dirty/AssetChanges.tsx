@@ -1,9 +1,12 @@
 import { FilePenLine, Lock, Save, Undo2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { AssetDiff, PropDiff } from '../../shared/asset-diff/types.ts'
-import { op, ppost } from '../api.ts'
+import type { PropDiff } from '../../shared/asset-diff/types.ts'
+import { op } from '../api.ts'
 import { DiffButton } from '../asset-diff/DiffButton.tsx'
-import { DiffBody, Loading, SummaryTags, type Tab } from '../asset-diff/DiffBody.tsx'
+import { DiffBody, SummaryTags, type Tab } from '../asset-diff/DiffBody.tsx'
+import { FailPane } from '../asset-diff/FailPane.tsx'
+import { DiffLoading } from '../asset-diff/Progress.tsx'
+import { useDiffRun } from '../asset-diff/use-diff-run.ts'
 import { useUe } from '../ctx.tsx'
 import { h, t } from '../host.ts'
 import { Badge } from '../ui.tsx'
@@ -23,31 +26,17 @@ export function AssetChanges({ path }: { path: string }) {
   const editorOn = (state?.instances ?? []).some((i) => i.kind === 'editor')
   const item = useDirtyState().items.find((d) => d.package === pkg)
   const act = useDirtyActions()
-  const [diff, setDiff] = useState<AssetDiff>()
-  const [error, setError] = useState('')
-  const [since, setSince] = useState(0)
-  const [nonce, setNonce] = useState(0)
   const [only, setOnly] = useState(true)
-  const [tab, setTab] = useState<Tab>('props')
+  const [tab, setTab] = useState<Tab>('widgets')
   const isNew = !!item?.isNew
 
+  // 还没存过盘的新资源：磁盘上没有这一边，按「新建」比
+  const from = isNew ? null : 'disk'
+  const run = useDiffRun(project.id, pkg, { key: `${from ?? '∅'}|live`, from, to: 'live' })
+  const diff = run.done.get(`${from ?? '∅'}|live`)
   useEffect(() => {
-    let live = true
-    setSince(Date.now())
-    setError('')
-    // 还没存过盘的新资源：磁盘上没有这一边，按「新建」比
-    ppost<AssetDiff>(project.id, 'asset-diff', { path: pkg, from: isNew ? null : 'disk', to: 'live' }).then(
-      (d) => {
-        if (!live) return
-        setDiff(d)
-        setDiffSummary(pkg, d)
-      },
-      (e: Error) => live && setError(e.message),
-    )
-    return () => {
-      live = false
-    }
-  }, [project.id, pkg, isNew, nonce])
+    if (diff) setDiffSummary(pkg, diff)
+  }, [pkg, diff])
 
   const a = isNew ? t('（磁盘上没有）') : t('磁盘上的')
   const b = t('编辑器里的')
@@ -58,7 +47,7 @@ export function AssetChanges({ path }: { path: string }) {
         op(project.id, 'set', { path: objPath, prop: p.name, value: p.a }).then(
           () => {
             toast.success(t('已改回磁盘上的值：点「保存」才写回文件'))
-            setNonce((n) => n + 1)
+            run.retry()
           },
           (e: Error) => toast.error(e.message),
         )
@@ -119,10 +108,12 @@ export function AssetChanges({ path }: { path: string }) {
           {act.saveLabel}
         </ui.Button>
       </div>
-      {error ? (
-        <p className="ue:p-4 ue:text-body ue:whitespace-pre-wrap ue:text-danger">{error}</p>
-      ) : !diff ? (
-        <Loading since={since} />
+      {!diff ? (
+        run.failed ? (
+          <FailPane failed={run.failed} onRetry={run.retry} onClose={() => showChanges('')} />
+        ) : (
+          <DiffLoading progress={run.progress} since={run.since} onCancel={run.cancel} />
+        )
       ) : (
         <DiffBody
           pkg={pkg}

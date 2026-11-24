@@ -25,7 +25,7 @@ export async function editorStartingWhy(
   if (vs) return vs
   if (opt.procs === false) return undefined
   // 用户自己从 UE 或 IDE 打开的编辑器面板跟不到启动，只能看进程（只在 Windows 上查得到）
-  const r = await editorBlockers(p).catch(() => undefined)
+  const r = await blockersCached(p)
   const same = r?.list.find((x) => x.same && !x.game)
   if (same)
     return t(
@@ -33,6 +33,28 @@ export async function editorStartingWhy(
       { pid: same.pid },
     )
   return undefined
+}
+
+// 模块状态：查进程要起 PowerShell（1–2 秒），读资源报错、目标卡状态都会问，10 秒内复用一次结果
+const procCache = new Map<string, { at: number; r: Promise<Awaited<ReturnType<typeof editorBlockers>> | undefined> }>()
+const PROC_TTL = 10_000
+
+function blockersCached(p: UeProject) {
+  const hit = procCache.get(p.id)
+  if (hit && Date.now() - hit.at < PROC_TTL) return hit.r
+  const r = editorBlockers(p).catch(() => undefined)
+  procCache.set(p.id, { at: Date.now(), r })
+  return r
+}
+
+/**
+ * 这个项目的编辑器进程在、却没有名片（UELink 没加载、还在加载、开的是另一份工程）时它的 PID：
+ * 目标卡据此显示「编辑器开着 · 没连上 UELink」，不再给「启动后台编辑器」（设计稿「UE资源版本差异-修复与强化」3.2）。
+ * 只在没有编辑器名片时问（调用方判断），查进程结果 10 秒内复用
+ */
+export async function unlinkedEditorPid(p: UeProject): Promise<number | undefined> {
+  const r = await blockersCached(p)
+  return r?.list.find((x) => x.same && !x.game)?.pid
 }
 
 /**

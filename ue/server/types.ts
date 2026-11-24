@@ -285,6 +285,8 @@ export interface ProjectState {
     /** 插件参数「编辑器没开时读资源」选了自动起后台编辑器（默认不自动起，用户 2026-11-16） */
     auto: boolean
   }
+  /** 这个项目的编辑器进程在（PID），但没有 UELink 名片：没连上（launch/bg-guard.ts unlinkedEditorPid） */
+  unlinkedEditor?: number
   jobs: Job[]
   /** 项目 Plugins/ 里有 UnLua（UE 没开时也列 Lua 页） */
   unlua?: boolean

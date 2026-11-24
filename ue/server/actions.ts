@@ -4,6 +4,7 @@ import { missingModules } from './install-files.ts'
 import { busyFromLog } from './busy/activity.ts'
 import { lastLogOf } from './busy/state.ts'
 import { backgroundState } from './editor.ts'
+import { unlinkedEditorPid } from './launch/bg-guard.ts'
 import { launchProgress } from './launch/track.ts'
 import { markUndone, readHistory, record } from './history.ts'
 import { BridgeError, bridgeVersionIn, info, liveCards } from './instances.ts'
@@ -53,6 +54,11 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     )
   ).filter((x) => !!x)
   const bridgeMissing = bridge ? await missingModules(path.join(p.root, 'Plugins', 'UELink'), 'UELink') : []
+  // 编辑器进程在却没名片：目标卡说「开着没连上」，不引导去起后台编辑器（面板正在跟的启动另有进度条）
+  const unlinked =
+    bridge && !cards.some((x) => x.kind === 'editor') && launchProgress(p.id)?.status !== 'running'
+      ? await unlinkedEditorPid(p)
+      : undefined
   return {
     project: p,
     instances,
@@ -62,6 +68,7 @@ export async function projectState(p: UeProject): Promise<ProjectState> {
     bundled,
     ...(bridgeMissing.length && { bridgeMissing }),
     background: backgroundState(p, cards),
+    ...(unlinked && { unlinkedEditor: unlinked }),
     jobs: projectJobs(p.id),
     extensions,
     launch: launchProgress(p.id),
