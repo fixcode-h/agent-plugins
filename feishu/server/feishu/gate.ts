@@ -124,7 +124,10 @@ async function targetOf(d: GateDeps, op: OpDef, a: OpArgs, c: McpCallContext) {
   const raw = refOf(input, spec.kind)
   if (!raw) return { error: t('{arg} 不是飞书链接或 token：{v}', { arg: spec.arg, v: input.slice(0, 120) }) }
   const res = await resolveRef(d.resolver, raw, c.signal)
-  if ('error' in res) return { error: t('解析飞书链接失败：{why}', { why: res.error }) }
+  if ('error' in res)
+    return res.type === 'not_installed'
+      ? { error: res.error, code: 'cli_unavailable' }
+      : { error: t('解析飞书链接失败：{why}', { why: res.error }) }
   if (!spec.accept.includes(res.kind))
     return {
       error: t(
@@ -141,7 +144,8 @@ async function targetOf(d: GateDeps, op: OpDef, a: OpArgs, c: McpCallContext) {
 
 export async function gate(d: GateDeps, op: OpDef, a: OpArgs, c: McpCallContext): Promise<GateResult> {
   const x = await targetOf(d, op, a, c)
-  if ('error' in x && x.error) return { ok: false, code: 'invalid_argument', message: x.error }
+  if ('error' in x && x.error)
+    return { ok: false, code: ('code' in x && x.code) || 'invalid_argument', message: x.error }
   const { target, raw } = x as { target?: Target; raw?: FeishuRef }
   const cfg = d.config()
   const head = (label: string) => t('飞书：{label}', { label })

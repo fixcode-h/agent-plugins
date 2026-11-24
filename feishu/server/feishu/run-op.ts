@@ -97,7 +97,7 @@ export async function runOp(d: RunDeps, op: OpDef, a: OpArgs, c: McpCallContext)
   await mkdir(dir, { recursive: true })
   const call = op.cli(a, target)
   const res = await runLark({
-    bin: d.resolver.bin(),
+    bin: await d.resolver.bin(),
     args: placeholders(call.args, dir, a),
     stdin: call.stdin,
     cwd: dir,
@@ -105,6 +105,7 @@ export async function runOp(d: RunDeps, op: OpDef, a: OpArgs, c: McpCallContext)
   })
   if (!res.ok) {
     await note('error', target, res.error?.message)
+    if (res.error?.type === 'not_installed') return fail('cli_unavailable', res.error.message, res.error.hint)
     return fail('cli_failed', t('lark-cli 报错：{msg}', { msg: res.error?.message ?? '' }), res.error?.hint)
   }
   await note(g.how, target, g.why)

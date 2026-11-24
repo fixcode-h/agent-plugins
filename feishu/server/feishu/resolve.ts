@@ -11,7 +11,8 @@ import type { Target } from './ops/types.ts'
  */
 
 export interface Resolver {
-  bin: () => string
+  /** lark-cli 的完整路径（自动找到的或设置里填的）；空串表示没找到 */
+  bin: () => string | Promise<string>
   cwd: () => string
 }
 
@@ -31,16 +32,18 @@ export async function resolveRef(
   r: Resolver,
   ref: FeishuRef,
   signal?: AbortSignal,
-): Promise<Target | { error: string }> {
+): Promise<Target | { error: string; type?: string }> {
   const hit = cache.get(ref.token)
   if (hit) return hit
   // 妙记没有 inspect：token 就是它自己，标题等读了才知道
   if (ref.kind === 'minutes') return { kind: 'minutes', token: ref.token, url: refUrl(ref), title: '' }
   const args = ['drive', '+inspect', '--url', ref.url || ref.token]
   if (!ref.url) args.push('--type', ref.kind)
-  const res = await runLark({ bin: r.bin(), args, cwd: r.cwd(), signal, timeoutMs: 30_000 })
+  const res = await runLark({ bin: await r.bin(), args, cwd: r.cwd(), signal, timeoutMs: 30_000 })
   if (!res.ok || !res.data || typeof res.data !== 'object')
-    return { error: res.error?.message || t('认不出这个飞书链接') }
+    return res.error?.type === 'not_installed'
+      ? { error: `${res.error.message}${res.error.hint ?? ''}`, type: 'not_installed' }
+      : { error: res.error?.message || t('认不出这个飞书链接'), type: res.error?.type }
   const d = res.data as Record<string, unknown>
   const node = (d.wiki_node ?? {}) as Record<string, unknown>
   const target: Target = {

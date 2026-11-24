@@ -5,6 +5,7 @@ import type { ActivateServer } from '../../sdk/server.ts'
 import { callsLarkCli } from '../shared/feishu/shell.ts'
 import { AuditLog } from './feishu/audit.ts'
 import { larkVersion, runLark } from './feishu/cli.ts'
+import { locateLark } from './feishu/locate.ts'
 import type { GateConfig } from './feishu/gate.ts'
 import { GrantStore } from './feishu/grants.ts'
 import type { RunDeps } from './feishu/run-op.ts'
@@ -25,7 +26,9 @@ const activate: ActivateServer = (ctx) => {
   const audit = new AuditLog(path.join(ctx.dataDir, 'audit'))
   const cacheRoot = path.join(ctx.dataDir, 'cache')
   const cfg = () => ctx.config()
-  const bin = () => String(cfg().cliPath ?? '').trim()
+  const shimDir = path.join(ctx.dir, 'bin')
+  const located = (force = false) => locateLark(String(cfg().cliPath ?? '').trim(), shimDir, force)
+  const bin = async () => (await located())?.path ?? ''
   const gateConfig = (): GateConfig => ({
     refAsk: cfg().refAsk !== false,
     discover: cfg().discover === 'deny' ? 'deny' : 'ask',
@@ -94,12 +97,19 @@ const activate: ActivateServer = (ctx) => {
       }
     },
     status: async () => {
-      const version = await larkVersion(bin(), ctx.dataDir).catch(() => '')
-      if (!version) return { cli: '', bin: bin() || 'lark-cli' }
-      const auth = await runLark({ bin: bin(), args: ['auth', 'status'], cwd: ctx.dataDir, timeoutMs: 20_000 })
+      // 设置页点「重新检测」时重新找：用户刚装好、刚改了路径
+      const found = await located(true)
+      const where = {
+        bin: found?.path ?? '',
+        binFrom: found?.from ?? '',
+        configured: String(cfg().cliPath ?? '').trim(),
+      }
+      const version = await larkVersion(found?.path ?? '', ctx.dataDir).catch(() => '')
+      if (!version) return { cli: '', ...where }
+      const auth = await runLark({ bin: found!.path, args: ['auth', 'status'], cwd: ctx.dataDir, timeoutMs: 20_000 })
       return {
         cli: version,
-        bin: bin() || 'lark-cli',
+        ...where,
         login: auth.ok ? JSON.stringify(auth.data ?? {}).slice(0, 600) : '',
         loginError: auth.ok ? '' : (auth.error?.message ?? ''),
       }
