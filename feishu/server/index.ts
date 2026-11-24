@@ -1,4 +1,4 @@
-import { chmod, readdir, rm, stat } from 'node:fs/promises'
+import { chmod, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { ActivateServer } from '../../sdk/server.ts'
@@ -10,6 +10,9 @@ import type { GateConfig } from './feishu/gate.ts'
 import { GrantStore } from './feishu/grants.ts'
 import type { RunDeps } from './feishu/run-op.ts'
 import { feishuCatalogTools, feishuTools } from './feishu/tools.ts'
+import { authModeOf, pickRoute } from './feishu/backend.ts'
+import { FeishuApi } from './feishu/openapi/client.ts'
+import { netFetchDirect } from './net.ts'
 
 /**
  * 飞书插件的服务端入口（面板插件接口 17，设计稿：飞书插件）。
@@ -29,6 +32,33 @@ const activate: ActivateServer = (ctx) => {
   const shimDir = path.join(ctx.dir, 'bin')
   const located = (force = false) => locateLark(String(cfg().cliPath ?? '').trim(), shimDir, force)
   const bin = async () => (await located())?.path ?? ''
+  // token 模式（插件接口 18 的保密项）：令牌加密存在面板里，过期时间不是机密、存插件数据目录
+  const expiryFile = path.join(ctx.dataDir, 'token-expiry.json')
+  const secrets = ctx.secrets
+  const api = new FeishuApi({
+    // FEISHU_OPENAPI_BASE 只给测试用（指向假的开放接口）
+    base: () =>
+      process.env.FEISHU_OPENAPI_BASE ||
+      (cfg().brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'),
+    appId: () => String(cfg().appId ?? '').trim(),
+    secrets: {
+      get: async (k) => (secrets ? (await secrets.get(k)).trim() : ''),
+      set: async (k, v) => {
+        if (secrets) await secrets.set(k, v)
+      },
+    },
+    expiry: {
+      get: async () => Number(JSON.parse(await readFile(expiryFile, 'utf8').catch(() => '{}')).at ?? 0),
+      set: (at) => writeFile(expiryFile, JSON.stringify({ at })),
+    },
+    fetch: (url, init) => netFetchDirect(url, init),
+  })
+  const route = () =>
+    pickRoute(
+      authModeOf(cfg().authMode),
+      async () => !!(await located()),
+      () => api.hasToken(),
+    )
   const gateConfig = (): GateConfig => ({
     refAsk: cfg().refAsk !== false,
     discover: cfg().discover === 'deny' ? 'deny' : 'ask',
@@ -38,7 +68,7 @@ const activate: ActivateServer = (ctx) => {
       .filter(Boolean),
   })
   const deps = (): RunDeps => ({
-    resolver: { bin, cwd: () => ctx.dataDir },
+    resolver: { bin, cwd: () => ctx.dataDir, mode: route, api },
     grants,
     audit,
     config: gateConfig,
@@ -64,6 +94,20 @@ const activate: ActivateServer = (ctx) => {
   const hint =
     '飞书链接（feishu.cn / larksuite.com）一律用 feishu_* 工具读写，不要在终端跑 lark-cli（会被拦下）。用户贴过的链接可以直接读；其余文档、搜索、写入都会弹卡请用户确认，等用户点完才返回。'
   const server = { name: 'feishu', summary, tools: () => feishuTools(deps) }
+
+  /** token 的状态（设置页显示）：填没填、能不能续期、过期时间，填了就用 user_info 验一下是谁 */
+  const tokenStatus = async () => {
+    if (!secrets) return { error: ctx.t('面板版本太旧，不支持保密项：请先升级面板') }
+    if (!(await api.hasToken())) return { set: false }
+    const user = await api.call({ path: '/open-apis/authen/v1/user_info' })
+    return {
+      set: true,
+      canRefresh: await api.canRefresh(),
+      expiresAt: (await api.expiresAt()) || undefined,
+      user: user.ok ? String((user.data as { name?: unknown }).name ?? '') : '',
+      error: user.ok ? '' : (user.error?.message ?? ''),
+    }
+  }
 
   const json = (v: unknown, status = 200) =>
     new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } })
@@ -103,6 +147,9 @@ const activate: ActivateServer = (ctx) => {
         bin: found?.path ?? '',
         binFrom: found?.from ?? '',
         configured: String(cfg().cliPath ?? '').trim(),
+        mode: authModeOf(cfg().authMode),
+        route: await route(),
+        token: await tokenStatus(),
       }
       const version = await larkVersion(found?.path ?? '', ctx.dataDir).catch(() => '')
       if (!version) return { cli: '', ...where }

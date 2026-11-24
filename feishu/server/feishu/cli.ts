@@ -52,7 +52,7 @@ const notInstalled = (): LarkError => ({
   type: 'not_installed',
   message: t('本机没找到 lark-cli：找过 PATH、npm 全局目录和常见安装目录。'),
   hint: t(
-    '请用户在终端安装并登录：npm install -g @larksuite/cli，然后 lark-cli auth login；装好后不用重启面板。装在别的位置的话，在设置 → 插件参数 → 飞书里填 lark-cli 的完整路径。',
+    '请用户在终端安装并登录：npm install -g @larksuite/cli，然后 lark-cli auth login；装好后不用重启面板。装在别的位置的话，在设置 → 插件参数 → 飞书里填 lark-cli 的完整路径。不装 lark-cli 也可以在同一页的「登录」里填 user_access_token。',
   ),
 })
 

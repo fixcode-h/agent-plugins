@@ -4,8 +4,10 @@ import type { McpCallContext, McpResult } from '../plugins/sdk.ts'
 import { findCitedRefs, findFeishuLinks, refUrl } from '../../shared/feishu/links.ts'
 import { t } from '../../shared/i18n.ts'
 import type { AuditLog, AuditResult } from './audit.ts'
-import { runLark } from './cli.ts'
+import { runLark, type LarkResult } from './cli.ts'
+import { apiHandler } from './openapi/registry.ts'
 import { gate, type GateDeps } from './gate.ts'
+import { apiRoute } from './resolve.ts'
 import { str } from './ops/args.ts'
 import type { OpArgs, OpDef, Target } from './ops/types.ts'
 
@@ -68,6 +70,41 @@ function placeholders(args: string[], dir: string, a: OpArgs) {
   return args.map((x) => (x === '{out}' ? out : x === '{dir}' ? dir : x))
 }
 
+/** token 模式下没有开放接口实现的操作：在弹卡之前就说明，不让用户白点一次允许 */
+const notInApi = (op: OpDef) => ({
+  message: t('「{label}」在 token 模式下不支持：改文档正文、新建文档、改 Markdown 文件、搜妙记只能经 lark-cli。', {
+    label: op.label(),
+  }),
+  hint: t(
+    '请用户在终端安装并登录 lark-cli（npm install -g @larksuite/cli，然后 lark-cli auth login），登录方式选「自动」或「只用 lark-cli」。',
+  ),
+})
+
+/** 执行：本机 lark-cli，或 token 模式下按开放接口注册表调 */
+async function execute(
+  d: RunDeps,
+  op: OpDef,
+  a: OpArgs,
+  target: Target | undefined,
+  dir: string,
+  signal?: AbortSignal,
+): Promise<LarkResult> {
+  const api = await apiRoute(d.resolver)
+  if (api) {
+    const h = apiHandler(op.tool, op.action)
+    if (!h) return { ok: false, error: { type: 'not_supported', ...notInApi(op) } }
+    return h(api, a, target, { dir, signal })
+  }
+  const call = op.cli(a, target)
+  return runLark({
+    bin: await d.resolver.bin(),
+    args: placeholders(call.args, dir, a),
+    stdin: call.stdin,
+    cwd: dir,
+    signal,
+  })
+}
+
 export async function runOp(d: RunDeps, op: OpDef, a: OpArgs, c: McpCallContext): Promise<McpResult> {
   const t0 = Date.now()
   const note = (how: AuditResult, target: Target | undefined, detail?: string) =>
@@ -87,6 +124,10 @@ export async function runOp(d: RunDeps, op: OpDef, a: OpArgs, c: McpCallContext)
       })
       .catch(() => {})
 
+  if (!apiHandler(op.tool, op.action) && (await apiRoute(d.resolver))) {
+    const n = notInApi(op)
+    return fail('not_supported', n.message, n.hint)
+  }
   const g = await gate(d, op, a, c)
   if (!g.ok) {
     if (g.how) await note(g.how, g.target, g.code)
@@ -95,17 +136,13 @@ export async function runOp(d: RunDeps, op: OpDef, a: OpArgs, c: McpCallContext)
   const target = g.target
   const dir = d.cacheDir(c.taskId)
   await mkdir(dir, { recursive: true })
-  const call = op.cli(a, target)
-  const res = await runLark({
-    bin: await d.resolver.bin(),
-    args: placeholders(call.args, dir, a),
-    stdin: call.stdin,
-    cwd: dir,
-    signal: c.signal,
-  })
+  const res = await execute(d, op, a, target, dir, c.signal)
   if (!res.ok) {
     await note('error', target, res.error?.message)
     if (res.error?.type === 'not_installed') return fail('cli_unavailable', res.error.message, res.error.hint)
+    if (res.error?.type === 'not_supported') return fail('not_supported', res.error.message, res.error.hint)
+    if (res.error?.type === 'auth') return fail('auth_expired', res.error.message, res.error.hint)
+    if (await apiRoute(d.resolver)) return fail('api_failed', res.error?.message ?? '', res.error?.hint)
     return fail('cli_failed', t('lark-cli 报错：{msg}', { msg: res.error?.message ?? '' }), res.error?.hint)
   }
   await note(g.how, target, g.why)
