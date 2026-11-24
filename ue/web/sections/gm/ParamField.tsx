@@ -29,7 +29,7 @@ export function ParamField({
   onChange: (v: string) => void
   config?: LuaGmConfig
   gm: GmStore
-  onEditBinding: (p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
 }) {
   const { ui } = h()
   const input = (
@@ -98,7 +98,7 @@ function TableField({
   config?: LuaGmConfig
   gm: GmStore
   fallback: React.ReactNode
-  onEditBinding: (p: GmParam, current?: LuaGmBinding) => void
+  onEditBinding: (p: GmParam, current?: LuaGmBinding, paste?: LuaGmBinding) => void
 }) {
   const { project } = useUe()
   const { ui } = h()
@@ -165,6 +165,7 @@ function TableField({
               : t('关联表格的列：下拉里按主列、描述列搜')
           }
           onClick={() => onEditBinding(p, undefined)}
+          onPaste={(x) => onEditBinding(p, undefined, x)}
         />
       </>
     )
@@ -198,7 +199,7 @@ function TableField({
         }
       />
       {/* 选了值、关联好了按钮也一直在：点它改关联（用户 2026-11-23） */}
-      <BindButton binding={b} title="" onClick={() => onEditBinding(p, b)} />
+      <BindButton binding={b} title="" onClick={() => onEditBinding(p, b)} onPaste={(x) => onEditBinding(p, b, x)} />
     </>
   )
 }

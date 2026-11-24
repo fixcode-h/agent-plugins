@@ -1850,7 +1850,6 @@
   "留空用默认 {v}": "Leave empty for default {v}",
   "改关联": "Change link",
   "关联表格": "Link a table",
-  "已关联 {where} 的 {key}，点这里改关联": "Linked to {key} in {where}. Click to change the link",
   "读不到关联的表：{msg}": "Can't read the linked table: {msg}",
   "关联 {p} → {table} 的 {key}（扫描脚本按注释给的）": "{p} → {key} of {table} (from the scan script, per comments)",
   "{file} · 前 {n} 行": "{file} · first {n} rows",
@@ -5009,5 +5008,11 @@
   "安装不完整": "Incomplete install",
   "UE 页的折叠、页签和筛选": "UE page folding, tabs and filters",
   "GameTest 编辑器的视图、断点和上次的参数": "GameTest editor view, breakpoints and last parameters",
-  "性能页自定义的通道": "Custom channels on the performance page"
+  "性能页自定义的通道": "Custom channels on the performance page",
+  "已关联 {where} 的 {key}，点这里改关联，右键复制粘贴": "Linked to {key} in {where}. Click to change the link, right-click to copy or paste",
+  "改关联…": "Change link…",
+  "复制关联": "Copy link",
+  "粘贴关联": "Paste link",
+  "剪贴板里没有关联：先在别的参数的表格按钮上右键「复制关联」": "No link on the clipboard: right-click another parameter’s table button and choose “Copy link” first",
+  "已把关联粘贴到 {p}": "Link pasted to {p}"
 }
