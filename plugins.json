@@ -63,11 +63,11 @@
     {
       "id": "feishu",
       "name": "飞书",
-      "version": "1.1.0",
-      "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli），或你填的飞书登录 token，读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
+      "version": "1.2.0",
+      "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli），或你在面板「账号授权」里填的飞书 token，读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
       "icon": "file-text",
-      "tag": "feishu-v1.1.0",
-      "asset": "feishu-1.1.0.zip",
+      "tag": "feishu-v1.2.0",
+      "asset": "feishu-1.2.0.zip",
       "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/feishu"
     }
   ],

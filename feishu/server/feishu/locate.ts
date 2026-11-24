@@ -9,8 +9,8 @@ import { findCommand, type CommandFrom } from '../exec/find-command.ts'
 
 export interface LarkBin {
   path: string
-  /** config：设置里填的；其余是自动找到的位置 */
-  from: 'config' | CommandFrom
+  /** config：设置里填的；integration：面板「账号授权」检测到的；其余是自动找到的位置 */
+  from: 'config' | 'integration' | CommandFrom
 }
 
 /** 找到的缓存一分钟，没找到的十秒（用户刚装上就能用，不用重启面板） */

@@ -58,6 +58,6 @@ test('找不到 lark-cli：工具返回 cli_unavailable，写清怎么装，不�
   const body = JSON.parse((r.content[0] as { text: string }).text)
   assert.equal(r.isError, true)
   assert.equal(body.error, 'cli_unavailable')
-  assert.match(body.message, /npm install -g @larksuite\/cli/)
+  assert.match(body.message, /账号授权/)
   assert.equal(cards, 0)
 })

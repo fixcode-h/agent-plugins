@@ -17,8 +17,9 @@ export interface TokenStore {
 
 export interface ApiDeps {
   /** 开放接口的根地址：飞书 https://open.feishu.cn，Lark https://open.larksuite.com */
-  base: () => string
-  appId: () => string
+  base: () => string | Promise<string>
+  /** App ID 和平台都在面板「账号授权」的备用登录里（插件接口 19），读取是异步的 */
+  appId: () => string | Promise<string>
   secrets: TokenStore
   /** 令牌过期时间（毫秒时间戳，不是机密，存插件数据目录） */
   expiry: { get: () => Promise<number>; set: (at: number) => Promise<void> }
@@ -51,7 +52,7 @@ export const noToken = (): LarkResult =>
     'not_installed',
     undefined,
     t(
-      '请用户二选一：在终端 npm install -g @larksuite/cli 并 lark-cli auth login；或在设置 → 插件参数 → 飞书 →「登录」里填 user_access_token（想自动续期再填 refresh_token、App ID 和 App Secret）。',
+      '请用户打开面板 设置 →「账号授权」→ 飞书 CLI，二选一：一键安装 lark-cli 并浏览器授权；或在「备用登录」里填 user_access_token（想自动续期再填 refresh_token、App ID 和 App Secret）。',
     ),
   )
 
@@ -66,7 +67,7 @@ export class FeishuApi {
 
   /** 能不能自动续期：refresh_token、App ID、App Secret 三样都要有 */
   async canRefresh() {
-    return !!(this.d.appId() && (await this.d.secrets.get('refreshToken')) && (await this.d.secrets.get('appSecret')))
+    return !!((await this.d.appId()) && (await this.d.secrets.get('refreshToken')) && (await this.d.secrets.get('appSecret')))
   }
 
   async expiresAt() {
@@ -82,12 +83,12 @@ export class FeishuApi {
   private async doRefresh(signal?: AbortSignal) {
     if (!(await this.canRefresh())) return false
     const res = await this.d
-      .fetch(`${this.d.base()}/open-apis/authen/v2/oauth/token`, {
+      .fetch(`${await this.d.base()}/open-apis/authen/v2/oauth/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/json; charset=utf-8' },
         body: JSON.stringify({
           grant_type: 'refresh_token',
-          client_id: this.d.appId(),
+          client_id: await this.d.appId(),
           client_secret: await this.d.secrets.get('appSecret'),
           refresh_token: await this.d.secrets.get('refreshToken'),
         }),
@@ -129,14 +130,14 @@ export class FeishuApi {
         (await this.canRefresh())
           ? t('自动续期也失败了：refresh_token 可能也过期了，请用户重新获取 token 填进设置。')
           : t(
-              '请用户在设置 → 插件参数 → 飞书 →「登录」里填新的 user_access_token；同时填 refresh_token、App ID 和 App Secret 就能自动续期。',
+              '请用户在面板 设置 →「账号授权」→ 飞书 CLI →「备用登录」里填新的 user_access_token；同时填 refresh_token、App ID 和 App Secret 就能自动续期。',
             ),
       )
     return (await this.once(c, await this.d.secrets.get('userToken'))).r
   }
 
   private async once(c: ApiCall, tk: string): Promise<{ r: LarkResult; expired?: boolean }> {
-    const url = new URL(`${this.d.base()}${c.path}`)
+    const url = new URL(`${await this.d.base()}${c.path}`)
     for (const [k, v] of Object.entries(c.query ?? {}))
       if (v !== undefined && v !== '') url.searchParams.set(k, String(v))
     let res: Response

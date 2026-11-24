@@ -5,7 +5,7 @@ import type { ActivateServer } from '../../sdk/server.ts'
 import { callsLarkCli } from '../shared/feishu/shell.ts'
 import { AuditLog } from './feishu/audit.ts'
 import { larkVersion, runLark } from './feishu/cli.ts'
-import { locateLark } from './feishu/locate.ts'
+import { credentialsOf, locateViaIntegration, migrateLogin } from './feishu/login.ts'
 import type { GateConfig } from './feishu/gate.ts'
 import { GrantStore } from './feishu/grants.ts'
 import type { RunDeps } from './feishu/run-op.ts'
@@ -30,21 +30,32 @@ const activate: ActivateServer = (ctx) => {
   const cacheRoot = path.join(ctx.dataDir, 'cache')
   const cfg = () => ctx.config()
   const shimDir = path.join(ctx.dir, 'bin')
-  const located = (force = false) => locateLark(String(cfg().cliPath ?? '').trim(), shimDir, force)
+  // lark-cli 的位置和登录看面板「账号授权」（插件接口 19），设置里填了路径时用填的
+  const located = (force = false) => locateViaIntegration(ctx, String(cfg().cliPath ?? '').trim(), shimDir, force)
   const bin = async () => (await located())?.path ?? ''
-  // token 模式（插件接口 18 的保密项）：令牌加密存在面板里，过期时间不是机密、存插件数据目录
+  // token 模式：令牌在「账号授权 → 飞书 CLI → 备用登录」里填，面板加密存；过期时间不是机密、存插件数据目录
   const expiryFile = path.join(ctx.dataDir, 'token-expiry.json')
-  const secrets = ctx.secrets
+  const creds = credentialsOf(ctx)
+  // 平台（飞书 / Lark）和 App ID 也在备用登录里填，几秒内的读取不重复解密
+  let brand = { at: 0, v: '' }
+  const brandOf = async () => {
+    if (Date.now() - brand.at > 5_000) brand = { at: Date.now(), v: creds ? await creds.get('brand') : '' }
+    return brand.v
+  }
+  const login = migrateLogin(ctx).catch((e) => ctx.log.warn('搬飞书登录信息失败', { error: String(e) }))
   const api = new FeishuApi({
     // FEISHU_OPENAPI_BASE 只给测试用（指向假的开放接口）
-    base: () =>
+    base: async () =>
       process.env.FEISHU_OPENAPI_BASE ||
-      (cfg().brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'),
-    appId: () => String(cfg().appId ?? '').trim(),
+      ((await brandOf()) === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'),
+    appId: async () => (creds ? (await creds.get('appId')).trim() : ''),
     secrets: {
-      get: async (k) => (secrets ? (await secrets.get(k)).trim() : ''),
+      get: async (k) => {
+        await login
+        return creds ? (await creds.get(k)).trim() : ''
+      },
       set: async (k, v) => {
-        if (secrets) await secrets.set(k, v)
+        if (creds) await creds.set(k, v)
       },
     },
     expiry: {
@@ -97,7 +108,7 @@ const activate: ActivateServer = (ctx) => {
 
   /** token 的状态（设置页显示）：填没填、能不能续期、过期时间，填了就用 user_info 验一下是谁 */
   const tokenStatus = async () => {
-    if (!secrets) return { error: ctx.t('面板版本太旧，不支持保密项：请先升级面板') }
+    if (!creds) return { error: ctx.t('面板版本太旧，不支持保密项：请先升级面板') }
     if (!(await api.hasToken())) return { set: false }
     const user = await api.call({ path: '/open-apis/authen/v1/user_info' })
     return {
@@ -151,6 +162,14 @@ const activate: ActivateServer = (ctx) => {
         route: await route(),
         token: await tokenStatus(),
       }
+      // 账号授权已经检测过版本和登录：直接用它的，和设置 → 账号授权里显示的一致
+      if (found?.from === 'integration')
+        return {
+          cli: found.version ?? '',
+          ...where,
+          account: found.account ?? '',
+          loginError: found.authed ? '' : ctx.t('还没登录'),
+        }
       const version = await larkVersion(found?.path ?? '', ctx.dataDir).catch(() => '')
       if (!version) return { cli: '', ...where }
       const auth = await runLark({ bin: found!.path, args: ['auth', 'status'], cwd: ctx.dataDir, timeoutMs: 20_000 })
