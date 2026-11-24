@@ -17,6 +17,45 @@ interface Status {
   configured?: string
   login?: string
   loginError?: string
+  /** 设置里选的登录方式和这次实际走的路 */
+  mode?: 'auto' | 'cli' | 'token'
+  route?: 'cli' | 'api'
+  token?: { set?: boolean; canRefresh?: boolean; expiresAt?: number; user?: string; error?: string }
+}
+
+/** token 登录的状态行（用户 2026-11-24 加「用 token 登录」） */
+function TokenLine({ s }: { s: Status }) {
+  const tk = s.token
+  if (!tk) return null
+  const using = s.route === 'api'
+  const exp = tk.expiresAt ? new Date(tk.expiresAt).toLocaleString() : ''
+  return (
+    <div className="fs:flex fs:flex-col fs:gap-1 fs:rounded-lg fs:border fs:border-line fs:bg-card fs:px-3.5 fs:py-2.5">
+      <div className="fs:flex fs:items-center fs:gap-2 fs:text-body fs:text-fg">
+        <StatusPill tone={!tk.set ? 'idle' : tk.error ? 'wait' : 'ok'}>
+          {!tk.set ? t('没填') : tk.error ? t('不能用') : t('可用')}
+        </StatusPill>
+        <span>{t('token 登录')}</span>
+        {using && <span className="fs:text-footnote fs:text-subtle">{t('（现在用的是这个）')}</span>}
+      </div>
+      {tk.set && tk.user && (
+        <p className="fs:text-footnote fs:text-subtle">{t('登录的飞书用户：{name}', { name: tk.user })}</p>
+      )}
+      {tk.set && tk.error && <p className="fs:text-footnote fs:text-warning">{tk.error}</p>}
+      {tk.set && (
+        <p className="fs:text-footnote fs:text-subtle">
+          {tk.canRefresh
+            ? exp
+              ? t('会自动续期，当前令牌 {at} 过期', { at: exp })
+              : t('会自动续期')
+            : t('不会自动续期：大约 2 小时后要重新填；同时填 refresh_token、App ID、App Secret 就能自动续期')}
+        </p>
+      )}
+      {!tk.set && using && (
+        <p className="fs:text-footnote fs:text-warning">{t('登录方式选了只用 token，但还没填 user_access_token')}</p>
+      )}
+    </div>
+  )
 }
 
 interface AuditEntry {
@@ -111,6 +150,8 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
             )}
             {s.login && <p className="fs:truncate fs:font-mono fs:text-footnote fs:text-subtle">{s.login}</p>}
           </>
+        ) : s.route === 'api' && !s.configured ? (
+          <p className="fs:text-footnote fs:text-subtle">{t('本机没装 lark-cli，现在用下面的 token 登录。')}</p>
         ) : (
           <p className="fs:text-footnote fs:text-warning">
             {s.configured
@@ -123,9 +164,10 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
           </p>
         )}
       </div>
+      <TokenLine s={s ?? {}} />
       <p className="fs:text-footnote fs:text-subtle">
         {t(
-          '只经本机 lark-cli 读写。Agent 能直接读的只有你在对话里贴过的链接；引用的文档、搜索、写入都会弹卡问你。终端里直接调 lark-cli 会被拦下，但 Agent 用 lark-cli 的完整路径从脚本里调时拦不到。',
+          '只经本机 lark-cli 或你填的 token 读写。Agent 能直接读的只有你在对话里贴过的链接；引用的文档、搜索、写入都会弹卡问你。终端里直接调 lark-cli 会被拦下，但 Agent 用 lark-cli 的完整路径从脚本里调时拦不到。',
         )}
       </p>
 

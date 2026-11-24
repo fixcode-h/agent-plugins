@@ -1,6 +1,8 @@
 import { looksLikeToken, parseFeishuUrl, refUrl, type FeishuKind, type FeishuRef } from '../../shared/feishu/links.ts'
 import { t } from '../../shared/i18n.ts'
 import { runLark } from './cli.ts'
+import type { FeishuApi } from './openapi/client.ts'
+import { inspectByApi } from './openapi/inspect.ts'
 import type { Target } from './ops/types.ts'
 
 /**
@@ -14,7 +16,13 @@ export interface Resolver {
   /** lark-cli 的完整路径（自动找到的或设置里填的）；空串表示没找到 */
   bin: () => string | Promise<string>
   cwd: () => string
+  /** 这次走哪条路：本机 lark-cli，还是用 token 直接调开放接口（backend.ts 按设置和找没找到 lark-cli 定）；不给就是 lark-cli */
+  mode?: () => Promise<'cli' | 'api'>
+  api?: FeishuApi
 }
+
+/** token 模式时给出开放接口的客户端，否则 undefined（走 lark-cli） */
+export const apiRoute = async (r: Resolver) => ((r.api && (await r.mode?.())) === 'api' ? r.api : undefined)
 
 // 模块状态：缓存，原样 token → 归一结果；插件重启就重新问
 const cache = new Map<string, Target>()
@@ -37,6 +45,13 @@ export async function resolveRef(
   if (hit) return hit
   // 妙记没有 inspect：token 就是它自己，标题等读了才知道
   if (ref.kind === 'minutes') return { kind: 'minutes', token: ref.token, url: refUrl(ref), title: '' }
+  const api = await apiRoute(r)
+  if (api) {
+    const got = await inspectByApi(api, ref, signal)
+    if ('error' in got) return got
+    remember(ref.token, got)
+    return got
+  }
   const args = ['drive', '+inspect', '--url', ref.url || ref.token]
   if (!ref.url) args.push('--type', ref.kind)
   const res = await runLark({ bin: await r.bin(), args, cwd: r.cwd(), signal, timeoutMs: 30_000 })
@@ -54,10 +69,14 @@ export async function resolveRef(
     ...(node.space_id ? { spaceId: String(node.space_id) } : {}),
     ...(node.node_token ? { nodeToken: String(node.node_token) } : {}),
   }
-  cache.set(ref.token, target)
+  remember(ref.token, target)
+  return target
+}
+
+function remember(raw: string, target: Target) {
+  cache.set(raw, target)
   // 解开后的规范 token 也记一份：之后直接用规范 token 调的不用再问
   if (!cache.has(target.token)) cache.set(target.token, { ...target, nodeToken: undefined })
-  return target
 }
 
 /** 测试用：清掉缓存 */
