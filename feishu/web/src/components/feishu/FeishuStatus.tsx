@@ -11,6 +11,10 @@ import { StatusPill, type StatusTone } from '@/components/ui/status-pill'
 interface Status {
   cli?: string
   bin?: string
+  /** 在哪找到的：config（设置里填的）、path、npm、common */
+  binFrom?: string
+  /** 设置里填的路径（空表示自动找） */
+  configured?: string
   login?: string
   loginError?: string
 }
@@ -35,6 +39,14 @@ const RESULT: Record<AuditEntry['result'], { tone: StatusTone; text: () => strin
   always: { tone: 'run', text: () => t('一直允许') },
   denied: { tone: 'wait', text: () => t('拒绝') },
   error: { tone: 'err', text: () => t('出错') },
+}
+
+/** lark-cli 在哪找到的 */
+const FROM: Record<string, () => string> = {
+  config: () => t('设置里填的路径'),
+  path: () => t('自动找到（PATH）'),
+  npm: () => t('自动找到（npm 全局目录）'),
+  common: () => t('自动找到（常见安装目录）'),
 }
 
 /** 放行原因给人看的说法（审计里记的是代号） */
@@ -88,8 +100,10 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
             <div className="fs:flex fs:items-center fs:gap-2 fs:text-body fs:text-fg">
               <StatusPill tone={s.loginError ? 'wait' : 'ok'}>{s.loginError ? t('没登录') : t('已就绪')}</StatusPill>
               <span className="fs:truncate">{s.cli}</span>
-              <span className="fs:truncate fs:text-footnote fs:text-subtle">{s.bin}</span>
             </div>
+            <p className="fs:truncate fs:text-footnote fs:text-subtle" title={s.bin}>
+              {FROM[s.binFrom ?? '']?.() ?? ''}：{s.bin}
+            </p>
             {s.loginError && (
               <p className="fs:text-footnote fs:text-warning">
                 {t('还没登录飞书：在终端跑 lark-cli auth login（{why}）', { why: s.loginError })}
@@ -99,12 +113,13 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
           </>
         ) : (
           <p className="fs:text-footnote fs:text-warning">
-            {t(
-              '没找到 lark-cli（{bin}）。先在终端装好并登录：npx @larksuite/cli@latest install，然后 lark-cli auth login',
-              {
-                bin: s.bin ?? 'lark-cli',
-              },
-            )}
+            {s.configured
+              ? t('设置里填的 lark-cli 路径不能用：{bin}。改成正确的完整路径，或者清空让面板自动找。', {
+                  bin: s.configured,
+                })
+              : t(
+                  '本机没找到 lark-cli（找过 PATH、npm 全局目录和常见安装目录）。在终端安装并登录：npm install -g @larksuite/cli，然后 lark-cli auth login，装好后点右上角「重新检测」；装在别的位置就在上面填完整路径。',
+                )}
           </p>
         )}
       </div>

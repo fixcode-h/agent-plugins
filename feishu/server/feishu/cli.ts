@@ -23,7 +23,7 @@ export interface LarkResult {
 }
 
 export interface LarkRun {
-  /** 可执行文件：设置里填的路径，留空用 PATH 上的 lark-cli */
+  /** 可执行文件：locateLark 找到的完整路径；空串表示没找到（直接报没装，不起进程） */
   bin: string
   args: string[]
   stdin?: string
@@ -47,11 +47,21 @@ const parse = (s: string): Record<string, unknown> | undefined => {
   }
 }
 
+/** 没找到 lark-cli：写清找过哪里、怎么装、装在别处怎么办 */
+const notInstalled = (): LarkError => ({
+  type: 'not_installed',
+  message: t('本机没找到 lark-cli：找过 PATH、npm 全局目录和常见安装目录。'),
+  hint: t(
+    '请用户在终端安装并登录：npm install -g @larksuite/cli，然后 lark-cli auth login；装好后不用重启面板。装在别的位置的话，在设置 → 插件参数 → 飞书里填 lark-cli 的完整路径。',
+  ),
+})
+
 export async function runLark(o: LarkRun): Promise<LarkResult> {
   const args = NO_IDENTITY.has(o.args[0] ?? '') ? o.args : [...o.args, '--as', 'user']
+  if (!o.bin) return { ok: false, error: notInstalled() }
   const lines: string[] = []
   const r = await runProcess({
-    command: o.bin || 'lark-cli',
+    command: o.bin,
     args,
     cwd: o.cwd,
     env: process.env,
@@ -64,11 +74,7 @@ export async function runLark(o: LarkRun): Promise<LarkResult> {
   if (r.spawnError)
     return {
       ok: false,
-      error: {
-        type: 'not_installed',
-        message: t('没找到 lark-cli（{bin}）：{why}', { bin: o.bin || 'lark-cli', why: r.spawnError }),
-        hint: t('先在终端装好并登录：npx @larksuite/cli@latest install，然后 lark-cli auth login'),
-      },
+      error: { ...notInstalled(), message: t('lark-cli 启动失败（{bin}）：{why}', { bin: o.bin, why: r.spawnError }) },
     }
   if (r.killed)
     return {
@@ -92,9 +98,10 @@ export async function runLark(o: LarkRun): Promise<LarkResult> {
 
 /** lark-cli 的版本（设置页检测用）：取不到返回空串 */
 export async function larkVersion(bin: string, cwd: string) {
+  if (!bin) return ''
   const lines: string[] = []
   const r = await runProcess({
-    command: bin || 'lark-cli',
+    command: bin,
     args: ['--version'],
     cwd,
     env: process.env,
