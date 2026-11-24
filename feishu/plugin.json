@@ -1,0 +1,89 @@
+{
+  "id": "feishu",
+  "name": "飞书",
+  "version": "1.0.0",
+  "icon": "file-text",
+  "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli）读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
+  "author": "fixcode-h",
+  "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/feishu",
+  "activation": "global",
+  "api": 17,
+  "settings": [
+    {
+      "key": "cliPath",
+      "type": "path",
+      "group": "lark-cli",
+      "label": "lark-cli 路径",
+      "desc": "留空用 PATH 上的 lark-cli（npx @larksuite/cli@latest install 装的）。要先在终端 lark-cli auth login 登录",
+      "default": "",
+      "placeholder": "lark-cli"
+    },
+    {
+      "key": "refAsk",
+      "type": "boolean",
+      "group": "权限",
+      "label": "读文档里引用的链接前先问我",
+      "desc": "关掉后，已经允许读的文档里引用的飞书文档可以直接读（不建议关：引用的文档常常是别的部门的）",
+      "default": true
+    },
+    {
+      "key": "discover",
+      "type": "select",
+      "group": "权限",
+      "label": "搜索和列举",
+      "desc": "搜飞书文档、列知识库空间和子页面、搜妙记。搜出来的文档不会自动授权",
+      "default": "ask",
+      "options": [
+        { "value": "ask", "label": "每次弹卡问我" },
+        { "value": "deny", "label": "一律不许" }
+      ]
+    },
+    {
+      "key": "trustedSpaces",
+      "type": "text",
+      "group": "权限",
+      "label": "信任的知识库空间",
+      "desc": "这些知识库空间（space_id，逗号分隔）里的文档读取不弹卡；写入照样要问。默认空",
+      "default": ""
+    },
+    {
+      "key": "allowShell",
+      "type": "boolean",
+      "group": "权限",
+      "label": "允许 Agent 在终端直接调用 lark-cli",
+      "desc": "默认不允许：终端里的 lark-cli 不受上面的权限管，打开后 Agent 能读你飞书账号下的任何文档",
+      "default": false
+    }
+  ],
+  "hooks": [
+    {
+      "id": "block-lark-cli",
+      "name": "拦截终端直接调用飞书 CLI",
+      "description": "Agent 在终端里直接跑 lark-cli 时拦下，让它改用 feishu_* 工具（权限按你给的链接管）",
+      "event": "tool.before",
+      "match": { "tool": "shell" },
+      "onError": "deny"
+    }
+  ],
+  "env": {
+    "PATH": { "prepend": ["bin"] },
+    "FEISHU_LARK_RAW": "{config.allowShell}"
+  },
+  "skillGuide": {},
+  "agents": [],
+  "workflows": [],
+  "mcpServers": ["feishu"],
+  "toolNames": {
+    "feishu_doc": "飞书文档",
+    "feishu_comment": "飞书评论",
+    "feishu_search": "搜索飞书",
+    "feishu_wiki": "飞书知识库",
+    "feishu_sheet": "飞书表格",
+    "feishu_base": "飞书多维表格",
+    "feishu_markdown": "飞书 Markdown 文件",
+    "feishu_minutes": "飞书妙记"
+  },
+  "server": "server/index.js",
+  "web": "web/index.js",
+  "css": "web/index.css"
+}

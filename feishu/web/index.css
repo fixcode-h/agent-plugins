@@ -1,0 +1,9 @@
+/*
+ * 飞书插件的样式：只生成网页部分用到的 Tailwind 工具类，不带 preflight（面板已经有一份）。
+ * 类名一律带前缀 fs:（插件的样式表在面板之后加载，不带前缀会盖掉面板同名的响应式类）。主题变量是面板的（sdk/theme.css）。
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(fs);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import '../../sdk/theme.css';
+
+@source './';
