@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { t } from '@shared/i18n'
 import { request } from '@/lib/api'
+import { useNav } from '@/lib/data'
 import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/ui/empty-panel'
 import { IconButton } from '@/components/ui/icon-button'
@@ -11,8 +12,10 @@ import { StatusPill, type StatusTone } from '@/components/ui/status-pill'
 interface Status {
   cli?: string
   bin?: string
-  /** 在哪找到的：config（设置里填的）、path、npm、common */
+  /** 在哪找到的：integration（账号授权）、config（设置里填的）、path、npm、common */
   binFrom?: string
+  /** 账号授权报告的登录账号 */
+  account?: string
   /** 设置里填的路径（空表示自动找） */
   configured?: string
   login?: string
@@ -48,11 +51,15 @@ function TokenLine({ s }: { s: Status }) {
             ? exp
               ? t('会自动续期，当前令牌 {at} 过期', { at: exp })
               : t('会自动续期')
-            : t('不会自动续期：大约 2 小时后要重新填；同时填 refresh_token、App ID、App Secret 就能自动续期')}
+            : t(
+                '不会自动续期：大约 2 小时后要重新填；在账号授权里同时填 refresh_token、App ID、App Secret 就能自动续期',
+              )}
         </p>
       )}
       {!tk.set && using && (
-        <p className="fs:text-footnote fs:text-warning">{t('登录方式选了只用 token，但还没填 user_access_token')}</p>
+        <p className="fs:text-footnote fs:text-warning">
+          {t('登录方式选了只用 token，但账号授权的备用登录里还没填 user_access_token')}
+        </p>
       )}
     </div>
   )
@@ -82,6 +89,7 @@ const RESULT: Record<AuditEntry['result'], { tone: StatusTone; text: () => strin
 
 /** lark-cli 在哪找到的 */
 const FROM: Record<string, () => string> = {
+  integration: () => t('账号授权检测到'),
   config: () => t('设置里填的路径'),
   path: () => t('自动找到（PATH）'),
   npm: () => t('自动找到（npm 全局目录）'),
@@ -106,6 +114,7 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
   const [items, setItems] = useState<AuditEntry[] | null>(null)
   const [error, setError] = useState('')
   const [clearing, setClearing] = useState(false)
+  const { openSettings } = useNav()
 
   const load = useCallback(async (query: string) => {
     setError('')
@@ -129,7 +138,10 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
     <section aria-label={t('飞书')} className="fs:flex fs:flex-col fs:gap-3">
       <div className="fs:flex fs:items-center fs:gap-2">
         <span className="fs:text-footnote fs:text-subtle">{t('lark-cli')}</span>
-        <IconButton icon={RefreshCw} label={t('重新检测')} size="2xs" className="fs:ml-auto" onClick={reload} />
+        <Button size="sm" variant="ghost" className="fs:ml-auto" onClick={() => openSettings('integrations')}>
+          {t('去账号授权登录')}
+        </Button>
+        <IconButton icon={RefreshCw} label={t('重新检测')} size="2xs" onClick={reload} />
       </div>
       <div className="fs:flex fs:flex-col fs:gap-1 fs:rounded-lg fs:border fs:border-line fs:bg-card fs:px-3.5 fs:py-2.5">
         {!s ? (
@@ -143,15 +155,22 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
             <p className="fs:truncate fs:text-footnote fs:text-subtle" title={s.bin}>
               {FROM[s.binFrom ?? '']?.() ?? ''}：{s.bin}
             </p>
+            {s.account && !s.loginError && (
+              <p className="fs:text-footnote fs:text-subtle">{t('登录的飞书用户：{name}', { name: s.account })}</p>
+            )}
             {s.loginError && (
               <p className="fs:text-footnote fs:text-warning">
-                {t('还没登录飞书：在终端跑 lark-cli auth login（{why}）', { why: s.loginError })}
+                {s.binFrom === 'integration'
+                  ? t('还没登录飞书：点右上角「去账号授权登录」，在飞书 CLI 那张卡片上点「浏览器授权」。')
+                  : t('还没登录飞书：在终端跑 lark-cli auth login（{why}）', { why: s.loginError })}
               </p>
             )}
             {s.login && <p className="fs:truncate fs:font-mono fs:text-footnote fs:text-subtle">{s.login}</p>}
           </>
         ) : s.route === 'api' && !s.configured ? (
-          <p className="fs:text-footnote fs:text-subtle">{t('本机没装 lark-cli，现在用下面的 token 登录。')}</p>
+          <p className="fs:text-footnote fs:text-subtle">
+            {t('本机没装 lark-cli，现在用账号授权里填的备用 token 登录。')}
+          </p>
         ) : (
           <p className="fs:text-footnote fs:text-warning">
             {s.configured
@@ -159,7 +178,7 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
                   bin: s.configured,
                 })
               : t(
-                  '本机没找到 lark-cli（找过 PATH、npm 全局目录和常见安装目录）。在终端安装并登录：npm install -g @larksuite/cli，然后 lark-cli auth login，装好后点右上角「重新检测」；装在别的位置就在上面填完整路径。',
+                  '本机没找到 lark-cli。点右上角「去账号授权登录」，在飞书 CLI 那张卡片上一键安装、浏览器授权；不想装的话在同一张卡片的「备用登录」里填 token。',
                 )}
           </p>
         )}
@@ -167,7 +186,7 @@ export function FeishuStatus({ status, reload }: { status: Record<string, unknow
       <TokenLine s={s ?? {}} />
       <p className="fs:text-footnote fs:text-subtle">
         {t(
-          '只经本机 lark-cli 或你填的 token 读写。Agent 能直接读的只有你在对话里贴过的链接；引用的文档、搜索、写入都会弹卡问你。终端里直接调 lark-cli 会被拦下，但 Agent 用 lark-cli 的完整路径从脚本里调时拦不到。',
+          '只经本机 lark-cli 或你在账号授权里填的 token 读写。Agent 能直接读的只有你在对话里贴过的链接；引用的文档、搜索、写入都会弹卡问你。终端里直接调 lark-cli 会被拦下，但 Agent 用 lark-cli 的完整路径从脚本里调时拦不到。',
         )}
       </p>
 
