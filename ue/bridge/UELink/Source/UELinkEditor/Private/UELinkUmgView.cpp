@@ -628,6 +628,80 @@ namespace UELinkUmgView
 	}
 }
 
+namespace UELinkUmgView
+{
+	TArray<TSharedPtr<FJsonValue>> WidgetSnaps(UWidgetBlueprint* BP, int32 MaxChars)
+	{
+		TArray<TSharedPtr<FJsonValue>> Out;
+		if (!BP || !BP->WidgetTree)
+		{
+			return Out;
+		}
+		const TMap<const UWidget*, FString> Paths = WidgetPaths(BP->WidgetTree);
+		TArray<TPair<FString, const UWidget*>> Sorted;
+		for (const TPair<const UWidget*, FString>& P : Paths)
+		{
+			Sorted.Add(TPair<FString, const UWidget*>(P.Value, P.Key));
+		}
+		Sorted.Sort([](const TPair<FString, const UWidget*>& A, const TPair<FString, const UWidget*>& B) { return A.Key < B.Key; });
+		for (const TPair<FString, const UWidget*>& P : Sorted)
+		{
+			UWidget* W = const_cast<UWidget*>(P.Value);
+			if (!IsValid(W))
+			{
+				continue;
+			}
+			TSharedPtr<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetStringField(TEXT("name"), W->GetName());
+			O->SetStringField(TEXT("class"), W->GetClass()->GetName());
+			O->SetStringField(TEXT("path"), P.Key);
+			int32 Cut = INDEX_NONE;
+			O->SetStringField(TEXT("parent"), P.Key.FindLastChar(TEXT('/'), Cut) ? P.Key.Left(Cut) : FString());
+			O->SetArrayField(TEXT("props"), AgentPanel::ListSavedProps(W, MaxChars));
+			// 插槽（在父面板里的位置、大小、对齐）是另一个对象，单独列出来；根控件没有插槽
+			if (UPanelSlot* Slot = W->Slot)
+			{
+				O->SetStringField(TEXT("slotClass"), Slot->GetClass()->GetName());
+				O->SetArrayField(TEXT("slot"), AgentPanel::ListSavedProps(Slot, MaxChars));
+			}
+			Out.Add(MakeShared<FJsonValueObject>(O));
+		}
+		return Out;
+	}
+
+	TArray<TSharedPtr<FJsonValue>> AnimSnaps(UWidgetBlueprint* BP)
+	{
+		constexpr int32 MaxKeysPerChannel = 200;
+		TArray<TSharedPtr<FJsonValue>> Out;
+		for (const FUmgAnimView& View : ReadAnimations(BP))
+		{
+			TSharedPtr<FJsonObject> A = MakeShared<FJsonObject>();
+			A->SetStringField(TEXT("name"), View.Name);
+			A->SetNumberField(TEXT("length"), View.Length);
+			TArray<TSharedPtr<FJsonValue>> Channels;
+			for (const FUmgChannelView& Ch : View.Channels)
+			{
+				TSharedPtr<FJsonObject> C = MakeShared<FJsonObject>();
+				C->SetStringField(TEXT("target"), Ch.Target);
+				C->SetStringField(TEXT("channel"), Ch.Channel);
+				TArray<TSharedPtr<FJsonValue>> Keys;
+				for (int32 i = 0; i < Ch.Keys.Num() && i < MaxKeysPerChannel; ++i)
+				{
+					TArray<TSharedPtr<FJsonValue>> K;
+					K.Add(MakeShared<FJsonValueNumber>(Ch.Keys[i].Time));
+					K.Add(MakeShared<FJsonValueNumber>(Ch.Keys[i].Value));
+					Keys.Add(MakeShared<FJsonValueArray>(K));
+				}
+				C->SetArrayField(TEXT("keys"), Keys);
+				Channels.Add(MakeShared<FJsonValueObject>(C));
+			}
+			A->SetArrayField(TEXT("channels"), Channels);
+			Out.Add(MakeShared<FJsonValueObject>(A));
+		}
+		return Out;
+	}
+}
+
 namespace AgentPanelEd
 {
 	void RegisterUmgViewOps()
