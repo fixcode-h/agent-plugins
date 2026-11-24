@@ -60,6 +60,15 @@ namespace UELinkUmgView
 	/** 读控件蓝图里的全部动画（只读，不改资源） */
 	TArray<FUmgAnimView> ReadAnimations(UWidgetBlueprint* BP);
 
+	/**
+	 * 版本差异的控件树快照（asset.snapshot 2.21）：每个控件一项 {name, class, path, parent, props, slotClass?, slot?}，
+	 * 按路径排序；属性只取存盘的（ListSavedProps），面板按控件名配对逐项比
+	 */
+	TArray<TSharedPtr<FJsonValue>> WidgetSnaps(UWidgetBlueprint* BP, int32 MaxChars);
+
+	/** 版本差异的动画快照：每个动画 {name, length, channels:[{target, channel, keys:[[秒, 值]...]}]}，每条通道最多 200 个关键帧 */
+	TArray<TSharedPtr<FJsonValue>> AnimSnaps(UWidgetBlueprint* BP);
+
 	/** 登记 umg.design、umg.anims（UELinkUmgView.cpp）和 umg.render（UELinkUmgRender.cpp） */
 	void RegisterRenderOp();
 }

@@ -217,7 +217,10 @@ bool AgentPanelEd::WithTempAsset(const FString& File, const FString& Original, T
 	const FString TempPkg = Root + Name;
 	FPackageName::RegisterMountPoint(Root, Dir);
 
-	UPackage* Pkg = LoadPackage(nullptr, *TempPkg, LOAD_NoWarn | LOAD_Quiet);
+	// 按引擎「和版本库比较」的加载方式（2.21）：LOAD_ForDiff 只为对比读出来，LOAD_DisableCompileOnLoad 不在加载时编译蓝图。
+	// 以前普通加载会编译这一版的蓝图：编辑器里同一个蓝图已经开着时，编译副本很慢、可能报编译错、卸载时还被引用着卸不掉，
+	// 版本差异在编辑器里一直读不出来（用户 2026-11-24）。类默认值和组件模板都存在包里，不编译也读得到
+	UPackage* Pkg = LoadPackage(nullptr, *TempPkg, LOAD_NoWarn | LOAD_Quiet | LOAD_ForDiff | LOAD_DisableCompileOnLoad);
 	UObject* Asset = Pkg ? MainAsset(Pkg, Name) : nullptr;
 	if (Asset)
 	{

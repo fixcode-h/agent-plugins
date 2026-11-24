@@ -4,6 +4,7 @@
 // 快照可能上 MB（大蓝图几百个节点），按 ADR 0067 写进面板给的 out 文件，只回路径和大小。
 #include "UELinkCompat.h"
 #include "AgentPanelEditorShared.h"
+#include "UELinkUmgView.h"
 
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
@@ -26,6 +27,7 @@
 #include "Serialization/JsonWriter.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
+#include "WidgetBlueprint.h"
 
 using namespace AgentPanel;
 using namespace AgentPanelEd;
@@ -248,6 +250,12 @@ namespace
 			}
 		}
 		O->SetArrayField(TEXT("graphs"), Graphs);
+		// 控件蓝图（2.21）：控件树和动画，面板按控件树比（增删控件、插槽和外观属性），不只给一张类默认值
+		if (UWidgetBlueprint* WBP = Cast<UWidgetBlueprint>(BP))
+		{
+			O->SetArrayField(TEXT("widgets"), UELinkUmgView::WidgetSnaps(WBP, SnapshotMaxChars));
+			O->SetArrayField(TEXT("anims"), UELinkUmgView::AnimSnaps(WBP));
+		}
 		return O;
 	}
 
