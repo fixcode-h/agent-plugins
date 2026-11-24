@@ -1,7 +1,7 @@
 {
   "id": "feishu",
   "name": "飞书",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "file-text",
   "description": "让 Agent 经本机已登录的飞书 CLI（lark-cli）读写飞书文档、表格、多维表格、评论、知识库和妙记，对所有对话生效。权限按对话管：只直接读你贴过的链接，文档里引用的、Agent 自己找来的、搜索和列举、写入都会弹卡问你；终端里直接调 lark-cli 会被拦下；每次调用记审计日志（不记内容）。",
   "author": "fixcode-h",
@@ -14,9 +14,9 @@
       "type": "path",
       "group": "lark-cli",
       "label": "lark-cli 路径",
-      "desc": "留空用 PATH 上的 lark-cli（npx @larksuite/cli@latest install 装的）。要先在终端 lark-cli auth login 登录",
+      "desc": "留空自动找（PATH、npm 全局目录、常见安装目录），找到的位置显示在「运行状态」里；装在别的位置时填完整路径。要先在终端 lark-cli auth login 登录",
       "default": "",
-      "placeholder": "lark-cli"
+      "placeholder": "自动找"
     },
     {
       "key": "refAsk",
@@ -34,8 +34,14 @@
       "desc": "搜飞书文档、列知识库空间和子页面、搜妙记。搜出来的文档不会自动授权",
       "default": "ask",
       "options": [
-        { "value": "ask", "label": "每次弹卡问我" },
-        { "value": "deny", "label": "一律不许" }
+        {
+          "value": "ask",
+          "label": "每次弹卡问我"
+        },
+        {
+          "value": "deny",
+          "label": "一律不许"
+        }
       ]
     },
     {
@@ -61,12 +67,16 @@
       "name": "拦截终端直接调用飞书 CLI",
       "description": "Agent 在终端里直接跑 lark-cli 时拦下，让它改用 feishu_* 工具（权限按你给的链接管）",
       "event": "tool.before",
-      "match": { "tool": "shell" },
+      "match": {
+        "tool": "shell"
+      },
       "onError": "deny"
     }
   ],
   "env": {
-    "PATH": { "prepend": ["bin"] },
+    "PATH": {
+      "prepend": ["bin"]
+    },
     "FEISHU_LARK_RAW": "{config.allowShell}"
   },
   "skillGuide": {},
