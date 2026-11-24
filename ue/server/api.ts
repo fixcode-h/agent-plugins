@@ -46,7 +46,14 @@ import { enableFor } from './capability.ts'
 import { searchIndexRoute } from './search-index/index.ts'
 import { vsDebugRoute } from './vs-debug/api.ts'
 import { ocrRoute } from './ocr/install.ts'
-import { assetDiffFor, assetHistory, parseSource } from './asset-diff/snapshot.ts'
+import { assetHistory } from './asset-diff/snapshot.ts'
+import { assetDiffRoute } from './asset-diff/route.ts'
+import { cancelDiff } from './asset-diff/progress.ts'
+import { changeSet } from './asset-diff/changeset.ts'
+import { restoreAsset } from './asset-diff/restore.ts'
+import { propHistory } from './asset-diff/history.ts'
+import { explainDiff } from './asset-diff/explain.ts'
+import type { PropRef } from '../shared/asset-diff/prop-history.ts'
 
 /**
  * 网页用的接口（挂在 /api/plugins/ue/ 下）。你在网页上的操作记成 actor=user，不受 Agent 权限限制，
@@ -185,7 +192,24 @@ export async function handle(req: Request): Promise<Response> {
       case 'GET asset-history':
         return json(await assetHistory(project, url.searchParams.get('path') ?? ''))
       case 'POST asset-diff':
-        return json(await assetDiffFor(project, String(b.path ?? ''), parseSource(b.from), parseSource(b.to)))
+        return json(await assetDiffRoute(project, b))
+      case 'POST asset-diff/cancel':
+        return json(cancelDiff(String(b.req ?? '')))
+      // 设计稿「UE资源版本差异-修复与强化」三期：同一提交改的资源、还原到这一版、属性来历、让 Agent 解释
+      case 'GET asset-diff/changeset':
+        return json(await changeSet(project, url.searchParams.get('change') ?? ''))
+      case 'POST asset-diff/restore':
+        return json(await restoreAsset(project, String(b.path ?? ''), String(b.rev ?? ''), b.force === true))
+      case 'POST asset-prop-history':
+        return json(
+          await propHistory(project, String(b.path ?? ''), b.ref as PropRef, {
+            start: String(b.start ?? 'disk'),
+            offset: Number(b.offset) || 0,
+            max: Number(b.max) || 20,
+          }),
+        )
+      case 'POST asset-diff/explain':
+        return json(await explainDiff(project, b))
       case 'POST op':
         return json(await runOp(ctx, String(b.op), (b.args as Body) ?? {}, Number(b.timeout) || 30000))
       case 'POST console': {

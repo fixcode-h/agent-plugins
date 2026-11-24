@@ -91,7 +91,7 @@ export function Assets() {
 
   return (
     <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
-      <PageHead title={t('资源')} desc={t('编辑器没开时自动起后台编辑器读取；改动点「保存」才写回文件')}>
+      <PageHead title={t('资源')} desc={t('改动点「保存」才写回文件；版本差异优先由开着的编辑器读')}>
         <DirtyHeadButton />
         <PrecheckButton onOpen={(p) => openAsset(p, 'assetSearch')} />
         <ui.Button

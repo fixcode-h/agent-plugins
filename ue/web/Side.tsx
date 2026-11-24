@@ -132,6 +132,9 @@ export function connLine(s: ProjectState | undefined) {
   if (!s) return { tone: 'muted' as const, text: t('检测中…') }
   const live = s.instances.filter((i) => i.kind !== 'background')
   if (!s.bridge) return { tone: 'warn' as const, text: t('还没装桥接插件') }
+  // 编辑器进程在却没名片：不说「UE 没在运行」，免得人去起后台编辑器（用户 2026-11-24）
+  if (!live.length && s.unlinkedEditor)
+    return { tone: 'warn' as const, text: t('编辑器开着 · 没连上 UELink'), unlinked: s.unlinkedEditor }
   if (!live.length) return { tone: 'muted' as const, text: t('UE 没在运行') }
   // 忙着的（同步加载等，进程活着只是不回应）不算连不上，单独显示
   const bad = live.filter((i) => !i.online && !i.busy)
@@ -219,7 +222,8 @@ export function useBackgroundCtl() {
   const [busy, setBusy] = useState(false)
   const bg = state?.background
   if (!bg || !state) return undefined
-  const live = state.instances.some((i) => i.kind !== 'background')
+  // 编辑器开着只是没连上也算：不给「启动后台编辑器」（两个进程开同一个项目会抢文件，起了也会被拦）
+  const live = state.instances.some((i) => i.kind !== 'background') || !!state.unlinkedEditor
   const idle = !bg.running && !bg.starting && !bg.error
   if (idle && (bg.auto || live || !state.bridge)) return undefined
   const act = (action: 'start' | 'stop') => {
