@@ -5177,5 +5177,16 @@
   "丢掉没保存的关卡改动": "discard unsaved level changes",
   "换地图时丢掉关卡里没保存的改动": "Discard unsaved level changes when switching maps",
   "换地图前丢掉关卡里没保存的改动": "Discard unsaved level changes before switching maps",
-  "丢掉后不能恢复。": "This can't be undone."
+  "丢掉后不能恢复。": "This can't be undone.",
+  "拷贝提交": "Copy",
+  "合并提交": "Merge",
+  "整批合并 / 拷贝进来的提交：一起进来的资源多半只是跟着分支过来，不一定和这个资源的改动有关": "A bulk merge / copy: the other assets mostly came along with the branch and may be unrelated to this asset's change",
+  "这是一次整批合并 / 拷贝的提交，下面的资源多半只是跟着分支过来，不一定和这个资源的改动有关。": "This is a bulk merge / copy. The assets below mostly came along with the branch and may be unrelated to this asset's change.",
+  "其他 {n}": "other {n}",
+  "搜这次提交里的资源：名字、路径或类型": "Search assets in this change: name, path or type",
+  "按文件夹": "By folder",
+  "按类型": "By type",
+  "同一次提交里一起改的资源": "Assets changed in the same commit",
+  "拖动调整列表高度": "Drag to resize the list",
+  "只列了前 {n} 个文件": "only the first {n} files listed"
 }
