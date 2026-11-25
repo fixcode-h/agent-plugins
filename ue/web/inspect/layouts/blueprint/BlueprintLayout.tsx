@@ -115,6 +115,7 @@ export function BlueprintLayout(p: LayoutProps) {
           path={path}
           outline={data.outline}
           online={data.online}
+          fromFile={data.fromFile}
           actor={actor !== false}
           view={view}
           onView={pickView}

@@ -81,12 +81,16 @@ export function Props({
         object: { path: string; name: string; class: string }
         kind?: 'instance' | 'asset' | 'class'
         readOnlyWhy?: string
+        /** 编辑器没开、服务端直接读文件给的（server/uasset）：note 说明只有改过的值、不能改 */
+        offline?: boolean
+        note?: string
         props: Prop[]
       }>(project.id, 'props', { path, filter: '', maxChars: 400 }, target),
     [path, target.instance, target.world],
   )
   // 类本身（WidgetBlueprintGeneratedClass 这种）整个只读
   const lockAll = data.data?.readOnlyWhy
+  const banner = data.data?.offline ? data.data.note : lockAll
   const props = (data.data?.props ?? [])
     .map((p) => (lockAll ? { ...p, readOnly: true, readOnlyWhy: lockAll } : p))
     .map((p) =>
@@ -192,9 +196,9 @@ export function Props({
         </div>
       </header>
       {cdo && data.data?.kind === 'asset' && <CdoNote cls={data.data.object.class} />}
-      {(readOnlyHint || lockAll) && (
+      {(readOnlyHint || banner) && (
         <div className="ue:border-b ue:border-line ue:px-4 ue:py-2">
-          <Note tone="info">{readOnlyHint || lockAll}</Note>
+          <Note tone="info">{readOnlyHint || banner}</Note>
         </div>
       )}
       {moreTab && more?.some((m) => m.id === moreTab) ? (

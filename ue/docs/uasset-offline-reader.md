@@ -1,6 +1,6 @@
 # 不开 UE 编辑器读 .uasset：照引擎源码自写解析 · 评估
 
-2026-11-25 · 只做评估和设计，不改产品代码，等用户定方向。
+2026-11-25 · 评估和设计。同日用户定方向：自写 TS，编辑器没开时不再起后台编辑器读结构，统一用它；**只读，修改资源必须开编辑器**（用户 2026-11-25：避免 TS 写坏资源导致打不开）。已实现的部分见文末「实现状态」。
 接着 2026-11-20 那次评估（项目文件 `designs/UE不启动编辑器读uasset-评估.md`，当时推荐 CUE4Parse）往下深入，回答用户这次的问题：**手里有 UE 源码，自己照着写一套读取代码，能不能直接解析 .uasset（蓝图组件、属性等）**。
 
 ## 1. 结论
@@ -347,3 +347,13 @@ sequenceDiagram
 1. 先跑第 0 期的探针脚本，可以吗？脚本在项目文件 `designs/UE不启动编辑器读uasset-自写解析评估/probe.mjs`，只读文件，不改任何东西。
 2. 方向选 A（自写 TS）还是 B（CUE4Parse）？推荐 A，理由见第 5 节。
 3. 第四期的反射快照要在 UELink 加一个只读操作（用户要重新编译 UELink），要不要做，还是第 6 节第 1、2 条够用了？
+
+## 实现状态（UE 插件 0.60.0）
+
+- 读取器：`ue/shared/uasset/`（容器层 `package.ts`、属性 `props.ts`、二进制结构体 `structs.ts`、引脚 `pins.ts`、蓝图结构 `bp.ts`、图表 `graph.ts` / `pseudo.ts`、快照 `snap.ts`、评审文本 `snap-text.ts`）。只读，不写文件。
+- 服务端：`ue/server/uasset/`。`read.ts` 读文件并按「修改时间 + 大小」缓存最近 8 份；`offline/` 是离线操作注册表（`asset.describe`、`props`、`get`、`components`、`bp.outline`、`bp.graph`、`datatable`、`datatable.row`、按磁盘路径找资源的 `assets`、评审用的 `asset.textify`），返回照 UELink 同名操作的形状，多带 `offline: true`、`note` 和 `instance.kind = "file"`；`route.ts` 的 `offlineFirst` 挂在 `ops.ts` 的 `runOp` 里：只管读操作、编辑器没开、没指定进程时走它，读不了（烘焙包、更新的引擎版本……）再按原来的路走 UE，并把原因带进报错。
+- 版本差异（`server/asset-diff/snapshot.ts`）：一次差异只挑一条路，编辑器开着或用户点了「启动后台编辑器读」由 UE 读，否则两边都由读取器读；缓存文件名带读取器格式版本（`-f2`），限制说明按当前界面语言现拼。
+- 网页：属性页、蓝图页头标「从文件读 · 只读」，属性一律只读。
+- 单测：`ue/shared/uasset/uasset.test.ts`、`ue/server/uasset/offline.test.ts`，资源用 `ue/shared/uasset/test/pack.ts` 现拼（不带第三方资源）。
+- 还没做：控件动画、父蓝图链上的变量（`inherited`）、引用方（要扫全项目）、编译状态；5.4 保存的真实资源还没实测过（只有拼出来的 5.4 格式样例）。
+

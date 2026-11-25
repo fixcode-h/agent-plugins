@@ -14,6 +14,9 @@ export interface AssetDesc {
   subobjects?: { path: string; name: string; class: string }[]
   subobjectCount?: number
   dirty?: boolean
+  /** 编辑器没开、服务端直接读文件给的（server/uasset）：note 是限制说明 */
+  offline?: boolean
+  note?: string
 }
 
 /**
@@ -29,11 +32,13 @@ export function useAssetDesc(path: string) {
     0,
     `${project.id}/layout/desc`,
   )
+  const desc = d.data?.path === path ? d.data.r : undefined
   return {
-    desc: d.data?.path === path ? d.data.r : undefined,
+    desc,
     error: d.error,
     loading: d.loading,
-    online: !!inst?.online || !!state?.background.running,
+    // 从文件读到了也算有数据（编辑器没开时服务端直接读磁盘上的资源）
+    online: !!inst?.online || !!state?.background.running || !!desc?.offline,
     reload: d.reload,
   }
 }

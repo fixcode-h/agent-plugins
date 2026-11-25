@@ -25,7 +25,7 @@ const noop = () => undefined
 /**
  * 对话里点 .uasset 弹出的查看窗口（面板 SDK 的 fileViewers）：按磁盘路径在资产注册表里找到这个资源，
  * DataTable 显示成表格，DataAsset 等显示属性，蓝图多一页大纲和图表伪代码，都有「摘要与引用」。和 UE 页的资源分区用同一套读取
- * （编辑器开着读编辑器里的，没开时起后台编辑器读磁盘上的版本）和同一套组件，这里只看不改：
+ * （编辑器开着读编辑器里的，没开时服务端直接读磁盘上的文件，server/uasset）和同一套组件，这里只看不改：
  * 改动要暂存、保存、P4 签出，这些在资源分区里，底栏给了入口。
  */
 export function AssetFile({ path, projectId, close }: FileViewerProps) {
@@ -69,7 +69,7 @@ export function AssetFile({ path, projectId, close }: FileViewerProps) {
 function Loaded({ project, file, openPage }: { project: UeProject; file: string; openPage: (sub?: string) => void }) {
   const state = useUeState(project.id)
   const s = state.data
-  // 编辑器开着就读编辑器里的（可能有没保存的改动，和用户眼前的一致）；没开时不指定，服务端起后台编辑器
+  // 编辑器开着就读编辑器里的（可能有没保存的改动，和用户眼前的一致）；没开时不指定，服务端直接读文件
   const hasEditor = !!s?.instances.some((i) => i.kind === 'editor' && i.online)
   const target = useMemo<Target>(() => (hasEditor ? { instance: 'editor' } : {}), [hasEditor])
   const found = useLoad(
@@ -127,8 +127,6 @@ function Loaded({ project, file, openPage }: { project: UeProject; file: string;
     [project, s, target, path],
   )
 
-  const starting = !s?.instances.some((i) => i.kind !== 'background') && !s?.background.running
-
   return (
     <Ctx.Provider value={ctx}>
       <div className="ue:flex ue:min-h-0 ue:flex-1 ue:flex-col">
@@ -137,7 +135,7 @@ function Loaded({ project, file, openPage }: { project: UeProject; file: string;
             <ErrorText>{state.error || found.error}</ErrorText>
           </div>
         ) : !found.data ? (
-          <Hint>{s && starting ? t('UE 没在运行，正在启动后台编辑器，第一次要 30–60 秒…') : t('读取中…')}</Hint>
+          <Hint>{t('读取中…')}</Hint>
         ) : !path ? (
           <Hint>
             {t('在 UE 的资源里没有找到这个文件。可能是刚新建还没被 UE 扫到，或者不在这个项目的 Content 目录里。')}
