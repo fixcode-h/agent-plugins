@@ -76,7 +76,11 @@ export function addCustom(
           ...(src.params?.length ? { params: src.params.map(toParam) } : {}),
         }
       : src.kind === 'set'
-        ? { prop: src.prop, ...(src.part ? { part: src.part } : {}) }
+        ? {
+            prop: src.prop,
+            ...(src.part ? { part: src.part } : {}),
+            ...(src.params?.length ? { params: src.params.map(toParam) } : {}),
+          }
         : {}),
     args,
     editable:

@@ -1,4 +1,4 @@
-import { Folder, SquareFunction, Table2 } from 'lucide-react'
+import { Folder, SquareFunction, Table2, Variable } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { isObjArg } from '../../../../shared/gm/custom.ts'
 import type { GmModule } from '../../../../shared/gm/schema.ts'
@@ -29,6 +29,7 @@ export function SaveGmDialog({
   args,
   params,
   props,
+  setProp,
   tables,
   onClose,
   onSave,
@@ -43,6 +44,8 @@ export function SaveGmDialog({
   params?: { name: string; type?: string; obj?: unknown }[]
   /** 取对象时读的属性 */
   props?: string[]
+  /** 改值时改的属性和类型：args.value 是新值，存成默认值、执行时可改（和调函数「只存参数不存值」不同，新值就是这条 GM 要做的事） */
+  setProp?: { prop: string; type: string }
   /**
    * 参数已关联的表格列：参数名 → 「表格 · 列」。关联存在 gm.json 的 tableBindings，键是「函数名.参数名」，
    * 对象调用和保存出来的 GM 读的是同一份，一处改了另一处跟着变，所以这里只显示、不复制
@@ -57,7 +60,7 @@ export function SaveGmDialog({
   const [note, setNote] = useState(init.note ?? '')
   const [mod, setMod] = useState(init.module ?? modules[0]?.id ?? '')
   const [newMod, setNewMod] = useState<string>()
-  const names = params?.length ? params.map((p) => p.name) : Object.keys(args)
+  const names = setProp ? [] : params?.length ? params.map((p) => p.name) : Object.keys(args)
   const sent = useRef(false)
   const typeOf = (k: string) => params?.find((p) => p.name === k)?.type ?? ''
   const opts = [
@@ -142,7 +145,23 @@ export function SaveGmDialog({
               <ObjRule o={obj.o} small name={obj.name} />
             </span>
           </div>
-          {fn ? (
+          {setProp ? (
+            <>
+              <div className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
+                <span className="ue:w-12 ue:shrink-0 ue:text-subtle">{t('改值')}</span>
+                <Variable className="ue:h-3.5 ue:w-3.5 ue:text-accent" />
+                <span className="ue:font-mono ue:text-fg">{setProp.prop}</span>
+                <span className="ue:font-mono ue:text-subtle">{setProp.type}</span>
+              </div>
+              <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2 ue:text-footnote">
+                <span className="ue:w-12 ue:shrink-0 ue:text-subtle">{t('新值')}</span>
+                <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-fg">
+                  {typeof args.value === 'string' ? args.value : JSON.stringify(args.value ?? null)}
+                </span>
+                <span className="ue:shrink-0 ue:text-caption ue:text-muted">{t('执行时可改')}</span>
+              </div>
+            </>
+          ) : fn ? (
             <div className="ue:flex ue:items-center ue:gap-2 ue:text-footnote">
               <span className="ue:w-12 ue:shrink-0 ue:text-subtle">{t('函数')}</span>
               <SquareFunction className="ue:h-3.5 ue:w-3.5 ue:text-accent" />
@@ -184,9 +203,11 @@ export function SaveGmDialog({
             })}
           </div>
           <span className="ue:text-caption ue:text-subtle">
-            {names.length
-              ? t('只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找')
-              : t('对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找')}
+            {setProp
+              ? t('存的是「把这个变量改成这个值」，执行这条 GM 时可以换新值；对象存的是匹配规则，执行时按规则现找')
+              : names.length
+                ? t('只存参数，不存值：执行这条 GM 时再填。对象存的是匹配规则（类 + 唯一标识），执行时按规则现找')
+                : t('对象和对象参数存的都是匹配规则（类 + 唯一标识），执行时按规则现找')}
           </span>
         </div>
       </div>
