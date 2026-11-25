@@ -303,7 +303,7 @@ const DEFS = [
   ),
   tool(
     'ue_lua',
-    'UnLua 项目的 Lua：action=exec（默认）执行 code（每次都会请用户确认）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
+    'UnLua 项目的 Lua：action=exec（默认）执行 code（会请用户确认，用户可选本对话不再询问）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
       '改完 .lua 的验证：check 只编译不执行（files 是 .lua 路径，相对项目目录；不开游戏也能查）→ reload 重载 modules（模块名）或 changed=true 重载改过还没重载的 → 触发后 errors 看有没有新报错（按消息和位置归并，带次数、调用栈；since 写上次结果的 seq 只看新的，clear=true 清空）。modules 列改过还没重载的模块（all=true 或 filter 列全部）。' +
       'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。\n' +
       'snippet（不带 code）执行用户在 Lua 页批准过的片段，不用确认；名字不对时回现有片段。snap 快照点（不暂停游戏）：file（文件或模块名）+ line 加，执行到时记局部变量和调用栈，hits 次后自动撤；id 看记录；remove=true 撤（不给 id 全撤）；都不给列全部。profile 采 seconds 秒（默认 5）按函数回用时和文件行（平铺总表；要看哪一帧慢、调用关系，改用 ue_perf 录含 Lua 的 trace）。leaks 列 Lua 还拿着、UObject 已销毁或世界已关的对象和引用路径。\n' +

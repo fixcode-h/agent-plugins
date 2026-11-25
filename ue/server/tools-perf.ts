@@ -16,6 +16,7 @@ import { traceAgentQuery, traceDiagnose, traceSummary } from './perf/trace-agent
 import { traceCompare } from './perf/trace-compare.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { t } from './util.ts'
+import { withGrant } from './confirm-grants.ts'
 
 /**
  * 性能和内存分析的两个工具（设计稿「性能与内存分析」第一期）：
@@ -66,7 +67,7 @@ action=query    下钻，what 见下
 action=compare  两份同类抓取的差异（id 是先抓的，other 是后抓的）。trace 按每帧平均比：帧时间、各线程、瓶颈、卡顿元凶、变慢 / 变快最多的计时器（from / to 写书签名时两份各按自己的书签对齐）
 action=export   trace 的完整数据写成文件，只回路径：what=frames（每帧一行，含各线程忙的毫秒）/ timers / counters（name 逗号分隔）/ log，format=csv（默认）/ json
 action=import   登记磁盘上的一个文件（path；.csv、.csv.gz、.memreport、.utrace），不复制不改原文件
-action=delete   删除抓取文件（每次都会请用户确认；导入的外部文件只取消登记）
+action=delete   删除抓取文件（会请用户确认；导入的外部文件只取消登记）
 
 CSV 的 what：
   hitches   卡顿帧：数量、分布在哪些时间段、最慢的若干帧，每帧附带比平时涨得最多的列。thresholdMs 改门槛
@@ -247,10 +248,12 @@ export const PERF_DEFS = [
           const cap = await getCapture(p, str(a.id))
           // 删文件不能撤回：不管权限设成什么都先问
           if (!ctx.confirm) throw new BridgeError(t('这一步要你确认，但这次调用不在对话里，没法弹出确认卡片'))
-          const r = await ctx.confirm({
-            title: cap.imported ? t('Agent 要取消登记一份导入的抓取') : t('Agent 要删除一份抓取文件'),
-            detail: `${cap.label ? `${cap.label}\n` : ''}${cap.file}\n${Math.round(cap.size / 1024)} KB`,
-          })
+          const r = await ctx.confirm(
+            withGrant('perf-delete', {
+              title: cap.imported ? t('Agent 要取消登记一份导入的抓取') : t('Agent 要删除一份抓取文件'),
+              detail: `${cap.label ? `${cap.label}\n` : ''}${cap.file}\n${Math.round(cap.size / 1024)} KB`,
+            }),
+          )
           if (!r.allow) throw new BridgeError(t('你拒绝了：{msg}', { msg: r.message || cap.file }))
           return out(await deleteCapture(p, cap.id))
         }

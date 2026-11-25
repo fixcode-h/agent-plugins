@@ -20,6 +20,7 @@ import {
   withoutLuaChannels,
 } from './perf/lua-trace.ts'
 import { runOp, type OpCtx } from './ops.ts'
+import { withGrant } from './confirm-grants.ts'
 import { hasUnLua } from './lua/unlua-detect.ts'
 import type { Actor, UeProject } from './types.ts'
 import { c, now, readJson, t, uid, writeJson } from './util.ts'
@@ -192,7 +193,7 @@ async function allow(ctx: OpCtx, title: string, detail: string): Promise<OpCtx> 
     throw new BridgeError(t('UE 页「权限与设置」里 Agent 对运行时是只读，不能执行：{what}', { what: title }))
   if (runtime === 'ask') {
     if (!ctx.confirm) throw new BridgeError(t('这一步要你确认，但这次调用不在对话里，没法弹出确认卡片'))
-    const r = await ctx.confirm({ title, detail })
+    const r = await ctx.confirm(withGrant('perf-capture', { title, detail }))
     if (!r.allow) throw new BridgeError(t('你拒绝了：{msg}', { msg: r.message || title }))
   }
   return granted(ctx)

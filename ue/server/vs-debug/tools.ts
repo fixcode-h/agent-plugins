@@ -1,6 +1,7 @@
 import type { OpCtx } from '../ops.ts'
 import { out, tool } from '../toolkit.ts'
 import { t } from '../util.ts'
+import { withGrant } from '../confirm-grants.ts'
 import { vsCall } from './connect.ts'
 import { beforeVsLaunch } from './fg-launch.ts'
 import { openVs } from './open-vs.ts'
@@ -19,7 +20,9 @@ const rest = (a: Args) => Object.fromEntries(Object.entries(a).filter(([k, v]) =
 async function confirmKill(ctx: OpCtx, title: string) {
   // 结束 UE 进程会丢掉编辑器里没保存的改动：不管权限设成什么都先问（和危险控制台命令一样走对话里的确认卡片）
   if (!ctx.confirm) throw new VsDebugError(t('这一步要你确认，但这次调用不在对话里，没法弹出确认卡片'))
-  const r = await ctx.confirm({ title, detail: t('VS 启动的 UE 进程会被结束，编辑器里没保存的改动会丢失。') })
+  const r = await ctx.confirm(
+    withGrant('vs-kill', { title, detail: t('VS 启动的 UE 进程会被结束，编辑器里没保存的改动会丢失。') }),
+  )
   if (!r.allow) throw new VsDebugError(t('你拒绝了：{msg}', { msg: r.message || title }))
 }
 

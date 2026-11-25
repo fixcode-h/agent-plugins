@@ -11,6 +11,7 @@ import { editorStartingWhy } from './launch/bg-guard.ts'
 import { record } from './history.ts'
 import { BridgeError, liveCards, pickCard, rpc, type Card } from './instances.ts'
 import type { PluginConfirm } from '../../sdk/server.ts'
+import { dangerGrant, withGrant, type UeGrant } from './confirm-grants.ts'
 import { formatLuaPath, type LuaKey } from './luapath.ts'
 import { isBatchArgs, keepJob, runAsJob } from './long-ops.ts'
 import { batchUndo, itemPaths } from './batch/undo.ts'
@@ -336,12 +337,13 @@ function release(p: UeProject, packages: string[]) {
 
 /**
  * 设成只读的那一档：用户的指令优先（面板 ADR 0070，用户 2026-11-19 定），不再直接报错，
- * 弹确认卡问这一次放不放行；同意只放这一次，不改设置。不在对话里（没法弹卡）时 ask 照旧报错
+ * 弹确认卡问放不放行；放行不改设置，选「本对话不再询问」时这个对话里同一类不再问（confirm-grants.ts）。
+ * 不在对话里（没法弹卡）时 ask 照旧报错
  */
-async function readOnlyAsk(ctx: OpCtx, title: string, what: string) {
+async function readOnlyAsk(ctx: OpCtx, grant: UeGrant, title: string, what: string) {
   // 不在对话里（定时任务、网页外的调用）没法问：按设置拦下，原因写清是哪一档
   if (!ctx.confirm) throw new BridgeError(t('{title}（这次调用没法弹确认卡片，按设置拦下）：{what}', { title, what }))
-  await ask(ctx, { title, detail: `${what}\n${t('同意只放行这一次，不改「权限与设置」。')}` })
+  await ask(ctx, withGrant(grant, { title, detail: `${what}\n${t('放行不改「权限与设置」。')}` }))
 }
 
 /** Agent 的权限（设计文档 6）：你在网页上的操作不受这个限制 */
@@ -350,36 +352,44 @@ async function checkPerms(ctx: OpCtx, op: string, kind: Kind, args: Record<strin
   const { runtime, asset, struct, python } = ctx.project.perms
   const what = describe(op, args)
   if (kind === 'runtime') {
-    if (runtime === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对运行时是只读，这次放行吗'), what)
-    // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 每次执行都先请你确认（用户 2026-11-10 定）
+    if (runtime === 'read')
+      return readOnlyAsk(ctx, 'readonly:runtime', t('「权限与设置」里 Agent 对运行时是只读，这次放行吗'), what)
+    // 任意 Lua 代码能做的事没有边界：不管权限设成什么，Agent 执行都先请你确认（用户 2026-11-10 定）；
+    // 卡上可选「本对话不再询问」，之后这个对话里执行 Lua 不再问（用户 2026-11-25）
     // 例外：你在 Lua 页批准过的片段（代码没改过）按「运行时」权限走，不再逐次确认（设计稿四.4）
     const approved = op === 'lua.exec' && !!ctx.approvedLua && ctx.approvedLua === args.code
-    if (op === 'lua.exec' && !approved) await ask(ctx, { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what })
-    else if (runtime === 'ask') await ask(ctx, { title: t('Agent 要改正在运行的 UE'), detail: what })
+    if (op === 'lua.exec' && !approved)
+      await ask(ctx, withGrant('lua-exec', { title: t('Agent 要在 UE 里执行 Lua 代码'), detail: what }))
+    else if (runtime === 'ask')
+      await ask(ctx, withGrant('runtime-write', { title: t('Agent 要改正在运行的 UE'), detail: what }))
   } else if (kind === 'asset') {
-    if (asset === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对资源是只读，这次放行吗'), what)
+    if (asset === 'read')
+      return readOnlyAsk(ctx, 'readonly:asset', t('「权限与设置」里 Agent 对资源是只读，这次放行吗'), what)
   } else if (kind === 'struct') {
     if (struct === 'read')
-      return readOnlyAsk(ctx, t('「权限与设置」里没有允许 Agent 新建、复制、改名，这次放行吗'), what)
+      return readOnlyAsk(ctx, 'readonly:struct', t('「权限与设置」里没有允许 Agent 新建、复制、改名，这次放行吗'), what)
     if (struct === 'ask')
-      await ask(ctx, {
-        title: op.startsWith('editor.') ? t('Agent 要改编辑器里打开的关卡') : t('Agent 要新建 / 复制 / 改名 UE 资源'),
-        detail: what,
-      })
+      await ask(
+        ctx,
+        op.startsWith('editor.')
+          ? withGrant('editor-level', { title: t('Agent 要改编辑器里打开的关卡'), detail: what })
+          : withGrant('struct', { title: t('Agent 要新建 / 复制 / 改名 UE 资源'), detail: what }),
+      )
   } else if (kind === 'delete') {
-    if (struct === 'read') return readOnlyAsk(ctx, t('「权限与设置」里没有允许 Agent 删除资源，这次放行吗'), what)
+    if (struct === 'read')
+      return readOnlyAsk(ctx, 'readonly:delete', t('「权限与设置」里没有允许 Agent 删除资源，这次放行吗'), what)
     // 删除跟结构性操作同一档：设成「允许，不用问我」就不再确认（用户 2026-11-19 定）
-    if (struct === 'ask') await ask(ctx, { title: t('Agent 要删除 UE 资源'), detail: what })
+    if (struct === 'ask') await ask(ctx, withGrant('delete', { title: t('Agent 要删除 UE 资源'), detail: what }))
   } else if (kind === 'python') {
-    if (python === 'read') return readOnlyAsk(ctx, t('「权限与设置」里没有打开「执行 Python」，这次放行吗'), what)
-    if (python === 'ask') await ask(ctx, { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what })
+    if (python === 'read')
+      return readOnlyAsk(ctx, 'readonly:python', t('「权限与设置」里没有打开「执行 Python」，这次放行吗'), what)
+    if (python === 'ask')
+      await ask(ctx, withGrant('python', { title: t('Agent 要在 UE 编辑器里执行 Python'), detail: what }))
   } else if (kind === 'save') {
-    if (asset === 'read') return readOnlyAsk(ctx, t('「权限与设置」里 Agent 对资源是只读，要保存，这次放行吗'), what)
+    if (asset === 'read')
+      return readOnlyAsk(ctx, 'readonly:save', t('「权限与设置」里 Agent 对资源是只读，要保存，这次放行吗'), what)
     if (asset === 'ask')
-      await ask(ctx, {
-        title: t('Agent 要保存 UE 资源（P4 项目会先签出）'),
-        detail: what,
-      })
+      await ask(ctx, withGrant('save', { title: t('Agent 要保存 UE 资源（P4 项目会先签出）'), detail: what }))
   }
 }
 
@@ -451,10 +461,13 @@ async function askStale(ctx: OpCtx, stale: P4Stale[]) {
       head: s.head,
     }),
   )
-  await ask(ctx, {
-    title: t('要改的资源本地版本落后（资源没法合并）'),
-    detail: `${lines.join('\n')}\n${t('同意：不更新，直接签出修改（之后提交会和 P4 上的新版本冲突）。拒绝：这次先不改，在 P4 里更新这几个资源后再让 Agent 改。')}`,
-  })
+  await ask(
+    ctx,
+    withGrant('p4-stale', {
+      title: t('要改的资源本地版本落后（资源没法合并）'),
+      detail: `${lines.join('\n')}\n${t('同意：不更新，直接签出修改（之后提交会和 P4 上的新版本冲突）。拒绝：这次先不改，在 P4 里更新这几个资源后再让 Agent 改。')}`,
+    }),
+  )
   // 同意了才记住；拒绝（ask 抛错）时下次改还问
   for (const s of fresh) staleAsked.add(`${actor.taskId}|${s.file}`)
 }
@@ -523,17 +536,26 @@ export async function runOp(
   // 非蓝图函数（受保护、私有、没标 BlueprintCallable）只让网页上你自己点的执行；Agent 的 ue_call 只能调蓝图开放的（用户 2026-11-11 定）
   // 用户的指令优先（面板 ADR 0070）：不再直接拒绝，弹卡问这一次放不放行
   if (op === 'call' && args.any && ctx.actor.kind !== 'user')
-    await ask(ctx, {
-      title: t('Agent 要调用没有对蓝图开放的函数'),
-      detail: `${describe(op, args)}\n${t('Agent 默认只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的），同意只放行这一次。')}`,
-    })
+    await ask(
+      ctx,
+      withGrant('call-any', {
+        title: t('Agent 要调用没有对蓝图开放的函数'),
+        detail: `${describe(op, args)}\n${t('Agent 默认只能调用蓝图开放的函数（BlueprintCallable、Exec 或标了 AgentPanel 的）。')}`,
+      }),
+    )
   if (op === 'console') {
     const cmd = String(args.command ?? '').trim()
     const hit = dangerousMatch(cmd)
     if (hit && !(ctx.actor.kind === 'user' && ctx.confirmed)) {
       if (ctx.actor.kind === 'user')
         throw new BridgeError(t('「{cmd}」是危险命令（{rule}），要先确认', { cmd, rule: hit }))
-      await ask(ctx, { title: t('Agent 要执行危险命令'), detail: `${cmd}\n${t('匹配规则：{rule}', { rule: hit })}` })
+      await ask(
+        ctx,
+        dangerGrant(hit, {
+          title: t('Agent 要执行危险命令'),
+          detail: `${cmd}\n${t('匹配规则：{rule}', { rule: hit })}`,
+        }),
+      )
     }
   }
   await checkPerms(ctx, op, kind, args)
