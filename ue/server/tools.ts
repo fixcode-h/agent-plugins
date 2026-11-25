@@ -33,6 +33,8 @@ import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
 import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
 import { openMap, startPie } from './editor-tools/map.ts'
+import { pieLogSince } from './editor-tools/pie-log.ts'
+import { liveCards } from './instances.ts'
 import { DEBUG_ACTIONS, DEBUG_PROPS, debugAction } from './lua-debug/tool-actions.ts'
 import { VS_TOOLS } from './vs-debug/tools.ts'
 
@@ -304,7 +306,7 @@ const DEFS = [
   ),
   tool(
     'ue_lua',
-    'UnLua 项目的 Lua：action=exec（默认）执行 code（会请用户确认，用户可选本对话不再询问）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
+    'UnLua 项目的 Lua：action=exec（默认）执行 code（会请用户确认，用户可选本对话不再询问）：单个表达式直接返回值，多条语句用 return；print 和执行期间的日志在 output 里；返回表时列前 50 项，不超过 20 项的子表就地展开（depth 默认 2、最多 3，UELink 2.23），不用改成 print 拼字符串；path 给了对象时 self 是它的实例表；timeoutMs 默认 5000、最多 60000。' +
       '改完 .lua 的验证：check 只编译不执行（files 是 .lua 路径，相对项目目录；不开游戏也能查）→ reload 重载 modules（模块名）或 changed=true 重载改过还没重载的 → 触发后 errors 看有没有新报错（按消息和位置归并，带次数、调用栈；since 写上次结果的 seq 只看新的，clear=true 清空）。modules 列改过还没重载的模块（all=true 或 filter 列全部）。' +
       'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。\n' +
       'snippet（不带 code）执行用户在 Lua 页批准过的片段，不用确认；名字不对时回现有片段。snap 快照点（不暂停游戏）：file（文件或模块名）+ line 加，执行到时记局部变量和调用栈，hits 次后自动撤；id 看记录；remove=true 撤（不给 id 全撤）；都不给列全部。profile 采 seconds 秒（默认 5）按函数回用时和文件行（平铺总表；要看哪一帧慢、调用关系，改用 ue_perf 录含 Lua 的 trace）。leaks 列 Lua 还拿着、UObject 已销毁或世界已关的对象和引用路径。\n' +
@@ -324,6 +326,7 @@ const DEFS = [
       since: { type: 'number' },
       clear: { type: 'boolean' },
       timeoutMs: { type: 'number' },
+      depth: { type: 'number' },
       mode: { type: 'string', enum: ['incremental', 'full'] },
       job: { type: 'string' },
       ...DEBUG_PROPS,
@@ -339,7 +342,10 @@ const DEFS = [
       if (dbg) return dbg
       if (!str(a.code).trim()) return mcpText('要给 code（执行 Lua）或 snippet（片段名），或写 action', true)
       const timeoutMs = Math.min(Math.max(Number(a.timeoutMs) || 5000, 100), 60000)
-      return out(await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs }, timeoutMs + 10000))
+      const depth = Math.min(Math.max(Number(a.depth) || 2, 1), 3)
+      return out(
+        await runOp(ctx, 'lua.exec', { code: str(a.code), path: a.path ?? '', timeoutMs, depth }, timeoutMs + 10000),
+      )
     },
   ),
   tool(
@@ -461,10 +467,11 @@ const DEFS = [
   ),
   tool(
     'ue_log',
-    '日志：action=tail 取日志（since 是上次结果里的 cursor，只取之后的新行；category 按分类前缀、verbosity 最低级别 Error / Warning / Log、contains 关键字）；action=crashes 列出崩溃记录；action=clear 清空正在运行的 UE 的日志文件（不能撤回，backup=true 先另存一份）。UE 没在运行时读 Saved/Logs 里的文件。',
+    '日志：action=tail 取日志（since 是上次结果里的 cursor，只取之后的新行；pie=true 只取最近一次 ue_editor pie_start 之后的行，查这次 PIE 新出的错用它；category 按分类前缀、verbosity 最低级别 Error / Warning / Log、contains 关键字）；action=crashes 列出崩溃记录；action=clear 清空正在运行的 UE 的日志文件（不能撤回，backup=true 先另存一份）。UE 没在运行时读 Saved/Logs 里的文件。',
     {
       action: { type: 'string', enum: ['tail', 'crashes', 'clear'] },
       since: { type: 'number' },
+      pie: { type: 'boolean' },
       limit: { type: 'number' },
       category: { type: 'string' },
       verbosity: { type: 'string' },
@@ -479,8 +486,15 @@ const DEFS = [
         const pid = ctx.target?.instance
         return out(await clearLogs(ctx, typeof pid === 'number' ? [pid] : undefined, !!a.backup))
       }
+      let since = Number(a.since) || 0
+      if (a.pie === true) {
+        const card = (await liveCards(ctx.project.root)).find((c) => c.kind === 'editor')
+        const m = pieLogSince(ctx.project.root, card?.pid)
+        if ('error' in m) return mcpText(m.error, true)
+        since = Math.max(since, m.since)
+      }
       const r = await logTail(ctx, {
-        since: Number(a.since) || 0,
+        since,
         limit: Math.min(Number(a.limit) || 200, 1000),
         category: str(a.category),
         verbosity: str(a.verbosity),
