@@ -529,11 +529,17 @@ try {
     [['AddItem', 'Content/Script/GM/GMBag.lua:3']],
   )
   assert.equal(luaList.lua[0].params[0].table, 'Item.Id')
-  const gmRun = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] })
+  // 自己跑 GM / GameTest 要过授权卡（self-test-gate.ts）：不在对话里（没有 confirm）直接拒，用户点了允许才跑
+  const noCard = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] })
+  assert.ok(noCard.isError && /授权卡/.test(text(noCard)), text(noCard))
+  const selfTestAsked = []
+  const tester = { confirm: async (r) => (selfTestAsked.push(r.rule), { allow: true, message: '' }) }
+  const gmRun = await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: [1001, 5] }, tester)
+  assert.deepEqual(selfTestAsked, ['self-test'])
   assert.ok(!gmRun.isError, text(gmRun))
   assert.equal(bridge.state.lua.exec.at(-1), 'GM.AddItem(1001, 5)')
   assert.ok(
-    (await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] })).isError,
+    (await call('ue_gm', { action: 'run', source: 'lua', name: 'AddItem', args: ['abc'] }, tester)).isError,
     '数字参数填了字母',
   )
   const webGm = await api('POST', '/p/p1/lua-gm/run', { name: 'AddItem', args: ['7'] })
@@ -548,7 +554,7 @@ try {
     editable: ['id'],
   }
   const objDef = { name: '商店界面', ref: { class: 'WBP_Shop_C' } }
-  assert.ok(!(await call('ue_gm', { action: 'save', kind: 'object', def: objDef })).isError)
+  assert.ok(!(await call('ue_gm', { action: 'save', kind: 'object', def: objDef }, tester)).isError)
   const gmDry = JSON.parse(
     text(
       await call('ue_gm', {
@@ -565,11 +571,15 @@ try {
     0,
     '演练不落盘',
   )
-  const gmSaved = await call('ue_gm', {
-    action: 'save',
-    kind: 'gm',
-    def: { ...def, objects: { 商店界面: { ref: objDef.ref } } },
-  })
+  const gmSaved = await call(
+    'ue_gm',
+    {
+      action: 'save',
+      kind: 'gm',
+      def: { ...def, objects: { 商店界面: { ref: objDef.ref } } },
+    },
+    tester,
+  )
   assert.ok(!gmSaved.isError, text(gmSaved))
   const customs = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'custom' })))
   assert.ok(
@@ -577,7 +587,7 @@ try {
     JSON.stringify(customs),
   )
   assert.ok(
-    (await call('ue_gm', { action: 'run', source: 'custom', name: '买一个', args: { count: 2 } })).isError,
+    (await call('ue_gm', { action: 'run', source: 'custom', name: '买一个', args: { count: 2 } }, tester)).isError,
     '不可改的参数',
   )
   assert.ok(!(await call('ue_gm', { action: 'remove', kind: 'gm', name: '买一个' })).isError)
