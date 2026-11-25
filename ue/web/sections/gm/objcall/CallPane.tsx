@@ -44,6 +44,8 @@ export function CallPane(p: {
   sentArgs?: Record<string, unknown>
   onRun: () => void
   onSave: () => void
+  /** 改值面板的「保存为 GM」 */
+  onSaveVar: (r: { prop: string; type: string; value: unknown }) => void
   onNewRule: (param: CallParam & { obj: ParamClass }) => void
   gm: GmStore
   config?: LuaGmConfig
@@ -69,7 +71,14 @@ export function CallPane(p: {
         </span>
       </div>
       {p.mode === 'set' ? (
-        <SetVarPane obj={p.obj} v={p.varSel} live={p.live} canRun={p.canRun} onChanged={p.onVarChanged} />
+        <SetVarPane
+          obj={p.obj}
+          v={p.varSel}
+          live={p.live}
+          canRun={p.canRun}
+          onChanged={p.onVarChanged}
+          onSave={p.onSaveVar}
+        />
       ) : p.mode === 'call' ? (
         p.fn ? (
           <>
