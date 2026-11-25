@@ -128,7 +128,7 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_log: {
     title: '日志',
     summary: '取 UE 日志的新行、列出崩溃记录、清空日志',
-    useWhen: '复现问题前后看报错和警告、排查崩溃时；用上次的 cursor 只取新行',
+    useWhen: '复现问题前后看报错和警告、排查崩溃时；用上次的 cursor 只取新行，只看这次 PIE 新出的错用 pie=true（errors 计数是整份日志的累计，别拿它判断这次有没有出错）',
     avoidWhen: 'clear 清空收不回，确实需要时才用并加 backup=true',
     irreversible: true,
     group: DIAG,

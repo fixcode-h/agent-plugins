@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.63.1",
+  "version": "0.64.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译，资源的版本差异（每一版改了哪些属性、组件、节点）；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -616,6 +616,10 @@
         {
           "rule": "plugin:ue:self-test",
           "label": "自己写和跑游戏内测试（GameTest / GM）"
+        },
+        {
+          "rule": "plugin:ue:lua-exec",
+          "label": "在 UE 里执行 Lua 代码（查对象、准备状态）"
         }
       ],
       "main": "ue-gametest",
@@ -623,7 +627,7 @@
         ["ue-gametest", "定测试点和地图、准备环境、写和跑脚本、判断失败原因、整理回归"],
         ["developer", "功能 bug 时按测试证据修代码"]
       ],
-      "document": "## 适用\nUE 项目的改动编译通过后，在游戏里验证功能：定测试点 → 选地图 → 准备编辑器和 PIE → 写 GameTest 脚本（可以用 GM、对象引用、项目接口准备状态）→ 跑 → 没过就修 → 通过的进回归。\n\n## 约定\n- 开头弹一次窗让你选在哪张地图上测，默认是编辑器当前打开的地图；之后不再逐步确认。\n- 这个工作流自带「自己写和跑游戏内测试（GameTest / GM）」的授权，运行里跑 GameTest、执行 GM、开 PIE 不弹授权卡（对话里留一行记录）。\n- 直接在父对话的目录里跑（不开独立分支）：UE 编辑器读的是项目目录，独立分支里的脚本和代码它看不到。\n- 不跑引擎的 Automation RunTests / Gauntlet。\n- 脚本先写进场景根的 agent/<日期>-<功能>/ 草稿目录，跑通过才搬进 regression/<模块>/，标签写 [<模块>, \"regression\", \"agent\"]。\n- 没通过时先分清是功能 bug 还是脚本写错：脚本写错就改脚本（每轮最多改 5 次）；功能 bug 派「开发」按证据修代码，修完热重载或重新编译再跑。「写脚本并跑」最多验收 3 轮，还不过就停下，由父对话问你怎么办。\n- 不用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过；跑不过就如实报告。\n- 编辑器开不了（没编译、启动失败、你正在玩别的地图）时不硬来：脚本照样写好并离线校验，登记成延期验证，报告里写清缺什么、怎么补跑。\n- 推送、合并由父对话决定。",
+      "document": "## 适用\nUE 项目的改动编译通过后，在游戏里验证功能：定测试点 → 选地图 → 准备编辑器和 PIE → 写 GameTest 脚本（可以用 GM、对象引用、项目接口准备状态）→ 跑 → 没过就修 → 通过的进回归。\n\n## 约定\n- 开头弹一次窗让你选在哪张地图上测，默认是编辑器当前打开的地图；之后不再逐步确认。\n- 这个工作流自带「自己写和跑游戏内测试（GameTest / GM）」和「在 UE 里执行 Lua 代码」的授权，运行里跑 GameTest、执行 GM、开 PIE、执行 Lua 不弹授权卡（对话里留一行记录）。\n- 直接在父对话的目录里跑（不开独立分支）：UE 编辑器读的是项目目录，独立分支里的脚本和代码它看不到。\n- 不跑引擎的 Automation RunTests / Gauntlet。\n- 脚本先写进场景根的 agent/<日期>-<功能>/ 草稿目录，跑通过才搬进 regression/<模块>/，标签写 [<模块>, \"regression\", \"agent\"]。\n- 没通过时先分清是功能 bug 还是脚本写错：脚本写错就改脚本（每轮最多改 5 次）；功能 bug 派「开发」按证据修代码，修完热重载或重新编译再跑。「写脚本并跑」最多验收 3 轮，还不过就停下，由父对话问你怎么办。\n- 不用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过；跑不过就如实报告。\n- 编辑器开不了（没编译、启动失败、你正在玩别的地图）时不硬来：脚本照样写好并离线校验，登记成延期验证，报告里写清缺什么、怎么补跑。\n- 推送、合并由父对话决定。",
       "flows": [
         {
           "id": "main",
@@ -635,14 +639,14 @@
               "agent": "ue-gametest",
               "tier": "medium",
               "confirm": true,
-              "instructions": "1. 弄清这次要测什么：读上面「输入」里的需求、改动清单和父对话写的测试点；没给改动清单时看版本控制里这次的改动（Git 看 diff，P4 看 opened）。每个测试点写成一句「做了什么之后，应该看到什么」，再写打算怎么测（准备状态用项目接口还是 GM、被测的操作走哪个界面、检查哪些数据和界面）。只测这次改动影响到的，不铺开测整个模块。\n2. 定地图：ue_status 看编辑器开着没有，开着时编辑器世界（type=editor）的 map 就是当前打开的地图；没开时读 Config/DefaultEngine.ini 的 EditorStartupMap / GameDefaultMap。\n3. 用 submit_report 交阶段报告：summary 写要测几个点、在哪张地图上测；decisions 第一项 Q1「在哪张地图上测」，选项把当前打开的地图放第一个并选它（pick），其余写项目默认地图、和这次改动有关的地图（最多 4 个，地图写 /Game/... 的长路径）；details 写测试点清单。用户要别的地图时会在退回意见里写地图名，按它改。"
+              "instructions": "1. 弄清这次要测什么：读上面「输入」里的需求、改动清单和父对话写的测试点；没给改动清单时看版本控制里这次的改动（Git 看 diff，P4 看 opened）。每个测试点写成一句「做了什么之后，应该看到什么」，再写打算怎么测（准备状态用项目接口还是 GM、被测的操作走哪个界面、检查哪些数据和界面）。只测这次改动影响到的，不铺开测整个模块。\n2. 定地图：先看文档根的 CONTEXT.md 有没有「地图与主模块」对照（哪张图加载哪个主模块 / 玩法），有就按改动所在的主模块挑图；ue_status 看编辑器开着没有，开着时编辑器世界（type=editor）的 map 就是当前打开的地图；没开时读 Config/DefaultEngine.ini 的 EditorStartupMap / GameDefaultMap。对照里没有、这次查清了某张图对应哪个主模块时，补进 CONTEXT.md 的「地图与主模块」一节（一行一张图：地图包名、主模块、怎么查到的），下次不用再翻 Lua 摸一遍。\n3. 用 submit_report 交阶段报告：summary 写要测几个点、在哪张地图上测；decisions 第一项 Q1「在哪张地图上测」，选项把当前打开的地图放第一个并选它（pick），其余写项目默认地图、和这次改动有关的地图（最多 4 个，地图写 /Game/... 的长路径）；details 写测试点清单。用户要别的地图时会在退回意见里写地图名，按它改。"
             },
             {
               "id": "env",
               "title": "准备环境",
               "agent": "ue-gametest",
               "tier": "medium",
-              "instructions": "按上一步确认的地图把编辑器和 PIE 准备好，每一步看工具返回的状态，不要猜：\n- ue_status 看进程。改了 C++、编辑器是改动之前启动的（ue_status 提示二进制比源码旧）时先 request_build 申请编译，等结果推回来；编译失败就交 fail。\n- 没有编辑器进程：ue_editor action=start_editor，再 wait_ready 等它可用（不要 sleep 干等）。只有后台编辑器（不开窗口的那种）时它跑不了界面测试：先 background_stop 再 start_editor。\n- 编辑器开着、PIE 没开：用 ue_gametest action=run steps=[{\"id\": \"pie\", \"action\": \"pie.start\", \"map\": \"<确认的地图>\"}] 开 PIE 并进地图，job 看它开好了。\n- PIE 已经在跑：地图和确认的一样就直接用；不一样说明用户可能正在玩，不要关掉它，交 fail 写明。\n- 启动失败、wait_ready 超时、项目没接入 UE 页：交 fail，原样写出报错。\n用 submit_verdict 交结论：编辑器和 PIE 都在确认的地图上准备好了交 pass，并写明 PIE 是不是这次开的；准备不了交 fail，blockers 写缺什么。"
+              "instructions": "按上一步确认的地图把编辑器和 PIE 准备好，每一步看工具返回的状态，不要猜：\n- ue_status 看进程。改了 C++、编辑器是改动之前启动的（ue_status 提示二进制比源码旧）时先 request_build 申请编译，等结果推回来；编译失败就交 fail。\n- 没有编辑器进程：ue_editor action=start_editor，再 wait_ready 等它可用（不要 sleep 干等）。只有后台编辑器（不开窗口的那种）时它跑不了界面测试：先 background_stop 再 start_editor。\n- 编辑器开着、PIE 没开：ue_editor action=pie_start map=<确认的地图> 开 PIE（只在 PIE 里玩这张图，编辑器里的图不动；等 PIE 世界起来才返回，不要 sleep）。返回的 logSince 之后的日志就是这次 PIE 的，查报错用 ue_log action=tail pie=true。\n- PIE 里出过错（脚本报错、主模块取不到）先 pie_stop 再重开，不要在坏掉的会话上接着查。\n- PIE 已经在跑：地图和确认的一样就直接用；不一样说明用户可能正在玩，不要关掉它，交 fail 写明。\n- 启动失败、wait_ready 超时、项目没接入 UE 页：交 fail，原样写出报错。\n用 submit_verdict 交结论：编辑器和 PIE 都在确认的地图上准备好了交 pass，并写明 PIE 是不是这次开的；准备不了交 fail，blockers 写缺什么。"
             },
             {
               "id": "test",

@@ -12,6 +12,7 @@
 #include "DataTableEditorUtils.h"
 #include "Editor.h"
 #include "Editor/EditorEngine.h"
+#include "LevelEditorViewport.h"
 #include "Engine/DataTable.h"
 #include "HAL/FileManager.h"
 #include "Misc/PackageName.h"
@@ -361,7 +362,25 @@ static void RegisterEditorOps()
 		FViewport* VP = nullptr;
 		if (World->WorldType == EWorldType::Editor)
 		{
+			// 2.23（复盘 2026-11-25 A6）：换图时活动视口是空的，以前只回「这个世界没有视口」，Agent 以为截图坏了
+			if (AgentPanelEd::MapLoading())
+			{
+				Error = TEXT("编辑器正在加载地图，加载完再截：等 ue_editor action=open_map 返回后再调");
+				return false;
+			}
 			VP = GEditor ? GEditor->GetActiveViewport() : nullptr;
+			// 焦点不在关卡视口上（内容浏览器、细节面板）时活动视口可能是空的：退回第一个关卡视口
+			if (!VP && GEditor)
+			{
+				for (FLevelEditorViewportClient* Client : GEditor->GetLevelViewportClients())
+				{
+					if (Client && Client->Viewport)
+					{
+						VP = Client->Viewport;
+						break;
+					}
+				}
+			}
 		}
 		else if (UGameViewportClient* VC = World->GetGameViewport())
 		{

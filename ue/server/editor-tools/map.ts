@@ -3,6 +3,7 @@ import { BridgeError, info, liveCards, rpc, type Card } from '../instances.ts'
 import { withGrant } from '../confirm-grants.ts'
 import type { Instance } from '../types.ts'
 import { t } from '../util.ts'
+import { markPieLog } from './pie-log.ts'
 
 /**
  * ue_editor 的 open_map 和 pie_start（工具定义在 tools.ts）：做完、等到结果再返回（面板 ADR 0067 第 5 节）。
@@ -209,6 +210,7 @@ export async function startPie(ctx: OpCtx, a: Record<string, unknown>) {
     throw new BridgeError(
       `UE 里的 UELink 是 ${card.bridge}，pie_start 带 map 要 2.22.0：先 open_map 换图再 pie_start，或到 UE 页「UE 插件」更新 UELink 后重新编译`,
     )
+  const logSince = await markPieLog(ctx, card.pid)
   const r = await runOp(editorCtx(ctx), 'pie', {
     action: 'start',
     players: a.players ?? 1,
@@ -218,9 +220,11 @@ export async function startPie(ctx: OpCtx, a: Record<string, unknown>) {
   const want = Math.min(Math.max(Number(a.players) || 1, 1), 8)
   const w = await waitInfo(card, (i) => pieWorlds(i).length >= want, clampMs(a.timeoutMs, 60000, 300000))
   const worlds = w.inst ? pieWorlds(w.inst) : []
+  const log = logSince !== undefined ? { logSince, logHint: '只看这次 PIE 之后的日志：ue_log action=tail pie=true' } : {}
   if (!w.ok)
     return {
       ...r,
+      ...log,
       ready: false,
       note: worlds.length
         ? `PIE 起了 ${worlds.length} 个世界，还没到 ${want} 个：用 ue_status 看一下`
@@ -228,8 +232,9 @@ export async function startPie(ctx: OpCtx, a: Record<string, unknown>) {
     }
   return {
     ...r,
+    ...log,
     ready: true,
     worlds: worlds.map((x) => ({ id: x.id, map: x.map, netMode: x.netMode })),
-    note: '游戏逻辑（主模块、Lua 环境）可能还在初始化：取不到对象时用 ue_log 看有没有报错，别直接下结论',
+    note: '游戏逻辑（主模块、Lua 环境）可能还在初始化：取不到对象时用 ue_log pie=true 看这次 PIE 有没有报错，别直接下结论；PIE 里出过错先 pie_stop 再重开，不要在坏掉的会话上接着查',
   }
 }

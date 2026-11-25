@@ -459,6 +459,13 @@ try {
   const pie = await call('ue_editor', { action: 'pie_start', map: '/Game/Maps/Town' }, yes)
   assert.match(text(pie), /"ready":true/, text(pie))
   assert.match(text(pie), /"map":"Town"/, text(pie))
+  // 开 PIE 前记下日志游标：ue_log pie=true 只给这次 PIE 之后的行（复盘 A7）
+  const logSince = Number(/"logSince":(\d+)/.exec(text(pie))?.[1])
+  assert.ok(logSince > 0, text(pie))
+  const pieLog = await call('ue_log', { action: 'tail', pie: true }, yes)
+  assert.ok(!pieLog.isError, text(pieLog))
+  const fresh = bridge.state.lines.filter((l) => l.seq > logSince).length
+  assert.equal(JSON.parse(text(pieLog)).lines.length, fresh, text(pieLog))
   assert.equal(bridge.state.map.package, '/Game/Maps/Arena')
   assert.ok(!(await call('ue_editor', { action: 'open_map', map: '/Game/Maps/Town' }, yes)).isError)
   assert.ok(!(await call('ue_editor', { action: 'pie_start' }, yes)).isError)
