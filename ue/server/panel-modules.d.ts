@@ -113,6 +113,8 @@ declare module '@panel/web/src/components/ui/version-diff' {
     error?: string
   }
   export type VersionPick = 'local' | number
+  /** 面板认 navExtra（新面板才有，旧面板 undefined） */
+  export const VERSION_DIFF_NAV_EXTRA: boolean | undefined
   export function VersionDiffShell(props: {
     open: boolean
     onClose: () => void
@@ -123,6 +125,7 @@ declare module '@panel/web/src/components/ui/version-diff' {
     onPick: (p: VersionPick) => void
     local?: { meta: string; message: string }
     tags?: Record<string, ReactNode>
+    navExtra?: ReactNode
     header: ReactNode
     children: ReactNode
     paneKey: string
