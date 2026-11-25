@@ -86,7 +86,7 @@ user-invocable: true
 
 - `create`：`class` 默认 Blueprint（给 `parent`）；DataTable 给 `rowStruct`；DataAsset 子类、曲线直接给类名。
 - `rename`（也用来移动）：返回引用它的资源列表，引擎会一起改；`redirector=true` 说明有引用方没改到，留了重定向器。
-- `delete`：有引用方时拒绝并列出。先改掉引用；确实要强删才 `force=true`，并且要向用户说明哪些资源会断开。删除每次都会请用户确认。
+- `delete`：有引用方时拒绝并列出。先改掉引用；确实要强删才 `force=true`，并且要向用户说明哪些资源会断开。删除会请用户确认（设成「允许，不用问我」时不问）。
 
 ## 撤回和保存
 

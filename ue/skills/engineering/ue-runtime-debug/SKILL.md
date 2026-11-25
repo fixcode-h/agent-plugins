@@ -53,7 +53,7 @@ user-invocable: true
 - 纯 Lua 的单例、管理器：不写 path，`ue_get lua="GameSystemManager"` 或 `lua='package.loaded["Game.Core.X"]'`，从全局表开始。
 - 改简单字段：`ue_set path=<对象> lua="Bag.Gold" value=999`（只能改数字、字符串、布尔、nil，能 `ue_undo` 撤回）。
 - 纯 Lua 实例（Lua 框架自己 new、不绑 UObject 的表）：`ue_find kind=lua module=<完整模块名>` 给的 `luaref:编号` 可当 `ue_get` / `ue_set lua=` / `ue_lua action=call` 的 path，但换一局游戏就失效；要反复用的写成匹配规则 `{class:"lua:<模块名>", ident:[…]}` 交给 `ue_gm action=call` 或存进对象列表，每次按规则现找。
-- 复杂的（调 Lua 函数、改表、看计算结果）用 `ue_lua code="..."`：单个表达式直接返回值，`path` 给了对象时 `self` 是它的实例表。每次都会请用户确认，先想清楚一次要做的事，别拆成很多次小调用。
+- 复杂的（调 Lua 函数、改表、看计算结果）用 `ue_lua code="..."`：单个表达式直接返回值，`path` 给了对象时 `self` 是它的实例表。会请用户确认（用户可选本对话不再询问），先想清楚一次要做的事，别拆成很多次小调用。
 
 ## 资源和 DataTable
 
