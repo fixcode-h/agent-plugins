@@ -313,6 +313,11 @@ namespace UELinkMapOps
 	}
 }
 
+bool AgentPanelEd::MapLoading()
+{
+	return UELinkMapOps::LastLoad().bPending;
+}
+
 bool AgentPanelEd::ResolveMapPackage(const FString& In, FString& OutPackage, FString& Error)
 {
 	FString File;

@@ -108,6 +108,8 @@ namespace AgentPanelEd
 	void RegisterMapOps();
 	/** 地图名、包名、对象路径或 .umap 路径换成地图包名（按资源注册表找短名，同名多张时报候选）；找不到返回 false 写 Error */
 	bool ResolveMapPackage(const FString& In, FString& OutPackage, FString& Error);
+	/** 2.23：editor.map 正在打开地图（还没加载完）：截图这类操作直接说「正在加载」，不去碰没准备好的视口 */
+	bool MapLoading();
 	/** 2.16：导入外部文件、调编辑器函数库（UELinkImportCallOps.cpp）：asset.import、asset.reimport、editor.functions、editor.call */
 	void RegisterImportCallOps();
 	/** 世界里的 Actor 增删、挂接、换文件夹时推 uelink.outliner 事件（UELinkOutlinerPush.cpp），网页的大纲据此重读，不轮询 */

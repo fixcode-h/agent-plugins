@@ -272,7 +272,8 @@ namespace AgentPanelLuaImpl
 	void Describe(FLuaCtx& C, int Idx, const TSharedPtr<FJsonObject>& F);
 	void DescribeKey(lua_State* L, int Idx, const TSharedPtr<FJsonObject>& F);
 	/** 列一张表的项（排序、分页），写 fields / total / offset / more / truncated */
-	void ListTable(FLuaCtx& C, int T, int32 Offset, int32 Limit, const TSharedPtr<FJsonObject>& Out);
+	/** Depth > 1 时把不超过 SmallTable 项的子表也展开（lua.exec 的结果，复盘 2026-11-25 A5：嵌套表只给项数，Agent 只好改成 print 拼字符串再跑） */
+	void ListTable(FLuaCtx& C, int T, int32 Offset, int32 Limit, const TSharedPtr<FJsonObject>& Out, int32 Depth = 1);
 	/** 元表链上的函数（最多三层），写 functions */
 	void ListFunctions(FLuaCtx& C, int T, const TSharedPtr<FJsonObject>& Out);
 	/** JSON 标量 → Lua；bPrevFloat：原来是小数时整数值也按小数写 */

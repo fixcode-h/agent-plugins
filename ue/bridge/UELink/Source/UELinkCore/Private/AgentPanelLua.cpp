@@ -450,6 +450,9 @@ namespace AgentPanelLuaImpl
 		return true;
 	}
 
+	/** lua.exec 结果里就地展开的子表最多几项 */
+	constexpr int32 SmallTable = 20;
+
 	/** 表的项数，最多数到 Cap（再多标 more） */
 	int32 CountEntries(lua_State* L, int T, int32 Cap, bool& bMore)
 	{
@@ -590,7 +593,7 @@ namespace AgentPanelLuaImpl
 	 * 列一张表的项：按键排序（数字键在前、从小到大，然后字符串键按字母），Offset / Limit 分页。
 	 * 只排前 MaxScan 项（超过标 truncated），总数照样数完
 	 */
-	void ListTable(FLuaCtx& C, int T, int32 Offset, int32 Limit, const TSharedPtr<FJsonObject>& Out)
+	void ListTable(FLuaCtx& C, int T, int32 Offset, int32 Limit, const TSharedPtr<FJsonObject>& Out, int32 Depth)
 	{
 		lua_State* L = C.L;
 		FTop Guard(L);
@@ -653,6 +656,11 @@ namespace AgentPanelLuaImpl
 			TSharedPtr<FJsonObject> F = MakeShared<FJsonObject>();
 			DescribeKey(L, K, F);
 			Describe(C, -1, F);
+			// 小表就地展开一层：只展开项数不多的，免得一张大配置表把返回撑爆（返回默认不超过 4000 字）
+			if (Depth > 1 && lua_istable(L, -1) && F->GetNumberField(TEXT("n")) <= SmallTable)
+			{
+				ListTable(C, lua_absindex(L, -1), 0, SmallTable, F, Depth - 1);
+			}
 			Fields.Add(MakeShared<FJsonValueObject>(F));
 			lua_settop(L, K - 1);
 		}
@@ -1160,7 +1168,7 @@ void AgentPanelRegisterLuaOps(FAgentPanelBridge& B)
 			Describe(C, I, R);
 			if (lua_istable(L, I))
 			{
-				ListTable(C, I, 0, 50, R);
+				ListTable(C, I, 0, 50, R, FMath::Clamp(Int(A, TEXT("depth"), 2), 1, 3));
 			}
 			Results.Add(MakeShared<FJsonValueObject>(R));
 		}
