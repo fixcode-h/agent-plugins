@@ -25,7 +25,6 @@ import { c, setCtx, t } from './util.ts'
 import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
 import { engineFacts } from './engine-facts.ts'
 import { ueIndexRoots } from './file-index-roots.ts'
-import { gtOfferBeforeEnd, gtOfferTrack } from './gt-offer.ts'
 
 /**
  * UE 插件的服务端入口（agent-panel 插件 SDK，面板 ADR 0059，插件接口 2）。
@@ -129,10 +128,6 @@ const activate: ActivateServer = async (ctx) => {
         },
       ],
     }),
-
-    // 清单 hooks 里的钩子（插件接口 3）：编译通过后问一次要不要写 GameTest（gt-offer.ts）
-    hook: (id, input) =>
-      id === 'gt-offer-track' ? gtOfferTrack(input) : id === 'gt-offer' ? gtOfferBeforeEnd(input) : undefined,
 
     // 评审看 .uasset 的改动：前后两版经桥接转成文本再比较（面板 7e0339f 起有这个接口，旧面板不调）
     textify: ueTextifier,

@@ -12,6 +12,7 @@ import type { Target } from './types.ts'
 import { ASSET_ACTIONS, ASSET_TOOLS, assetAction, JOB_HINT } from './tools-asset.ts'
 import { out, str, TARGET, tool } from './toolkit.ts'
 import { mcpText } from './util.ts'
+import { selfTestGate } from './self-test-gate.ts'
 import { batchNudge } from './batch/nudge.ts'
 import { findBySelect } from './batch/find-select.ts'
 import { BATCH_HINT, BATCH_PROPS, runBatch } from './batch/run.ts'
@@ -663,6 +664,9 @@ export function ueTools(projectId: string, root: string, agent: string): McpTool
         target: target && (target.instance !== undefined || target.world) ? target : undefined,
       }
       try {
+        // Agent 自己在游戏里测试前先过授权卡（self-test-gate.ts）：拒绝时把说明当工具结果交回
+        const denied = await selfTestGate(def.name, args, ctx)
+        if (denied) return mcpText(denied, true)
         // 对多个资源逐个调同一件事时提醒改用批量（batch/nudge.ts）
         const r = batchNudge(mctx.taskId, def.name, args, await fn(args, ctx))
         // 改到 AssetForge 纳管的资产时提醒先改配置（uekit/forge-guard.ts）
