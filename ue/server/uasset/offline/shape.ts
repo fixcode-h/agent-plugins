@@ -16,7 +16,7 @@ export function clean(v: unknown, depth = 0): unknown {
 }
 
 /** 截短长值：和桥接的 maxChars 一样，超了给 JSON 文本的开头 */
-function clip(v: unknown, max: number): unknown {
+export function clip(v: unknown, max: number): unknown {
   if (max <= 0) return v
   const s = typeof v === 'string' ? v : JSON.stringify(v)
   if (s === undefined || s.length <= max) return v

@@ -348,12 +348,19 @@ sequenceDiagram
 2. 方向选 A（自写 TS）还是 B（CUE4Parse）？推荐 A，理由见第 5 节。
 3. 第四期的反射快照要在 UELink 加一个只读操作（用户要重新编译 UELink），要不要做，还是第 6 节第 1、2 条够用了？
 
-## 实现状态（UE 插件 0.60.0）
+## 实现状态（UE 插件 0.61.1）
 
 - 读取器：`ue/shared/uasset/`（容器层 `package.ts`、属性 `props.ts`、二进制结构体 `structs.ts`、引脚 `pins.ts`、蓝图结构 `bp.ts`、图表 `graph.ts` / `pseudo.ts`、快照 `snap.ts`、评审文本 `snap-text.ts`）。只读，不写文件。
 - 服务端：`ue/server/uasset/`。`read.ts` 读文件并按「修改时间 + 大小」缓存最近 8 份；`offline/` 是离线操作注册表（`asset.describe`、`props`、`get`、`components`、`bp.outline`、`bp.graph`、`datatable`、`datatable.row`、按磁盘路径找资源的 `assets`、评审用的 `asset.textify`），返回照 UELink 同名操作的形状，多带 `offline: true`、`note` 和 `instance.kind = "file"`；`route.ts` 的 `offlineFirst` 挂在 `ops.ts` 的 `runOp` 里：只管读操作、编辑器没开、没指定进程时走它，读不了（烘焙包、更新的引擎版本……）再按原来的路走 UE，并把原因带进报错。
 - 版本差异（`server/asset-diff/snapshot.ts`）：一次差异只挑一条路，编辑器开着或用户点了「启动后台编辑器读」由 UE 读，否则两边都由读取器读；缓存文件名带读取器格式版本（`-f2`），限制说明按当前界面语言现拼。
 - 网页：属性页、蓝图页头标「从文件读 · 只读」，属性一律只读。
 - 单测：`ue/shared/uasset/uasset.test.ts`、`ue/server/uasset/offline.test.ts`，资源用 `ue/shared/uasset/test/pack.ts` 现拼（不带第三方资源）。
-- 还没做：控件动画、父蓝图链上的变量（`inherited`）、引用方（要扫全项目）、编译状态；5.4 保存的真实资源还没实测过（只有拼出来的 5.4 格式样例）。
+- 补全默认值（0.61.1，用户反馈「很多属性没读全、还漏数据」后做）：文件里每个对象只存和原型不一样的属性，结构体也只存改过的成员，数据表每行只存改过的列。
+  - 原型链（`shared/uasset/inherit.ts`）：类默认对象 → 父类的类默认对象；它下面的子对象（C++ 组件）→ 父类默认对象下面的同名子对象；生成类下面的组件模板 → 父蓝图里同名的模板；其余 → 自己类的默认对象。导出表的 TemplateIndex 在编辑器保存的包里是 0，只能按位置推。
+  - 合并（`server/uasset/defaults/resolve.ts`）：父蓝图、组件类蓝图读它们的文件；走到 C++ 类时用编辑器记下的默认值。属性按编辑器的反射顺序，带分类和显示名，结构体按成员合，静态数组合回一条，这一层改过的标 `changed: true`。
+  - C++ 默认值（`defaults/native-cache.ts`、`prime.ts`，按项目存在数据目录 `uasset-defaults/`）：离线读时缺的记进待补，编辑器开着时每次发操作顺手在后台用 UELink 现有的 `props` 读 `/Script/Engine.Default__X`（和 `Default__X:子对象`）补上，每轮最多 40 个、隔一分钟一轮，记下超过一天的重读。没走第 6 节第 3 条的「UELink 新操作」，不用重新编译 UELink。
+  - 数据表：编辑器开着时读一遍这张表，和文件里的行对出各列默认值（`shared/uasset/table-defaults.ts`），按行结构记下；用户定义结构的列名去掉 `_2_<GUID>` 后缀，和编辑器显示的一致。
+  - 组件：父蓝图加的组件（子蓝图没改过的在子蓝图文件里根本没有）去父蓝图文件里读，标 `inherited`。
+  - 二进制结构补了曲线关键帧（`RichCurveKey` 等）、`PerPlatform*`、`PerQualityLevel*`、`InstancedStruct`、材质输入、`Matrix`、`BoxSphereBounds`、`FloatRange` 等（`structs-engine.ts`）。
+- 还没做：控件动画、父蓝图链上的变量（`inherited`）、引用方（要扫全项目）、编译状态；5.4 保存的真实资源还没实测过（只有拼出来的 5.4 格式样例）；编辑器从没开过的项目第一次看仍只有改过的值（界面上写明）。
 

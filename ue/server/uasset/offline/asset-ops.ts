@@ -7,7 +7,9 @@ import { BridgeError } from '../../instances.ts'
 import { t } from '../../util.ts'
 import { findObject, loadAsset, OfflineReadError } from '../read.ts'
 import { registerOffline } from './registry.ts'
-import { brief, num, propInfo, readOnlyWhy } from './shape.ts'
+import { brief, clip, num, readOnlyWhy } from './shape.ts'
+import { fullProps, layerNote } from '../defaults/resolve.ts'
+import { parentBlueprints } from '../bp-chain.ts'
 
 /** 资源的摘要、属性、组件（照 UELink 的 asset.describe / props / get / components） */
 
@@ -77,42 +79,66 @@ registerOffline('asset.describe', async ({ project, args }) => {
   return { ...out, note: t('引用方（谁引用了它）要扫全项目，编辑器没开时不给') }
 })
 
-/** 属性：按名字开头筛（和桥接一样不分大小写） */
-function propsOf(o: UObj, filter: string, maxChars: number) {
+/** 属性：原型链合好的完整列表（resolve.ts），按名字开头筛（和桥接一样不分大小写） */
+async function propsOf(project: Parameters<typeof loadAsset>[0], a: Asset, o: UObj, filter: string, maxChars: number) {
+  const layer = await fullProps(project, a, o)
   const f = filter.toLowerCase()
   const why = readOnlyWhy()
-  return o.props.filter((p) => !f || p.name.toLowerCase().startsWith(f)).map((p) => propInfo(p, maxChars, why))
+  const props = layer.props
+    .filter((p) => !f || p.name.toLowerCase().startsWith(f))
+    .map((p) => {
+      const { changed, ...rest } = p
+      const count = Array.isArray(p.value)
+        ? p.value.length
+        : p.value && typeof p.value === 'object'
+          ? Object.keys(p.value).length
+          : 0
+      return {
+        ...rest,
+        ...(p.container ? { count } : {}),
+        readOnly: true,
+        readOnlyWhy: why,
+        ...(changed ? { changed: true } : {}),
+        value: clip(p.value, maxChars),
+      }
+    })
+  return { props, note: layerNote(layer) }
 }
 
 registerOffline('props', async ({ project, args }) => {
-  const { o } = await objectOf(project, pathArg(args), true)
+  const { asset: a, o } = await objectOf(project, pathArg(args), true)
+  const { props, note } = await propsOf(project, a, o, String(args.filter ?? ''), num(args.maxChars, 2000))
   return {
     object: brief(o),
     kind: /Class$/.test(o.class) && !o.isCdo ? 'class' : 'asset',
     widget: false,
     readOnlyWhy: readOnlyWhy(),
-    props: propsOf(o, String(args.filter ?? ''), num(args.maxChars, 2000)),
+    props,
+    note,
   }
 })
 
 /** get 只认顶层属性名（文件里没有类型信息，嵌套路径 A.B[2] 按读出的值往下取） */
 registerOffline('get', async ({ project, args }) => {
-  const { o } = await objectOf(project, pathArg(args), true)
+  const { asset: a, o } = await objectOf(project, pathArg(args), true)
   const name = String(args.prop ?? '')
   const head = /^[^.[]+/.exec(name)?.[0] ?? ''
-  const p = o.props.find((x) => x.name.toLowerCase() === head.toLowerCase())
+  const layer = await fullProps(project, a, o)
+  const p = layer.props.find((x) => x.name.toLowerCase() === head.toLowerCase())
   if (!p)
     throw new BridgeError(
-      t('{o} 的文件里没有 {p}：可能是没改过（用的是 C++ 默认值），要看默认值请打开编辑器', { o: o.name, p: name }),
+      layer.missing.length
+        ? t('{o} 的文件里没有 {p}：可能是没改过（用的是 C++ 默认值），要看默认值请打开编辑器', { o: o.name, p: name })
+        : t('{o} 没有属性 {p}', { o: o.name, p: name }),
     )
-  let v: unknown = propInfo(p, 0, '').value
+  let v: unknown = p.value
   for (const m of name.slice(head.length).matchAll(/\.([^.[]+)|\[(\d+)\]/g)) {
     const key = m[1] ?? Number(m[2])
     const pick = (x: unknown) => (x && typeof x === 'object' ? (x as Record<string, unknown>)[key] : undefined)
     // 结构体成员是小写开头（照 FJsonObjectConverter），用户照 UE 写大写开头也认
     v = pick(v) ?? (typeof key === 'string' ? pickCi(v, key) : undefined)
   }
-  return { value: v ?? null, type: p.type }
+  return { value: v ?? null, type: String(p.type ?? '') }
 })
 
 function pickCi(v: unknown, key: string) {
@@ -124,6 +150,17 @@ function pickCi(v: unknown, key: string) {
 /** 和网页 bp-comps.ts 一样按类名认常见的非场景组件 */
 const NOT_SCENE = /Movement|InputComponent|Perception|PawnNoise|^ActorComponent$/i
 
+interface CompItem {
+  path: string
+  name: string
+  class: string
+  parent: string
+  root: boolean
+  scene: boolean
+  created: string
+  inherited?: boolean
+}
+
 registerOffline('components', async ({ project, args }) => {
   const path = pathArg(args)
   const { asset: a } = await loadAsset(project, path)
@@ -132,7 +169,7 @@ registerOffline('components', async ({ project, args }) => {
   if (!bp.components.length && !bp.cdo) throw new OfflineReadError(t('文件里找不到类默认对象'))
   const pathOf = new Map(bp.components.map((c) => [c.name, c.obj.path]))
   const rootPath = typeof prop(bp.cdo, 'RootComponent') === 'string' ? String(prop(bp.cdo, 'RootComponent')) : ''
-  const items = bp.components.map((c) => {
+  const items: CompItem[] = bp.components.map((c) => {
     const scene = !NOT_SCENE.test(c.class)
     const parentPath = c.parent ? (pathOf.get(c.parent) ?? '') : ''
     return {
@@ -146,6 +183,38 @@ registerOffline('components', async ({ project, args }) => {
       ...(c.source === 'inherited' ? { inherited: true } : {}),
     }
   })
+  // 父蓝图加的组件：子蓝图没改过的在子蓝图文件里根本没有，要去父蓝图的文件里读（bp-chain.ts）；改过的上面已经有了，补上挂在谁下面
+  const { chain } = await parentBlueprints(project, bp)
+  const byName = new Map(items.map((x) => [x.name, x]))
+  for (const link of chain) {
+    const pathIn = new Map(link.bp.components.map((c) => [c.name, c.obj.path]))
+    for (const c of link.bp.components) {
+      if (c.source === 'native') continue
+      const scene = !NOT_SCENE.test(c.class)
+      const mine = byName.get(c.name)
+      const parentName = c.parent
+      if (mine) {
+        if (!mine.parent && scene && parentName)
+          mine.parent = pathOf.get(parentName) ?? byName.get(parentName)?.path ?? pathIn.get(parentName) ?? ''
+        continue
+      }
+      const item: CompItem = {
+        path: c.obj.path,
+        name: c.name,
+        class: c.class,
+        parent:
+          scene && parentName
+            ? (pathOf.get(parentName) ?? byName.get(parentName)?.path ?? pathIn.get(parentName) ?? '')
+            : '',
+        root: false,
+        scene,
+        created: 'blueprint',
+        inherited: true,
+      }
+      items.push(item)
+      byName.set(c.name, item)
+    }
+  }
   // 文件里没写根组件（C++ 父类建的根组件没改过就不在 CDO 下面）：第一个没有父组件的场景组件当根
   if (!items.some((x) => x.root)) {
     const first = items.find((x) => x.scene && !x.parent)

@@ -70,6 +70,8 @@ export interface ExportSpec {
   name: string
   /** 类：负数是导入下标（-1 起），正数是导出 */
   classIndex: number
+  /** 父类（生成类用）：负数是导入下标 */
+  superIndex?: number
   outer?: number
   cdo?: boolean
   props: PropSpec[]
@@ -223,7 +225,7 @@ export function buildPackage(spec: PackSpec): Uint8Array {
   const fix: { size: number; offset: number; start: number; end: number }[] = []
   for (const e of spec.exports) {
     w.i32(e.classIndex)
-      .i32(0)
+      .i32(e.superIndex ?? 0)
       .i32(0)
       .i32(e.outer ?? 0)
     n.write(w, e.name)

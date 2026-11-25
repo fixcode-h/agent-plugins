@@ -66,6 +66,11 @@ export function DataTableLayout({ path, onOpen, onChanged, layout }: LayoutProps
           <Badge>DataTable</Badge>
           {data.table && <Badge>{data.table.struct}</Badge>}
           {data.table?.dirty && <Badge tone="warn">{t('未保存')}</Badge>}
+          {data.table?.offline && (
+            <Badge tone="warn" title={data.table.note}>
+              {t('从文件读 · 只读')}
+            </Badge>
+          )}
         </>
       }
       views={[
