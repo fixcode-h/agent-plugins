@@ -435,6 +435,35 @@ try {
   assert.ok(spawnHist?.undo, JSON.stringify(spawnHist))
   assert.ok(!(await call('ue_undo', { id: spawnHist.id })).isError)
   assert.equal(bridge.state.tools.spawned.length, 0)
+  // 打开地图（UELink 2.22 editor.map）：PIE 在跑先停；关卡有没保存的改动先报错；discard 请用户确认后丢掉；等打开完才返回
+  bridge.state.map.dirty = ['/Game/Maps/Town']
+  const dirtyErr = await call('ue_editor', { action: 'open_map', map: 'Maps/Arena' }, yes)
+  assert.ok(dirtyErr.isError && /没保存/.test(text(dirtyErr)), text(dirtyErr))
+  assert.equal(bridge.state.map.pie, false, '打开地图前先停 PIE')
+  let askedDiscard = ''
+  const discardYes = {
+    confirm: async (r) => {
+      if (r.rule === 'map-discard') askedDiscard = r.title
+      return { allow: true, message: '' }
+    },
+  }
+  const opened = await call('ue_editor', { action: 'open_map', map: 'Maps/Arena', unsaved: 'discard' }, discardYes)
+  assert.ok(!opened.isError, text(opened))
+  assert.match(text(opened), /"package":"\/Game\/Maps\/Arena"/, text(opened))
+  assert.match(text(opened), /open_map map=\/Game\/Maps\/Town/, '返回里告诉 Agent 怎么换回原图')
+  assert.ok(askedDiscard, '丢掉改动要请用户确认')
+  assert.equal(bridge.state.map.package, '/Game/Maps/Arena')
+  assert.match(text(await call('ue_editor', { action: 'open_map', map: 'Maps/Arena' }, yes)), /"already":true/)
+  assert.match(text(await call('ue_editor', { action: 'open_map', map: 'Arena' }, yes)), /有 2 张地图叫 Arena/)
+  // pie_start 带 map：只在 PIE 里玩那张图，编辑器的图不动；等 PIE 世界起来才返回
+  const pie = await call('ue_editor', { action: 'pie_start', map: '/Game/Maps/Town' }, yes)
+  assert.match(text(pie), /"ready":true/, text(pie))
+  assert.match(text(pie), /"map":"Town"/, text(pie))
+  assert.equal(bridge.state.map.package, '/Game/Maps/Arena')
+  assert.ok(!(await call('ue_editor', { action: 'open_map', map: '/Game/Maps/Town' }, yes)).isError)
+  assert.ok(!(await call('ue_editor', { action: 'pie_start' }, yes)).isError)
+  assert.equal(bridge.state.map.package, '/Game/Maps/Town')
+  assert.equal(bridge.state.map.pie, true)
   const redir = await api('POST', '/p/p1/tools/redirectors', { path: '/Game/Old' })
   assert.equal(redir.items.length, 1)
   const fixed = await api('POST', '/p/p1/tools/redirectors/fix', { path: '/Game/Old' })

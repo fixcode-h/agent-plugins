@@ -16,6 +16,7 @@ export type UeGrant =
   | 'call-any'
   | 'struct'
   | 'editor-level'
+  | 'map-discard'
   | 'delete'
   | 'python'
   | 'save'
@@ -31,6 +32,7 @@ const LABELS: Record<UeGrant, () => string> = {
   'call-any': () => t('调用没有对蓝图开放的函数'),
   struct: () => t('新建 / 复制 / 改名 UE 资源'),
   'editor-level': () => t('改编辑器里打开的关卡'),
+  'map-discard': () => t('换地图时丢掉关卡里没保存的改动'),
   delete: () => t('删除 UE 资源'),
   python: () => t('在 UE 编辑器里执行 Python'),
   save: () => t('保存 UE 资源'),

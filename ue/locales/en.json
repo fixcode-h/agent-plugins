@@ -5172,5 +5172,10 @@
   "越过设置删除资源": "Delete assets despite settings",
   "越过设置执行 Python": "Run Python despite settings",
   "越过只读设置保存资源": "Save assets despite read-only setting",
-  "执行匹配「{rule}」的危险命令": "Run dangerous commands matching \"{rule}\""
+  "执行匹配「{rule}」的危险命令": "Run dangerous commands matching \"{rule}\"",
+  "打开地图": "Open map",
+  "丢掉没保存的关卡改动": "discard unsaved level changes",
+  "换地图时丢掉关卡里没保存的改动": "Discard unsaved level changes when switching maps",
+  "换地图前丢掉关卡里没保存的改动": "Discard unsaved level changes before switching maps",
+  "丢掉后不能恢复。": "This can't be undone."
 }

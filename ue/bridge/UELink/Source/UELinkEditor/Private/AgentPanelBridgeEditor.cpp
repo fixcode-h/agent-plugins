@@ -297,7 +297,20 @@ static void RegisterEditorOps()
 				Error = TEXT("PIE 已经在运行");
 				return false;
 			}
+			// 2.22：map 只在 PIE 里玩那张图（GlobalMapOverride，和 GameTest 的 pie.start 一样），不换编辑器里打开的图，
+			// 不碰没保存的关卡改动；测试换图优先用它，要编辑器本身换图才用 editor.map
+			FString MapPackage;
+			const FString MapArg = Str(A, TEXT("map"));
+			if (!MapArg.IsEmpty() && !ResolveMapPackage(MapArg, MapPackage, Error))
+			{
+				return false;
+			}
 			FRequestPlaySessionParams Params;
+			if (!MapPackage.IsEmpty())
+			{
+				Params.GlobalMapOverride = MapPackage;
+				Out->SetStringField(TEXT("map"), MapPackage);
+			}
 			ULevelEditorPlaySettings* Settings = DuplicateObject(GetDefault<ULevelEditorPlaySettings>(), GetTransientPackage());
 			const int32 Players = FMath::Clamp(Int(A, TEXT("players"), 1), 1, 8);
 			Settings->SetPlayNumberOfClients(Players);
@@ -413,6 +426,7 @@ public:
 		RegisterStreamOps();
 		RegisterSelectionOps();
 		RegisterEditorToolsOps();
+		RegisterMapOps();
 		RegisterImportCallOps();
 		RegisterEditorBatchOps();
 		RegisterUmgViewOps();
