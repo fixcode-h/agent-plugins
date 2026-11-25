@@ -5108,11 +5108,9 @@
   "{n} 个对象没读通": "{n} objects couldn't be read",
   "{bp} 里没有图 {g}，有：{list}": "{bp} has no graph {g}. Available: {list}",
   "找不到节点 {id}": "Node {id} not found",
-  "编辑器没开，直接从磁盘上的文件读：只有改过的值（没改过的属性、C++ 里的默认值看不到），没有显示名和编译状态，不能修改": "The editor isn't open, so this was read straight from the file on disk: only changed values are shown (unchanged properties and C++ defaults are missing), with no display names or compile status, and nothing can be edited",
   "（没读出来：{why}，{n} 字节）": "(not read: {why}, {n} bytes)",
   "编辑器没开，这是从文件读的：要改先打开编辑器": "The editor isn't open; this was read from the file. Open the editor to edit",
   "这不是 DataTable": "This isn't a DataTable",
-  "文件里每行只存了改过的列，没写的列是行结构的默认值": "Each row in the file only stores changed columns; missing columns use the row struct's defaults",
   "{t} 里没有行 {r}": "{t} has no row {r}",
   "磁盘上没有 {p} 的文件（可能还没保存过）": "No file for {p} on disk (it may not have been saved yet)",
   "读取 {p} 出错：{why}": "Error reading {p}: {why}",
@@ -5148,5 +5146,12 @@
   "控件动画还不能离线读，动画差异要开着编辑器看": "Widget animations can't be read offline yet; open the editor to see animation changes",
   "文本用了不常见的格式（类型 {k}），这一项没读": "Text uses an uncommon format (type {k}); this item wasn't read",
   "文本格式化参数的类型认不出（{k}）": "Unknown text format argument type ({k})",
-  "读不到临时文件 {f}": "Can't read the temporary file {f}"
+  "读不到临时文件 {f}": "Can't read the temporary file {f}",
+  "{names} 的 C++ 默认值还没记下，没改过的属性没列出来：编辑器开着时面板会自动记下，以后编辑器没开也能看全": "C++ defaults for {names} haven't been recorded yet, so unchanged properties aren't listed. The panel records them automatically while the editor is open; after that you can see everything even with the editor closed",
+  "没改过的属性用的是上次编辑器开着时记下的 C++ 默认值，C++ 改过还没重开编辑器的话可能是旧的": "Unchanged properties show the C++ defaults recorded the last time the editor was open; they may be out of date if the C++ changed since",
+  "父类 {p} 的文件读不了，它改过的默认值没算进来": "Couldn't read the parent {p}, so the defaults it changes aren't included",
+  "{o} 没有属性 {p}": "{o} has no property {p}",
+  "编辑器没开，直接从磁盘上的文件读：不能修改，没有编译状态和没保存的改动": "The editor isn't open, so this was read straight from the file on disk: read-only, with no compile status and no unsaved changes",
+  "没写的格子用的是上次编辑器开着时记下的行结构默认值": "Empty cells use the row struct defaults recorded the last time the editor was open",
+  "文件里每行只存了改过的列，没写的格子是行结构的默认值：编辑器开着时面板会自动记下默认值，以后编辑器没开也能看全": "The file only stores the columns each row changed; empty cells use the row struct defaults. The panel records those defaults automatically while the editor is open; after that you can see full rows even with the editor closed"
 }
