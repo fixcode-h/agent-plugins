@@ -34,6 +34,8 @@ export const UE_GUIDES: Record<string, Guide> = {
     useWhen:
       '要用项目自带的 GM（加道具、跳关、改数值）复现或验证问题时，先 action=list 看有哪些；要反复调同一个对象上的函数，或用户说「存成 GM」时用 action=save kind=gm 存成自定义 GM（之后 run source=custom），常用对象存进对象列表用 kind=object；一串固定步骤（含等几秒）存成宏用 kind=macro；想知道用户刚在 GM 页点过什么用 list source=recent',
     avoidWhen: '只调一次对象函数用 ue_call；要写进测试场景、能回放的步骤用 ue_gametest',
+    // 普通对话里第一次 run / macro / save 弹授权卡（self-test-gate.ts）
+    confirms: true,
     group: RUN,
   },
   ue_find: {
@@ -182,9 +184,11 @@ export const UE_GUIDES: Record<string, Guide> = {
     title: '游戏测试',
     summary: '写、校验、跑 GameTest 测试脚本，看报告',
     useWhen:
-      '验证刚改的功能或复现用户说的操作时（UE 项目不跑引擎的 Automation RunTests，功能验证用它；不是用户要你写测试的，写新脚本前先用提问工具问用户要不要写、写明要测什么，同意才写，不同意只编译）：先 look what=props / widgets / vars / api 查对象的属性和推荐标识、部件名、变量和接口，按技能 ue-gametest-authoring 写 v5 脚本（schemaVersion 5，对象引用 {class, in?, ident} + 部件 {obj, part}，属性路径 @/子控件.属性、@.属性、@#Lua字段、@:状态；obj.call / api 准备状态，界面操作，对象判断或表达式检查），validate 过了再 run，job / report 看结果，失败读 payload.evidence；通过的放进 regression/ 打标签，以后 run tag=… 回归。用户刚在 GM 页调过、想把那几下写进测试时 look what=gmRecent 拿现成的 gm.run 步骤；不知道用哪个属性区分同类对象时 look what=props 看 score 和 suggest，游戏开着时 inspect 指着看；validate 报 schema_old / settings_old / path_old 时按新写法重写（旧格式不迁移）',
+      '验证刚改的功能或复现用户说的操作时（UE 项目不跑引擎的 Automation RunTests，功能验证用它；普通对话里第一次 run / step 会弹授权卡请用户确认，不用自己先问，拒绝了就只编译）：先 look what=props / widgets / vars / api 查对象的属性和推荐标识、部件名、变量和接口，按技能 ue-gametest-authoring 写 v5 脚本（schemaVersion 5，对象引用 {class, in?, ident} + 部件 {obj, part}，属性路径 @/子控件.属性、@.属性、@#Lua字段、@:状态；obj.call / api 准备状态，界面操作，对象判断或表达式检查），validate 过了再 run，job / report 看结果，失败读 payload.evidence；通过的放进 regression/ 打标签，以后 run tag=… 回归。用户刚在 GM 页调过、想把那几下写进测试时 look what=gmRecent 拿现成的 gm.run 步骤；不知道用哪个属性区分同类对象时 look what=props 看 score 和 suggest，游戏开着时 inspect 指着看；validate 报 schema_old / settings_old / path_old 时按新写法重写（旧格式不迁移）',
     avoidWhen:
       '不要让用户去录制，能从代码写就自己写；只读运行时数值用 ue_get，找 Actor 用 ue_find，只截图用 ue_screenshot，只开停 PIE 用 ue_editor，只敲一条命令用 ue_console——要写进报告、能回放时才用对应的脚本步骤；click 自带等待，不要在前面插 wait seconds；Lua 不用 ue_lua 求值绕过脚本，写成项目 Lua 接口；不要再写 v3 的选择器字符串（WBP_X:Root/Btn）和 invoke / widget.close，用引用和 obj.*；不要只改旧脚本的版本号冒充新格式，按新写法重写',
+    // 普通对话里第一次 run / step 弹授权卡（self-test-gate.ts）
+    confirms: true,
     group: RUN,
   },
   ue_vs_debug: {
