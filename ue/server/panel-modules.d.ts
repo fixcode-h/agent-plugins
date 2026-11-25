@@ -511,6 +511,35 @@ declare module '@panel/web/src/components/ui/split-pane' {
   }): ReactElement
 }
 
+/** 网页：按像素记的栏宽 / 栏高和拖动条（双击恢复默认，记在本机；面板 web/src/components/ui/resize.tsx） */
+declare module '@panel/web/src/components/ui/resize' {
+  import type { ReactElement } from 'react'
+  export interface PaneWidth {
+    width: number
+    set: (n: number) => void
+    save: (n: number) => void
+    reset: () => void
+    fit: (n: number) => void
+    min: number
+    max: number
+    dragging: boolean
+    setDragging: (v: boolean) => void
+    stored: boolean
+  }
+  export function usePaneWidth(
+    key: string,
+    initial: number | (() => number),
+    min: number,
+    max: number | (() => number),
+  ): PaneWidth
+  export function ResizeHandle(p: {
+    pane: PaneWidth
+    label?: string
+    side?: 'left' | 'right' | 'bottom' | 'top'
+    className?: string
+  }): ReactElement
+}
+
 /** 服务端：项目文档根变了（项目设置里改的）时通知（面板 server/docs/root-cache.ts）；root 为空表示可能变了、自己重新问 */
 declare module '@panel/server/docs/root-cache' {
   export function onDocRootChange(fn: (projectId: string, root: string | undefined) => void): () => void

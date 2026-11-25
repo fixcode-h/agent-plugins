@@ -201,7 +201,16 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
         </>
       }
     >
-      {cur?.change && <ChangeSetStrip key={cur.id} pkg={pkg} change={cur.change} label={cur.label} rev={cur.id} />}
+      {cur?.change && (
+        <ChangeSetStrip
+          key={cur.id}
+          pkg={pkg}
+          change={cur.change}
+          label={cur.label}
+          rev={cur.id}
+          message={cur.message}
+        />
+      )}
       {diff ? null : run.failed ? (
         <FailPane failed={run.failed} onRetry={run.retry} onClose={onClose} />
       ) : !hist || hist.vcs === 'none' ? null : (
