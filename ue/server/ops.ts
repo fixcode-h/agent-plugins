@@ -26,6 +26,7 @@ import { gameFileOf, p4EditFiles, p4SavePlan, type P4Stale } from './p4-checkout
 import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
 import { vcsCmd } from './vcs.ts'
 import { offlineFirst } from './uasset/route.ts'
+import { primeNativeDefaults } from './uasset/defaults/prime.ts'
 
 /**
  * 所有对 UE 的操作都走这里（网页和 Agent 工具共用）：选目标进程、按权限放行或请你确认、危险命令确认、
@@ -591,6 +592,8 @@ export async function runOp(
   const card = await chooseCard(ctx, op, args).catch((e: Error) => {
     throw off.why ? new BridgeError(`${t('从文件读不了：{why}', { why: off.why })}\n${e.message}`) : e
   })
+  // 编辑器开着：后台顺手记下离线读时缺的 C++ 默认值（uasset/defaults/prime.ts，有限流），以后编辑器没开也能看全属性
+  void primeNativeDefaults(ctx.project, card)
   await luaReady(ctx, card, op)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world

@@ -25,11 +25,8 @@ export const canOffline = (op: string, args: Record<string, unknown>) => {
   return !!h && (!h.when || h.when(args))
 }
 
-/** 共用的限制说明：只有改过的值，没有 C++ 默认值、显示名、编译状态，也改不了 */
-export const offlineNote = () =>
-  t(
-    '编辑器没开，直接从磁盘上的文件读：只有改过的值（没改过的属性、C++ 里的默认值看不到），没有显示名和编译状态，不能修改',
-  )
+/** 共用的限制说明：读属性的操作自己再说默认值补得怎么样（defaults/resolve.ts 的 layerNote） */
+export const offlineNote = () => t('编辑器没开，直接从磁盘上的文件读：不能修改，没有编译状态和没保存的改动')
 
 export async function runOffline(op: string, call: OfflineCall): Promise<Record<string, unknown>> {
   const h = handlers.get(op)

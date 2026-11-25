@@ -17,6 +17,9 @@ export interface Table {
   rows: TableRow[]
   total: number
   dirty: boolean
+  /** 编辑器没开、服务端直接读文件给的（server/uasset）：note 说明没写的格子是不是补全了 */
+  offline?: boolean
+  note?: string
 }
 
 export type Cell =
