@@ -1,4 +1,4 @@
-import { Crosshair, Pencil, RefreshCw, X } from 'lucide-react'
+import { Crosshair, Pencil, RefreshCw, Save, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { GmObject } from '../../shared/gm/schema.ts'
 import { useUe } from '../ctx.tsx'
@@ -35,6 +35,7 @@ export function SetVarPane({
   live,
   canRun,
   onChanged,
+  onSave,
 }: {
   obj: GmObject
   v?: VarSel
@@ -43,6 +44,11 @@ export function SetVarPane({
   /** 改成功了：中栏列表重读一次 */
   /** 写完（成功或失败）：进调用记录；成功时中栏重读。value 是写进去的文字 */
   onChanged: (r: { ok: boolean; value: string; error?: string }) => void
+  /**
+   * 「保存为 GM」（用户 2026-11-25）：把「改这个变量成这个值」存成一条自定义 GM（kind=set），新值当默认、执行时可改。
+   * 不给就不显示按钮（测试页的对象弹窗也用这个面板，那里不存 GM）
+   */
+  onSave?: (r: { prop: string; type: string; value: unknown }) => void
 }) {
   const { ui } = h()
   const { project, target } = useUe()
@@ -92,6 +98,13 @@ export function SetVarPane({
       onChanged({ ok: false, value: text, error: (e as Error).message })
     } finally {
       setBusy('')
+    }
+  }
+  const save = () => {
+    try {
+      onSave?.({ prop: v.prop, type: v.type, value: v.lua ? luaValue(v.type, text) : ueValue(text) })
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message })
     }
   }
   const block = canRun || (!live ? t('游戏没在运行') : '')
@@ -213,6 +226,22 @@ export function SetVarPane({
           </ui.Button>
         </div>
       </ui.Field>
+      {onSave && (
+        <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
+          <ui.Button
+            size="sm"
+            variant="secondary"
+            disabled={!!v.readOnly || !!objTaken}
+            title={
+              objTaken ? t('新值是抓来的对象，存不成 GM；改成手填的值再存') : t('存成一条自定义 GM，执行时可以改新值')
+            }
+            onClick={save}
+          >
+            <Save className="ue:h-3.5 ue:w-3.5" />
+            {t('保存为 GM')}
+          </ui.Button>
+        </div>
+      )}
       {(block || msg) && (
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-2">
           {block && <span className="ue:text-caption ue:text-subtle">{block}</span>}

@@ -121,6 +121,7 @@ export function ObjCall({
                 sentArgs={b.sentArgs}
                 onRun={b.run}
                 onSave={b.save}
+                onSaveVar={b.saveVar}
                 onNewRule={b.onNewRule}
                 gm={d.gm}
                 config={d.lua.data?.config}
