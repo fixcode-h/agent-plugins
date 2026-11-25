@@ -9,6 +9,8 @@ import { t } from './i18n.ts'
 import { readName, type Package } from './package.ts'
 import { readObjectRef, readSoftPath } from './refs.ts'
 import { structCodec } from './structs.ts'
+// 引擎结构的布局登记在这个文件里，要在 structs.ts 之后执行（它用 structs.ts 的 registerStruct）
+import './structs-engine.ts'
 import { readText } from './text.ts'
 import { cppType, param, readTypeName, typeText, type TypeNode } from './types.ts'
 
