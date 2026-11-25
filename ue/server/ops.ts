@@ -43,6 +43,11 @@ export interface OpCtx {
   confirmed?: boolean
   /** 你批准过的 Lua 片段的代码（lua-debug/snippets.ts）：Agent 执行它时不再逐次确认 */
   approvedLua?: string
+  /**
+   * 工具自己发的控制台命令，不是 Agent 写的（ue_editor open_map 在旧 UELink 上用 `open` 换图，editor-tools/map.ts）：
+   * 不按「危险命令」弹卡，权限照「运行时」走。只在服务端代码里设，Agent 和网页传不进来
+   */
+  internalConsole?: boolean
 }
 
 /**
@@ -123,6 +128,9 @@ function kindOf(op: string, args: Record<string, unknown>): Kind {
       return 'runtime'
     case 'pie':
       return args.action === 'start' || args.action === 'stop' ? 'runtime' : 'read'
+    // 打开地图（UELink 2.22）：换的是编辑器里的关卡，不改资源；没保存的改动由 editor-tools/map.ts 先处理
+    case 'editor.map':
+      return args.action === 'open' ? 'runtime' : 'read'
     // GameTest（UEKit 扩展）：跑场景、单步、录制都在驱动正在运行的游戏
     case 'gt.run':
     case 'gt.step':
@@ -287,6 +295,8 @@ function describe(op: string, args: Record<string, unknown>) {
       return `GameTest ${t('检查点')} ${args.text ?? ''}`.trim()
     case 'gt.editrec.stop':
       return `GameTest ${t('停止录编辑器操作')}${args.save === false ? ` · ${t('不保存')}` : ''}`
+    case 'editor.map':
+      return `${t('打开地图')} ${args.map ?? ''}${args.unsaved === 'discard' ? ` · ${t('丢掉没保存的关卡改动')}` : ''}`
     case 'pie':
       return `PIE ${args.action}${args.players ? ` × ${args.players}` : ''}${args.netMode ? ` ${args.netMode}` : ''}`
     default:
@@ -546,7 +556,7 @@ export async function runOp(
   if (op === 'console') {
     const cmd = String(args.command ?? '').trim()
     const hit = dangerousMatch(cmd)
-    if (hit && !(ctx.actor.kind === 'user' && ctx.confirmed)) {
+    if (hit && !ctx.internalConsole && !(ctx.actor.kind === 'user' && ctx.confirmed)) {
       if (ctx.actor.kind === 'user')
         throw new BridgeError(t('「{cmd}」是危险命令（{rule}），要先确认', { cmd, rule: hit }))
       await ask(

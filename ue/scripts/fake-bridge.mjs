@@ -802,8 +802,18 @@ export async function startFakeBridge(
         ops: Object.keys(ops),
         ...(extensions ? { extensions } : {}),
         worlds: worlds ?? [
-          { id: 'editor', type: 'Editor', netMode: 'Standalone', map: 'Town' },
-          { id: 'pie0', type: 'PIE', netMode: 'ListenServer', pieInstance: 0, map: 'Town' },
+          { id: 'editor', type: 'Editor', netMode: 'Standalone', map: state.map.package.split('/').pop() },
+          ...(state.map.pie
+            ? [
+                {
+                  id: 'pie0',
+                  type: 'PIE',
+                  netMode: 'ListenServer',
+                  pieInstance: 0,
+                  map: (state.map.pieMap || state.map.package).split('/').pop(),
+                },
+              ]
+            : []),
         ],
       })
     let body = ''

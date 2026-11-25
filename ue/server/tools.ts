@@ -32,6 +32,7 @@ import { findLua, LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
 import { selectionBrief } from './selection.ts'
 import { luaCompileTool } from './lua-build/tool.ts'
 import { consoleConfig, consoleTags, editorDestroy, editorSpawn } from './editor-tools/tool-actions.ts'
+import { openMap, startPie } from './editor-tools/map.ts'
 import { DEBUG_ACTIONS, DEBUG_PROPS, debugAction } from './lua-debug/tool-actions.ts'
 import { VS_TOOLS } from './vs-debug/tools.ts'
 
@@ -529,7 +530,7 @@ const DEFS = [
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器（VS 开着这个项目时经 VS 按 F5 带调试器启动）；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；pie_start（players 玩家数、netMode 为 standalone / listen / client）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
+    '编辑器控制：start_editor 启动编辑器（VS 开着这个项目时经 VS 按 F5 带调试器启动）；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；open_map 让编辑器本身换图（map 写地图名、/Game 包名或 .umap；PIE 在跑会先停掉；关卡有没保存的改动时报错列出，unsaved=save 先保存、unsaved=discard 丢掉（请用户确认）；等加载完才返回，timeoutMs 默认 120000；不要用 ue_console open + sleep）；pie_start（map 只在 PIE 里玩这张图、不动编辑器里的图和没保存的改动，测试换图优先用它；players 玩家数、netMode 为 standalone / listen / client；等 PIE 世界起来才返回）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
       'spawn 在编辑器打开的关卡里放 Actor（class 写类名或蓝图路径，location [x,y,z]、rotation [pitch,yaw,roll]、label、level、folder 可选），destroy 删掉 actors（Actor 路径数组，ue_find kind=actor 找）。spawn / destroy 进撤销栈（ue_undo 能撤）、按结构性操作权限确认，PIE 运行中不能用，改完关卡要 ue_save 才落盘。',
     {
       action: {
@@ -537,6 +538,7 @@ const DEFS = [
         enum: [
           'start_editor',
           'wait_ready',
+          'open_map',
           'pie_start',
           'pie_stop',
           'pie_status',
@@ -547,6 +549,9 @@ const DEFS = [
           'destroy',
         ],
       },
+      map: { type: 'string' },
+      unsaved: { type: 'string', enum: ['error', 'save', 'discard'] },
+      reload: { type: 'boolean' },
       players: { type: 'number' },
       netMode: { type: 'string' },
       class: { type: 'string' },
@@ -575,14 +580,10 @@ const DEFS = [
         }
         case 'wait_ready':
           return out(await waitEditorReady(ctx.project, Number(a.timeoutMs) || undefined))
+        case 'open_map':
+          return out(await openMap(ctx, a))
         case 'pie_start':
-          return out(
-            await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', {
-              action: 'start',
-              players: a.players ?? 1,
-              netMode: a.netMode ?? 'standalone',
-            }),
-          )
+          return out(await startPie(ctx, a))
         case 'pie_stop':
           return out(await runOp({ ...ctx, target: { instance: 'editor' } }, 'pie', { action: 'stop' }))
         case 'pie_status':
