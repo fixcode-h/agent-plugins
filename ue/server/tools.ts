@@ -24,6 +24,7 @@ import { FORGE_GUARDED, forgeNotice } from './uekit/forge-guard.ts'
 import { runLuaGm } from './lua-gm/run.ts'
 import { listGm } from './lua-gm/tool.ts'
 import { removeGmDef } from './gm-custom/remove.ts'
+import { runAdhoc } from './gm-custom/adhoc.ts'
 import { runCustom } from './gm-custom/run.ts'
 import { saveGmDef } from './gm-custom/save.ts'
 import { findLua, LUA_DEV_ACTIONS, luaDevAction } from './lua/tool-actions.ts'
@@ -100,9 +101,10 @@ const DEFS = [
     'ue_gm',
     'GM：action=list 列出 GM（参数类型、说明、所在模块），filter 按名字前缀筛。source 不写列项目的 C++（Exec 函数、UAgentPanelGMLibrary，要 UE 在运行）、Lua（扫描脚本列出，UE 没开也能列；参数的 table 是关联的配置表列，填值前可用 table.query 查）和自定义 GM；source=lua 只列 Lua 并重扫；source=engine 列引擎自带的；source=custom 列自定义 GM、对象列表和模块名；source=macro 列存的宏和步骤；source=recent 列用户在 GM 页最近执行的 20 条（参数、成功没有、输出）。' +
       'action=run 执行 name：args 按顺序给参数；Lua 写 source=lua，C++ 同名多处用 owner 指定类；source=custom 执行自定义 GM，args 写 {参数名: 值}，只能改它的 editable。action=macro 按名字执行存的宏（步骤可以是 {wait: 秒}；宏的 onFail=skip 时失败的步跳过接着做）。' +
-      'action=save 存进团队共用的 gm.json（同名就改）：kind=gm 时 def 写一条自定义 GM {name, module（模块名，没有就新建）, obj, objects: {对象名: {ref: 匹配规则} 或 {src: "@pawn"}}, function, args（对象参数写 {"$obj": 对象名}）, params（可选，函数全部参数 [{name, type}]，没写进 args 的用默认值、editable 的执行时可填）, editable, many: error/first/each, kind: call/get, props（get 时读的属性路径）, note}；kind=object 时 def 写对象库（objects.json，GM 页对象调用和测试页共用）的一项 {name, ref} 或 {name, src}，folder 写放进哪个文件夹（a/b 分层，没有就新建；不写时新对象放进 Agent）；kind=macro 时 def 写 {name, steps: [{gm|lua|console|custom: 名字, args} 或 {wait: 秒}], onFail: stop/skip}。存前用 gt.validate 校验，有错不存；dryRun=true 只看结果。action=remove 删 kind + name，返回里列出还在用它的宏。',
+      'action=call 临时对对象调函数 / 取值 / 改值、不存：def 写 {obj, function, args} 或 {obj, props: [属性路径]} 或 {obj, prop, value}，obj 是对象列表里的名字（参数里的 {"$obj": 名} 也按它现找）、匹配规则 {class, ident}（class 写 lua:模块名 时纯 Lua 实例也认，不用 luaref）或来源字符串 @pawn；按规则现找，命中多个时 many=first/each（改值不支持 each）。' +
+      'action=save 存进团队共用的 gm.json（同名就改）：kind=gm 时 def 写一条自定义 GM {name, module（模块名，没有就新建）, obj, objects: {对象名: {ref: 匹配规则} 或 {src: "@pawn"}}, function, args（对象参数写 {"$obj": 对象名}）, params（可选，函数全部参数 [{name, type}]，没写进 args 的用默认值、editable 的执行时可填）, editable, many: error/first/each, kind: call/get/set, props（get 时读的属性路径）, prop（set 改的属性路径，新值写 args.value、editable 写 ["value"] 执行时可改）, note}；kind=object 时 def 写对象库（objects.json，GM 页对象调用和测试页共用）的一项 {name, ref} 或 {name, src}，folder 写放进哪个文件夹（a/b 分层，没有就新建；不写时新对象放进 Agent）；kind=macro 时 def 写 {name, steps: [{gm|lua|console|custom: 名字, args} 或 {wait: 秒}], onFail: stop/skip}。存前用 gt.validate 校验，有错不存；dryRun=true 只看结果。action=remove 删 kind + name，返回里列出还在用它的宏。',
     {
-      action: { type: 'string', enum: ['list', 'run', 'macro', 'save', 'remove'] },
+      action: { type: 'string', enum: ['list', 'run', 'call', 'macro', 'save', 'remove'] },
       source: { type: 'string', enum: ['cpp', 'lua', 'custom', 'engine', 'macro', 'recent'] },
       kind: { type: 'string', enum: ['gm', 'object', 'macro'] },
       name: { type: 'string' },
@@ -135,6 +137,7 @@ const DEFS = [
           ? out(await runLuaGm(ctx, str(a.name), list))
           : out(await runOp(ctx, 'gm.run', { name: a.name, owner: a.owner, args: list }))
       }
+      if (a.action === 'call') return out(await runAdhoc(ctx, a))
       if (a.action === 'macro') return out(await runMacro(ctx, str(a.name)))
       return out(await listGm(ctx, str(a.source), str(a.filter)))
     },
@@ -147,7 +150,7 @@ const DEFS = [
   ),
   tool(
     'ue_find',
-    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；module 写完整模块名时 pure 里还有这个 Lua 类的纯 Lua 实例（Lua 框架自己 new、不绑 UObject 的表），它的 ref（luaref:编号）可当 ue_get / ue_lua 的 path 用；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；名字通配符、父类、多个目录、标签用 select（写法同批量的 select，如 select={path:"/Game", class:"Blueprint", name:"*Box*"}，只列出路径不操作，total 是选中总数，offset / limit 翻页）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
+    '找对象：kind=actor 按名字前缀找关卡里的 Actor（不区分大小写，比对对象名和编辑器显示名，空前缀不返回）；kind=component 列出 Actor（path）的组件；kind=object 按类名（class）和名字前缀找活着的 UObject（子系统、GameInstance、GameState、PlayerController…）；kind=lua 找绑定了 Lua 模块的对象（UnLua 项目），module 按模块名包含的文字筛，也可以加 class、prefix，结果带模块名；module 写完整模块名时 pure 里还有这个 Lua 类的纯 Lua 实例（Lua 框架自己 new、不绑 UObject 的表），它的 ref（luaref:编号）可当 ue_get / ue_set / ue_lua 的 path 用，换一局游戏失效，反复用的写成匹配规则 {class:"lua:模块名", ident} 交给 ue_gm action=call；kind=asset 按类型和名字前缀找资源（path 是目录，默认 /Game；prefix 也可以直接给 /Game 路径或磁盘上 Content 里的路径，会拆成目录 + 名字；编辑器没开时自动用后台编辑器）；名字通配符、父类、多个目录、标签用 select（写法同批量的 select，如 select={path:"/Game", class:"Blueprint", name:"*Box*"}，只列出路径不操作，total 是选中总数，offset / limit 翻页）；kind=node 跨蓝图搜节点：query 是调用的函数名、读写的变量名、转换的类名或节点标题里的文字，path 是目录（默认 /Game）或 blueprint 指定一个蓝图，结果给蓝图路径、图名和节点 id（逐个加载蓝图来扫，partial=true 表示没扫完，缩小目录再搜）。',
     {
       kind: { type: 'string', enum: ['actor', 'component', 'object', 'lua', 'asset', 'node'] },
       prefix: { type: 'string' },

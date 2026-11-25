@@ -1,4 +1,4 @@
-import { callStep, gtNames, mergeArgs } from '../../gm/custom.ts'
+import { gtNames, mergeArgs, stepOf } from '../../gm/custom.ts'
 import type { GmMacroStep, GmStore } from '../../gm/schema.ts'
 import type { GtScript, GtStep } from '../types.ts'
 
@@ -48,10 +48,7 @@ const dynamic = (v: unknown) => typeof v === 'string' && /^\s*[$=]/.test(v)
 const list = (a: GmRef['args']) => (Array.isArray(a) ? a : [])
 
 export const isGmRef = (v: unknown): v is GmRef =>
-  !!v &&
-  typeof v === 'object' &&
-  typeof (v as GmRef).name === 'string' &&
-  GM_KINDS.includes((v as GmRef).kind)
+  !!v && typeof v === 'object' && typeof (v as GmRef).name === 'string' && GM_KINDS.includes((v as GmRef).kind)
 
 /** 一条 GM → 步骤（抛错带原因：找不到、参数不能用变量、取对象的自定义 GM…） */
 function expandOne(ref: GmRef, lib: GmLib, depth: number): Out {
@@ -81,7 +78,7 @@ function expandOne(ref: GmRef, lib: GmLib, depth: number): Out {
       if (!c) throw new Error(`GM 库里没有自定义 GM「${ref.label ?? ref.name}」（被删掉了？）`)
       if (c.kind === 'get') throw new Error(`自定义 GM「${c.name}」是取对象，不能放进测试；用「找对象」或检查属性`)
       const merged = mergeArgs(c, args && !Array.isArray(args) ? args : undefined)
-      const { step, objects } = callStep(c, merged)
+      const { step, objects } = stepOf(c, merged)
       return { run: [step as GtStep], objects }
     }
     case 'macro': {
