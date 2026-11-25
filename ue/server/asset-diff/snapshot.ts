@@ -5,8 +5,11 @@ import path from 'node:path'
 import { fileAt, fileHistory, type FileHistory } from '@panel/server/exec/vcs-history'
 import { assetDiff } from '../../shared/asset-diff/diff.ts'
 import type { AssetDiff, AssetSnap } from '../../shared/asset-diff/types.ts'
-import { packageToDisk } from '../asset-query.ts'
-import { BridgeError, type Card } from '../instances.ts'
+import { assetFile } from '../uasset/locate.ts'
+import { BridgeError, liveCards, type Card } from '../instances.ts'
+import { UassetError } from '../../shared/uasset/errors.ts'
+import { fileNote, fileSnapshot } from '../../shared/uasset/snap.ts'
+import '../uasset/read.ts'
 import type { StepId } from '../../shared/asset-diff/progress.ts'
 import { DiffTracker } from './progress.ts'
 import { DiffReadError, pickReader } from './reader.ts'
@@ -14,10 +17,12 @@ import { runOp } from '../ops.ts'
 import type { UeProject } from '../types.ts'
 import { c, t } from '../util.ts'
 
+export { assetFile }
+
 /**
  * 资源页「版本差异」（设计稿 UE资源版本差异）：版本记录走面板的 vcs-history；点开一条记录时才取那两版的字节，
- * 交给桥接 asset.snapshot（UELink 2.14）在编辑器（没开就是后台编辑器）里读成结构化快照，再按 shared/asset-diff 逐项比。
- * 快照按文件内容的哈希记在数据目录：提交过的版本不会再变，再看同一版不用再起编辑器加载。
+ * 编辑器开着时交给桥接 asset.snapshot（UELink 2.14）读成结构化快照，没开时用自写的读取器（shared/uasset）直接读字节，
+ * 再按 shared/asset-diff 逐项比。快照按文件内容的哈希记在数据目录：提交过的版本不会再变，再看同一版不用再读。
  */
 
 /** 有 asset.snapshot 的桥接版本 */
@@ -37,35 +42,6 @@ function remember(key: string, snap: AssetSnap) {
 }
 
 const cacheDir = () => path.join(c().dataDir, 'asset-snap')
-
-/** 包路径 → 磁盘上的 .uasset：/Game 在 Content；插件的挂载点在 Plugins 下找同名、带 Content 的目录（最多往下 3 层） */
-export async function assetFile(root: string, pkg: string): Promise<string> {
-  const p = String(pkg).split('.')[0]
-  const game = packageToDisk(root, p)
-  if (game) return game
-  const m = /^\/([^/]+)\/(.+)$/.exec(p)
-  if (!m) throw new BridgeError(t('{p} 不是资源路径', { p: pkg }))
-  const find = async (dir: string, depth: number): Promise<string> => {
-    let names: string[] = []
-    try {
-      names = await readdir(dir)
-    } catch {
-      return ''
-    }
-    for (const n of names) {
-      const sub = path.join(dir, n)
-      if (n.toLowerCase() === m[1].toLowerCase() && existsSync(path.join(sub, 'Content'))) return sub
-      if (depth > 0 && !n.startsWith('.')) {
-        const hit = await find(sub, depth - 1).catch(() => '')
-        if (hit) return hit
-      }
-    }
-    return ''
-  }
-  const plugin = await find(path.join(root, 'Plugins'), 3)
-  if (!plugin) throw new BridgeError(t('找不到 {p} 在磁盘上的文件', { p: pkg }))
-  return path.join(plugin, 'Content', ...m[2].split('/')) + '.uasset'
-}
 
 const relOf = (root: string, file: string) => path.relative(root, file).replaceAll('\\', '/')
 
@@ -157,8 +133,35 @@ async function bytesOf(project: UeProject, pkg: string, src: SnapSource): Promis
   return null
 }
 
-/** 编辑器 / 后台编辑器只挑一次：两边都要读时用同一个进程 */
-type ReaderRef = { card?: Promise<Card>; startBackground?: boolean }
+/**
+ * 由谁读只挑一次，两边总是同一条路（两条路读出来的内容不一样，混着比会冒出一堆假差异）：
+ * 编辑器开着（或用户点了「启动后台编辑器读」）→ UE 读；编辑器没开 → 自写的读取器直接读文件（用户 2026-11-25）
+ */
+type ReaderRef = { card?: Promise<Card>; startBackground?: boolean; mode: ReadMode }
+type ReadMode = 'ue' | 'file'
+
+/** 读取器的快照格式变了就改这个，旧缓存自然不再命中 */
+const FILE_READER_VER = 'f2'
+
+async function readMode(project: UeProject, startBackground?: boolean): Promise<ReadMode> {
+  if (startBackground) return 'ue'
+  return (await liveCards(project.root)).some((x) => x.kind === 'editor') ? 'ue' : 'file'
+}
+
+/** 用读取器读一版：读不了时说清原因，网页给「打开编辑器」「启动后台编辑器读」两条出路 */
+async function readFileSnap(data: Buffer, key: string): Promise<AssetSnap> {
+  let snap: AssetSnap
+  try {
+    snap = fileSnapshot(new Uint8Array(data))
+  } catch (e) {
+    const why = e instanceof UassetError ? e.message : (e as Error).message
+    throw new DiffReadError('no-ue', t('编辑器没开，从文件读不了这一版：{why}。可以打开编辑器，或启动后台编辑器来读', { why }))
+  }
+  const text = JSON.stringify(snap)
+  remember(key, snap)
+  await writeCache(key, text).catch(() => {})
+  return snap
+}
 
 /** 一边的快照：取字节 → 查缓存 → 交给 UE 读，每步记进进度；那一版里没有这个文件时返回 null */
 async function sideSnapshot(
@@ -178,6 +181,8 @@ async function sideSnapshot(
   }
   if ('live' in src) {
     tr.set(steps.fetch, { state: 'skip', detail: t('编辑器里的那份不用取文件') })
+    if (ref.mode === 'file')
+      throw new DiffReadError('no-ue', t('编辑器没开：「编辑器里的」那份要编辑器开着才能读，改看「磁盘上的」'))
     const card = await reader()
     return tr.step(steps.read, async () => JSON.parse(await bridgeSnapshot(project, card, pkg)) as AssetSnap)
   }
@@ -194,10 +199,18 @@ async function sideSnapshot(
     return null
   }
   const hash = hashOf(pkg, data)
-  const hit = await readCache(hash)
+  const key = ref.mode === 'file' ? `${hash}-${FILE_READER_VER}` : hash
+  // 读文件这条路缓存命中时也标出来：不然页头空着，看不出这次是谁读的
+  if (ref.mode === 'file') tr.reader('file', 0)
+  const hit = await readCache(key)
+  // 读取器的限制说明按当前界面语言重拼（缓存里存的是当时的语言）
+  if (hit?.fileRead) hit.note = fileNote(hit)
   if (hit) {
     tr.set(steps.read, { state: 'skip', detail: t('本机缓存里有这一版的结构，跳过读取') })
     return hit
+  }
+  if (ref.mode === 'file') {
+    return tr.step(steps.read, () => readFileSnap(data, key))
   }
   const card = await reader()
   return tr.step(steps.read, () => readBytes(project, card, pkg, data, hash))
@@ -222,15 +235,17 @@ export async function assetDiffFor(
 ): Promise<AssetDiff> {
   const a = sideName(from)
   const b = sideName(to)
+  const mode = await readMode(project, opts.startBackground)
+  const readLabel = (v: string) => (mode === 'file' ? t('读 {v} 的结构', { v }) : t('UE 读 {v} 的结构', { v }))
   const tr = new DiffTracker(opts.req ?? '', opts.conn, [
     { id: 'fetch-a', label: t('取 {v} 的文件', { v: a }) },
     { id: 'fetch-b', label: t('取 {v} 的文件', { v: b }) },
-    { id: 'read-a', label: t('UE 读 {v} 的结构', { v: a }) },
-    { id: 'read-b', label: t('UE 读 {v} 的结构', { v: b }) },
+    { id: 'read-a', label: readLabel(a) },
+    { id: 'read-b', label: readLabel(b) },
     { id: 'compare', label: t('比较') },
   ])
   try {
-    const ref: ReaderRef = { startBackground: opts.startBackground }
+    const ref: ReaderRef = { startBackground: opts.startBackground, mode }
     // 一开始就标出不用做的步骤，别让人以为还要等它
     if (!from) for (const id of ['fetch-a', 'read-a'] as const) tr.set(id, { state: 'skip', detail: t('这一版之前没有这个资源') })
     if (to && 'live' in to) tr.set('fetch-b', { state: 'skip', detail: t('编辑器里的那份不用取文件') })
@@ -251,7 +266,8 @@ export async function snapshotOf(project: UeProject, pkg: string, src: SnapSourc
     { id: 'read-a', label: '' },
   ])
   try {
-    return await sideSnapshot(project, pkg, src, tr, { fetch: 'fetch-a', read: 'read-a' }, {})
+    const ref: ReaderRef = { mode: await readMode(project) }
+    return await sideSnapshot(project, pkg, src, tr, { fetch: 'fetch-a', read: 'read-a' }, ref)
   } finally {
     tr.end()
   }

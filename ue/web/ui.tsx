@@ -199,7 +199,9 @@ export function kindLabel(kind: string) {
         ? t('专用服务器')
         : kind === 'background'
           ? t('后台编辑器')
-          : kind
+          : kind === 'file'
+            ? t('磁盘上的文件（编辑器没开）')
+            : kind
 }
 
 export function worldLabel(w: World) {

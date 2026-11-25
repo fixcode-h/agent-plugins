@@ -25,6 +25,7 @@ import { wildcard } from '@panel/shared/text-match/index'
 import { gameFileOf, p4EditFiles, p4SavePlan, type P4Stale } from './p4-checkout.ts'
 import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
 import { vcsCmd } from './vcs.ts'
+import { offlineFirst } from './uasset/route.ts'
 
 /**
  * 所有对 UE 的操作都走这里（网页和 Agent 工具共用）：选目标进程、按权限放行或请你确认、危险命令确认、
@@ -584,7 +585,12 @@ export async function runOp(
   // AssetForge 页先从磁盘列配置根下的 JSON（uekit/forge-disk.ts），同步状态再由 UE 补：不为了列文件等编辑器、拉后台编辑器
   if (FORGE_DISK_OPS.has(op) && args.disk === true) return forgeFromDisk(ctx.project.root, op, args)
   delete args.disk
-  const card = await chooseCard(ctx, op, args)
+  // 编辑器没开：能从文件读的读操作直接读磁盘上的资源（server/uasset/），不为看结构起后台编辑器
+  const off = await offlineFirst(ctx.project, ctx.target, op, args, kind === 'read' && wantsAssets(op, args))
+  if (off.res) return off.res
+  const card = await chooseCard(ctx, op, args).catch((e: Error) => {
+    throw off.why ? new BridgeError(`${t('从文件读不了：{why}', { why: off.why })}\n${e.message}`) : e
+  })
   await luaReady(ctx, card, op)
   const world = String(args.world ?? ctx.target?.world ?? (ctx.target ? '' : ctx.project.target.world) ?? '')
   if (world && !args.world) args.world = world
