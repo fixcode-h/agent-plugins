@@ -319,8 +319,9 @@ export function useObjCallState(d: GmData, live: boolean) {
     const nm = (n: string) => rename.get(n) ?? n
     keepBench.current = nm(c.obj) !== obj?.name
     setSel(nm(c.obj))
-    setMode(c.kind)
-    setTab(c.kind === 'get' ? 'props' : 'fns')
+    // 改变量的 GM 打开到「属性」页签：右栏的改值要先在中栏点那个变量（拿到类型才知道怎么填）
+    setMode(c.kind === 'set' ? 'call' : c.kind)
+    setTab(c.kind === 'call' ? 'fns' : 'props')
     setMany(c.many)
     setPicked(c.props ?? [])
     setValues(

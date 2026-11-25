@@ -30,10 +30,12 @@ export const UE_GUIDES: Record<string, Guide> = {
   },
   ue_gm: {
     title: 'GM 命令',
-    summary: '列出和执行项目的 GM（C++、Lua、自定义）和宏；把常用的对象函数调用存成自定义 GM，管理对象列表',
+    summary:
+      '列出和执行项目的 GM（C++、Lua、自定义）和宏；按对象列表或匹配规则调对象函数、取值、改值，存成自定义 GM，管理对象列表',
     useWhen:
-      '要用项目自带的 GM（加道具、跳关、改数值）复现或验证问题时，先 action=list 看有哪些；要反复调同一个对象上的函数，或用户说「存成 GM」时用 action=save kind=gm 存成自定义 GM（之后 run source=custom），常用对象存进对象列表用 kind=object；一串固定步骤（含等几秒）存成宏用 kind=macro；想知道用户刚在 GM 页点过什么用 list source=recent',
-    avoidWhen: '只调一次对象函数用 ue_call；要写进测试场景、能回放的步骤用 ue_gametest',
+      '要用项目自带的 GM（加道具、跳关、改数值）复现或验证问题时，先 action=list 看有哪些；对 GM 页对象列表里的对象（或按类 + 标识现找的对象，含纯 Lua 实例）调函数、读值、改值用 action=call，不用先找路径；要反复调同一个对象上的函数，或用户说「存成 GM」时用 action=save kind=gm 存成自定义 GM（之后 run source=custom），常用对象存进对象列表用 kind=object；一串固定步骤（含等几秒）存成宏用 kind=macro；想知道用户刚在 GM 页点过什么用 list source=recent',
+    avoidWhen:
+      '已经有对象路径时调函数用 ue_call、改属性用 ue_set（能 ue_undo 撤回）；要写进测试场景、能回放的步骤用 ue_gametest',
     group: RUN,
   },
   ue_find: {

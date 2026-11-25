@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { gtNames, isObjArg, newCustomId, objValue } from '../../shared/gm/custom.ts'
+import { gtNames, isObjArg, newCustomId, objValue, SET_VALUE } from '../../shared/gm/custom.ts'
 import { findModule, newModuleId } from '../../shared/gm/modules.ts'
 import { AGENT_FOLDER, normFolder } from '../../shared/gm/obj-folders.ts'
 import { GmCustom, GmObject, type GmCustomObj, type GmStore } from '../../shared/gm/schema.ts'
@@ -30,10 +30,20 @@ function scriptFor(c: GmCustom) {
   const objOf = (n: string) => (c.objects[n]?.src ? c.objects[n].src : (id.get(n) ?? n))
   const args: Obj = {}
   for (const [k, v] of Object.entries(c.args)) args[k] = isObjArg(v) ? objOf(v.$obj) : v
+  const part = c.part ? { part: c.part } : {}
+  const value = c.args[SET_VALUE]
   const step =
     c.kind === 'get'
       ? { action: 'obj.find', obj: objOf(c.obj) }
-      : { action: 'obj.call', obj: objOf(c.obj), function: c.function ?? '', args, ...(c.part ? { part: c.part } : {}) }
+      : c.kind === 'set'
+        ? {
+            action: 'obj.set',
+            obj: objOf(c.obj),
+            prop: c.prop ?? '',
+            value: isObjArg(value) ? `@obj.${id.get(value.$obj) ?? value.$obj}` : (value ?? null),
+            ...part,
+          }
+        : { action: 'obj.call', obj: objOf(c.obj), function: c.function ?? '', args, ...part }
   return { schemaVersion: 5, name: `gm:${c.name}`, objects, steps: [step] }
 }
 
@@ -92,6 +102,10 @@ async function saveCustom(ctx: OpCtx, g: GmStore, def: Obj, dryRun: boolean, age
   }
   if (!c.objects[c.obj]) throw new Error(`obj「${c.obj}」不在 objects 里：objects 写 {名字: {ref} 或 {src}}`)
   if (c.kind === 'call' && !c.function) throw new Error('kind=call 要写 function')
+  if (c.kind === 'set' && !c.prop)
+    throw new Error('kind=set 要写 prop（属性路径，如 @.Count、@#hp），新值写在 args.value')
+  if (c.kind === 'set' && c.many === 'each')
+    throw new Error('kind=set 不支持 many=each（一次改一个），写 first 或 error')
   const check = await validate(ctx, c)
   if (!check.ok)
     return { saved: false, errors: check.errors, warnings: check.warnings, note: '校验没过，没存；按 errors 改了再存' }

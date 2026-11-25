@@ -1,4 +1,4 @@
-import { callStep, getQuery, invokesOf, mergeArgs, stepOk } from '../../shared/gm/custom.ts'
+import { getQuery, invokesOf, mergeArgs, stepOf, stepOk } from '../../shared/gm/custom.ts'
 import type { GmCustom, GmStore } from '../../shared/gm/schema.ts'
 import { BridgeError } from '../instances.ts'
 import { runOp, type OpCtx } from '../ops.ts'
@@ -11,7 +11,7 @@ export const findCustom = (g: GmStore, idOrName: string) =>
 
 /**
  * 执行一条自定义 GM（ue_gm run source=custom、宏里的一步）：拼法在 shared/gm/custom.ts，和 GM 页同一份。
- * kind=call 走 gt.step 跑一步 obj.call（带 objects）；kind=get 走 gt.resolve 带 show 拿每个实例的属性值。
+ * kind=call 走 gt.step 跑一步 obj.call（带 objects），kind=set 跑一步 obj.set；kind=get 走 gt.resolve 带 show 拿每个实例的属性值。
  * 成败只看 gt.step 的 ok / status（规格第 7 节），失败时把它的 message 原样抛出（不重试）
  */
 export async function runCustom(ctx: OpCtx, idOrName: string, override?: Record<string, unknown>) {
@@ -32,7 +32,7 @@ export async function runCustomDef(ctx: OpCtx, c: GmCustom, override?: Record<st
     return { ok: true, gm: c.name, count: item?.count ?? 0, items: item?.candidates ?? [] }
   }
   const args = mergeArgs(c, override)
-  const { step, objects } = callStep(c, args)
+  const { step, objects } = stepOf(c, args)
   const res = await runOp(ctx, 'gt.step', { step, objects }, 60000)
   const invoke = invokesOf(res)
   if (!stepOk(res))
@@ -42,5 +42,11 @@ export async function runCustomDef(ctx: OpCtx, c: GmCustom, override?: Record<st
           t('自定义 GM「{name}」没执行成功（{s}）', { name: c.name, s: String(res.status ?? '') }),
       ),
     )
-  return { ok: true, gm: c.name, status: res.status, invoke, ...(res.message ? { message: res.message } : {}) }
+  return {
+    ok: true,
+    gm: c.name,
+    status: res.status,
+    ...(c.kind === 'set' ? { set: { prop: c.prop, value: args.value } } : { invoke }),
+    ...(res.message ? { message: res.message } : {}),
+  }
 }
