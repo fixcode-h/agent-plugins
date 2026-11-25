@@ -41,6 +41,7 @@ user-invocable: true
 - 同步属性（`replicated`）在客户端世界改会被服务器盖掉：结果里 `client=true` 时，用 `target.world` 切到服务器世界再改。
 - 控制台变量：`ue_console action=cvars changed=true` 看改过的；`action=set` 改，结束前改回或告诉用户。
 - `ue_gm action=list` 看 GM 的参数类型和说明再执行；项目里存的宏用 `action=macro`。
+- GM 页对象列表里的对象（或按类 + 标识现找的对象）不用先找路径：`ue_gm action=call def={obj:"背包", function:"AddItem", args:{Id:2003}}` 调函数，`def={obj, props:["@.Gold"]}` 读值，`def={obj, prop:"@.Gold", value:999}` 改值；`obj` 也能直接写匹配规则 `{class, ident}`。常用的对象 `ue_gm action=save kind=object` 存进对象列表，常做的调用 / 改值存成自定义 GM（`kind=call` / `set`）。
 - 危险命令（quit、open、servertravel…）会弹确认卡片给用户，被拒绝就停下说明。
 
 ## UnLua 项目的 Lua 侧
@@ -51,6 +52,7 @@ user-invocable: true
 - 读实例表：`ue_get path=<对象> lua=""` 列一层字段和模块函数；`lua="Bag.Items[3]"` 往下取。表一次一层，子表按路径再取。
 - 纯 Lua 的单例、管理器：不写 path，`ue_get lua="GameSystemManager"` 或 `lua='package.loaded["Game.Core.X"]'`，从全局表开始。
 - 改简单字段：`ue_set path=<对象> lua="Bag.Gold" value=999`（只能改数字、字符串、布尔、nil，能 `ue_undo` 撤回）。
+- 纯 Lua 实例（Lua 框架自己 new、不绑 UObject 的表）：`ue_find kind=lua module=<完整模块名>` 给的 `luaref:编号` 可当 `ue_get` / `ue_set lua=` / `ue_lua action=call` 的 path，但换一局游戏就失效；要反复用的写成匹配规则 `{class:"lua:<模块名>", ident:[…]}` 交给 `ue_gm action=call` 或存进对象列表，每次按规则现找。
 - 复杂的（调 Lua 函数、改表、看计算结果）用 `ue_lua code="..."`：单个表达式直接返回值，`path` 给了对象时 `self` 是它的实例表。每次都会请用户确认，先想清楚一次要做的事，别拆成很多次小调用。
 
 ## 资源和 DataTable
@@ -88,6 +90,7 @@ user-invocable: true
 **谁改了这个值**：先停在能访问它的地方（比如它所在类的某个函数断点），`ue_vs_breakpoints action=add data=this->Health size=4`，然后 `continue` → `wait`，停下时就在改它的代码后面，`stack` 看是谁。数据断点只能在停下时设，x64 一次最多 4 个，调试结束就失效。
 
 **改代码到复测**：
+
 - 改了函数体、模块已经加载：不用停调试器，`ue_editor action=livecoding` 热重载，再触发复测。
 - 改了头文件、加了 UPROPERTY / UFUNCTION、Live Coding 不行时：`ue_vs_debug action=stop`（会结束 UE，请用户确认，编辑器里没保存的先 ue_save）→ `action=build` → `action=wait` 看 `buildDone` / `buildFailed`，失败时按 `buildErrors` 的 文件:行 修了再 build → `action=start` → `ue_gametest run` 或原来的触发步骤复测。
 - Development 构建里很多局部变量被优化掉（显示「已优化」）：`ue_vs_debug action=start configuration="DebugGame Editor"` 换成 DebugGame 再看（要先 stop，会重新编译）。

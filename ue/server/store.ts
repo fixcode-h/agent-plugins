@@ -13,6 +13,8 @@ import { c, readJson, writeJson } from './util.ts'
  * gm.json 改了（网页、Agent 的 ue_gm save / remove、别人提交后拉下来）都推 gm 事件给网页（gm-custom/watch.ts），不轮询
  */
 export const GM_EVENT = 'gm'
+/** Agent 在服务端记了一条调用记录（ue_gm action=call）：开着的 GM 页重读本机状态 */
+export const GM_RECENT_EVENT = 'gm-recent'
 
 type P = Pick<UeProject, 'id' | 'root' | 'gmStore'>
 

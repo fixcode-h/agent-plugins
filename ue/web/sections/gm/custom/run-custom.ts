@@ -1,11 +1,11 @@
-import { callStep, getQuery, invokesOf, stepOk, type InvokeReport } from '../../../../shared/gm/custom.ts'
+import { getQuery, invokesOf, stepOf, stepOk, type InvokeReport } from '../../../../shared/gm/custom.ts'
 import type { GmCustom } from '../../../../shared/gm/schema.ts'
 import type { Target } from '../../../../server/types.ts'
 import { op } from '../../../api.ts'
 import { argValue } from '../../../obj-kit/CallForm.tsx'
 
 /**
- * 调一次对象函数 / 取一次对象（GM 页的自定义 GM、对象调用工作台共用）。拼参数用 shared/gm/custom.ts，和 ue_gm 同一份；
+ * 调一次对象函数 / 取一次对象 / 改一次变量（GM 页的自定义 GM、对象调用工作台共用）。拼参数用 shared/gm/custom.ts，和 ue_gm 同一份；
  * 成功与否只看 gt.step 的 ok / status，返回值看 payload.invoke（规格第 7 节）；出错原样显示，不重试
  */
 export interface CallOut {
@@ -27,7 +27,7 @@ export interface FoundItem {
   ident?: { prop: string; actual: unknown }[]
 }
 
-type Def = Pick<GmCustom, 'kind' | 'obj' | 'objects' | 'function' | 'part' | 'args' | 'many' | 'props'>
+type Def = Pick<GmCustom, 'kind' | 'obj' | 'objects' | 'function' | 'part' | 'args' | 'many' | 'props' | 'prop'>
 
 export async function runCall(
   projectId: string,
@@ -55,7 +55,7 @@ export async function runCall(
         at,
       }
     }
-    const { step, objects } = callStep(def, args)
+    const { step, objects } = stepOf(def, args)
     const r = await op<Record<string, unknown>>(projectId, 'gt.step', { step, objects }, target, 60000)
     const invoke = invokesOf(r)
     if (!stepOk(r)) return { ok: false, error: String(r.message || r.status || ''), invoke, ms: Date.now() - t0, at }

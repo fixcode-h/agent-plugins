@@ -49,6 +49,13 @@ const objectsFor = (list: GmObject[], names: string[]) => {
  * 对象调用的状态和动作（规格第 7 节）：选中的对象、选中的函数和填的参数、命中多个怎么办、取对象读哪些属性、上次的输出，
  * 以及对象列表的增删改（选对象面板、起名字）和「保存为 GM」。GM 页左栏的对象列表、右边的工作台都从这里取
  */
+/** 属性路径 → 显示用的变量名：@.Gold / @#hp / @/Txt.Text → 最后一段 */
+const varName = (prop: string) =>
+  prop
+    .replace(/^@[./#:]?/, '')
+    .split(/[./#]/)
+    .pop() || prop
+
 export function useObjCallState(d: GmData, live: boolean) {
   const { project, target } = useUe()
   const { toast } = h()
@@ -74,7 +81,13 @@ export function useObjCallState(d: GmData, live: boolean) {
   const [running, setRunning] = useState(false)
   const [refEdit, setRefEdit] = useState<{ value?: GtRef; lockClass?: string; done: (ref: GtRef) => void }>()
   // 保存为 GM 弹窗：true 是存当前工作台的调用；from 是最近执行里一条自定义 GM 的那组参数（「存成 GM…」）
-  const [saving, setSaving] = useState<false | true | { c: GmCustom; args: Record<string, unknown> }>(false)
+  // 保存为 GM 弹窗：true 是调函数 / 读取，{c, args} 是从调用记录另存，{set} 是改值面板存的「改这个变量」
+  const [saving, setSaving] = useState<
+    | false
+    | true
+    | { c: GmCustom; args: Record<string, unknown> }
+    | { set: { prop: string; type: string; value: unknown } }
+  >(false)
   // 模块右键「在这个模块里新建 GM」记下的模块：下次保存为 GM 时默认选它
   const [saveModule, setSaveModule] = useState<string>()
   const { hits } = useObjHits(
@@ -319,8 +332,9 @@ export function useObjCallState(d: GmData, live: boolean) {
     const nm = (n: string) => rename.get(n) ?? n
     keepBench.current = nm(c.obj) !== obj?.name
     setSel(nm(c.obj))
-    setMode(c.kind)
-    setTab(c.kind === 'get' ? 'props' : 'fns')
+    // 改变量的 GM 打开到「属性」页签：右栏的改值要先在中栏点那个变量（拿到类型才知道怎么填）
+    setMode(c.kind === 'set' ? 'call' : c.kind)
+    setTab(c.kind === 'call' ? 'fns' : 'props')
     setMany(c.many)
     setPicked(c.props ?? [])
     setValues(
@@ -361,7 +375,7 @@ export function useObjCallState(d: GmData, live: boolean) {
           }}
         />
       )}
-      {saving && typeof saving === 'object' && (
+      {saving && typeof saving === 'object' && 'c' in saving && (
         <SaveGmDialog
           init={{
             name: saving.c.name,
@@ -384,6 +398,38 @@ export function useObjCallState(d: GmData, live: boolean) {
               const res = addCustom(d.gm, { ...c, objects: objs, args: saving.args }, r)
               // 先关弹窗再等写盘：GM 列表里马上就有（saveGm 先改页面上的），写完再提示；
               // 以前等写完才关，请求慢时点了像没反应，连点几下就存几遍
+              setSaving(false)
+              if (await d.saveGm(res.g)) toast.success(t('已存成 GM「{n}」', { n: r.name }))
+            } catch (e) {
+              toast.error((e as Error).message)
+            }
+          }}
+        />
+      )}
+      {saving && typeof saving === 'object' && 'set' in saving && obj && (
+        <SaveGmDialog
+          init={{ name: t('{n} · 改 {p}', { n: obj.name, p: varName(saving.set.prop) }), module: saveModule }}
+          modules={allModules(d.gm, [])}
+          obj={{ name: obj.name, o: obj }}
+          args={{ value: saving.set.value }}
+          setProp={{ prop: saving.set.prop, type: saving.set.type }}
+          onClose={() => setSaving(false)}
+          onSave={async (r) => {
+            const x = saving.set
+            try {
+              const res = addCustom(
+                d.gm,
+                {
+                  kind: 'set',
+                  obj: obj.name,
+                  objects,
+                  prop: x.prop,
+                  args: { value: x.value },
+                  params: [{ name: 'value', type: x.type }],
+                  many: 'error',
+                },
+                r,
+              )
               setSaving(false)
               if (await d.saveGm(res.g)) toast.success(t('已存成 GM「{n}」', { n: r.name }))
             } catch (e) {
@@ -479,6 +525,7 @@ export function useObjCallState(d: GmData, live: boolean) {
       running,
       run: () => void run(),
       save: () => setSaving(true),
+      saveVar: (set: { prop: string; type: string; value: unknown }) => setSaving({ set }),
       onNewRule,
       hits,
       only,

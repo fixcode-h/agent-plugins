@@ -2,7 +2,18 @@
 // 用法：node --test ue/shared/gm/gm.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callStep, getQuery, gtNames, invokesOf, mergeArgs, paramNames, stepOk, callText } from './custom.ts'
+import {
+  callStep,
+  callText,
+  getQuery,
+  gtNames,
+  invokesOf,
+  mergeArgs,
+  paramNames,
+  setStep,
+  stepOf,
+  stepOk,
+} from './custom.ts'
 import { allModules, placeOf } from './modules.ts'
 import { emptyGm, GmCustom, parseGm } from './schema.ts'
 import { pluginToStored, relInside, storedToAbs, storedToPlugin } from './table-path.ts'
@@ -160,4 +171,27 @@ test('保存时没填的参数也存进 params：显示全、editable 的执行�
   assert.throws(() => mergeArgs(c, { Owner: '@pawn' }), /Owner.*不能改/)
   // 旧数据没有 params：参数名按 args 的键
   assert.deepEqual(paramNames(buy), ['ItemId', 'Count', 'Buyer'])
+})
+
+test('改变量（kind=set）拼成一步 obj.set：新值取 args.value，对象值写成 @obj.名字，不支持 each', () => {
+  const setGold = GmCustom.parse({
+    id: 'c9z9',
+    name: '背包 · 改金币',
+    module: 'shop',
+    kind: 'set',
+    obj: '杂货铺',
+    objects: { 杂货铺: { ref: shop }, 'lua:Npc': { ref: npc } },
+    prop: '@.Gold',
+    args: { value: 999 },
+    editable: ['value'],
+  })
+  const r = stepOf(setGold)
+  assert.deepEqual(r.step, { action: 'obj.set', obj: { $obj: '杂货铺' }, prop: '@.Gold', value: 999 })
+  assert.deepEqual(stepOf(setGold, mergeArgs(setGold, { value: 5 })).step.value, 5)
+  // 对象值：名字换成 GameTest 认的再写成 @obj.
+  assert.equal(stepOf({ ...setGold, args: { value: { $obj: 'lua:Npc' } } }).step.value, '@obj.lua_Npc')
+  assert.equal((stepOf({ ...setGold, many: 'first' }).objects['杂货铺'] as { many?: string }).many, 'first')
+  assert.throws(() => setStep({ ...setGold, many: 'each' }), /each/)
+  assert.throws(() => setStep({ ...setGold, prop: undefined }), /prop/)
+  assert.equal(callText(setGold, setGold.args), '把 杂货铺 的 @.Gold 改成 999')
 })

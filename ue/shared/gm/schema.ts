@@ -57,7 +57,8 @@ export type GmMany = z.infer<typeof GmMany>
 
 /**
  * 自定义 GM：对象调用「保存为 GM」或 Agent 的 ue_gm save 存下的。kind=call 调 obj 上的 function；
- * kind=get 取 obj 命中的每个实例的 props 此刻的值。args 里对象参数写 `{"$obj": 名字}`（名字在 objects 里）或来源字符串
+ * kind=get 取 obj 命中的每个实例的 props 此刻的值；kind=set 把 obj 的 prop 改成 args.value（GameTest obj.set，
+ * 值放在 args 里是为了和调函数一样能标「执行时可改」、走同一套参数表单）。args 里对象参数写 `{"$obj": 名字}`（名字在 objects 里）或来源字符串
  */
 export const GmCustom = z.object({
   id: z.string().min(1),
@@ -65,7 +66,7 @@ export const GmCustom = z.object({
   module: z.string().min(1),
   note: z.string().optional(),
   by: z.literal('agent').optional(),
-  kind: z.enum(['call', 'get']).default('call'),
+  kind: z.enum(['call', 'get', 'set']).default('call'),
   obj: z.string().min(1),
   objects: z.record(z.string(), GmCustomObj),
   function: z.string().optional(),
@@ -78,6 +79,8 @@ export const GmCustom = z.object({
   many: GmMany.default('error'),
   /** kind=get 读的属性路径（v5 写法，`@/TxtTitle.Text`） */
   props: z.array(z.string()).optional(),
+  /** kind=set 改的属性路径（v5 写法：`@.Count`、`@/ChkAuto.IsChecked`、`@#hp`），新值在 args.value */
+  prop: z.string().optional(),
 })
 export type GmCustom = z.infer<typeof GmCustom>
 export type GmCustomInput = z.input<typeof GmCustom>

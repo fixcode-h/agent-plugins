@@ -71,6 +71,8 @@ export interface AssetSnap {
   class: string
   props: SnapProp[]
   note?: string
+  /** 编辑器没开时自写读取器读的（shared/uasset/snap.ts）：note 按当时的界面语言现拼，缓存里的不算 */
+  fileRead?: { failed: number }
   blueprint?: {
     parent: string
     interfaces: string[]
