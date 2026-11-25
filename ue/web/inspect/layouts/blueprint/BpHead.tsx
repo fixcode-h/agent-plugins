@@ -14,6 +14,7 @@ export function BpHead({
   path,
   outline,
   online,
+  fromFile,
   actor,
   view,
   onView,
@@ -21,6 +22,7 @@ export function BpHead({
   path: string
   outline?: BpOutline
   online: boolean
+  fromFile?: string
   actor: boolean
   view: BpView
   onView: (v: BpView) => void
@@ -36,7 +38,15 @@ export function BpHead({
       <PersonStanding className="ue:h-4 ue:w-4 ue:shrink-0 ue:text-muted" />
       <span className="ue:truncate ue:font-mono ue:text-body ue:font-medium ue:text-fg">{assetName(path)}</span>
       <Badge title={outline?.parent}>{outline?.parent ? `Blueprint · ${short(outline.parent)}` : 'Blueprint'}</Badge>
-      {online ? <Badge tone="ok">{t('UE 已连接')}</Badge> : <Badge tone="warn">{t('UE 未连接')}</Badge>}
+      {fromFile ? (
+        <Badge tone="warn" title={fromFile.trim()}>
+          {t('从文件读 · 只读')}
+        </Badge>
+      ) : online ? (
+        <Badge tone="ok">{t('UE 已连接')}</Badge>
+      ) : (
+        <Badge tone="warn">{t('UE 未连接')}</Badge>
+      )}
       {outline?.dirty && <Badge tone="warn">{t('未保存')}</Badge>}
       <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-caption ue:text-subtle" title={path}>
         {path.split('.')[0]}

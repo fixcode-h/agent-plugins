@@ -44,6 +44,9 @@ export interface BpDispatcher extends BpParam {
 
 /** bp.outline 的回包里这个布局用到的部分（组件走 components 操作，编译结果给图表页） */
 export interface BpOutline {
+  /** 编辑器没开、服务端直接读文件给的（server/uasset） */
+  offline?: boolean
+  note?: string
   path: string
   name: string
   parent: string
