@@ -5188,5 +5188,9 @@
   "按类型": "By type",
   "同一次提交里一起改的资源": "Assets changed in the same commit",
   "拖动调整列表高度": "Drag to resize the list",
-  "只列了前 {n} 个文件": "only the first {n} files listed"
+  "只列了前 {n} 个文件": "only the first {n} files listed",
+  "搜名字、路径或类型": "Search name, path or type",
+  "收起列表": "Collapse the list",
+  "在左栏列出这些资源": "List these assets in the left pane",
+  "展开列表": "Expand the list"
 }

@@ -10,7 +10,7 @@ import { FailPane } from './FailPane.tsx'
 import { DiffLoading, ReaderChip } from './Progress.tsx'
 import { useDiffRun } from './use-diff-run.ts'
 import { closeAssetDiff, takeInitialRev, useAssetDiffTarget } from './store.ts'
-import { ChangeSetStrip } from './ChangeSetStrip.tsx'
+import { useSameCommit } from './ChangeSetStrip.tsx'
 import { PropHistoryPane } from './PropHistoryPane.tsx'
 import { RevActions } from './RevActions.tsx'
 
@@ -114,6 +114,7 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
   const cur = typeof pick === 'number' ? revs[pick] : undefined
   // 还原到哪一版：选中的那一版；本地改动页是最近一次提交（git HEAD / p4 #have）
   const restoreRev = cur?.id ?? hist?.base ?? ''
+  const same = useSameCommit(pkg, cur)
 
   // 左栏小标签：这次打开里算过的（和上一版比的那一次）
   const tags: Record<string, ReactNode> = {}
@@ -132,6 +133,7 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
       onClose={onClose}
       meta={`${hist?.file ?? pkg}${diff ? ` · ${diff.class}` : ''}`}
       paneKey="ue-asset"
+      navExtra={same.side}
       list={hist}
       failed={hist ? undefined : histError}
       pick={pick}
@@ -201,16 +203,7 @@ export function AssetDiffDialog({ pkg, onClose }: { pkg: string; onClose: () => 
         </>
       }
     >
-      {cur?.change && (
-        <ChangeSetStrip
-          key={cur.id}
-          pkg={pkg}
-          change={cur.change}
-          label={cur.label}
-          rev={cur.id}
-          message={cur.message}
-        />
-      )}
+      {same.strip}
       {diff ? null : run.failed ? (
         <FailPane failed={run.failed} onRetry={run.retry} onClose={onClose} />
       ) : !hist || hist.vcs === 'none' ? null : (

@@ -1,5 +1,5 @@
 import { Folder } from 'lucide-react'
-import { startTransition, useMemo, useState } from 'react'
+import { startTransition, useMemo, useState, type ReactNode } from 'react'
 import { ResizeHandle, usePaneWidth } from '@panel/web/src/components/ui/resize'
 import { TreeList, type TreeLine } from '@panel/web/src/components/ui/tree/tree-list'
 import { Hit, TreeSearch, hitText } from '@panel/web/src/components/ui/tree/tree-search'
@@ -19,9 +19,26 @@ export function typeName(cls: string) {
  * 搜索 + 按文件夹 / 按类型分组，行用共用的虚拟滚动树（只画看得见的几十行），整块限高、底边可拖，高度记在本机。
  * 点一行切到那个资源，停在同一版
  */
-export function ChangeSetList({ items, onOpen }: { items: ChangeAsset[]; onOpen: (pkg: string) => void }) {
+export function ChangeSetList({
+  items,
+  onOpen,
+  side,
+  head,
+}: {
+  items: ChangeAsset[]
+  onOpen: (pkg: string) => void
+  /** 挂在版本差异弹窗左栏的版本记录下面（用户 2026-11-25「点开放到左侧显示」）：顶边拖高，栏窄所以搜索和分组上下排 */
+  side?: boolean
+  /** 左栏里列表上面的标题行 */
+  head?: ReactNode
+}) {
   const { ui } = h()
-  const pane = usePaneWidth('ue-diff-same-commit', 220, 96, () => Math.round(window.innerHeight * 0.7))
+  const pane = usePaneWidth(
+    side ? 'ue-diff-same-commit-side' : 'ue-diff-same-commit',
+    side ? 360 : 220,
+    side ? 140 : 96,
+    () => Math.round(window.innerHeight * (side ? 0.65 : 0.7)),
+  )
   const [by, setBy] = useKept<'folder' | 'type'>('ue-diff-same-commit-by', 'folder')
   const [q, setQ] = useState('')
   const [shut, setShut] = useState<Record<string, boolean>>({})
@@ -69,8 +86,8 @@ export function ChangeSetList({ items, onOpen }: { items: ChangeAsset[]; onOpen:
           </span>
         ),
         title: t('看 {p} 在这一版的差异', { p: a.pkg }),
-        // 按文件夹分时行尾写类型，按类型分时写文件夹：分组里没说的那一项
-        aside: (
+        // 按文件夹分时行尾写类型，按类型分时写文件夹：分组里没说的那一项。左栏窄，不写，悬停看完整路径
+        aside: side ? undefined : (
           <span className="ue:truncate ue:text-caption ue:text-subtle">
             {by === 'folder' ? (a.cls ? typeName(a.cls) : '') : folderOf(a.pkg)}
           </span>
@@ -83,33 +100,51 @@ export function ChangeSetList({ items, onOpen }: { items: ChangeAsset[]; onOpen:
     }
   }
 
+  const search = (
+    <TreeSearch
+      value={q}
+      onChange={(v) => startTransition(() => setQ(v))}
+      placeholder={side ? t('搜名字、路径或类型') : t('搜这次提交里的资源：名字、路径或类型')}
+      hits={found.list.length}
+    />
+  )
+  const groupBy = (
+    <ui.Segmented
+      label={t('分组')}
+      size="sm"
+      value={by}
+      onChange={(v: string) => setBy(v === 'type' ? 'type' : 'folder')}
+      options={[
+        { id: 'folder', label: t('按文件夹') },
+        { id: 'type', label: t('按类型') },
+      ]}
+    />
+  )
+  const tree = <TreeList lines={lines} label={t('同一次提交里一起改的资源')} />
+
+  if (side)
+    return (
+      <div
+        className="ue:relative ue:flex ue:shrink-0 ue:flex-col ue:border-t ue:border-line"
+        style={{ height: pane.width }}
+      >
+        <ResizeHandle pane={pane} side="top" label={t('拖动调整列表高度')} />
+        {head}
+        <div className="ue:[&>div]:border-b-0">{search}</div>
+        <div className="ue:border-b ue:border-line ue:px-3 ue:pb-2">{groupBy}</div>
+        {tree}
+      </div>
+    )
+
   return (
     // 拖动条放在裁剪框外面：裁剪框 overflow-hidden 会把伸出底边的那半截拖动条裁掉，鼠标按不准
     <div className="ue:relative ue:mt-1.5" style={{ height: pane.width }}>
       <div className="ue:flex ue:h-full ue:flex-col ue:overflow-hidden ue:rounded-(--c-card-radius) ue:border ue:border-line ue:bg-bg">
         <div className="ue:flex ue:items-start ue:border-b ue:border-line">
-          <div className="ue:min-w-0 ue:flex-1 ue:[&>div]:border-b-0">
-            <TreeSearch
-              value={q}
-              onChange={(v) => startTransition(() => setQ(v))}
-              placeholder={t('搜这次提交里的资源：名字、路径或类型')}
-              hits={found.list.length}
-            />
-          </div>
-          <div className="ue:shrink-0 ue:px-3 ue:py-2">
-            <ui.Segmented
-              label={t('分组')}
-              size="sm"
-              value={by}
-              onChange={(v: string) => setBy(v === 'type' ? 'type' : 'folder')}
-              options={[
-                { id: 'folder', label: t('按文件夹') },
-                { id: 'type', label: t('按类型') },
-              ]}
-            />
-          </div>
+          <div className="ue:min-w-0 ue:flex-1 ue:[&>div]:border-b-0">{search}</div>
+          <div className="ue:shrink-0 ue:px-3 ue:py-2">{groupBy}</div>
         </div>
-        <TreeList lines={lines} label={t('同一次提交里一起改的资源')} />
+        {tree}
       </div>
       <ResizeHandle pane={pane} side="bottom" label={t('拖动调整列表高度')} />
     </div>
