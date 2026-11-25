@@ -65,7 +65,7 @@ export async function engineFacts(p: UeProject): Promise<string> {
         .join('、')}（要同时兼容几个引擎版本时，每个版本的头文件都查）。`,
     )
   lines.push(
-    '写或改调用引擎 API 的 C++、override 引擎虚函数、加 include 和 Build.cs 依赖之前，按 ue-cpp-engine-api 技能先查这个版本的真实签名（接了 UEToVS 就用 get_members / search_symbols scope=all / suggest_include，没有就 rg 上面的源码目录），不凭记忆写；编译报「不是成员、找不到标识符、参数不对、链接找不到符号」时也是先查定义再改，不换个名字再试。',
+    '写或改调用引擎 API 的 C++、override 引擎虚函数、加 include 和 Build.cs 依赖之前，按 ue-cpp-engine-api 技能先查这个版本的真实签名（用面板的 find：action=members / symbol wide=true / include，面板会走 UEToVS 或按文本查上面的源码目录），不凭记忆写；编译报「不是成员、找不到标识符、参数不对、链接找不到符号」时也是先查定义再改，不换个名字再试。',
   )
   return lines.join('\n')
 }

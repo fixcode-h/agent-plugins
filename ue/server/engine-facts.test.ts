@@ -35,7 +35,7 @@ test('C++ 项目：写明版本、源码目录和先查后写的技能', async (
   assert.match(s, /5\.4\.4，Launcher 安装/)
   assert.ok(s.includes(path.join(engine, 'Engine', 'Source')))
   assert.match(s, /ue-cpp-engine-api/)
-  assert.match(s, /get_members/)
+  assert.match(s, /find：action=members/)
 })
 
 test('纯蓝图项目不给；登记后加了 Source 的按 C++ 项目给', async () => {
