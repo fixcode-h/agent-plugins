@@ -85,9 +85,13 @@ export function useGm(nonce: number) {
       h().events.on('gm', (d) => {
         if ((d as { project?: string }).project === project.id) void store.reload()
       }),
+      // Agent 用 ue_gm action=call 调过对象：调用记录在服务端追加的，重读一次
+      h().events.on('gm-recent', (d) => {
+        if ((d as { project?: string }).project === project.id) void local.reload()
+      }),
     ]
     return () => offs.forEach((off) => off())
-    // lua.reload、store.reload 是稳定的；只按项目重新订阅
+    // lua.reload、store.reload、local.reload 是稳定的；只按项目重新订阅
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id])
 

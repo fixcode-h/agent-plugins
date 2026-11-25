@@ -112,6 +112,42 @@ export function callStep(
   return { step, objects }
 }
 
+/** 改变量（kind=set）的新值在 args 里的键：和调函数的参数同一套「执行时可改」、表单和覆盖规则 */
+export const SET_VALUE = 'value'
+
+/**
+ * 改变量（kind=set）：gt.step 跑一步 obj.set（UEKit game-test-ref 5.3）。obj.set 没有 each，命中多个时只能 many=first
+ * 或报歧义；新值是对象参数 `{"$obj": 名}` 时写成 `@obj.<名>`，GameTest 执行时按那个对象的匹配规则现找
+ */
+export function setStep(c: Pick<GmCustom, 'obj' | 'objects' | 'prop' | 'part' | 'args' | 'many'>, args = c.args) {
+  if (!c.objects[c.obj]) throw new Error(`对象「${c.obj}」不在这条 GM 的 objects 里`)
+  if (!c.prop) throw new Error('改变量要写 prop（属性路径，如 @.Count、@#hp）')
+  if (c.many === 'each') throw new Error('改变量不支持 many=each（GameTest 的 obj.set 一次改一个）；写 first 或 error')
+  const value = args[SET_VALUE]
+  const used = isObjArg(value) ? [c.obj, value.$obj] : [c.obj]
+  for (const n of used) if (!c.objects[n]) throw new Error(`新值用到的对象「${n}」不在这条 GM 的 objects 里`)
+  const id = gtNames(Object.keys(c.objects))
+  const objects: GtObjects = {}
+  for (const [name, o] of Object.entries(c.objects)) objects[id.get(name)!] = objValue(o)
+  const tid = id.get(c.obj)!
+  const target = objects[tid]
+  if (c.many === 'first' && typeof target === 'object') objects[tid] = { ...target, many: 'first' }
+  const step: Record<string, unknown> = {
+    action: 'obj.set',
+    obj: objArg(tid),
+    prop: c.prop,
+    value: isObjArg(value) ? `@obj.${id.get(value.$obj)}` : (value ?? null),
+  }
+  if (c.part) step.part = c.part
+  return { step, objects }
+}
+
+/** 调函数或改变量：按 kind 拼 gt.step 的参数（取对象不走 gt.step，用 getQuery） */
+export const stepOf = (
+  c: Pick<GmCustom, 'kind' | 'obj' | 'objects' | 'function' | 'prop' | 'part' | 'args' | 'many'>,
+  args: Record<string, unknown> = c.args,
+) => (c.kind === 'set' ? setStep(c, args) : callStep(c, args))
+
 /**
  * 取对象（kind=get）：gt.resolve 一次拿命中的每个实例和这些属性此刻的值（show）。
  * show 要写在 refs 的每一项里（协议 gt.resolve：refs: [{id, ref, show}]），写在外层 GameTest 不认、属性值不回来。
@@ -157,8 +193,15 @@ export const stepOk = (res: unknown) => {
 }
 
 /** 「会执行」的一句话：在 商店界面 上调 BuyItem(2003, 1, 店主) */
-export function callText(c: Pick<GmCustom, 'obj' | 'function' | 'kind' | 'props'>, args: Record<string, unknown>) {
+export function callText(
+  c: Pick<GmCustom, 'obj' | 'function' | 'kind' | 'props' | 'prop'>,
+  args: Record<string, unknown>,
+) {
   if (c.kind === 'get') return `取 ${c.obj} 的 ${(c.props ?? []).join(', ') || '全部命中实例'}`
+  if (c.kind === 'set') {
+    const v = args[SET_VALUE]
+    return `把 ${c.obj} 的 ${c.prop ?? ''} 改成 ${isObjArg(v) ? v.$obj : typeof v === 'string' ? v : JSON.stringify(v ?? null)}`
+  }
   const vals = Object.values(args).map((v) => (isObjArg(v) ? v.$obj : typeof v === 'string' ? v : JSON.stringify(v)))
   return `在 ${c.obj} 上调 ${c.function ?? ''}(${vals.join(', ')})`
 }

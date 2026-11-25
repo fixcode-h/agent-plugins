@@ -581,6 +581,33 @@ try {
     '不可改的参数',
   )
   assert.ok(!(await call('ue_gm', { action: 'remove', kind: 'gm', name: '买一个' })).isError)
+  // action=call（2026-11-25）：按对象列表的名字临时调用 / 改值，不在列表里的写清楚怎么办；列表里的对象记进调用记录
+  const notIn = await call('ue_gm', { action: 'call', def: { obj: '没有的对象', function: 'Open' } })
+  assert.ok(notIn.isError && /对象列表里没有「没有的对象」/.test(text(notIn)), text(notIn))
+  // 假桥接没有 GameTest：调用失败也照实记一笔，错误原样给 Agent
+  const adhoc = await call('ue_gm', { action: 'call', def: { obj: '商店界面', prop: '@.Gold', value: 9 } })
+  assert.ok(adhoc.isError, text(adhoc))
+  const rec = JSON.parse(text(await call('ue_gm', { action: 'list', source: 'recent' }))).recent
+  assert.ok(
+    rec.some((r) => r.key === 'objcall:商店界面' && r.ok === false),
+    JSON.stringify(rec),
+  )
+  // 改变量存成自定义 GM（kind=set）：没写 prop 不存
+  const setDef = {
+    name: '改金币',
+    module: '商店',
+    kind: 'set',
+    obj: '商店界面',
+    objects: { 商店界面: { ref: objDef.ref } },
+  }
+  assert.ok((await call('ue_gm', { action: 'save', kind: 'gm', def: setDef, dryRun: true })).isError, '没写 prop')
+  const setDry = await call('ue_gm', {
+    action: 'save',
+    kind: 'gm',
+    def: { ...setDef, prop: '@.Gold', args: { value: 100 }, editable: ['value'] },
+    dryRun: true,
+  })
+  assert.ok(!setDry.isError, text(setDry))
   // UELink 2.4：Lua 改完能验（check → reload → errors）、调 Lua 函数、函数签名，ue_status 带编辑器选中
   const chk = await call('ue_lua', { action: 'check', files: ['Content/Script/UI/BadPanel.lua'] })
   assert.match(text(chk), /'end' expected/)

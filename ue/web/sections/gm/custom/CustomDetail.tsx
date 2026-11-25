@@ -2,7 +2,7 @@ import { Check, Crosshair, History, ListPlus, MessageSquarePlus, Package, Play, 
 import type { ReactNode } from 'react'
 import type { LuaGmBinding, LuaGmConfig } from '../../../../server/lua-gm/types.ts'
 import type { GmRun } from '../../../../server/store.ts'
-import { callText, isObjArg, paramNames } from '../../../../shared/gm/custom.ts'
+import { callText, isObjArg, paramNames, SET_VALUE } from '../../../../shared/gm/custom.ts'
 import type { GmCustom, GmObject, GmStore } from '../../../../shared/gm/schema.ts'
 import { h, t } from '../../../host.ts'
 import { Badge } from '../../../ui.tsx'
@@ -31,6 +31,8 @@ function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
           {t('取')} <ObjName name={c.obj} /> {t('命中的每个实例')}
           {(c.props ?? []).length > 0 && <span className="ue:font-mono">{(c.props ?? []).join(', ')}</span>}
         </>
+      ) : c.kind === 'set' ? (
+        <SetText c={c} value={args[SET_VALUE]} />
       ) : (
         <>
           {/* 写成方法调用的样子：商店界面.BuyItem(2003, 1, 店主) */}
@@ -54,6 +56,23 @@ function WillRun({ c, args }: { c: GmCustom; args: Record<string, unknown> }) {
         </>
       )}
     </div>
+  )
+}
+
+/** 改变量的「会执行」：背包.@.Gold = 100，没存值的写「执行时填」 */
+function SetText({ c, value }: { c: GmCustom; value: unknown }) {
+  return (
+    <>
+      <ObjName name={c.obj} />
+      <span className="ue:font-mono">{c.prop} = </span>
+      {value === undefined ? (
+        <span className="ue:font-mono ue:text-subtle">{t('执行时填')}</span>
+      ) : isObjArg(value) ? (
+        <ObjName name={value.$obj} />
+      ) : (
+        <span className="ue:font-mono">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+      )}
+    </>
   )
 }
 
@@ -143,9 +162,9 @@ export function CustomDetail(p: {
                 </p>
               )}
             </Section>
-            {c.kind === 'call' && (
+            {c.kind !== 'get' && (
               <Section
-                title={t('调用')}
+                title={c.kind === 'set' ? t('改值') : t('调用')}
                 aside={
                   !c.editable.length
                     ? t('参数都是存好的')
@@ -154,10 +173,10 @@ export function CustomDetail(p: {
                       : t('只有「执行时可改」的参数能改')
                 }
               >
-                <SigCard sig={{ name: c.function ?? '', sig }} />
+                {c.kind === 'call' && <SigCard sig={{ name: c.function ?? '', sig }} />}
                 {p.presets}
                 <CallForm
-                  fn={c.function ?? ''}
+                  fn={c.kind === 'set' ? (c.prop ?? '') : (c.function ?? '')}
                   params={customParams(c)}
                   values={p.args}
                   onChange={p.onArg}
