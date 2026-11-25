@@ -13,14 +13,18 @@ const ICON: Record<DiffStep['state'], { icon: typeof Circle; tone: string; spin?
 }
 
 const readerName = (r: { kind: string; pid: number }) =>
-  r.kind === 'background' ? t('后台编辑器 PID {pid} 读', { pid: r.pid }) : t('编辑器 PID {pid} 读', { pid: r.pid })
+  r.kind === 'file'
+    ? t('编辑器没开，直接读文件')
+    : r.kind === 'background'
+      ? t('后台编辑器 PID {pid} 读', { pid: r.pid })
+      : t('编辑器 PID {pid} 读', { pid: r.pid })
 
 /** 头部的「由谁读」小标签 */
 export function ReaderChip({ reader }: { reader?: { kind: string; pid: number } }) {
   if (!reader) return null
   return (
     <span
-      title={t('这一次由哪个 UE 进程读资源结构')}
+      title={t('这一次由谁读资源结构')}
       className="ue:inline-flex ue:h-5.5 ue:items-center ue:gap-1 ue:rounded-(--c-badge-radius) ue:bg-sel ue:px-1.5 ue:text-caption ue:text-muted"
     >
       <CircleDot className="ue:h-3 ue:w-3 ue:text-success" />

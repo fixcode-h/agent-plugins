@@ -12,6 +12,8 @@ export interface BpData {
   outlineError: string
   /** UE 连上了（编辑器或后台编辑器）：没连上时视口、图表给出原因和「启动 UE」 */
   online: boolean
+  /** 编辑器没开、是从磁盘上的文件直接读的（只读，只有改过的值）：页头标出来，note 是限制说明 */
+  fromFile?: string
   reload: () => void
 }
 
@@ -34,12 +36,16 @@ export function useBpData(path: string): BpData {
     0,
     `${project.id}/bp/outline`,
   )
-  const online = !!inst?.online || !!state?.background.running
+  // 编辑器没开时服务端直接读文件（offline + note），有数据就当连上了，各块照常显示
+  const o = outline.data?.path === path ? outline.data.o : undefined
+  const fromFile = o?.offline ? (o.note ?? '') || ' ' : undefined
+  const online = !!inst?.online || !!state?.background.running || !!fromFile
   return {
     comps: comps.data?.path === path ? comps.data.items : undefined,
     outline: outline.data?.path === path ? outline.data.o : undefined,
     outlineError: outline.error ?? '',
     online,
+    fromFile,
     reload: () => {
       comps.reload()
       outline.reload()
