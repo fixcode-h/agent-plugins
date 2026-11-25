@@ -1,4 +1,5 @@
 import type { ActivateServer } from '../../sdk/server.ts'
+import { ueFindSources } from './find-sources.ts'
 import { projectState } from './actions.ts'
 import { buildProcs } from './build/procs.ts'
 import { availableVersion } from './uelink.ts'
@@ -134,6 +135,9 @@ const activate: ActivateServer = async (ctx) => {
 
     // 项目文件索引（面板插件接口 16）：引擎的 Engine 目录也收进面板的文件索引，旧面板不调
     fileIndexRoots: ueIndexRoots,
+
+    // 找代码的路（面板插件接口 21）：C++ 走 VS 的 UEToVS、Lua 走 IDEA 的 lua_code，面板的 find 按语言挑、自己去调；旧面板不调
+    findSources: ueFindSources,
 
     // 项目能力（插件接口 9）：新建项目时按目录推荐，打开了但没接入、没装桥接时提示
     detect: detectUe,

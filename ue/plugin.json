@@ -1,13 +1,13 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.61.0",
+  "version": "0.62.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译，资源的版本差异（每一版改了哪些属性、组件、节点）；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
   "homepage": "https://github.com/fixcode-h/agent-plugins/tree/main/ue",
   "activation": "project",
-  "api": 20,
+  "api": 21,
   "settings": [
     {
       "key": "attach",
@@ -371,7 +371,7 @@
     "ue-runtime-debug": "在正在运行的 UE 里排查 Bug、看和改运行时数值、跑 GM、读 DataTable 和资源时（配合 ue_* 工具）",
     "ue-asset-authoring": "读懂或修改 UE 的蓝图和资源时：看图表和引用关系、按操作列表改蓝图并编译、新建复制改名删除资源（配合 ue_asset、ue_blueprint）",
     "ue-gametest-authoring": "给 UE 功能写、校验、跑和维护 GameTest 回放测试时：从项目代码直接写 v3 脚本（查 vars / widgets / api → 写 → validate → run → 改 → 进回归），把录制整理成带循环、分支、守护的流程，写项目 C++ / Lua 测试接口",
-    "ue-cpp-engine-api": "写或改调用 UE 引擎 API 的 C++（新调用引擎函数、override 引擎虚函数、加 include 和 Build.cs 依赖、兼容几个引擎版本）之前，以及编译报不是成员、找不到标识符、参数不对、链接找不到符号时：按项目用的引擎版本查真实签名再写（配合 UEToVS 的 get_members、search_symbols、suggest_include）",
+    "ue-cpp-engine-api": "写或改调用 UE 引擎 API 的 C++（新调用引擎函数、override 引擎虚函数、加 include 和 Build.cs 依赖、兼容几个引擎版本）之前，以及编译报不是成员、找不到标识符、参数不对、链接找不到符号时：按项目用的引擎版本查真实签名再写（配合面板 find 的 members、symbol、include）",
     "ue-perf-analysis": "排查 UE 的卡顿、帧率低、内存高和内存泄漏，或者分析 trace、CSV Profiler、memreport 文件时（配合 ue_perf、ue_capture；trace 先 diagnose 再下钻，方向多时并行派子任务）"
   },
   "agents": [

@@ -21,17 +21,13 @@ user-invocable: true
 
 ## 怎么查（按顺序，查到就停）
 
-1. **项目接了 UEToVS（VS 的代码索引，工具名不带前缀）时用它**，它读的就是这个项目用的引擎源码：
-   - 看一个类有哪些成员和签名：`get_members type_name=AActor`（要基类的一起列：`include_inherited=true`；只看蓝图可调的：`ue=["UFUNCTION"]`）。
-   - 找一个函数或类型在哪、按名字模糊搜：`search_symbols query=GetActorBounds scope=all`（`scope=all` 才包括引擎和引擎插件，默认只搜项目）。
-   - 跳到定义或声明：`go_to_definition symbol=UGameplayStatics::GetPlayerController`（`kind=declaration` 先看头文件里的声明）。
-   - 该 include 哪个头、Build.cs 加哪个模块：`suggest_include type=UUserWidget`（可带 `from=<要加 include 的文件>`）。
-   - 一个模块的依赖、头文件能不能直接 include：`get_module_info module=UMG header=Blueprint/UserWidget.h`。
-   - 反射信息（UFUNCTION 标记、蓝图可不可调）：`get_reflection_info`。
-2. **没有 UEToVS、或者它说索引没好**：用 `rg` 在引擎源码里搜，限定目录，别从引擎根往下全搜：
-   - 先定位头文件：`rg -l "class ENGINE_API AActor\b" "<引擎>/Engine/Source/Runtime/Engine/Classes"`。
-   - 再在那个头文件里搜函数：`rg -n "GetActorBounds" <头文件>`，读声明那几行，看参数、`const`、默认值、`UE_DEPRECATED`。
-   - 模块名看头文件所在目录的 `*.Build.cs`；引擎插件里的类在 `<引擎>/Engine/Plugins/...`，还要在 `.uplugin` 里依赖那个插件。
+1. **用面板的 `find` 查**（面板按语言走 VS 的 UEToVS 符号索引，它读的就是这个项目用的引擎源码；VS 没开时面板按文本在引擎源码里找）：
+   - 看一个类有哪些成员和签名：`find action=members query=AActor`。
+   - 找一个函数或类型在哪：`find action=symbol query=AActor::GetActorBounds wide=true`（`wide=true` 才包括引擎和引擎插件，默认只查项目）。
+   - 该 include 哪个头、Build.cs 加哪个模块：`find action=include query=UUserWidget`。
+   - 找到头文件后读声明那几行，看参数、`const`、默认值、`UE_DEPRECATED`。
+   - UEToVS 另有的非查找工具照常用：跳到定义或声明 `go_to_definition`、模块依赖 `get_module_info`、反射信息 `get_reflection_info`。
+2. **find 说没有、又确信该有**：模块名看头文件所在目录的 `*.Build.cs`；引擎插件里的类在 `<引擎>/Engine/Plugins/...`，还要在 `.uplugin` 里依赖那个插件。
 3. **引擎源码目录不存在或面板没给**（引擎没装源码、路径没找到）：说明查不到，请用户确认引擎目录（UE 页「权限与设置」里可以手动指定）或贴出头文件里那几行，不要凭记忆写。
 
 查到以后，回复里写一行「查过：`<类::函数>` 在 `<头文件>`，签名 `<签名>`」，评审和后面的子对话不用再查。
@@ -47,12 +43,12 @@ user-invocable: true
 
 ## 编译报错时
 
-| 报错                                                                                                                  | 意思                                                                                                                      | 先做什么                                                                                                                        |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| C2039 `'X': is not a member of 'Y'`（clang：`no member named 'X' in 'Y'`）                                            | Y 上没有叫 X 的成员：名字记错、在基类或别的类上、这个版本改名了                                                           | `get_members type_name=Y include_inherited=true`，或在 Y 的头文件里 `rg X`                                                      |
-| C3861 / C2065 `identifier not found` / `undeclared identifier`（clang：`use of undeclared identifier`）               | 名字没声明：少了 include，或者根本没有这个函数                                                                            | `search_symbols query=X scope=all` 找到它在哪，再 `suggest_include`                                                             |
-| C2660 `function does not take N arguments`、C2664 `cannot convert argument`（clang：`no matching function for call`） | 参数个数或类型对不上                                                                                                      | `go_to_definition symbol=X kind=declaration` 看真实参数表                                                                       |
-| LNK2019 / LNK2001 `unresolved external symbol`（clang：`undefined reference`）                                        | 头文件找到了，但链接不到：Build.cs 少了模块依赖，或者那个函数没导出（类和函数上都没有 `XXX_API`，只能在它自己的模块里用） | `suggest_include type=<类>` 看模块，补 `PublicDependencyModuleNames` / `PrivateDependencyModuleNames`；没导出的换一个导出的接口 |
+| 报错                                                                                                                  | 意思                                                                                                                      | 先做什么                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| C2039 `'X': is not a member of 'Y'`（clang：`no member named 'X' in 'Y'`）                                            | Y 上没有叫 X 的成员：名字记错、在基类或别的类上、这个版本改名了                                                           | `find action=members query=Y`，或读 Y 的头文件                                                                                       |
+| C3861 / C2065 `identifier not found` / `undeclared identifier`（clang：`use of undeclared identifier`）               | 名字没声明：少了 include，或者根本没有这个函数                                                                            | `find action=symbol query=X wide=true` 找到它在哪，再 `find action=include`                                                          |
+| C2660 `function does not take N arguments`、C2664 `cannot convert argument`（clang：`no matching function for call`） | 参数个数或类型对不上                                                                                                      | `go_to_definition symbol=X kind=declaration` 看真实参数表                                                                            |
+| LNK2019 / LNK2001 `unresolved external symbol`（clang：`undefined reference`）                                        | 头文件找到了，但链接不到：Build.cs 少了模块依赖，或者那个函数没导出（类和函数上都没有 `XXX_API`，只能在它自己的模块里用） | `find action=include query=<类>` 看模块，补 `PublicDependencyModuleNames` / `PrivateDependencyModuleNames`；没导出的换一个导出的接口 |
 
 面板在编译失败的结果里认出这几类错误时，会把涉及的符号列出来提醒你先查定义。**不要换个名字、加个参数再编一次碰运气**：先查到真实签名，再一次改对。查不到就停下来告诉用户缺什么。
 
