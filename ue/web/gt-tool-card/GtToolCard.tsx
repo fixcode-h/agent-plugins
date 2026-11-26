@@ -72,7 +72,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
     nav.go({ page: 'plugin', id: 'ue', sub: 'main', msg: gametestRoute(project, runSub(target.scenario, res.runId)) })
 
   return (
-    <div data-gt-tool-card={phase} className="ue:my-1 ue:ml-6 ue:rounded-md ue:border ue:border-line ue:text-footnote">
+    <div data-gt-tool-card={phase} className="ue:text-footnote">
       <div className="ue:flex ue:min-w-0 ue:items-center ue:gap-2 ue:px-2.5 ue:py-1.5">
         <button
           type="button"
