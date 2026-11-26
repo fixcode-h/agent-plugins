@@ -25,6 +25,23 @@ if (local) {
 } else {
   const run = (cmd, args, cwd = ROOT) =>
     execFileSync(cmd, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
-  run('git', ['clone', '--depth', '1', '--branch', branch, 'https://github.com/fixcode-h/agent-panel.git', target])
+  // 面板仓库改成私有后（2026-11-26），CI 要带能读面板仓库的令牌（仓库机密 PANEL_TOKEN）才克隆得下来；
+  // 令牌放进请求头而不是 URL，克隆失败时日志里也不会打出来
+  const token = process.env.PANEL_TOKEN
+  const auth = token
+    ? ['-c', `http.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`]
+    : []
+  if (!token && process.env.CI)
+    console.log('面板仓库是私有的：没设仓库机密 PANEL_TOKEN（能读 fixcode-h/agent-panel 的令牌）时克隆会失败')
+  run('git', [
+    ...auth,
+    'clone',
+    '--depth',
+    '1',
+    '--branch',
+    branch,
+    'https://github.com/fixcode-h/agent-panel.git',
+    target,
+  ])
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], target)
 }
