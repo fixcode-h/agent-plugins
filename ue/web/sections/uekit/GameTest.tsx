@@ -1,3 +1,4 @@
+import { parseRunSub } from '../../gt-tool-card/link.ts'
 import {
   BookOpen,
   CircleCheck,
@@ -79,7 +80,9 @@ const readLast = (project: string) => {
 const dirOf = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 
 export function GameTest() {
-  const { project, state, sub, go } = useUe()
+  const { project, state, sub: rawSub, go } = useUe()
+  // 对话里 ue_gametest 的工具卡片跳过来时带着这次运行（gt-tool-card/link.ts）：打开脚本，右栏看这次的报告
+  const { path: sub, run: subRun } = parseRunSub(rawSub)
   const { ui, cn } = h()
   const { busy, run } = useAction()
   const installed = state?.extensions?.some((x) => x.name === 'GameTest')
@@ -259,6 +262,9 @@ export function GameTest() {
   )
 
   const selected = list?.scenarios.find((s) => s.relativePath === sub)
+  useEffect(() => {
+    if (sub && subRun) setOpenRun({ scenario: sub, runId: subRun, n: Date.now() })
+  }, [sub, subRun])
   // 从「调用脚本」双击进来的一层层调用方（子图，用户 2026-11-19）：打开的就是被调用的脚本本身，面包屑点了回去；
   // 从脚本库换到别的脚本时清掉
   const [callers, setCallers] = useState<{ path: string; name: string; to: string }[]>([])

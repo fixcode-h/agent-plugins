@@ -33,6 +33,8 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 6. **改**：读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
 7. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
+**从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名，报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 7 步进回归。
+
 **不要**让用户去录制、去点界面；能从代码写就自己写。不知道用哪个属性区分同类对象时看 `props` 的 `score` / `suggest`；游戏开着可以 `inspect` 指着看，它直接给出引用。
 
 ## 写法（v5）

@@ -1,3 +1,4 @@
+import { GtToolCard } from './gt-tool-card/GtToolCard.tsx'
 import { Sparkles } from 'lucide-react'
 import { TableBindDialogSpecimen } from './sections/gm/TableBindDialog.tsx'
 import { TablePickSpecimen } from './sections/gm/TablePick.tsx'
@@ -93,6 +94,8 @@ const activate: ActivateWeb = (host) => {
     // 对话里的文件标记、文件浏览页点 .uasset：弹窗里看 DataTable、DataAsset、蓝图默认值（旧面板没有这一项，照旧交给系统打开）
     fileViewers: [{ id: 'asset', exts: ['uasset'], icon: GamepadIcon, Viewer: AssetFile }],
     Status,
+    // 对话里 Agent 跑 GameTest 脚本的那一行（面板 2026-11-26 的 toolCards，旧面板不画）：跑的哪个脚本、状态、展开看每步
+    toolCards: [{ id: 'gt-run', tool: 'ue_gametest', match: (a) => a.action === 'run', Card: GtToolCard }],
     // AI 分析窗口右侧的应用面板（插件接口 6）：GameTest「AI 整理」回复里的 gametest-tidy 代码块，逐条勾选后写回场景
     reports: [
       {

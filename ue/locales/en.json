@@ -5195,5 +5195,13 @@
   "{file} 读不进来：{msg}": "Couldn't read {file}: {msg}",
   "让 Agent 做增量编译工具": "Have an agent make the incremental build tool",
   "让 Agent 做全编译工具": "Have an agent make the full build tool",
-  "先在左边「编译工具」里给增量编译、全编译各选一个项目工具；没有就用 /createtool 做一个": "First pick a project tool for incremental and full build under \"Build tools\" on the left; if there's none, make one with /createtool"
+  "先在左边「编译工具」里给增量编译、全编译各选一个项目工具；没有就用 /createtool 做一个": "First pick a project tool for incremental and full build under \"Build tools\" on the left; if there's none, make one with /createtool",
+  "没跑起来": "Did not start",
+  "已结束": "Ended",
+  "临时步骤": "Ad-hoc steps",
+  "第 {n}/{m} 步": "Step {n}/{m}",
+  "失败 {n} 步": "{n} failed",
+  "在 GameTest 页打开": "Open in GameTest",
+  "等第一步的结果…": "Waiting for the first step…",
+  "没有这次运行的记录": "No record of this run"
 }
