@@ -66,18 +66,20 @@ export interface UeProject {
   addedAt: string
 }
 
-/** Lua 编译设置（设计稿四.3）：只能跑这里配好的两条指令 */
+/**
+ * Lua 编译设置（设计稿四.3）：「增量编译」「全编译」两个按钮各绑一个项目工具（/createtool 做的，面板 ADR 0082），
+ * 不再单独配命令行（用户 2026-11-26）。命令、工作目录、报错格式、会改的文件都在工具里
+ */
 export interface LuaBuildConfig {
-  /** 全编译的命令行（经 shell 执行） */
-  full: string
-  /** 增量编译的命令行：{files} 换成改过的文件（相对脚本目录、带引号），{filelist} 换成写了文件列表的临时文件 */
-  incremental: string
-  /** 工作目录，相对项目根；空是项目根 */
-  cwd: string
+  /** 全编译用的项目工具 id；空是没选 */
+  fullTool: string
+  /**
+   * 增量编译用的项目工具 id。改过的文件经工具参数交过去：参数 filelist 填一个每行一个文件的列表文件，
+   * files 填空格隔开的文件（都相对脚本目录）
+   */
+  incrementalTool: string
   /** Lua 脚本根目录，相对项目根（UnLua 默认 Content/Script）：找改过的文件、文件名换模块名都按它 */
   scriptDir: string
-  /** 报错格式：{file}:{line}: {message} 这样的模板，或前后带 / 的正则（命名分组 file、line、col、message） */
-  errorFormat: string
   /** 编译成功后重载这次编过的模块 */
   autoReload: boolean
   /** 用哪个编辑器打开报错位置：{file}、{line} 占位，例如 code -g "{file}:{line}"；空用系统默认程序打开（不跳行） */
@@ -102,6 +104,8 @@ export interface LuaBuildRun {
   status: 'running' | 'ok' | 'failed' | 'stopped'
   /** 实际执行的命令行 */
   command: string
+  /** 跑的是哪个项目工具（名字和 id） */
+  tool?: { id: string; name: string }
   /** 增量编了哪些文件（相对脚本目录）；全编译是脚本目录下的 .lua 个数 */
   files: string[]
   fileCount: number

@@ -1,34 +1,34 @@
-import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import path from 'node:path'
 import { ueDocFile } from '../doc-root.ts'
 import type { LuaBuildConfig, UeProject } from '../types.ts'
-import { c, readJson, writeJson } from '../util.ts'
+import { readJson, writeJson } from '../util.ts'
 
 /**
  * Lua 编译设置分两处存（用户 2026-11-21）：
- * - 团队共用的（两条编译指令、工作目录、脚本目录、报错格式）存项目文档根的 AgentPanel/UE/lua-build.json，可以提交，一个人配好全组用；
+ * - 团队共用的（两个按钮各用哪个项目工具、脚本目录）存项目文档根的 AgentPanel/UE/lua-build.json，可以提交，一个人选好全组用；
  * - 个人习惯（编完重载不重载、打开报错用哪个编辑器）留在本机的项目登记里（UeProject.luaBuild）。
  * 读项目时把两份合成一份放在内存的 p.luaBuild 里，存项目登记时只存个人那部分（registry.ts）。
  *
- * 编译指令整行交给命令行执行，放进仓库后别人改一下、你拉一次代码就会在你的机器上跑：
- * 所以本机记一份「确认过的指令」的哈希，指令和它对不上（新拉的、被别人改过的）先在设置里确认才跑，
- * 和 Lua 片段的批准（lua-debug/snippets.ts）一个道理。自己在网页上保存的算确认过。
+ * 以前这里存两条命令行，从仓库拉来的要本机确认过才跑（2026-11-26 前）。现在按钮只绑项目工具，命令在工具里，
+ * 和「技能与 MCP → 工具」里点试运行一样由面板管，这里不再存命令也不再记确认
  */
-/** 没配过时的默认值（config.ts 也从这里取）：确认的哈希要按生效的值算，没写进文件的字段和默认值一样 */
 export const DEFAULT_LUA_BUILD: LuaBuildConfig = {
-  full: '',
-  incremental: '',
-  cwd: '',
+  fullTool: '',
+  incrementalTool: '',
   scriptDir: 'Content/Script',
-  errorFormat: '{file}:{line}: {message}',
   autoReload: true,
   editor: '',
 }
 
-export const SHARED_KEYS = ['full', 'incremental', 'cwd', 'scriptDir', 'errorFormat'] as const
+export const SHARED_KEYS = ['fullTool', 'incrementalTool', 'scriptDir'] as const
 type SharedKey = (typeof SHARED_KEYS)[number]
 export type SharedLuaBuild = Partial<Pick<LuaBuildConfig, SharedKey>>
+
+/** 旧版存的两条命令行：不再执行，只在编译页提示「做成项目工具」时带上，选好工具保存后从文件里去掉 */
+export interface LegacyLuaBuild {
+  full?: string
+  incremental?: string
+}
 
 type P = Pick<UeProject, 'id' | 'root'>
 
@@ -50,50 +50,42 @@ export function localPart(x?: Partial<LuaBuildConfig>): Partial<LuaBuildConfig> 
   return Object.keys(out).length ? out : undefined
 }
 
-/** 确认认的是决定执行什么的四样：两条指令、工作目录和脚本目录（{files} 按它换成文件，全编译也编它下面的文件） */
-const commandHash = (s: SharedLuaBuild) =>
-  createHash('sha256')
-    .update(
-      JSON.stringify([s.full ?? '', s.incremental ?? '', s.cwd ?? '', s.scriptDir || DEFAULT_LUA_BUILD.scriptDir]),
-    )
-    .digest('hex')
-
-const approvedFile = (id: string) => path.join(c().dataDir, 'lua-build-approved', `${encodeURIComponent(id)}.json`)
-
-export async function approveLuaBuild(id: string, s: SharedLuaBuild) {
-  await writeJson(approvedFile(id), { hash: commandHash(s) })
+const legacyOf = (x: Record<string, unknown> | undefined): LegacyLuaBuild => {
+  const out: LegacyLuaBuild = {}
+  for (const k of ['full', 'incremental'] as const) if (typeof x?.[k] === 'string' && x[k]) out[k] = x[k] as string
+  return out
 }
 
-/** 指令本机确认过没有：没配指令、或者和确认过的一样才算 */
-export async function luaBuildApproved(p: Pick<UeProject, 'id' | 'luaBuild'>) {
-  const s = sharedPart(p.luaBuild)
-  if (!s.full && !s.incremental) return true
-  return (await readJson<{ hash?: string }>(approvedFile(p.id), {})).hash === commandHash(s)
+/** 文档根里还留着的旧命令行（没有时为空） */
+export async function legacyLuaBuild(p: P): Promise<LegacyLuaBuild | undefined> {
+  const l = legacyOf(await readJson<Record<string, unknown>>(luaBuildFile(p).read, {}))
+  return Object.keys(l).length ? l : undefined
 }
 
 /**
  * 读项目时调：把文档根里的共用设置合进 p.luaBuild。strip=true 表示本机登记里还留着共用字段（升级前存的），
- * 已经搬进文档根，调用方把登记重写成只剩个人那部分。
- * 一次性搬家：文档根还没有这个文件就把本机那份写过去；本机的指令就是你自己配的，和文档根里的一样就记成确认过
+ * 调用方把登记重写成只剩个人那部分。
+ * 一次性搬家：文档根还没有这个文件、本机登记里有旧命令行，就把它们写过去（之后编译页提示做成项目工具时用得上）
  */
 export async function mergeLuaBuild(p: UeProject): Promise<{ luaBuild?: Partial<LuaBuildConfig>; strip: boolean }> {
   const file = luaBuildFile(p)
-  let shared = sharedPart(await readJson<SharedLuaBuild>(file.read, {}))
-  const own = sharedPart(p.luaBuild)
-  const strip = Object.keys(own).length > 0
-  if (strip) {
-    if (!existsSync(file.read)) {
-      await writeJson(file.write, own)
-      shared = own
-    }
-    if (commandHash(own) === commandHash(shared)) await approveLuaBuild(p.id, own)
+  const raw = (p.luaBuild ?? {}) as Record<string, unknown>
+  const strip = Object.keys(raw).some((k) => k !== 'autoReload' && k !== 'editor')
+  if (strip && !existsSync(file.read)) {
+    const carry = { ...legacyOf(raw), ...sharedPart(p.luaBuild) }
+    if (Object.keys(carry).length) await writeJson(file.write, carry)
   }
+  const shared = sharedPart(await readJson<SharedLuaBuild>(file.read, {}))
   const merged = { ...localPart(p.luaBuild), ...shared }
   return { luaBuild: Object.keys(merged).length ? merged : undefined, strip }
 }
 
-/** 网页上保存：共用部分改了才写文档根（只改了个人习惯不往仓库里写文件）；保存就是你看过这些指令，记成本机确认过 */
+/**
+ * 网页上保存：共用部分改了才写文档根（只改了个人习惯不往仓库里写文件）。
+ * 两个按钮都选好了工具，旧命令行就没用了，顺手从文件里去掉；还没选全时留着，提示做工具时还要用
+ */
 export async function saveSharedLuaBuild(p: P, next: SharedLuaBuild, changed: boolean) {
-  if (changed) await writeJson(luaBuildFile(p).write, sharedPart(next))
-  await approveLuaBuild(p.id, next)
+  if (!changed) return
+  const keep = next.fullTool && next.incrementalTool ? {} : ((await legacyLuaBuild(p)) ?? {})
+  await writeJson(luaBuildFile(p).write, { ...keep, ...sharedPart(next) })
 }

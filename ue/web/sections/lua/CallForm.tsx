@@ -55,7 +55,10 @@ export function CallForm({
         const extra = rest.trim() ? parseArg(rest) : []
         const list = [...params.map((p) => parseArg(args[p] ?? '')), ...(Array.isArray(extra) ? extra : [extra])]
         // 选了别的实例：按那个对象的实例表找同名函数（元表链上找到的就是同一个）
-        const on = who !== 'this' && who !== 'none' ? { path: who, keys: [fn.name] } : { path: root.path, keys: [...root.keys, fn.name] }
+        const on =
+          who !== 'this' && who !== 'none'
+            ? { path: who, keys: [fn.name] }
+            : { path: root.path, keys: [...root.keys, fn.name] }
         const r = await op<CallRes>(project.id, 'lua.call', { ...on, self: who !== 'none', args: list }, target, 20000)
         setRes(r)
         onChanged()
@@ -65,11 +68,7 @@ export function CallForm({
       }
     })
 
-  const thisLabel = root.path
-    ? choice?.why === 'class'
-      ? t('这个类对象（不是实例）')
-      : t('这个对象')
-    : t('这张表')
+  const thisLabel = root.path ? (choice?.why === 'class' ? t('这个类对象（不是实例）') : t('这个对象')) : t('这张表')
   const selfOptions = [
     ...(choice?.cands ?? []).map((o) => ({
       value: o.path,
@@ -120,7 +119,9 @@ export function CallForm({
           <ui.Input
             size="sm"
             className="ue:font-mono"
-            placeholder={fn.src ? t('其余参数，JSON 数组') : t('UE 函数没有参数名：按顺序写成 JSON 数组，例如 [0, "a"]')}
+            placeholder={
+              fn.src ? t('其余参数，JSON 数组') : t('UE 函数没有参数名：按顺序写成 JSON 数组，例如 [0, "a"]')
+            }
             value={rest}
             onChange={(e: { target: { value: string } }) => setRest(e.target.value)}
             onKeyDown={(e: { key: string }) => e.key === 'Enter' && call()}
@@ -144,7 +145,10 @@ function CallResult({ res }: { res: CallRes }) {
     <div className="ue:flex ue:flex-col ue:overflow-hidden ue:rounded-md ue:border ue:border-line ue:bg-card ue:font-mono ue:text-footnote">
       {res.results.length ? (
         res.results.map((r, i) => (
-          <div key={i} className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:px-3 ue:py-1 ue:last:border-b-0">
+          <div
+            key={i}
+            className="ue:flex ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:px-3 ue:py-1 ue:last:border-b-0"
+          >
             <span className="ue:w-5 ue:shrink-0 ue:text-subtle">{res.results.length > 1 ? i + 1 : '←'}</span>
             <Badge>{r.t}</Badge>
             <span className="ue:min-w-0 ue:break-all ue:text-fg">{luaText(r)}</span>
@@ -221,7 +225,8 @@ function CallError({ message, onOpen }: { message: string; onOpen?: (file: strin
           <span className="ue:text-fg">{e.text ?? head}</span>
           {e.file && e.line !== undefined && onOpen && (
             <ui.Button size="sm" variant="ghost" onClick={() => onOpen(e.file!, e.line)}>
-              <FileText className="ue:h-3.5 ue:w-3.5" /> {t('打开 {file}:{line}', { file: baseName(e.file), line: e.line })}
+              <FileText className="ue:h-3.5 ue:w-3.5" />{' '}
+              {t('打开 {file}:{line}', { file: baseName(e.file), line: e.line })}
             </ui.Button>
           )}
         </div>

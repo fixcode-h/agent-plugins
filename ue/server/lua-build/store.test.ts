@@ -1,5 +1,5 @@
 // 项目登记读出来时的一次性搬家（registry.ts load）：选过「项目 .agent-panel/ue」的收藏等搬到文档根；
-// Lua 编译设置的团队共用部分搬到文档根、本机只留个人习惯；仓库里拉来的指令本机没确认过不跑。
+// Lua 编译设置的团队共用部分搬到文档根、本机只留个人习惯；两个按钮选的项目工具存文档根。
 // 用法：node --test ue/server/lua-build/store.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -10,7 +10,7 @@ import type { PluginServerContext } from '../../../sdk/server.ts'
 import { getProject, patchProject } from '../registry.ts'
 import { setCtx } from '../util.ts'
 import { saveLuaBuildConfig } from './config.ts'
-import { luaBuildApproved } from './store.ts'
+import { legacyLuaBuild } from './store.ts'
 
 let base = ''
 const data = () => path.join(base, 'data')
@@ -54,7 +54,7 @@ test('选过项目 .agent-panel/ue 的：那边的收藏、片段、GM 设置复
   assert.equal('favStore' in (await stored('a')), false)
 })
 
-test('Lua 编译设置：本机登记里的共用部分搬到文档根并记成确认过，登记只留个人习惯', async () => {
+test('Lua 编译设置：本机登记里的旧字段搬到文档根，登记只留个人习惯；旧命令行留着给提示用', async () => {
   await register('b', {
     luaBuild: {
       full: 'build.bat',
@@ -67,44 +67,44 @@ test('Lua 编译设置：本机登记里的共用部分搬到文档根并记成�
     },
   })
   const p = await getProject('b')
-  assert.equal(p?.luaBuild?.full, 'build.bat')
+  assert.equal(p?.luaBuild?.scriptDir, 'Script')
   assert.equal(p?.luaBuild?.editor, 'code -g "{file}:{line}"')
+  assert.equal('full' in (p?.luaBuild ?? {}), false)
   const shared = JSON.parse(await readFile(path.join(ueDocs('b'), 'lua-build.json'), 'utf8'))
-  assert.equal(shared.full, 'build.bat')
-  assert.equal(shared.scriptDir, 'Script')
-  assert.equal('editor' in shared, false)
+  assert.deepEqual(shared, { full: 'build.bat', scriptDir: 'Script' })
+  assert.deepEqual(await legacyLuaBuild(p!), { full: 'build.bat' })
   assert.deepEqual((await stored('b')).luaBuild, { autoReload: false, editor: 'code -g "{file}:{line}"' })
-  assert.equal(await luaBuildApproved(p!), true)
   // 之后存别的设置也不把共用部分写回本机
   await patchProject('b', { buildCmd: 'x' })
   assert.deepEqual((await stored('b')).luaBuild, { autoReload: false, editor: 'code -g "{file}:{line}"' })
 })
 
-test('仓库里拉来的指令本机没确认过不算数；在设置里保存一次就确认了，只改个人习惯不写文档根', async () => {
+test('选工具存进文档根；两个都选好才去掉旧命令行，只改个人习惯不写文档根', async () => {
   await mkdir(ueDocs('c'), { recursive: true })
   const file = path.join(ueDocs('c'), 'lua-build.json')
-  await writeFile(file, JSON.stringify({ full: 'evil.bat' }))
+  await writeFile(file, JSON.stringify({ full: 'old.bat', incremental: 'old-inc.bat' }))
   await register('c', {})
   let p = await getProject('c')
-  assert.equal(p?.luaBuild?.full, 'evil.bat')
-  assert.equal(await luaBuildApproved(p!), false)
   await saveLuaBuildConfig(p!, { editor: 'subl {file}:{line}' })
-  // 共用部分没改：文件原样（没写入默认值），但已确认
-  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { full: 'evil.bat' })
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { full: 'old.bat', incremental: 'old-inc.bat' })
   p = await getProject('c')
-  assert.equal(await luaBuildApproved(p!), true)
   assert.equal(p?.luaBuild?.editor, 'subl {file}:{line}')
-  // 别人只改了脚本目录：{files} 换成的文件变了，也要重新确认
-  await writeFile(file, JSON.stringify({ full: 'evil.bat', scriptDir: 'Other' }))
+  await saveLuaBuildConfig(p!, { fullTool: 'lua-full' })
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), {
+    full: 'old.bat',
+    incremental: 'old-inc.bat',
+    fullTool: 'lua-full',
+    incrementalTool: '',
+    scriptDir: 'Content/Script',
+  })
   p = await getProject('c')
-  assert.equal(await luaBuildApproved(p!), false)
-  await saveLuaBuildConfig(p!, {})
-  // 别人又改了指令：重新要确认
-  await writeFile(file, JSON.stringify({ full: 'evil2.bat' }))
-  p = await getProject('c')
-  assert.equal(await luaBuildApproved(p!), false)
-  // 网页上改了共用部分：写进文档根
-  await saveLuaBuildConfig(p!, { full: 'good.bat' })
-  assert.equal(JSON.parse(await readFile(file, 'utf8')).full, 'good.bat')
-  assert.equal(await luaBuildApproved((await getProject('c'))!), true)
+  assert.equal(p?.luaBuild?.fullTool, 'lua-full')
+  await saveLuaBuildConfig(p!, { incrementalTool: 'lua-inc' })
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), {
+    fullTool: 'lua-full',
+    incrementalTool: 'lua-inc',
+    scriptDir: 'Content/Script',
+  })
+  assert.equal(await legacyLuaBuild((await getProject('c'))!), undefined)
+  await assert.rejects(saveLuaBuildConfig(p!, { fullTool: 'Bad Id' }), /工具 id 不对/)
 })

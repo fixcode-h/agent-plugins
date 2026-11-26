@@ -31,7 +31,7 @@ export function parseErrorLine(re: RegExp, line: string, dirs: ErrorDirs): LuaBu
     file,
     line: lineNo,
     ...(g.col ? { col: Number(g.col) } : {}),
-    message: (g.message ?? '').trim() || stripAnsi(line).trim(),
+    message: (g.message ?? g.msg ?? '').trim() || stripAnsi(line).trim(),
     exists: abs.exists,
   }
 }

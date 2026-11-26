@@ -610,3 +610,34 @@ declare module '@panel/web/src/lib/prefs/index' {
   }
   export function registerPrefs(list: PrefFamily[]): () => void
 }
+
+/**
+ * 服务端：项目的自建工具（/createtool，面板 server/custom-tools/host.ts，ADR 0082）。Lua 页的编译按钮各绑一个项目工具：
+ * projectTools 列出来给下拉选，spawnProjectTool 校验参数、展开命令、P4 签出后起进程（输出、停止由插件管）
+ */
+declare module '@panel/server/custom-tools/host' {
+  import type { ChildProcess } from 'node:child_process'
+  export interface ProjectToolBrief {
+    id: string
+    name: string
+    summary: string
+    version: number
+    params: { name: string; label: string; type: string; required: boolean; desc: string }[]
+    errorPattern?: string
+    okExit: number[]
+  }
+  export function projectTools(
+    projectId: string,
+  ): Promise<{ tools: ProjectToolBrief[]; broken: { file: string; error: string }[]; dir?: string }>
+  export function spawnProjectTool(
+    projectId: string,
+    id: string,
+    args: Record<string, unknown>,
+    o: { source: string; title: string; detached?: boolean },
+  ): Promise<{ tool: ProjectToolBrief; line: string; cwd: string; checkout: string; child: ChildProcess }>
+  export function noteProjectToolRun(
+    projectId: string,
+    id: string,
+    r: { ok: boolean; ms: number; summary?: string },
+  ): void
+}

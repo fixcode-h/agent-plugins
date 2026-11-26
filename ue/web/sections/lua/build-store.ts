@@ -1,5 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { BuildSummary, ChangedFile } from '../../../server/lua-build/changes.ts'
+import type { ToolBrief } from '../../../server/lua-build/launch.ts'
+import type { LegacyLuaBuild } from '../../../server/lua-build/store.ts'
 import type { LuaBuildConfig, LuaBuildError, LuaBuildRun } from '../../../server/types.ts'
 import { pget, ppost } from '../../api.ts'
 import { useUe } from '../../ctx.tsx'
@@ -18,8 +20,10 @@ export interface BuildSnap {
   config: LuaBuildConfig
   /** 团队共用的那份设置写在哪（项目文档根的 AgentPanel/UE/lua-build.json） */
   sharedFile?: string
-  /** 指令是从仓库拉来的、这台机器还没确认过：编译会被拦，设置里保存一次算确认 */
-  unapproved?: boolean
+  /** 两个按钮能选的项目工具（/createtool 做的）；error 是读不到（面板太旧之类） */
+  tools?: { tools: ToolBrief[]; broken: { file: string; error: string }[]; dir?: string; error?: string }
+  /** 以前配过的两条命令行：不再执行，提示做成工具时带上 */
+  legacy?: LegacyLuaBuild
   scriptDirExists: boolean
   changes: {
     files: ChangedFile[]
@@ -81,6 +85,19 @@ export async function loadBuild(projectId: string): Promise<void> {
     emit()
   }
   if (e.stale) return loadBuild(projectId)
+}
+
+/** 只重取工具列表（编译页、设置页打开时）：对话里刚用 /createtool 做好的工具回来就能选 */
+export async function loadTools(projectId: string): Promise<void> {
+  const e = entry(projectId)
+  const tools = await pget<BuildSnap['tools']>(projectId, 'lua-build/tools').catch((err: Error) => ({
+    tools: [],
+    broken: [],
+    error: err.message,
+  }))
+  if (!e.snap) return
+  e.snap = { ...e.snap, tools }
+  emit()
 }
 
 interface PushData {
