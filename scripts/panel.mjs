@@ -33,6 +33,15 @@ if (local) {
     : []
   if (!token && process.env.CI)
     console.log('面板仓库是私有的：没设仓库机密 PANEL_TOKEN（能读 fixcode-h/agent-panel 的令牌）时克隆会失败')
-  run('git', [...auth, 'clone', '--depth', '1', '--branch', branch, 'https://github.com/fixcode-h/agent-panel.git', target])
+  run('git', [
+    ...auth,
+    'clone',
+    '--depth',
+    '1',
+    '--branch',
+    branch,
+    'https://github.com/fixcode-h/agent-panel.git',
+    target,
+  ])
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], target)
 }
