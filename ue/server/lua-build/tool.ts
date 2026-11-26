@@ -11,7 +11,7 @@ const WAIT_MS = 20000
 const SHOW_ERRORS = 10
 
 /**
- * ue_lua action=compile（设计稿四.3）：只跑项目设置里配好的指令；没编完回 job，带 job 再调接着等
+ * ue_lua action=compile（设计稿四.3）：只跑 Lua 页「编译」里给两个按钮选好的项目工具；没编完回 job，带 job 再调接着等
  */
 export async function luaCompileTool(a: Record<string, unknown>, ctx: OpCtx): Promise<McpResult> {
   let id = str(a.job)
@@ -28,6 +28,7 @@ function summary(r: LuaBuildRun) {
   const base = {
     job: r.id,
     mode: r.mode,
+    tool: r.tool?.id,
     status: r.status,
     files: r.mode === 'incremental' ? r.files.slice(0, 20) : undefined,
     fileCount: r.fileCount,
@@ -44,7 +45,7 @@ function summary(r: LuaBuildRun) {
     ...(r.errors.length > SHOW_ERRORS ? { more: `还有 ${r.errors.length - SHOW_ERRORS} 条，见 logFile` } : {}),
     ...(r.status === 'failed' && !r.errors.length
       ? {
-          note: '失败了但输出里没认出 文件:行：读 logFile 看原文；认不出可能是报错格式和编译器输出对不上，请用户在 UE 页 Lua 编译设置里改',
+          note: '失败了但输出里没认出 文件:行：读 logFile 看原文；认不出可能是项目工具的报错格式（output.errorPattern，命名分组 file、line、msg）和编译器输出对不上，可以用 custom_tool 改这个工具',
         }
       : {}),
     reload: r.reload,

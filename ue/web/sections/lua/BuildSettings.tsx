@@ -5,10 +5,11 @@ import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 import { Card } from '../../ui.tsx'
 import { loadBuild, useLuaBuild } from './build-store.ts'
+import { BuildToolPick } from './BuildTools.tsx'
 
 /**
- * 「权限与设置」里的「Lua 编译」（设计稿四.3）：全编译、增量两条指令，工作目录、脚本目录、报错格式、编完重载、编辑器。
- * 只有装了 UnLua 的项目显示（state.unlua）。保存时服务端会检查报错格式写得对不对
+ * 「权限与设置」里的「Lua 编译」（设计稿四.3）：两个按钮各用哪个项目工具（和编译页左边同一个组件，选了马上存），
+ * 下面是脚本目录、编完重载、编辑器。只有装了 UnLua 的项目显示（state.unlua）
  */
 export function LuaBuildSettings() {
   const { project, state } = useUe()
@@ -28,20 +29,18 @@ export function LuaBuildSettings() {
   })
   const save = () =>
     run('lua-build', async () => {
-      await ppost(project.id, 'lua-build/config', form)
+      // 工具在上面选了就存了，这里只存下面这几项，免得拿表单里的旧值盖掉刚选的工具
+      const { scriptDir, autoReload, editor } = form
+      await ppost(project.id, 'lua-build/config', { scriptDir, autoReload, editor })
       await loadBuild(project.id)
       toast.success(t('已保存'))
     })
 
   return (
-    <Card title={t('Lua 编译')} aside={t('在本机跑，不经过 UE；Agent 也只能跑这两条')}>
-      {b.snap?.unapproved && (
-        <div className="ue:border-b ue:border-warning/30 ue:bg-warning/10 ue:px-4 ue:py-2 ue:text-body ue:text-fg">
-          {t(
-            '编译指令来自仓库里的共用设置，这台机器还没确认过（新拉的或被别人改过）。看过下面的指令没问题后点保存，才能编译',
-          )}
-        </div>
-      )}
+    <Card title={t('Lua 编译')} aside={t('在本机跑项目工具，不经过 UE；Agent 也只能跑选好的这两个')}>
+      <div className="ue:border-b ue:border-line ue:p-4">
+        <BuildToolPick />
+      </div>
       <form
         className="ue:grid ue:gap-4 ue:p-4 ue:sm:grid-cols-2"
         onSubmit={(e) => {
@@ -49,31 +48,8 @@ export function LuaBuildSettings() {
           void save()
         }}
       >
-        <ui.Field
-          label={t('全编译指令')}
-          hint={t('整行交给命令行执行，例如 tools\\LuaBuild\\build_all.bat')}
-          className="ue:sm:col-span-2"
-        >
-          <ui.Input className="ue:font-mono" placeholder={t('没配')} {...field('full')} />
-        </ui.Field>
-        <ui.Field
-          label={t('增量编译指令')}
-          hint={t('{files} 换成改过的文件（相对脚本目录）；文件多时用 {filelist}，换成一个每行一个文件的临时文件')}
-          className="ue:sm:col-span-2"
-        >
-          <ui.Input className="ue:font-mono" placeholder="tools\LuaBuild\build.bat {files}" {...field('incremental')} />
-        </ui.Field>
-        <ui.Field label={t('工作目录')} hint={t('相对项目根，留空是项目根')}>
-          <ui.Input className="ue:font-mono" placeholder={t('<项目>')} {...field('cwd')} />
-        </ui.Field>
         <ui.Field label={t('Lua 脚本目录')} hint={t('相对项目根：找改过的文件、文件换成模块名都按它')}>
           <ui.Input className="ue:font-mono" {...field('scriptDir')} />
-        </ui.Field>
-        <ui.Field
-          label={t('报错格式')}
-          hint={t('用 {file} {line} {col} {message} 占位；也可以前后加 / 写正则（命名分组 file、line、message）')}
-        >
-          <ui.Input className="ue:font-mono" {...field('errorFormat')} />
         </ui.Field>
         <ui.Field label={t('编完')}>
           <ui.Select
@@ -94,11 +70,11 @@ export function LuaBuildSettings() {
         </ui.Field>
         <div className="ue:flex ue:flex-wrap ue:items-center ue:gap-3 ue:sm:col-span-2">
           <ui.Button size="sm" type="submit" disabled={!!busy}>
-            {b.snap?.unapproved ? t('确认并保存') : t('保存')}
+            {t('保存')}
           </ui.Button>
           {b.snap?.sharedFile && (
             <span className="ue:min-w-0 ue:break-all ue:text-caption ue:text-subtle">
-              {t('指令、目录和报错格式存在 {f}，团队共用；编完重载和编辑器只存本机', { f: b.snap.sharedFile })}
+              {t('选的工具和脚本目录存在 {f}，团队共用；编完重载和编辑器只存本机', { f: b.snap.sharedFile })}
             </span>
           )}
         </div>

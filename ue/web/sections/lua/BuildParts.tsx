@@ -58,7 +58,7 @@ export function BuildOutput({ run }: { run: BuildCurrent }) {
 
 /**
  * Lua 页页头的「增量编译 · N」「全编译」（tabs.ts 的 LUA_HEAD_ACTIONS）。点了切到「编译」页签看输出；
- * 没配指令时按钮灰掉，悬停说去哪配
+ * 没选项目工具时按钮灰掉，悬停说去哪选
  */
 export function LuaBuildHead() {
   const { project, go } = useUe()
@@ -80,10 +80,10 @@ export function LuaBuildHead() {
       <ui.Button
         size="sm"
         variant="secondary"
-        disabled={!cfg.incremental || b.running || !n || !!busy}
+        disabled={!cfg.incrementalTool || b.running || !n || !!busy}
         title={
-          !cfg.incremental
-            ? t('还没配增量编译指令：到「权限与设置」→ Lua 编译里填')
+          !cfg.incrementalTool
+            ? t('还没选增量编译用哪个项目工具：到「编译」页签左边选')
             : !n
               ? t('上次编译成功以来没有改过的文件')
               : t('只编勾上的 {n} 个改过的文件', { n })
@@ -96,8 +96,8 @@ export function LuaBuildHead() {
       <ui.Button
         size="sm"
         variant="secondary"
-        disabled={!cfg.full || b.running || !!busy}
-        title={!cfg.full ? t('还没配全编译指令：到「权限与设置」→ Lua 编译里填') : undefined}
+        disabled={!cfg.fullTool || b.running || !!busy}
+        title={!cfg.fullTool ? t('还没选全编译用哪个项目工具：到「编译」页签左边选') : undefined}
         onClick={() => void start('full')}
       >
         {b.running && mode === 'full' ? spin : <Layers className="ue:h-3.5 ue:w-3.5" />}

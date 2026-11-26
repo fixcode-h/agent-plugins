@@ -3,12 +3,12 @@ import { createWriteStream, type WriteStream } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { OpCtx } from '../ops.ts'
-import type { LuaBuildRun } from '../types.ts'
+import type { LuaBuildRun, UeProject } from '../types.ts'
 import { c, t, uid } from '../util.ts'
-import { compileErrorPattern, inProject, luaBuildConfig } from './config.ts'
+import { compileErrorPattern, DEFAULT_ERROR_FORMAT, inProject, luaBuildConfig } from './config.ts'
 import { changedFiles, luaFiles, moduleName, patchBuildState } from './changes.ts'
 import { errorKey, parseErrorLine, stripAnsi, type ErrorDirs } from './errors.ts'
-import { luaBuildApproved } from './store.ts'
+import { toolLauncher, type ToolBrief } from './launch.ts'
 
 /**
  * 跑 Lua 编译（设计稿四.3）：在本机起进程（面板服务端，不经过 UE），输出逐行推给网页（事件 ue-lua-build），能停止。
@@ -82,30 +82,27 @@ function addLine(projectId: string, l: Live, text: string, re: RegExp, dirs: Err
 /** 面板自己加的行（命令行、结束状态）不拿去认报错 */
 const NONE = /$^/
 
-const quote = (s: string) => (/[\s"&|<>^()]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s)
-
-/** 起一次编译：mode=incremental 时 files 不给就编全部改过的。返回这次的记录（还在跑） */
+/**
+ * 起一次编译：跑设置里给这个按钮选的项目工具（/createtool 做的）。mode=incremental 时 pick 不给就编全部改过的，
+ * 改过的文件经工具参数交过去：filelist 填列表文件（每行一个，相对脚本目录），files 填空格隔开的文件。返回这次的记录（还在跑）
+ */
 export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pick?: string[]): Promise<LuaBuildRun> {
   const p = ctx.project
   const cur = lives.get(p.id)
   if (cur?.run.status === 'running') throw new Error(t('这个项目已经有一次 Lua 编译在跑：等它结束或先停止'))
   const cfg = luaBuildConfig(p)
-  const tpl = mode === 'full' ? cfg.full : cfg.incremental
-  if (!tpl)
+  const toolId = mode === 'full' ? cfg.fullTool : cfg.incrementalTool
+  if (!toolId)
     throw new Error(
       mode === 'full'
-        ? t('还没配全编译指令：到 UE 页「权限与设置」→ Lua 编译里填')
-        : t('还没配增量编译指令：到 UE 页「权限与设置」→ Lua 编译里填'),
+        ? t('还没选全编译用哪个项目工具：到 Lua 页「编译」里选（没有就用 /createtool 做一个）')
+        : t('还没选增量编译用哪个项目工具：到 Lua 页「编译」里选（没有就用 /createtool 做一个）'),
     )
-  if (!(await luaBuildApproved(p)))
-    throw new Error(
-      t(
-        '编译指令是从仓库里的共用设置读到的，这台机器还没确认过（新拉的或被别人改过）：请用户到 UE 页「权限与设置」→ Lua 编译里看过指令后点保存，再编译',
-      ),
-    )
-  const re = compileErrorPattern(cfg.errorFormat)
+  const launcher = await toolLauncher()
+  const brief = (await launcher.list(p.id)).tools.find((x) => x.id === toolId)
+  if (!brief)
+    throw new Error(t('项目里没有 id 为 {id} 的工具（可能被删了或改了 id）：到 Lua 页「编译」里重新选', { id: toolId }))
   const scriptDir = inProject(p, cfg.scriptDir)
-  const cwd = inProject(p, cfg.cwd)
   const id = uid()
   const dir = path.join(c().dataDir, 'lua-build', p.id)
   await mkdir(dir, { recursive: true })
@@ -121,23 +118,23 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
   }
   const fileCount = mode === 'incremental' ? files.length : all.length
   const reloadFiles = mode === 'incremental' ? files : changed
-
-  let command = tpl
-    .replaceAll('{root}', quote(p.root))
-    .replaceAll('{scripts}', quote(scriptDir))
-    .replaceAll('{files}', files.map(quote).join(' '))
-  if (command.includes('{filelist}')) {
-    const listFile = path.join(dir, `${id}.files.txt`)
-    await writeFile(listFile, files.join('\n') + '\n')
-    command = command.replaceAll('{filelist}', quote(listFile))
-  }
+  const args = await fileArgs(p, brief, id, mode, files)
+  const re = errorRegex(brief)
 
   const logFile = path.join(dir, `${id}.log`)
+  // 经面板起（ADR 0082）：参数校验、命令展开、P4 签出和工具管理页试运行同一份；进孤儿登记，面板被强杀后下次启动会清掉。
+  // 非 Windows 单独成组，停止时连子进程一起结束
+  const started = await launcher.spawn(p.id, toolId, args, {
+    source: 'ue',
+    title: t('Lua 编译'),
+    detached: process.platform !== 'win32',
+  })
   const r: LuaBuildRun = {
     id,
     mode,
     status: 'running',
-    command,
+    command: started.line,
+    tool: { id: started.tool.id, name: started.tool.name },
     files,
     fileCount,
     startedAt: Date.now(),
@@ -156,19 +153,11 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
     done: new Promise((res) => (finish = res)),
   }
   lives.set(p.id, live)
-  const dirs: ErrorDirs = { root: p.root, cwd, scriptDir }
-  addLine(p.id, live, `> ${command}`, NONE, dirs)
-
-  // 命令行是用户在设置里写的整行（可能带管道、.bat），交给 shell 执行；非 Windows 单独成组，停止时连子进程一起结束
-  // 经面板的外部进程入口起（ADR 0076）：进孤儿登记，面板被强杀后下次启动会清掉留下的编译进程
-  const { spawnTracked } = await import('@panel/server/exec/tracked')
-  const child = spawnTracked(command, [], {
-    cwd,
-    shell: true,
-    detached: process.platform !== 'win32',
-    source: 'ue',
-    title: t('Lua 编译'),
-  })
+  const dirs: ErrorDirs = { root: p.root, cwd: started.cwd, scriptDir }
+  addLine(p.id, live, `> ${started.line}`, NONE, dirs)
+  if (started.checkout) addLine(p.id, live, started.checkout, NONE, dirs)
+  const child = started.child
+  const okExit = started.tool.okExit.length ? started.tool.okExit : [0]
   live.child = child
   let buf = { out: '', err: '' }
   const feed = (k: 'out' | 'err', d: Buffer) => {
@@ -185,7 +174,7 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
     if (error) addLine(p.id, live, error, NONE, dirs)
     r.endedAt = Date.now()
     r.code = code ?? -1
-    r.status = stopping.has(r.id) ? 'stopped' : code === 0 ? 'ok' : 'failed'
+    r.status = stopping.has(r.id) ? 'stopped' : code !== null && okExit.includes(code) ? 'ok' : 'failed'
     stopping.delete(r.id)
     const secs = ((r.endedAt - r.startedAt) / 1000).toFixed(1)
     addLine(
@@ -203,6 +192,11 @@ export async function startLuaBuild(ctx: OpCtx, mode: 'full' | 'incremental', pi
       addLine(p.id, live, e.message, NONE, dirs),
     )
     live.log?.end()
+    launcher.noteRun(p.id, toolId, {
+      ok: r.status === 'ok',
+      ms: r.endedAt - r.startedAt,
+      summary: r.errors[0]?.message,
+    })
     push(p.id, live, true)
     finish()
     void pruneLogs(dir)
@@ -254,6 +248,40 @@ export async function waitBuild(projectId: string, id: string, ms: number) {
   if (!l) return undefined
   await Promise.race([l.done, new Promise((res) => setTimeout(res, ms))])
   return l.run
+}
+
+/** 工具写了报错格式（带 file、line 分组）就按它认，没写或认不出 文件:行 的按 luac 的格式认 */
+function errorRegex(tool: ToolBrief): RegExp {
+  if (tool.errorPattern)
+    try {
+      return compileErrorPattern(`/${tool.errorPattern}/`)
+    } catch {
+      // 工具的报错格式只有 msg 之类、没有 file 和 line：认不出位置，退回默认格式
+    }
+  return compileErrorPattern(DEFAULT_ERROR_FORMAT)
+}
+
+/**
+ * 改过的文件怎么交给工具：工具有 filelist 参数就写一个列表文件（放 UE 项目的 Saved 下，参数要求在项目里也过得去），
+ * 有 files 参数就填空格隔开的文件。全编译不填。增量编译的工具两个都没有时拦下：不然它不知道编哪些
+ */
+async function fileArgs(p: UeProject, tool: ToolBrief, id: string, mode: 'full' | 'incremental', files: string[]) {
+  const has = (n: string) => tool.params.some((x) => x.name === n)
+  if (mode === 'full') return {}
+  if (has('filelist')) {
+    const dir = path.join(p.root, 'Saved', 'AgentPanel', 'lua-build')
+    await mkdir(dir, { recursive: true })
+    const listFile = path.join(dir, `${id}.files.txt`)
+    await writeFile(listFile, files.join('\n') + '\n')
+    void pruneLogs(dir)
+    return { filelist: listFile }
+  }
+  if (has('files')) return { files: files.join(' ') }
+  throw new Error(
+    t('增量编译的工具「{name}」没有 filelist 或 files 参数，拿不到改过的文件：改一下这个工具，或换一个', {
+      name: tool.name,
+    }),
+  )
 }
 
 async function pruneLogs(dir: string) {

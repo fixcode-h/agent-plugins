@@ -56,7 +56,9 @@ export function FnLayers({
               onClick={() => setFlip((x) => ({ ...x, [from]: !x[from] }))}
               className="ue:sticky ue:top-0 ue:z-1 ue:flex ue:w-full ue:cursor-pointer ue:items-center ue:gap-2 ue:border-b ue:border-line ue:bg-card ue:px-4 ue:py-1 ue:text-left ue:text-caption ue:font-medium ue:text-muted ue:hover:text-fg"
             >
-              <ChevronRight className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:transition-transform', open && 'ue:rotate-90')} />
+              <ChevronRight
+                className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:transition-transform', open && 'ue:rotate-90')}
+              />
               {title}
               <span className="ue:text-subtle">{list.length}</span>
               <span className="ue:ml-auto ue:truncate ue:font-mono ue:font-normal ue:text-subtle" title={files[0]}>
@@ -65,7 +67,14 @@ export function FnLayers({
             </button>
             {open &&
               list.map((fn) => (
-                <FnRow key={`${fn.from}\u0001${fn.name}`} root={root} fn={fn} choice={choice} onChanged={onChanged} onOpen={onOpen} />
+                <FnRow
+                  key={`${fn.from}\u0001${fn.name}`}
+                  root={root}
+                  fn={fn}
+                  choice={choice}
+                  onChanged={onChanged}
+                  onOpen={onOpen}
+                />
               ))}
           </section>
         )

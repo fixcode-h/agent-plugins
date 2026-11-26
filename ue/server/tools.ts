@@ -310,7 +310,7 @@ const DEFS = [
       '改完 .lua 的验证：check 只编译不执行（files 是 .lua 路径，相对项目目录；不开游戏也能查）→ reload 重载 modules（模块名）或 changed=true 重载改过还没重载的 → 触发后 errors 看有没有新报错（按消息和位置归并，带次数、调用栈；since 写上次结果的 seq 只看新的，clear=true 清空）。modules 列改过还没重载的模块（all=true 或 filter 列全部）。' +
       'call 调 Lua 函数（按运行时权限，不用每次确认）：lua 是函数路径（如 BagSystem.AddItem），path 给对象时从它的实例表开始，self=true 用 obj:fn() 的方式调，args 是参数数组（JSON，对象和数组转成 Lua 表）。只读字段用 ue_get（functions=true 看函数签名），改简单字段用 ue_set（能撤回）。\n' +
       'snippet（不带 code）执行用户在 Lua 页批准过的片段，不用确认；名字不对时回现有片段。snap 快照点（不暂停游戏）：file（文件或模块名）+ line 加，执行到时记局部变量和调用栈，hits 次后自动撤；id 看记录；remove=true 撤（不给 id 全撤）；都不给列全部。profile 采 seconds 秒（默认 5）按函数回用时和文件行（平铺总表；要看哪一帧慢、调用关系，改用 ue_perf 录含 Lua 的 trace）。leaks 列 Lua 还拿着、UObject 已销毁或世界已关的对象和引用路径。\n' +
-      'compile 在本机跑项目设置里配好的 Lua 编译（不经过 UE）：mode=incremental（默认）只编上次成功以来改过的，full 全编译；最多等 20 秒，没编完返回 job，再带 job 调一次接着等；完整输出在 logFile。',
+      'compile 在本机跑 Lua 页「编译」里给增量 / 全编译选好的项目工具（/createtool 做的，不经过 UE）：mode=incremental（默认）只编上次成功以来改过的，full 全编译；最多等 20 秒，没编完返回 job，再带 job 调一次接着等；完整输出在 logFile。',
     {
       action: { type: 'string', enum: ['exec', 'compile', ...LUA_DEV_ACTIONS, ...DEBUG_ACTIONS] },
       code: { type: 'string' },

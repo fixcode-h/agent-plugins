@@ -1,6 +1,7 @@
 // Lua 编译的报错认法和改过的文件（设计稿四.3）：用临时目录造脚本目录，跑一个假编译命令。
 // 用法：node --test ue/server/lua-build/lua-build.test.ts（Node 22 直接跑 .ts，不需要 UE）
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -13,7 +14,7 @@ import { changedFiles, moduleName } from './changes.ts'
 import { compileErrorPattern } from './config.ts'
 import { parseErrorLine } from './errors.ts'
 import { startLuaBuild, waitBuild } from './run.ts'
-import { approveLuaBuild, sharedPart } from './store.ts'
+import { setToolLauncher, type ToolBrief } from './launch.ts'
 
 let root = ''
 let data = ''
@@ -24,10 +25,34 @@ const project = (luaBuild: Partial<UeProject['luaBuild']> = {}) =>
     id: 'p1',
     root,
     vcs: 'none',
-    luaBuild: { scriptDir: 'Content/Script', errorFormat: '{file}:{line}: {message}', autoReload: false, ...luaBuild },
+    luaBuild: { scriptDir: 'Content/Script', autoReload: false, ...luaBuild },
   }) as unknown as UeProject
 
+// 面板的项目工具（server/custom-tools/host）在单测里换成假的：命令里 {{filelist}} {{files}} 换成值，直接交给 sh
+const fakeTools: (ToolBrief & { command: string })[] = []
+const noted: { id: string; ok: boolean }[] = []
+const brief = (id: string, command: string, params: string[] = [], errorPattern?: string) => ({
+  id,
+  name: id,
+  summary: '',
+  version: 1,
+  params: params.map((name) => ({ name, label: '', type: 'string', required: false, desc: '' })),
+  okExit: [0],
+  command,
+  ...(errorPattern ? { errorPattern } : {}),
+})
+
 before(async () => {
+  setToolLauncher({
+    list: async () => ({ tools: fakeTools, broken: [] }),
+    spawn: async (_p, id, args) => {
+      const tool = fakeTools.find((x) => x.id === id)!
+      const line = tool.command.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => JSON.stringify(String(args[k] ?? '')))
+      const child = spawn('sh', ['-c', line], { cwd: root })
+      return { tool, line, cwd: root, checkout: '', child }
+    },
+    noteRun: (_p, id, r) => void noted.push({ id, ok: r.ok }),
+  })
   root = await mkdtemp(path.join(tmpdir(), 'ue-luabuild-'))
   data = await mkdtemp(path.join(tmpdir(), 'ue-luabuild-data-'))
   await mkdir(path.join(root, 'Content/Script/UI'), { recursive: true })
@@ -81,13 +106,23 @@ test('没编过不猜改过的文件；全编译成功后只列之后改的；�
   assert.equal((await changedFiles(p0, dir)).files.length, 0)
   assert.equal((await changedFiles(p0, dir)).baseline, null)
 
-  const p = project({
-    full: 'node -e "process.exit(0)"',
-    incremental: 'node -e "console.log(process.argv.slice(1).join(\',\'))" -- {files}',
-  })
+  fakeTools.push(
+    brief('lua-full', 'node -e "process.exit(0)"'),
+    brief('lua-inc', 'cat {{filelist}}', ['filelist']),
+    brief('no-files', 'true'),
+    brief(
+      'lua-bad',
+      'node -e "console.error(\'ERR UI/BagPanel.lua@9 unexpected symbol\'); process.exit(1)"',
+      [],
+      '^ERR (?<file>\\S+)@(?<line>\\d+) (?<msg>.*)$',
+    ),
+  )
+  const p = project({ fullTool: 'lua-full', incrementalTool: 'lua-inc' })
   const ctx = { project: p, actor: { kind: 'user' } } as unknown as OpCtx
-  // 本机没确认过的指令不跑（store.ts）：测试里先确认
-  await approveLuaBuild(p.id, sharedPart(p.luaBuild))
+  await assert.rejects(
+    startLuaBuild({ project: project(), actor: { kind: 'user' } } as unknown as OpCtx, 'full'),
+    /还没选全编译/,
+  )
   // 把现有文件的时间调到过去，全编译的时刻就晚于它们
   const old = new Date(Date.now() - 60000)
   for (const f of ['UI/BagPanel.lua', 'Main.lua']) await utimes(path.join(dir, f), old, old)
@@ -109,18 +144,33 @@ test('没编过不猜改过的文件；全编译成功后只列之后改的；�
   const r = await waitBuild(p.id, inc.id, 15000)
   assert.equal(r?.status, 'ok')
   assert.deepEqual(r?.files, ['UI/BagPanel.lua'])
+  assert.equal(r?.tool?.id, 'lua-inc')
+  // 列表文件放在 UE 项目的 Saved 下，工具把它 cat 出来
+  assert.match(r!.command, /Saved\/AgentPanel\/lua-build\/.+\.files\.txt/)
   assert.match(await readFile(r!.logFile, 'utf8'), /UI\/BagPanel\.lua/)
   assert.equal((await changedFiles(p, dir)).files.length, 0)
+  assert.deepEqual(noted.slice(-1), [{ id: 'lua-inc', ok: true }])
 
-  const bad = project({
-    full: 'node -e "console.error(\'luac: UI/BagPanel.lua:9: unexpected symbol\'); process.exit(1)"',
-  })
-  await approveLuaBuild(bad.id, sharedPart(bad.luaBuild))
+  // 增量编译的工具没有 filelist / files 参数：不知道编哪些，起之前就拦下
+  await utimes(path.join(dir, 'Main.lua'), later, later)
+  const nf = project({ incrementalTool: 'no-files' })
+  await assert.rejects(
+    startLuaBuild({ project: nf, actor: { kind: 'user' } } as unknown as OpCtx, 'incremental'),
+    /没有 filelist 或 files 参数/,
+  )
+  await assert.rejects(
+    startLuaBuild({ project: project({ fullTool: 'gone' }), actor: { kind: 'user' } } as unknown as OpCtx, 'full'),
+    /没有 id 为 gone 的工具/,
+  )
+
+  // 工具自己写的报错格式（命名分组 msg）
+  const bad = project({ fullTool: 'lua-bad' })
   const b = await startLuaBuild({ project: bad, actor: { kind: 'agent' } } as unknown as OpCtx, 'full')
   const br = await waitBuild(bad.id, b.id, 15000)
   assert.equal(br?.status, 'failed')
   assert.equal(br?.errors.length, 1)
   assert.equal(br?.errors[0].file, 'Content/Script/UI/BagPanel.lua')
   assert.equal(br?.errors[0].exists, true)
+  assert.equal(br?.errors[0].message, 'unexpected symbol')
   assert.ok(pushed.some((x) => x.event === 'ue-lua-build'))
 })

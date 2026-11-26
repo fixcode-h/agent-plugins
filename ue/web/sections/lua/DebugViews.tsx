@@ -84,4 +84,3 @@ export function CaptureView({ cap, onOpen }: { cap: SnapCapture; onOpen: OpenAt 
     </div>
   )
 }
-

@@ -1,14 +1,4 @@
-import {
-  CircleAlert,
-  Copy,
-  FileCode,
-  Hammer,
-  RefreshCw,
-  RotateCw,
-  SlidersHorizontal,
-  Sparkles,
-  Square,
-} from 'lucide-react'
+import { CircleAlert, Copy, FileCode, RefreshCw, RotateCw, SlidersHorizontal, Sparkles, Square } from 'lucide-react'
 import { useRef } from 'react'
 import type { LuaBuildError } from '../../../server/types.ts'
 import { useAction } from '../../api.ts'
@@ -19,9 +9,10 @@ import { PANE_FILL, PANE_FIXED, SPLIT_ROW, SplitHandle, usePane } from '@panel/w
 import { Badge, Card, ErrorText, LinkBtn, Note, Term } from '../../ui.tsx'
 import { BuildOutput, BuildStatus, buildTitle } from './BuildParts.tsx'
 import { useLuaBuild } from './build-store.ts'
+import { BuildToolHint, BuildToolPick } from './BuildTools.tsx'
 
 /**
- * Lua 页「编译」页签（设计稿四.3，效果图 7）：左边改过的文件（可以勾掉不编的）和设置里的两条指令，
+ * Lua 页「编译」页签（设计稿四.3，效果图 7）：左边改过的文件（可以勾掉不编的）和两个按钮各用哪个项目工具，
  * 右边这次编译的结果：认出来的 文件:行（点了用编辑器打开到那一行、每条能交给 Agent）、实时输出。
  * 编译在面板服务端起进程，不经过 UE，所以 UE 没开也能用（tabs.ts 里 offline）
  */
@@ -53,7 +44,9 @@ export function LuaBuild() {
     'Lua 编译报错，请按 文件:行 修好，改完用 ue_lua action=compile 再编一次确认：' +
     '\n' +
     list.map((e) => `- ${e.file}:${e.line}${e.col ? `:${e.col}` : ''}: ${e.message}`).join('\n') +
-    (cur ? `\n\n编译命令：${cur.command}\n完整输出：${cur.logFile}` : '')
+    (cur
+      ? `\n\n编译工具：${cur.tool ? `${cur.tool.name}（custom_tool id=${cur.tool.id}）` : '—'}\n编译命令：${cur.command}\n完整输出：${cur.logFile}`
+      : '')
   const changes = snap.changes
   const last = changes.last.full
 
@@ -127,31 +120,20 @@ export function LuaBuild() {
           )}
         </Card>
         <Card
-          title={t('指令')}
+          title={t('编译工具')}
           aside={
             <ui.Button size="sm" variant="ghost" onClick={() => go('bridge')}>
               <SlidersHorizontal className="ue:h-3.5 ue:w-3.5" /> {t('改设置')}
             </ui.Button>
           }
         >
-          <dl className="ue:grid ue:grid-cols-[auto_1fr] ue:gap-x-4 ue:gap-y-1.5 ue:px-4 ue:py-3 ue:text-footnote">
-            {(
-              [
-                [t('全编译'), cfg?.full || t('没配')],
-                [t('增量'), cfg?.incremental || t('没配')],
-                [t('目录'), cfg?.cwd || t('<项目>')],
-                [t('报错格式'), cfg?.errorFormat ?? ''],
-                [t('编完'), cfg?.autoReload ? t('自动重载改过的模块') : t('不重载')],
-              ] as const
-            ).map(([k, v]) => (
-              <div key={k} className="ue:contents">
-                <dt className="ue:text-subtle">{k}</dt>
-                <dd className="ue:min-w-0 ue:truncate ue:font-mono" title={v}>
-                  {v}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <BuildToolPick compact />
+          <div className="ue:border-t ue:border-line ue:px-4 ue:py-2 ue:text-caption ue:text-subtle">
+            {t('脚本目录 {dir} · {r}', {
+              dir: cfg?.scriptDir ?? '',
+              r: cfg?.autoReload ? t('编完自动重载改过的模块') : t('编完不重载'),
+            })}
+          </div>
           {last && (
             <div className="ue:border-t ue:border-line ue:px-4 ue:py-2 ue:text-caption ue:text-subtle">
               {t('上次全编译 {at} · {n} 个文件 · {s} 秒 · {r}', {
@@ -187,10 +169,7 @@ export function LuaBuild() {
       >
         {!cur ? (
           <div className="ue:flex ue:flex-1 ue:flex-col ue:items-center ue:justify-center ue:gap-3 ue:p-6 ue:text-footnote ue:text-subtle">
-            <Hammer className="ue:h-6 ue:w-6" />
-            {cfg?.full || cfg?.incremental
-              ? t('点页头的「增量编译」或「全编译」开始；输出会实时显示在这里')
-              : t('先在设置里配全编译、增量编译两条指令')}
+            <BuildToolHint />
           </div>
         ) : (
           <>
