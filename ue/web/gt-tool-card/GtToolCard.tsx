@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, ExternalLink, FlaskConical } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ToolCardProps } from '../../../sdk/web.ts'
-import { op } from '../api.ts'
+import { op, ppost } from '../api.ts'
 import { h, t } from '../host.ts'
 import { mergeJobEvent } from '../sections/uekit/gt-batch.ts'
 import { RunReport } from '../sections/uekit/gt-debug/RunReport.tsx'
@@ -10,7 +10,7 @@ import { useExtEvents } from '../sections/uekit/ListCol.tsx'
 import { Badge, type Tone } from '../ui.tsx'
 import { gametestRoute, runSub } from './link.ts'
 import { phaseProgress, runPhase, runResult, runTarget, tallyOf, type RunPhase, type RunTally } from './state.ts'
-import { LivePhases } from './LivePhases.tsx'
+import { LivePhases, type GtOutline } from './LivePhases.tsx'
 
 const PHASE: Record<RunPhase, { tone: Tone; label: () => string }> = {
   starting: { tone: 'run', label: () => t('启动中') },
@@ -38,6 +38,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
   const [job, setJob] = useState<GtJob>()
   const [tally, setTally] = useState<RunTally>()
   const [open, setOpen] = useState(false)
+  const [outline, setOutline] = useState<GtOutline>()
   const project = projectId ?? ''
 
   // 打开对话时这次运行可能早就跑完、或者还在跑：查一次作业现状，之后靠推送
@@ -63,6 +64,19 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
     const j = e as unknown as GtJob & { lastStep?: GtJob['steps'][number] }
     if (j.runId && j.runId === res.runId) setJob((old) => mergeJobEvent(old, j))
   })
+
+  // 展开跑着的卡片时读一次脚本的三段顶层步骤：没跑到的步骤也列出来（读不到就只列跑过的）
+  const wantOutline = open && !!project && !!target.scenario && !outline
+  useEffect(() => {
+    if (!wantOutline) return
+    let off = false
+    ppost<GtOutline>(project, 'ext/gt/outline', { scenario: target.scenario })
+      .then((o) => !off && setOutline(o))
+      .catch(() => !off && setOutline({}))
+    return () => {
+      off = true
+    }
+  }, [wantOutline, project, target.scenario])
 
   const phase = runPhase({ calling: running, failed, error: res.error, runId: res.runId, job, tally })
   const total = job?.planned ?? res.planned
@@ -115,7 +129,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
           {res.error ? (
             <p className="ue:px-3 ue:py-2 ue:text-danger">{res.error}</p>
           ) : live ? (
-            <LivePhases job={job} />
+            <LivePhases job={job} outline={outline} />
           ) : res.runId && project ? (
             <div className="ue:max-h-96 ue:overflow-auto">
               <RunReport project={project} runId={res.runId} active={false} onSelect={() => undefined} />
