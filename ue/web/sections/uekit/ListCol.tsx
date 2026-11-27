@@ -34,7 +34,7 @@ export function ListCol({
   onQuery: (q: string) => void
   placeholder: string
   tabs?: ReactNode
-  /** 搜索框和页签之间常驻的一块（GameTest 的节点） */
+  /** 列表下面、底部说明上面常驻的一块（GameTest 的节点）：放在列表下面，出现消失时列表顶端不跳 */
   shelf?: ReactNode
   children: ReactNode
   footer?: ReactNode
@@ -97,15 +97,16 @@ export function ListCol({
           </div>
           {searchExtra}
         </div>
-        {shelf}
         {tabs}
       </div>
       <div
+        data-list-body="1"
         onContextMenu={onBodyMenu}
         className="ue:flex ue:max-h-[50vh] ue:min-h-0 ue:min-w-0 ue:flex-1 ue:flex-col ue:overflow-x-hidden ue:overflow-y-auto ue:px-2 ue:pb-2 ue:md:max-h-none"
       >
         {children}
       </div>
+      {shelf}
       {footer && (
         <div className="ue:flex ue:min-w-0 ue:flex-col ue:gap-1.5 ue:border-t ue:border-line ue:px-4 ue:pt-2.5 ue:pb-3 ue:text-caption ue:leading-relaxed ue:text-subtle">
           {footer}
