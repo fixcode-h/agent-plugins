@@ -92,10 +92,10 @@ async function look(op: Op, a: Record<string, unknown>, ctx: Parameters<typeof g
 export const GT_TOOL = tool(
   'ue_gametest',
   'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，schemaVersion 5；对象引用 {class, in?, ident}（class 可写 lua:模块名）、部件 {obj, part}，ident 可写条件组 {any|all, not?}，属性路径 @/子控件.属性、@.属性、@#Lua字段、@:状态；有 if / loop / call / set / obj.* / api / gm.run / 守护 / 表达式，步骤可挂 hooks（执行前 / 成功后 / 失败时的 GM）；写法按技能 ue-gametest-authoring）。' +
-    'look what=…：status 场景根和连接；props 对象的属性树和推荐标识（给 class 不用开游戏）；widgets WBP 控件树；vars 变量和函数签名（scope=widget|class|subsystem|player|object|lua）；api 接口库；actions 动作；scenarios 场景；library 本项目公共库（common/ 下按功能分的子脚本，写脚本前先查、能用就 call）；gmRecent 用户刚在 GM 页执行过的 GM（直接给 gm.run 步骤）。' +
+    'look what=…：status 场景根和连接；props 对象的属性树和推荐标识（给 class 不用开游戏）；widgets WBP 控件树；vars 变量和函数签名（按 scope）；api 接口库；actions 动作；scenarios 场景；library 本项目公共库 common/（写前先查，有就 call）；gmRecent 用户刚在 GM 页执行过的 GM（转成 gm.run 步骤）。' +
     '写测试：look 查 → 写脚本 → validate（编辑器没开时只查结构）→ run → job / report。validate 报 schema_old / path_old 时按新写法重写。' +
-    'run：scenario（可带 params、from / to 步骤 id）、steps + name 或批量 tag / scenarios，马上返回编号；step 执行一步；resolve 核对引用命中几个和 skipIf；inspect 看视口某点是什么；job 等进度（最多等 45 秒）；report 报告，失败步骤的 payload.evidence 有截图、控件快照、日志、用到的对象当时的属性；history 最近结果；stop 取消。' +
-    '编辑器没开时 look scenarios / report / history 读磁盘（offline: true）。跑场景文件通过的 report / job 算进完成依据。',
+    'run：scenario（可带 params、from / to 步骤 id）、steps + name 或批量 tag / scenarios，马上返回编号；step 执行一步；resolve 核对引用命中几个和 skipIf；inspect 看视口某点是什么；job 等进度（最多等 45 秒）；report 报告，失败步骤的 payload.evidence 有截图、控件快照、日志、对象属性；history 最近结果；stop 取消。' +
+    '编辑器没开时 look scenarios / library、report / history 读磁盘。跑场景文件通过的 report / job 算完成依据。',
   {
     action: {
       type: 'string',
