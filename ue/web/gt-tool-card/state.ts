@@ -3,6 +3,8 @@
  * 跑的是哪个脚本、这次的运行号、现在怎样。不依赖 React，单测直接跑（state.test.ts）
  */
 import type { GtJob } from '../sections/uekit/gt-run/types.ts'
+import { outcomeOf, PHASE_TITLE, type PhaseKey, type PhaseRecord } from '../sections/uekit/gt-rows/phases.ts'
+import { t } from '../host.ts'
 
 /** 这次调用跑的是什么：脚本路径、按标签批量、临时步骤 */
 export function runTarget(args: Record<string, unknown>): { scenario?: string; label: string } {
@@ -40,17 +42,23 @@ export function runResult(output: string): { runId?: string; planned?: number; e
   }
 }
 
-export type RunPhase = 'starting' | 'running' | 'passed' | 'failed' | 'error' | 'unknown'
+export type RunPhase = 'starting' | 'running' | 'passed' | 'failed' | 'blocked' | 'error' | 'unknown'
 
 /** 跑完的这次运行的报告摘要：作业已经换成别的运行时，按报告里失败的步数定通过没有 */
 export interface RunTally {
   total: number
   failed: number
+  /** 执行前没通过：前置不满足（GameTest 2.8.0） */
+  blocked?: boolean
 }
 
-export function tallyOf(steps: { status: string; block?: boolean; warn?: boolean }[]): RunTally {
+export function tallyOf(steps: PhaseRecord[]): RunTally {
   const real = steps.filter((s) => !s.block)
-  return { total: real.length, failed: real.filter((s) => s.status === 'failed' && !s.warn).length }
+  return {
+    total: real.length,
+    failed: real.filter((s) => s.status === 'failed' && !s.warn).length,
+    ...(outcomeOf(steps) === 'blocked' && { blocked: true }),
+  }
 }
 
 /** 卡片上的状态：调用还没回来是 starting；推送 / 查到的作业是这次的就按它；作业换了就按这次的报告；都没有是 unknown */
@@ -67,8 +75,8 @@ export function runPhase(o: {
   if (!o.runId) return 'error'
   const j = o.job?.runId === o.runId ? o.job : undefined
   if (j && (j.busy || j.status === 'running')) return 'running'
-  if (j) return j.failed > 0 || j.status === 'failed' ? 'failed' : 'passed'
-  if (o.tally) return o.tally.failed > 0 ? 'failed' : 'passed'
+  if (j) return j.outcome === 'blocked' ? 'blocked' : j.failed > 0 || j.status === 'failed' ? 'failed' : 'passed'
+  if (o.tally) return o.tally.blocked ? 'blocked' : o.tally.failed > 0 ? 'failed' : 'passed'
   return 'unknown'
 }
 
@@ -94,4 +102,16 @@ export function liveStepLine(s: {
   const msg = (s.message || s.target || '').trim()
   if (note) return { title: note, detail: msg, code: false }
   return { title: s.action ?? '?', detail: msg, code: true }
+}
+
+/**
+ * 卡片头上的进度：GameTest 2.8.0 起按段数「执行 第 3/5 步」（只数这段顶层的节点），不再拿已完成记录数比计划步数
+ * （子脚本、循环里的记录会让它超过，出现「第 9/8 步」）。旧 GameTest 没有 phases 时返回 undefined，照旧显示
+ */
+export function phaseProgress(job?: Pick<GtJob, 'phase' | 'phases'>): string | undefined {
+  const p = job?.phase as PhaseKey | undefined
+  const c = p && job?.phases?.[p]
+  if (!p || !c) return undefined
+  const n = Math.min(c.done + 1, c.total)
+  return t('{phase} 第 {n}/{m} 步', { phase: PHASE_TITLE[p](), n, m: c.total })
 }

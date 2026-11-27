@@ -1,6 +1,7 @@
 import { op, ppost } from '../../api.ts'
 import type { GtBatch } from './GtBatch.tsx'
 import type { GtJob } from './gt-run/types.ts'
+import { recordKey } from './gt-rows/phases.ts'
 import type { Scenario } from './GtMenus.tsx'
 
 /**
@@ -10,7 +11,8 @@ import type { Scenario } from './GtMenus.tsx'
 /** gt.job 事件 → 页面的作业状态：事件不带全部步骤，只带最新一步，接到同一次 run 已有的列表后面 */
 export function mergeJobEvent(old: GtJob | undefined, j: GtJob & { lastStep?: GtJob['steps'][number] }): GtJob {
   const steps = old?.runId === j.runId ? [...(old?.steps ?? [])] : []
-  if (j.lastStep && !steps.some((s) => s.index === j.lastStep!.index)) steps.push(j.lastStep)
+  // 按段 + 调用链 + 路径认同一条：执行前、执行后、子脚本里的步骤 index 会和主流程的重（GameTest 2.8.0）
+  if (j.lastStep && !steps.some((s) => recordKey(s) === recordKey(j.lastStep!))) steps.push(j.lastStep)
   // 单独跑一个场景时 UE 会清掉上一份批量：事件里没有 batch 就是没有
   return { ...j, steps }
 }

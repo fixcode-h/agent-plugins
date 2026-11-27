@@ -1,6 +1,7 @@
 import { op, ppost } from '../../../api.ts'
 import type { GtBatch } from '../GtBatch.tsx'
 import type { GtStep, StepDef } from './step-parts.tsx'
+import type { PhaseCounts } from '../gt-rows/phases.ts'
 
 /**
  * GameTest 运行相关的数据形状（gt.job、gt.runs、场景文件）和读报告。
@@ -17,6 +18,13 @@ export interface GtJob {
   planned?: number
   failed: number
   steps: GtStep[]
+  /** 结论（GameTest 2.8.0）：blocked = 执行前没通过（前置不满足） */
+  outcome?: 'passed' | 'failed' | 'blocked'
+  blockedStep?: string
+  blockedReason?: string
+  /** 正在跑哪段、每段的进度（GameTest 2.8.0） */
+  phase?: string
+  phases?: PhaseCounts['phases']
   /** 批量运行（GameTest 1.2）：两个场景之间 busy 也是 true */
   batch?: GtBatch
 }

@@ -1,4 +1,14 @@
-import { CircleCheck, CircleDashed, CircleMinus, CircleStop, CircleX, Layers, Loader2, X } from 'lucide-react'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleMinus,
+  CircleStop,
+  CircleX,
+  Layers,
+  Loader2,
+  X,
+} from 'lucide-react'
 import { h, t } from '../../host.ts'
 import { ms } from './gt-run/step-parts.tsx'
 
@@ -21,6 +31,8 @@ export interface GtBatch {
   current?: number
   passed: number
   failed: number
+  /** 前置不满足的场景数（GameTest 2.8.0） */
+  blocked?: number
   skipped?: number
   items?: GtBatchItem[]
 }
@@ -29,6 +41,8 @@ function ItemIcon({ s }: { s: string }) {
   if (s === 'running') return <Loader2 className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:animate-spin ue:text-warning" />
   if (s === 'passed') return <CircleCheck className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-success" />
   if (s === 'failed' || s === 'error') return <CircleX className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-danger" />
+  // 执行前没通过（GameTest 2.8.0）：前置不满足，琥珀色，不算测试失败
+  if (s === 'blocked') return <CircleAlert className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-warning" />
   if (s === 'skipped') return <CircleMinus className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
   return <CircleDashed className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
 }
@@ -78,6 +92,9 @@ export function GtBatchBar({
         {batch.failed > 0 && (
           <span className="ue:text-danger ue:tabular-nums">{t('失败 {n}', { n: batch.failed })}</span>
         )}
+        {(batch.blocked ?? 0) > 0 && (
+          <span className="ue:text-warning ue:tabular-nums">{t('前置不满足 {n}', { n: batch.blocked ?? 0 })}</span>
+        )}
         {(batch.skipped ?? 0) > 0 && (
           <span className="ue:text-subtle ue:tabular-nums">{t('没跑 {n}', { n: batch.skipped ?? 0 })}</span>
         )}
@@ -108,8 +125,17 @@ export function GtBatchBar({
               <span className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
                 <span className="ue:truncate ue:text-fg">{x.name || x.scenario}</span>
                 {x.message ? (
-                  <span className="ue:min-w-0 ue:truncate ue:text-danger">
-                    {x.failedStep ? t('第 {n} 步：{m}', { n: x.failedStep, m: x.message }) : x.message}
+                  <span
+                    className={cn(
+                      'ue:min-w-0 ue:truncate',
+                      x.status === 'blocked' ? 'ue:text-warning' : 'ue:text-danger',
+                    )}
+                  >
+                    {x.status === 'blocked'
+                      ? t('执行前：{m}', { m: x.message })
+                      : x.failedStep
+                        ? t('第 {n} 步：{m}', { n: x.failedStep, m: x.message })
+                        : x.message}
                   </span>
                 ) : (
                   x.name && <span className="ue:min-w-0 ue:truncate ue:font-mono ue:text-subtle">{x.scenario}</span>

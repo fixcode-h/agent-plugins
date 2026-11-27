@@ -1,16 +1,6 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import {
-  CirclePlay,
-  CircleX,
-  ClipboardList,
-  Eraser,
-  LogIn,
-  ScanSearch,
-  ShieldCheck,
-  StickyNote,
-  Unlink,
-} from 'lucide-react'
+import { CircleX, LogIn, ScanSearch, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
@@ -20,6 +10,7 @@ import { RUN_LOOK } from '../nodes/parts.tsx'
 import { hookCount } from '../../../../../shared/gt-script/gm/hooks.ts'
 import { HookLines } from '../../gt-gm/HookLines.tsx'
 import { useBp } from './ctx.ts'
+import { PHASE_META } from '../../gt-rows/PhaseHead.tsx'
 import { EXIT_TONE, ExitRow, NodeBody, NodeCard, NodeHead, NodeTile, Pin } from './parts.tsx'
 import type { BpNode, BpPin } from './graph.ts'
 
@@ -185,23 +176,36 @@ export const BpEventNode = memo(function BpEventNode({ data }: Props) {
       </NodeCard>
     )
   }
-  const setup = n.kind === 'setup'
-  const teardown = n.kind === 'teardown'
-  const Icon = setup ? ClipboardList : teardown ? Eraser : n.entry ? LogIn : CirclePlay
-  const label = setup
-    ? t('准备')
-    : teardown
-      ? t('收尾')
-      : n.entry
-        ? pinLabel({ id: '', kind: n.entry.kind, index: n.entry.index, at: { slot: [], index: 0 } }, n.entry.action)
-        : t('开始')
+  // 三段事件（执行前 / 执行 / 执行后）的名字、图标、颜色和列表、对话卡片同一份（gt-rows/PhaseHead.tsx）
+  const phase = n.kind === 'setup' ? 'setup' : n.kind === 'teardown' ? 'teardown' : n.entry ? undefined : 'steps'
+  const meta = phase && PHASE_META[phase]
+  const Icon = meta ? meta.icon : LogIn
+  const tone = meta ? meta.tone : 'success'
+  const label = meta
+    ? meta.title()
+    : pinLabel({ id: '', kind: n.entry!.kind, index: n.entry!.index, at: { slot: [], index: 0 } }, n.entry!.action)
   return (
     <div
       data-gt-node={n.id}
-      className="ue:relative ue:flex ue:h-10 ue:items-center ue:gap-2 ue:rounded-full ue:bg-card ue:pr-4 ue:pl-2 ue:text-body ue:font-medium ue:text-fg ue:shadow-card ue:ring-1 ue:ring-success/45"
+      title={meta?.hint()}
+      className="ue:relative ue:flex ue:h-10 ue:items-center ue:gap-2 ue:rounded-full ue:bg-card ue:pr-4 ue:pl-2 ue:text-body ue:font-medium ue:text-fg ue:shadow-card"
+      style={{ boxShadow: `0 0 0 1px color-mix(in oklab, var(--${tone}) 50%, transparent)` }}
     >
-      <NodeTile icon={Icon} tone="success" round />
+      <NodeTile icon={Icon} tone={tone} round />
       {label}
+      {/* 三段之间的竖向虚线（只是示意先后，不能连、不能拖）挂在这两个点上 */}
+      {phase && (
+        <>
+          <Handle id="phase-in" type="target" position={Position.Top} isConnectable={false} className="ue:!opacity-0" />
+          <Handle
+            id="phase-out"
+            type="source"
+            position={Position.Bottom}
+            isConnectable={false}
+            className="ue:!opacity-0"
+          />
+        </>
+      )}
       {n.outs[0] && <OutPin node={n.id} pin={n.outs[0]} top={HEAD_MID} />}
     </div>
   )

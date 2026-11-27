@@ -5,7 +5,7 @@ import { gtApi, gtValidate, gtVars, gtWidgets, STRUCT_MAX } from './gt-author/to
 import { gtLibrary } from './gt-author/library.ts'
 import { scenarioRoot } from './gt-disk.ts'
 import { gtProps } from './gt-ref/tool.ts'
-import { gtVerdict } from './gt-verdict.ts'
+import { gtVerdict, withBlockedHint } from './gt-verdict.ts'
 import { JOB_WAIT_DEFAULT_MS, waitJob } from './gt-job-wait.ts'
 import { readLocal } from '../store.ts'
 import { refOfRun } from '../../shared/gt-script/gm/ref-of-run.ts'
@@ -166,11 +166,11 @@ export const GT_TOOL = tool(
         const job = await waitJob(() => op('gt.job', { steps: num(a.last, 20) }), {
           waitMs: num(a.waitMs, JOB_WAIT_DEFAULT_MS),
         })
-        return withVerdict(out(job), gtVerdict(job))
+        return withVerdict(out(withBlockedHint(job)), gtVerdict(job))
       }
       case 'report': {
         const report = await op('gt.report', { runId: a.runId })
-        return withVerdict(out(report), gtVerdict(report))
+        return withVerdict(out(withBlockedHint(report)), gtVerdict(report))
       }
       case 'history':
         return out(await gtHistory(op, a))

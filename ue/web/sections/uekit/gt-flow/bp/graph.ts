@@ -323,25 +323,17 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
   }
 
   function root(y: number) {
-    // 主流程：开始 → steps；有 setup 时多一个「准备」事件，有 teardown 时多一个「收尾」事件
-    const startPin: BpPin = { id: 'next', kind: 'next', at: { slot: ['steps'], index: 0 } }
-    add({ id: START_KEY, kind: 'start', x: 0, y: 0, outs: [startPin], input: false })
-    auto.set(START_KEY, [0, y])
-    const main = chain(['steps'], BP.start + BP.gx, y, { node: START_KEY, pin: startPin })
-    y += Math.max(main.h, BP.head) + BP.gy * 2
-    if (arr(doc, ['setup']).length) {
-      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['setup'], index: 0 } }
-      add({ id: SETUP_KEY, kind: 'setup', x: 0, y: 0, outs: [pin], input: false })
-      auto.set(SETUP_KEY, [0, y])
-      const r = chain(['setup'], BP.start + BP.gx, y, { node: SETUP_KEY, pin })
-      y += Math.max(r.h, BP.head) + BP.gy * 2
-    }
-    // 收尾段：主流程跑完、失败或停止后都会走的一串，单独一个「收尾」事件
-    if (arr(doc, ['teardown']).length) {
-      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['teardown'], index: 0 } }
-      add({ id: TEARDOWN_KEY, kind: 'teardown', x: 0, y: 0, outs: [pin], input: false })
-      auto.set(TEARDOWN_KEY, [0, y])
-      const r = chain(['teardown'], BP.start + BP.gx, y, { node: TEARDOWN_KEY, pin })
+    // 三段（用户 2026-11-27）：执行前 → 执行（原来的「开始」）→ 执行后，三个事件节点每个脚本都有、不能删；空的段运行时跳过
+    const lanes: [string, 'setup' | 'start' | 'teardown', 'setup' | 'steps' | 'teardown'][] = [
+      [SETUP_KEY, 'setup', 'setup'],
+      [START_KEY, 'start', 'steps'],
+      [TEARDOWN_KEY, 'teardown', 'teardown'],
+    ]
+    for (const [key, kind, slot] of lanes) {
+      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: [slot], index: 0 } }
+      add({ id: key, kind, x: 0, y: 0, outs: [pin], input: false })
+      auto.set(key, [0, y])
+      const r = chain([slot], BP.start + BP.gx, y, { node: key, pin })
       y += Math.max(r.h, BP.head) + BP.gy * 2
     }
     // 守护：一条一个事件节点，后面接它的处理步骤

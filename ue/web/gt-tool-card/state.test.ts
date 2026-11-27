@@ -36,7 +36,19 @@ test('状态：调用中、跑着、通过、失败；别的运行的作业不�
     { status: 'succeeded', block: true },
   ])
   assert.deepEqual(tally, { total: 3, failed: 1 })
-  assert.equal(runPhase({ calling: false, failed: false, runId: 'r1', job: job({ runId: 'r0' }), tally }), 'failed')
+  assert.equal(runPhase({ calling: false, failed: false, runId: 'r1', job: job({ runId: 'r0' }), tally }), 'failed') // 执行前没通过：前置不满足（GameTest 2.8.0），作业带 outcome 或按报告推
+  assert.equal(
+    runPhase({ calling: false, failed: false, runId: 'r1', job: job({ failed: 1, outcome: 'blocked' }) }),
+    'blocked',
+  )
+  const blocked = tallyOf([
+    { status: 'failed', setup: true },
+    { status: 'skipped', path: 'steps.0' },
+  ])
+  assert.equal(
+    runPhase({ calling: false, failed: false, runId: 'r1', job: job({ runId: 'r0' }), tally: blocked }),
+    'blocked',
+  )
 })
 
 test('跳到 GameTest 页的子路径：脚本路径带上运行号，拆回来一样', () => {

@@ -7,6 +7,8 @@ import { loadReport } from '../gt-run/types.ts'
 import { ms, StepIcon, type GtStep as ReportStep } from '../gt-run/step-parts.tsx'
 import { titleOfKey } from './lookup.ts'
 import { ReportValues } from './ReportValues.tsx'
+import { groupPhases, outcomeOf, type TreeRow } from '../gt-rows/phases.ts'
+import { PhaseRow, phaseSummary } from '../gt-rows/PhaseHead.tsx'
 
 /**
  * 「报告」页：这次运行跑完后读 gt.report（协议第 11 节：每步带 id、path，块结束记一条 block），
@@ -65,53 +67,103 @@ export function RunReport({
   const list = steps.filter((s) => !String(s.path ?? '').endsWith('#hooks'))
   const failed = list.filter((s) => s.status === 'failed' && !s.warn).length
   const warned = list.filter((s) => s.warn).length
+  const outcome = outcomeOf(list)
+  const firstBad = list.find((s) => s.status === 'failed' && !s.warn)
+  const groups = groupPhases(list, {
+    live: false,
+    totals: doc && {
+      setup: doc.setup?.length ?? 0,
+      steps: doc.steps?.length ?? 0,
+      teardown: doc.teardown?.length ?? 0,
+    },
+  })
   return (
     <div className="ue:flex ue:flex-col">
-      <p className={cn('ue:px-4 ue:py-2 ue:text-footnote', failed ? 'ue:text-danger' : 'ue:text-success')}>
-        {failed ? t('{n} 步失败', { n: failed }) : t('全部通过')}
-        {warned > 0 && <span className="ue:ml-2 ue:text-warning">{t('{n} 条附带 GM 出错', { n: warned })}</span>}
+      <p
+        className={cn(
+          'ue:px-4 ue:py-2 ue:text-footnote',
+          outcome === 'blocked' ? 'ue:text-warning' : failed ? 'ue:text-danger' : 'ue:text-success',
+        )}
+      >
+        {outcome === 'blocked' ? t('前置不满足：测试没开始') : failed ? t('{n} 步失败', { n: failed }) : t('全部通过')}
+        {warned > 0 && <span className="ue:ml-2 ue:text-warning">{t('{n} 条警告', { n: warned })}</span>}
         <span className="ue:ml-2 ue:text-subtle">{t('共 {n} 条记录', { n: list.length })}</span>
       </p>
-      <ol className="ue:flex ue:flex-col">
-        {list.map((s, i) => {
-          const key = String((s as { id?: unknown }).id ?? (s as { path?: unknown }).path ?? '')
-          const info = titleOfKey(doc, key)
-          const block = (s as { block?: unknown }).block === true
-          // 附带 GM（<路径>.hooks.<组>.<序号>）缩在它那一步底下
-          const hook = String(s.path ?? '').includes('.hooks.')
-          return (
-            <li key={i}>
-              <button
-                type="button"
-                disabled={!info.path}
-                onClick={() => info.path && onSelect(info.path)}
-                className={cn(
-                  'ue:flex ue:w-full ue:items-start ue:gap-2 ue:py-1.5 ue:pr-4 ue:text-left',
-                  hook ? 'ue:pl-9' : 'ue:pl-4',
-                  info.path && 'ue:cursor-pointer ue:hover:bg-hover',
-                )}
-              >
-                <span className="ue:mt-0.5 ue:shrink-0">
-                  <StepIcon s={s.warn ? 'warned' : s.status} />
-                </span>
-                <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">
-                  <span className={cn('ue:truncate ue:text-footnote', block ? 'ue:text-muted' : 'ue:text-fg')}>
-                    {info.path ? info.title : s.title || s.note || s.action}
-                    {block && ` · ${t('整块')}`}
-                  </span>
-                  {s.status === 'failed' && s.message && (
-                    <span className={cn('ue:text-caption ue:break-words', s.warn ? 'ue:text-warning' : 'ue:text-danger')}>
-                      {s.message}
-                    </span>
-                  )}
-                </span>
-                <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">{ms(s.durationMs)}</span>
-              </button>
-              <ReportValues project={project} payload={s.payload} />
-            </li>
-          )
-        })}
-      </ol>
+      {outcome === 'blocked' && firstBad && (
+        <p className="ue:mx-4 ue:mb-2 ue:rounded-md ue:bg-warning/10 ue:px-3 ue:py-2 ue:text-footnote ue:text-fg">
+          <span className="ue:font-medium ue:text-warning">{firstBad.title || firstBad.note || firstBad.action}</span>
+          {firstBad.message && ` · ${firstBad.message}`}
+          <span className="ue:block ue:text-subtle">{t('先补上前置（配置、资源、环境）再跑，不要改测试脚本')}</span>
+        </p>
+      )}
+      {groups.map((g) => (
+        <section key={g.phase} className="ue:border-t ue:border-line/60 ue:px-2">
+          <PhaseRow phase={g.phase} state={g.state} summary={phaseSummary(g.state, g.done, g.total)} />
+          <ol className="ue:flex ue:flex-col">
+            {g.rows.map((row, i) => (
+              <ReportRow key={i} row={row} doc={doc} project={project} onSelect={onSelect} />
+            ))}
+          </ol>
+        </section>
+      ))}
     </div>
+  )
+}
+
+/** 报告的一行：子脚本里的步骤（calls）按层缩进；调用还没记录时只有占位 */
+function ReportRow({
+  row,
+  doc,
+  project,
+  onSelect,
+}: {
+  row: TreeRow<ReportStep>
+  doc?: GtScript
+  project: string
+  onSelect: (p: GtPath) => void
+}) {
+  const { cn } = h()
+  const s = row.step
+  if (!s)
+    return (
+      <li className="ue:py-1 ue:pr-4 ue:text-footnote ue:text-muted" style={{ paddingLeft: 16 + row.depth * 18 }}>
+        {t('调用 {name}', { name: row.key })}
+      </li>
+    )
+  // 子脚本里的步骤路径相对子脚本：不对到这份脚本的节点上
+  const info = s.calls?.length ? { path: undefined, title: '' } : titleOfKey(doc, String(s.id ?? s.path ?? ''))
+  const block = s.block === true
+  // 附带 GM（<路径>.hooks.<组>.<序号>）缩在它那一步底下
+  const hook = String(s.path ?? '').includes('.hooks.')
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={!info.path}
+        onClick={() => info.path && onSelect(info.path)}
+        style={{ paddingLeft: 16 + (row.depth + (hook ? 1 : 0)) * 18 }}
+        className={cn(
+          'ue:flex ue:w-full ue:items-start ue:gap-2 ue:py-1.5 ue:pr-4 ue:text-left',
+          info.path && 'ue:cursor-pointer ue:hover:bg-hover',
+        )}
+      >
+        <span className="ue:mt-0.5 ue:shrink-0">
+          <StepIcon s={s.warn ? 'warned' : s.status} />
+        </span>
+        <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">
+          <span className={cn('ue:truncate ue:text-footnote', block ? 'ue:text-muted' : 'ue:text-fg')}>
+            {info.path ? info.title : s.title || s.note || s.action}
+            {block && s.action !== 'call' && ` · ${t('整块')}`}
+          </span>
+          {s.status === 'failed' && s.message && (
+            <span className={cn('ue:text-caption ue:break-words', s.warn ? 'ue:text-warning' : 'ue:text-danger')}>
+              {s.message}
+            </span>
+          )}
+        </span>
+        <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">{ms(s.durationMs)}</span>
+      </button>
+      <ReportValues project={project} payload={s.payload} />
+    </li>
   )
 }

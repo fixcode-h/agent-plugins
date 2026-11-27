@@ -11,7 +11,7 @@ import {
   setPositions,
   tidyLoose,
 } from './edit.ts'
-import { bpGraph, findScope, layoutOf, looseSlot, pinOf, START_KEY, TEARDOWN_KEY } from './graph.ts'
+import { bpGraph, findScope, layoutOf, looseSlot, pinOf, SETUP_KEY, START_KEY, TEARDOWN_KEY } from './graph.ts'
 
 const doc = (): GtScript => ({
   schemaVersion: 3,
@@ -171,7 +171,7 @@ const nested = (): GtScript =>
 test('子图：段在外层只画一个节点，进到里面只画它里面的，循环在里面摊开画', () => {
   const ids = (g: ReturnType<typeof bpGraph>) => g.nodes.map((n) => n.id).sort()
   const top = bpGraph(nested())
-  assert.deepEqual(ids(top), [START_KEY, 'g1', 'g2'].sort())
+  assert.deepEqual(ids(top), [SETUP_KEY, START_KEY, TEARDOWN_KEY, 'g1', 'g2'].sort())
   assert.equal(top.nodes.find((n) => n.id === 'g1')!.folded, 3)
   assert.deepEqual(
     top.nodes.find((n) => n.id === 'g1')!.outs.map((p) => p.id),
@@ -220,15 +220,22 @@ test('子图：里面加的、断开的节点记在这一层，块删了跟着�
   assert.equal(layoutOf(gone).loose, undefined)
 })
 
-test('收尾段（teardown）画成单独的「收尾」事件，后面接它的步骤', () => {
+test('三段事件（执行前 / 执行 / 执行后）每个脚本都有，从上到下排；后面接各自的步骤', () => {
   const d: GtScript = {
     schemaVersion: 5,
     steps: [{ id: 's1', action: 'key', key: 'E' }],
-    teardown: [{ id: 't1', action: 'key', key: 'Escape' }, { id: 't2', action: 'key', key: 'Q' }],
+    teardown: [
+      { id: 't1', action: 'key', key: 'Escape' },
+      { id: 't2', action: 'key', key: 'Q' },
+    ],
   }
   const g = bpGraph(d)
   const ev = g.nodes.find((n) => n.id === TEARDOWN_KEY)
   assert.equal(ev?.kind, 'teardown')
   assert.ok(g.nodes.some((n) => n.kind === 'step' && n.path?.join('.') === 'teardown.1'))
-  assert.equal(bpGraph({ ...d, teardown: [] }).nodes.some((n) => n.id === TEARDOWN_KEY), false)
+  // 空的段也画事件节点（用户 2026-11-27：三个节点默认在、不能删），后面没接东西运行时跳过
+  const empty = bpGraph({ ...d, teardown: [] })
+  const ev3 = [SETUP_KEY, START_KEY, TEARDOWN_KEY].map((k) => empty.nodes.find((n) => n.id === k)!)
+  assert.ok(ev3.every(Boolean))
+  assert.ok(ev3[0].y < ev3[1].y && ev3[1].y < ev3[2].y)
 })

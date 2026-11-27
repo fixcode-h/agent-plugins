@@ -29,11 +29,11 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
    - `action=look what=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
    - `action=look what=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
    - `action=look what=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
-4. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再按正常游戏流程走输入和界面操作，最后用对象判断或表达式检查。见下面「写法」，**写之前读「写紧凑」「公共库」「收尾段，能连着重复跑」三节**。
+4. **写**：按三段写——执行前（`setup`）准备环境、检查前置，执行（`steps`）按正常游戏流程走输入和界面操作、最后用对象判断或表达式检查，执行后（`teardown`）收拾现场。见下面「写法」，**写之前读「三段怎么分」「写紧凑」「公共库」「收尾段，能连着重复跑」四节**。
 5. **打快照点**：跑之前在被测链路的关键函数上加 Lua 快照点或 C++ 日志断点，见「用日志和快照点分析代码」。
-6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。`style_*` 警告是写法建议（固定等待、存变量只为断言、连着几步检查、和别的脚本重复的开头、和公共库一样的一段、长脚本不分段、塞 Lua 代码、循环没上限）：照提示改掉；确实不该改的在交付时写明理由。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
+6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。`style_*` 警告是写法建议（固定等待、存变量只为断言、连着几步检查、和别的脚本重复的开头、和公共库一样的一段、长脚本不分段、塞 Lua 代码、循环没上限、`style_precheck_in_steps` 准备和前置检查写进了执行段、`style_cleanup_in_steps` 收尾写进了执行段）：照提示改掉；确实不该改的在交付时写明理由。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
 7. **跑**：`action=run scenario=…`（可带 `params`），`job` 等进度（工具里等到跑完、有步骤失败或约 45 秒才返回，不用自己反复调；还在跑就再调一次），`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。**交结果前自己再跑两遍**：同一批脚本用 `scenarios=[...]` 批量连着跑一次；再故意让上一份停在中途（`to` 跑到一半、或跑一份会失败的），紧接着跑下一份——两次都过才算过，见「收尾段，能连着重复跑」。
-8. **分析和改**：先对照快照点记录和日志，写出代码实际走了哪条路、和文档时序对不对（通过了也要写）。再读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
+8. **分析和改**：先对照快照点记录和日志，写出代码实际走了哪条路、和文档时序对不对（通过了也要写）。再读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。结果是 `outcome: "blocked"`（前置不满足，返回里带 `next`）时测试根本没开始：回去补前置（表格、资源、剧情、环境）再跑，不改执行段。
 9. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
 **从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名（`title` 照样写短句），报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 9 步进回归。
@@ -172,6 +172,44 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **改公共库要小心**：别的脚本也在 `call` 它。只加参数（给默认值）、不改已有参数的意思；要改行为先 `look what=scenarios` 看谁在用。
 - **交付时写清**：这次复用了库里哪几份、新提了哪几份进库。
 
+## 三段怎么分（GameTest 2.8.0）
+
+每份脚本固定三段，编辑页和流程图上三个事件节点一直在，哪段没步骤运行时就跳过：
+
+| 段 | 字段 | 放什么 | 不放什么 | 失败算什么 |
+| --- | --- | --- | --- | --- |
+| 执行前 | `setup` | 等环境就绪（PIE、登录、进地图，进地图用公共库 `common/地图/…`）、加载测试接口；**只读**的前置检测（配置、模板、剧情、道具在不在） | 被测玩法的操作；改配置、改存档去绕过入口 | **前置不满足**（`outcome: "blocked"`）：测试没开始，执行段不跑，执行后照常跑 |
+| 执行 | `steps` | 按正常游戏流程操作，用「等到」条件等状态，最后检查结果 | 只是准备或检查前置的步骤 | 失败 |
+| 执行后 | `teardown` | 退出玩法、关界面、恢复状态 | 结果检查 | 只记警告 |
+
+- 执行前写两个 `group`：`title` 分别是「准备环境」「前置检测」；前置检测里全是 `assert` 或只读接口带 `expect`，每条 `title` 写查的是什么（「查前置剧情」）。只有一两步时可以不分组。
+- 前置清单（工作流 scope / prep 节点列的）每一项都要在「前置检测」里有一条，下次缺配置直接报「前置不满足：查前置剧情」。
+- 检测不过时不许在执行前里「修」：不改配置指向、不跳过入口、不直接调玩法开始接口。
+- `_settings.json` 的 `setup`（项目通用前置）会自动插在执行前最前面，脚本里不重复写。
+
+例子（碰杯）：
+
+```json
+{
+  "schemaVersion": 5,
+  "setup": [
+    { "id": "prep", "action": "group", "title": "准备环境", "do": [
+      { "id": "p1", "action": "api", "title": "加载测试接口", "api": "Gm.Lua", "args": { "code": "require('GameTestApi/ClinkGlasses')" } },
+      { "id": "p2", "action": "call", "title": "进入地图", "script": "common/地图/进入地图" }
+    ] },
+    { "id": "check", "action": "group", "title": "前置检测", "do": [
+      { "id": "c1", "action": "assert", "title": "查碰杯配置和 NPC 模板", "cond": { "all": [
+        { "api": "项目.ClinkGlassesTestApi.ClinkConfigExists", "equals": true },
+        { "api": "项目.ClinkGlassesTestApi.NPCTemplateExists", "equals": true }
+      ] } },
+      { "id": "c2", "action": "assert", "title": "查前置剧情", "cond": { "api": "项目.ClinkGlassesTestApi.ScenarioExists", "args": { "id": 990001 }, "equals": true } }
+    ] }
+  ],
+  "steps": [ "… 走近 NPC 按 E、等进引导、选手势、等结算、检查奖励 …" ],
+  "teardown": [ "… 退出玩法、等回到空闲 …" ]
+}
+```
+
 ## 收尾段，能连着重复跑
 
 批量回归时一份脚本失败后玩法还停在中途，下一份一开始状态就不对，会被带着一起失败。每份脚本都要能连着、重复地跑：
@@ -280,6 +318,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - 不用 `ue_lua` / 控制台把逻辑塞进脚本绕过接口库；不用表达式调会改状态的函数。
 - 不在接口或脚本里直接调被测链路上的函数、替玩家操作、运行时改配置来绕开缺的前置配置；缺什么先补什么。
 - 不写固定等待（`wait seconds`）代替条件；`click` 本身会等部件可点。
+- 不把准备环境、前置检查写进执行段（`steps`），前置检测不过时不在脚本里绕过去。
 - 不把同一时刻的几项检查拆成一项一个节点，不把准备步骤复制粘贴进每份脚本（提进公共库或 `setup`）。
 - 不写 v3 的选择器字符串（`WBP_X:Root/Btn`、`List[Data.Id=1]>Btn`）、`invoke`、`find`、`widget.close` / `widget.call`、`text(sel)` 这类按选择器的函数，都不认。
 - 不编类名、部件名、属性路径、接口名：都从 `widgets` / `props` / `vars` / `api` 的返回里抄。
