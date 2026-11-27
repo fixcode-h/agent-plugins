@@ -45,6 +45,8 @@ export interface BpLayout {
 export const LAYOUT_KEY = '_layout'
 export const START_KEY = '#start'
 export const SETUP_KEY = '#setup'
+/** 收尾段（GameTest 2.7.0）的事件节点 */
+export const TEARDOWN_KEY = '#teardown'
 
 export function layoutOf(doc: GtScript): BpLayout {
   const l = doc[LAYOUT_KEY]
@@ -71,7 +73,7 @@ export interface BpPin {
 }
 
 /** entry：进到块里面时，块的每个子槽一个入口事件节点（照 UE 蓝图折叠图的输入节点） */
-export type BpKind = 'start' | 'setup' | 'step' | 'guard' | 'note' | 'entry'
+export type BpKind = 'start' | 'setup' | 'teardown' | 'step' | 'guard' | 'note' | 'entry'
 
 export interface BpNode {
   id: string
@@ -119,7 +121,11 @@ const nodeH = (n: BpNode) => {
   return BP.head + BP.body + rows * BP.row
 }
 const nodeW = (n: BpNode) =>
-  n.kind === 'start' || n.kind === 'setup' || n.kind === 'entry' ? BP.start : n.kind === 'guard' ? BP.eventW : BP.w
+  n.kind === 'start' || n.kind === 'setup' || n.kind === 'teardown' || n.kind === 'entry'
+    ? BP.start
+    : n.kind === 'guard'
+      ? BP.eventW
+      : BP.w
 
 const arr = (doc: unknown, p: GtPath) => {
   const a = getAt(doc, p)
@@ -199,6 +205,7 @@ export function findScope(doc: GtScript, key: string): GtPath | undefined {
   }
   visit(['steps'])
   visit(['setup'])
+  visit(['teardown'])
   arr(doc, ['guards']).forEach((_, i) => visit(['guards', i, 'do']))
   ;(layoutOf(doc).loose ?? []).forEach((_, i) => visit(looseSlot(i)))
   return hit
@@ -316,7 +323,7 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
   }
 
   function root(y: number) {
-    // 主流程：开始 → steps；有 setup 时多一个「准备」事件
+    // 主流程：开始 → steps；有 setup 时多一个「准备」事件，有 teardown 时多一个「收尾」事件
     const startPin: BpPin = { id: 'next', kind: 'next', at: { slot: ['steps'], index: 0 } }
     add({ id: START_KEY, kind: 'start', x: 0, y: 0, outs: [startPin], input: false })
     auto.set(START_KEY, [0, y])
@@ -327,6 +334,14 @@ export function bpGraph(doc: GtScript, o: GraphOptions = {}): BpGraph {
       add({ id: SETUP_KEY, kind: 'setup', x: 0, y: 0, outs: [pin], input: false })
       auto.set(SETUP_KEY, [0, y])
       const r = chain(['setup'], BP.start + BP.gx, y, { node: SETUP_KEY, pin })
+      y += Math.max(r.h, BP.head) + BP.gy * 2
+    }
+    // 收尾段：主流程跑完、失败或停止后都会走的一串，单独一个「收尾」事件
+    if (arr(doc, ['teardown']).length) {
+      const pin: BpPin = { id: 'next', kind: 'next', at: { slot: ['teardown'], index: 0 } }
+      add({ id: TEARDOWN_KEY, kind: 'teardown', x: 0, y: 0, outs: [pin], input: false })
+      auto.set(TEARDOWN_KEY, [0, y])
+      const r = chain(['teardown'], BP.start + BP.gx, y, { node: TEARDOWN_KEY, pin })
       y += Math.max(r.h, BP.head) + BP.gy * 2
     }
     // 守护：一条一个事件节点，后面接它的处理步骤

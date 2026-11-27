@@ -24,14 +24,15 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 1. **弄清要测什么**：一句话写下「玩家做了什么之后，应该看到什么」。读改动的代码（C++、蓝图名、Lua）和模块文档的接入时序，找到入口界面、点击处理、改的数据在哪。
 2. **排正常流程和前置清单，缺的先补**：见下面「先补前置，再按正常流程测」。配置不齐时测出来的结果没有意义，先补齐、导表、重开 PIE 再往下写。
 3. **查**（不开游戏也行）：
+   - `ue_gametest action=look what=library`：**先查本项目的公共库**（场景根 `common/` 下按功能分文件夹的子脚本：进地图等加载完、登录、走到 NPC 旁交互…），每份给 `script`、`title`、`note`、`params`。要走的那段库里有就直接 `call`，见「公共库」。
    - `ue_gametest action=look what=widgets asset=/Game/UI/WBP_Bag`：WBP 的控件树，部件名就是这里的控件名；列表、格子标 `container`。
    - `action=look what=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
    - `action=look what=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
    - `action=look what=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
-4. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再按正常游戏流程走输入和界面操作，最后用对象判断或表达式检查。见下面「写法」。
+4. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再按正常游戏流程走输入和界面操作，最后用对象判断或表达式检查。见下面「写法」，**写之前读「写紧凑」「公共库」「收尾段，能连着重复跑」三节**。
 5. **打快照点**：跑之前在被测链路的关键函数上加 Lua 快照点或 C++ 日志断点，见「用日志和快照点分析代码」。
-6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
-7. **跑**：`action=run scenario=…`（可带 `params`），`job` 等进度（工具里等到跑完、有步骤失败或约 45 秒才返回，不用自己反复调；还在跑就再调一次），`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。
+6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。`style_*` 警告是写法建议（固定等待、存变量只为断言、连着几步检查、和别的脚本重复的开头、和公共库一样的一段、长脚本不分段、塞 Lua 代码、循环没上限）：照提示改掉；确实不该改的在交付时写明理由。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
+7. **跑**：`action=run scenario=…`（可带 `params`），`job` 等进度（工具里等到跑完、有步骤失败或约 45 秒才返回，不用自己反复调；还在跑就再调一次），`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。**交结果前自己再跑两遍**：同一批脚本用 `scenarios=[...]` 批量连着跑一次；再故意让上一份停在中途（`to` 跑到一半、或跑一份会失败的），紧接着跑下一份——两次都过才算过，见「收尾段，能连着重复跑」。
 8. **分析和改**：先对照快照点记录和日志，写出代码实际走了哪条路、和文档时序对不对（通过了也要写）。再读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
 9. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
@@ -110,7 +111,74 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **表达式**：填值处写 `"=…"`，条件写 `{"expr": "…"}`。只算值：`$var`、`@来源.路径`、`prop(引用, "属性路径")`（例 `num(prop("shop", "@/TxtGold:text"))`）、`len` `min` `format`… 和**只读**接口。改状态的函数只能用 `obj.call` / `api` 步骤。
 - **取值来源**：`@gi @gs @gm @ps @pc @pawn @hud`、`@sub.<子系统类>`、`@actor[tag=X]`、`@obj.<名字>`、`@luaMod.<require 路径>`、`@luaG.<全局>`、`@cvar.<名字>`。路径照 `vars` / `props` 返回的抄，不要猜。
 - **守护**：不定时弹出的东西（引导、公告、断线重连、升级弹窗）写成守护，`when` 用对象判断、`do` 里常用 `obj.close`。不要在主流程里到处插「如果有就关掉」。全局的写在 `_settings.json` 的 `guards`，一个脚本自己的写在顶层 `guards`。
-- **子脚本**：重复出现的一段（登录、翻完引导、回主界面）写成带 `params` 的脚本放 `common/`，用 `call`。先 `action=look what=scenarios` 看已有的，能复用就复用。参数传对象时传 `objects` 里的名字，不传选择器。
+- **子脚本**：重复出现的一段放进本项目公共库 `common/<功能>/`，用 `call`，见「公共库」。参数传对象时传 `objects` 里的名字，不传选择器。
+- **收尾段**：顶层 `teardown`（GameTest 2.7.0）：主流程跑完、失败、按停止后都会跑，退出玩法、关界面、恢复状态写在这里，见「收尾段，能连着重复跑」。
+
+## 写紧凑：一个意图一个节点
+
+画布上一个节点应该是「一件玩家或测试想做的事」，不是一次函数调用。写完对照这几条收一遍（`validate` 的 `style_*` 警告会指出来）：
+
+- **等就等那件事**：「等到某情况出现才继续」写一步 `wait until=cond`（或 `obj.wait`），条件就是你在等的那件事（界面出现、状态变成 X、第 2 回合结算了），超时没等到本身就是失败；不写固定秒数，也不写「循环 + 查一下 + 再等」。
+- **等具体那一次，不等累计数**：等第 2 回合就写「第 2 回合的结果不为空」（按回合号、按状态），不写「结算事件累计 ≥ 2」——前一回合提前结算时累计数会误判成后一回合。
+- **同一时刻的几项检查合成一步**：连着几步都只是「看一眼」时，写一个 `assert`，`cond: {"all": [每项一个判断]}`，`title` 写这组检查想确认什么。失败时报告的 `payload.cond` 照样列出每一项的实际值，合并不丢信息。
+- **调接口顺带判断**：调接口拿返回值只为了紧接着断言，直接在这一步写 `expect`（`{"equals": 1}`），不要 `saveAs` 再加一步 `assert $v == 1`。
+- **等待和检查能合就合**：等到某状态后马上要核对同一时刻的其他几项，写一步 `wait until=cond` 等主条件，下一步一个 `assert all` 查其余；不要每项一步。
+- **分段**：主流程超过十几步时按阶段包 `group`（准备、进入玩法、每个测试点一段、收尾），`title` 写阶段名；重复几轮的同一组操作用 `loop`（`until` + `max`），不展开写。
+- **值进 params**：Id、配置行、模板号、地图这些写进顶层 `params` 并在 `note` 说清是什么，步骤里写 `$名字`；状态枚举不要写裸数字（`4`、`8`），用接口返回名字（`GetStateName`）或在 `note` 写明数字的意思。
+
+改前（一项一个节点，7 步）：
+
+```json
+[
+  { "id": "s1", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "GuideRequired" }, "expect": { "equals": 1 } },
+  { "id": "s2", "action": "api", "api": "项目.XxxTest.GetState", "expect": { "equals": 4 } },
+  { "id": "s3", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "RoundStarted" }, "expect": { "equals": 0 } },
+  { "id": "s4", "action": "wait", "until": "seconds", "seconds": 3 },
+  { "id": "s5", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "RoundSettled" }, "saveAs": "n" },
+  { "id": "s6", "action": "assert", "expr": "$n >= 2" },
+  { "id": "s7", "action": "api", "api": "项目.XxxTest.LastRoundResult", "expect": { "equals": "Win" } }
+]
+```
+
+改后（3 步，每步一个意图）：
+
+```json
+[
+  {
+    "id": "s1", "action": "assert", "title": "进入等待引导",
+    "note": "开始玩法后应先停在等引导：引导请求恰好一次、状态是 AwaitGuide、还没开第一回合",
+    "cond": { "all": [
+      { "api": "项目.XxxTest.EventCount", "args": { "name": "GuideRequired" }, "equals": 1 },
+      { "api": "项目.XxxTest.GetStateName", "equals": "AwaitGuide" },
+      { "api": "项目.XxxTest.EventCount", "args": { "name": "RoundStarted" }, "equals": 0 }
+    ] }
+  },
+  {
+    "id": "s2", "action": "wait", "until": "cond", "timeoutMs": 15000, "title": "等第 2 回合结算",
+    "note": "按回合号等，不按累计事件数，免得第 1 回合的结算被算进来",
+    "cond": { "expr": "项目.XxxTest.RoundResult(2) != ''" }
+  },
+  { "id": "s3", "action": "api", "api": "项目.XxxTest.RoundResult", "args": { "round": 2 }, "expect": { "equals": "Win" }, "title": "第 2 回合判赢", "note": "第 2 回合出了相同的手势，应判 Win" }
+]
+```
+
+## 公共库（本项目的 common/）
+
+公共库是**这个项目自己的**一组子脚本，放在场景根 `common/` 下、按功能分文件夹（`common/地图/`、`common/登录/`、`common/NPC交互/`、`common/界面/`…），跟着项目文档提交，换个项目就是另一套；面板不内置任何一份。
+
+- **先查后写**：写脚本前 `look what=library`（可带 `query`）。要走的那段库里有，就写一步 `{"action": "call", "script": "common/地图/进入地图并等加载完", "with": {"map": "$map"}}`，不再自己写一遍。
+- **边写边判断要不要提**：写的时候把每一段问一句「别的功能的测试会不会也走这一段」——和这次被测功能无关、换个玩法也一样的（进地图并等 Loading 出现再消失、登录、传送到 NPC 旁按交互键、关弹窗回主界面、翻完引导），就提进公共库；只属于这个功能的操作和检查留在脚本里。拿不准时先留在脚本里，第二份脚本又要用时再提。
+- **怎么提**：放进 `common/<功能>/<做什么>.json`（文件名写中文的「做什么」），顶层 `title`、`note` 写清用途、前提（要在什么状态下调）和结束时的状态；会变的值写成 `params`（带 `default`、`note`），对象参数传 `objects` 里的名字；结尾写一步检查确认做到了（例如 Loading 消失后玩家 Pawn 存在）。提完把原脚本里那段换成 `call`，跑一遍。
+- **改公共库要小心**：别的脚本也在 `call` 它。只加参数（给默认值）、不改已有参数的意思；要改行为先 `look what=scenarios` 看谁在用。
+- **交付时写清**：这次复用了库里哪几份、新提了哪几份进库。
+
+## 收尾段，能连着重复跑
+
+批量回归时一份脚本失败后玩法还停在中途，下一份一开始状态就不对，会被带着一起失败。每份脚本都要能连着、重复地跑：
+
+- **开头复位**：`setup` 或第一段先把上一份可能留下的状态清掉（玩法进行中就先退出、等回到空闲），清完再开始记录本局的事件和计数（先清后记，不然清的那次退出会被算进本局）。
+- **结尾收尾**：顶层写 `teardown`（GameTest 2.7.0）：退出玩法、关界面、删掉测试生成的 NPC、恢复改过的设置。它在主流程跑完、中途失败、第一次按停止后都会执行，里面的失败只记警告、不改结论。收尾段里的步骤要能在任何中途状态下执行（先判断再退出，用 `if`），不依赖主流程跑到哪一步。
+- **自测**：交之前批量连着跑一次；再让一份停在中途（`to` 跑到一半）后紧接着跑下一份。两次都过才交。
 
 ## 旧脚本（v1–v4）
 
@@ -212,5 +280,6 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - 不用 `ue_lua` / 控制台把逻辑塞进脚本绕过接口库；不用表达式调会改状态的函数。
 - 不在接口或脚本里直接调被测链路上的函数、替玩家操作、运行时改配置来绕开缺的前置配置；缺什么先补什么。
 - 不写固定等待（`wait seconds`）代替条件；`click` 本身会等部件可点。
+- 不把同一时刻的几项检查拆成一项一个节点，不把准备步骤复制粘贴进每份脚本（提进公共库或 `setup`）。
 - 不写 v3 的选择器字符串（`WBP_X:Root/Btn`、`List[Data.Id=1]>Btn`）、`invoke`、`find`、`widget.close` / `widget.call`、`text(sel)` 这类按选择器的函数，都不认。
 - 不编类名、部件名、属性路径、接口名：都从 `widgets` / `props` / `vars` / `api` 的返回里抄。

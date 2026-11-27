@@ -11,7 +11,7 @@ import {
   setPositions,
   tidyLoose,
 } from './edit.ts'
-import { bpGraph, findScope, layoutOf, looseSlot, pinOf, START_KEY } from './graph.ts'
+import { bpGraph, findScope, layoutOf, looseSlot, pinOf, START_KEY, TEARDOWN_KEY } from './graph.ts'
 
 const doc = (): GtScript => ({
   schemaVersion: 3,
@@ -218,4 +218,17 @@ test('子图：里面加的、断开的节点记在这一层，块删了跟着�
   // 删掉 g1：它那层的没连上的也清掉
   const gone = tidyLoose({ ...r.doc, steps: r.doc.steps!.slice(1) })
   assert.equal(layoutOf(gone).loose, undefined)
+})
+
+test('收尾段（teardown）画成单独的「收尾」事件，后面接它的步骤', () => {
+  const d: GtScript = {
+    schemaVersion: 5,
+    steps: [{ id: 's1', action: 'key', key: 'E' }],
+    teardown: [{ id: 't1', action: 'key', key: 'Escape' }, { id: 't2', action: 'key', key: 'Q' }],
+  }
+  const g = bpGraph(d)
+  const ev = g.nodes.find((n) => n.id === TEARDOWN_KEY)
+  assert.equal(ev?.kind, 'teardown')
+  assert.ok(g.nodes.some((n) => n.kind === 'step' && n.path?.join('.') === 'teardown.1'))
+  assert.equal(bpGraph({ ...d, teardown: [] }).nodes.some((n) => n.id === TEARDOWN_KEY), false)
 })

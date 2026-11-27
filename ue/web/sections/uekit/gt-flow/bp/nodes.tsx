@@ -1,6 +1,16 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { CirclePlay, CircleX, ClipboardList, LogIn, ScanSearch, ShieldCheck, StickyNote, Unlink } from 'lucide-react'
+import {
+  CirclePlay,
+  CircleX,
+  ClipboardList,
+  Eraser,
+  LogIn,
+  ScanSearch,
+  ShieldCheck,
+  StickyNote,
+  Unlink,
+} from 'lucide-react'
 import { CountBadge } from '@panel/web/src/components/ui/count-badge'
 import { h, t } from '../../../../host.ts'
 import { BreakpointDot } from '../../gt-debug/BreakpointDot.tsx'
@@ -176,12 +186,15 @@ export const BpEventNode = memo(function BpEventNode({ data }: Props) {
     )
   }
   const setup = n.kind === 'setup'
-  const Icon = setup ? ClipboardList : n.entry ? LogIn : CirclePlay
+  const teardown = n.kind === 'teardown'
+  const Icon = setup ? ClipboardList : teardown ? Eraser : n.entry ? LogIn : CirclePlay
   const label = setup
     ? t('准备')
-    : n.entry
-      ? pinLabel({ id: '', kind: n.entry.kind, index: n.entry.index, at: { slot: [], index: 0 } }, n.entry.action)
-      : t('开始')
+    : teardown
+      ? t('收尾')
+      : n.entry
+        ? pinLabel({ id: '', kind: n.entry.kind, index: n.entry.index, at: { slot: [], index: 0 } }, n.entry.action)
+        : t('开始')
   return (
     <div
       data-gt-node={n.id}
@@ -243,6 +256,7 @@ export const BP_NODE_TYPES = {
   step: BpStepNode,
   start: BpEventNode,
   setup: BpEventNode,
+  teardown: BpEventNode,
   entry: BpEventNode,
   guard: BpEventNode,
   note: BpNoteNode,

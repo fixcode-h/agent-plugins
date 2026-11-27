@@ -22,11 +22,12 @@ export interface GuardEntry {
   owner?: GtPath
 }
 
-/** 场景根上的步骤槽：setup、steps，以及顶层每条守护的 do */
+/** 场景根上的步骤槽：setup、steps、teardown，以及顶层每条守护的 do */
 export function rootSlots(doc: GtScript): { slot: GtPath; kind: SlotKind; inGuard: boolean }[] {
   const out: { slot: GtPath; kind: SlotKind; inGuard: boolean }[] = [
     { slot: ['setup'], kind: 'setup', inGuard: false },
     { slot: ['steps'], kind: 'steps', inGuard: false },
+    { slot: ['teardown'], kind: 'teardown', inGuard: false },
   ]
   ;(Array.isArray(doc.guards) ? doc.guards : []).forEach((_, i) =>
     out.push({ slot: ['guards', i, 'do'], kind: 'do', inGuard: true }),

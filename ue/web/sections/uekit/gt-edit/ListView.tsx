@@ -40,6 +40,7 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
       [
         { slot: ['setup'], kind: 'setup' as const, title: t('准备') },
         { slot: ['steps'], kind: 'steps' as const, title: t('主流程') },
+        { slot: ['teardown'], kind: 'teardown' as const, title: t('收尾') },
       ].map((s) => ({ ...s, rows: listRows(doc, s.slot, s.kind, collapsed) })),
     [doc, collapsed],
   )
@@ -313,10 +314,10 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
         aria-label={t('步骤列表')}
       >
         {sections.map((s) =>
-          s.kind === 'setup' && !s.rows.length ? null : (
+          (s.kind === 'setup' || s.kind === 'teardown') && !s.rows.length ? null : (
             <section key={s.kind}>
-              {/* 顶上标题行已经写了「主流程」：只有准备步骤时才需要小节头分开两段 */}
-              {(s.kind === 'setup' || sections[0].rows.length > 0) && (
+              {/* 顶上标题行已经写了「主流程」：有准备或收尾步骤时才需要小节头分开几段 */}
+              {(s.kind !== 'steps' || sections[0].rows.length > 0 || sections[2].rows.length > 0) && (
                 <div className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:bg-panel ue:px-3 ue:text-caption ue:text-subtle">
                   {s.title}
                   <span className="ue:tabular-nums">{s.rows.filter((r) => r.kind === 'step').length}</span>
@@ -340,7 +341,7 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
                   onClick={(e) => insertAt(e, s.slot, endOf(s.slot))}
                 >
                   <Plus className="ue:h-3 ue:w-3" />
-                  {s.kind === 'setup' ? t('加准备步骤') : t('加一步')}
+                  {s.kind === 'setup' ? t('加准备步骤') : s.kind === 'teardown' ? t('加收尾步骤') : t('加一步')}
                 </button>
               </div>
             </section>
@@ -353,6 +354,15 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
             onClick={(e) => insertAt(e, ['setup'], 0)}
           >
             {t('+ 加准备步骤（每次运行先做、不算进结果，例如开关卡、设 GM 状态）')}
+          </button>
+        )}
+        {!sections[2].rows.length && (
+          <button
+            type="button"
+            className="ue:mx-3 ue:mt-2 ue:block ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
+            onClick={(e) => insertAt(e, ['teardown'], 0)}
+          >
+            {t('+ 加收尾步骤（跑完、失败或停止后都会做，例如退出玩法、恢复状态）')}
           </button>
         )}
       </div>

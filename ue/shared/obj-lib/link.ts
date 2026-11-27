@@ -95,18 +95,19 @@ export function absorbLibDrops(doc: GtScript): GtScript {
     if (next) changed = true
     return next ?? v
   }
-  const steps = visit({ setup: doc.setup, steps: doc.steps, guards: doc.guards }) as Pick<
+  const steps = visit({ setup: doc.setup, steps: doc.steps, teardown: doc.teardown, guards: doc.guards }) as Pick<
     GtScript,
-    'setup' | 'steps' | 'guards'
+    'setup' | 'steps' | 'teardown' | 'guards'
   >
   if (!changed) return doc
   return { ...out, ...strip(steps) }
 }
 
-const strip = (s: Pick<GtScript, 'setup' | 'steps' | 'guards'>) => {
+const strip = (s: Pick<GtScript, 'setup' | 'steps' | 'teardown' | 'guards'>) => {
   const o: Partial<GtScript> = {}
   if (s.setup !== undefined) o.setup = s.setup
   if (s.steps !== undefined) o.steps = s.steps
+  if (s.teardown !== undefined) o.teardown = s.teardown
   if (s.guards !== undefined) o.guards = s.guards
   return o
 }
