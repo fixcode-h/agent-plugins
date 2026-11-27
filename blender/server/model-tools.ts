@@ -22,6 +22,8 @@ export const MODEL_TOOLS: McpTool[] = [
       },
       required: ['code'],
     },
+    // 面板补中文意图参数，对话卡片显示「这段要做什么」而不是代码第一行
+    intent: true,
     call: async (args, ctx) => {
       const code = String(args.code ?? '')
       if (!code.trim()) return mcpText('code 是空的', true)

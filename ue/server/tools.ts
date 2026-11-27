@@ -702,7 +702,7 @@ export function ueTools(projectId: string, root: string, agent: string): McpTool
 /** 不带 call 的工具定义（设置 →「MCP」的能力目录也用它，不用找项目） */
 export function ueToolDefs() {
   return DEFS.map((d) => {
-    const { confirms, irreversible, ...guide } = UE_GUIDES[d.name] ?? {}
+    const { confirms, irreversible, intent, ...guide } = UE_GUIDES[d.name] ?? {}
     return {
       name: d.name,
       description: d.description,
@@ -711,6 +711,7 @@ export function ueToolDefs() {
       ...(guide.title && { guide: guide as (typeof UE_GUIDES)[string] }),
       ...(confirms && { confirms }),
       ...(irreversible && { irreversible }),
+      ...(intent && { intent }),
       fn: d.fn,
       targets: d.targets,
     }
