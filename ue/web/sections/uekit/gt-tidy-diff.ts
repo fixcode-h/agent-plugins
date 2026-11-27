@@ -19,7 +19,9 @@ export function stepKey(s: Step) {
               .map((k) => [k, sorted((v as Step)[k])]),
           )
         : v
-  return JSON.stringify(sorted(Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'note' && k !== 'hint'))))
+  return JSON.stringify(
+    sorted(Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'title' && k !== 'note' && k !== 'hint'))),
+  )
 }
 
 export function diffSteps(a: Step[], b: Step[]): DiffRow[] {

@@ -3000,7 +3000,6 @@
   "列表、格子里每一格做一遍，条目叫 item": "Once for every cell of a list or grid; the item is called item",
   "每轮开始前看条件，不成立就出来": "Checks the condition before each round and exits when it doesn't hold",
   "对一组账号、数量各做一遍": "Once for each of a set of accounts or amounts",
-  "这一步在做什么（报告里显示）": "What this step does (shown in reports)",
   "失败了": "On failure",
   "总时限": "Time limit",
   "值": "Value",
@@ -5207,5 +5206,8 @@
   "选中的视口：和 UE Play 菜单勾「选中的视口」一样，在当前关卡视口里运行，不弹独立窗口。独立窗口：开一个单独的游戏窗口（分辨率按 pie.start 的 width、height）。步骤写 window 时以步骤为准；关卡视口看不见时自动改开独立窗口。": "Selected viewport: like checking \"Selected Viewport\" in UE's Play menu, the game runs in the current level viewport without a separate window. New window: opens a standalone game window (size from pie.start width and height). A step's window field wins; if no level viewport is visible, a new window is opened instead.",
   "要 GameTest 2.5.0 才能选，旧版 PIE 总是开独立窗口：到「UE 插件」更新 GameTest 后重新编译。": "Needs GameTest 2.5.0; older versions always open a new window. Update GameTest under \"UE plugins\" and rebuild.",
   "选中的视口（默认）": "Selected viewport (default)",
-  "独立窗口": "New window"
+  "独立窗口": "New window",
+  "一句话说这一步做什么": "What this step does, in a few words",
+  "详细说明：为什么这样做、要注意什么": "Details: why this step, what to watch for",
+  "GameTest {v} 起才认名称，现在是 {cur}：先在「UE 插件」里升级": "Step names need GameTest {v} or later (you have {cur}): update it under \"UE plugins\" first"
 }

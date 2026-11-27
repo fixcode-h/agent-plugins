@@ -7,7 +7,7 @@ import { editorStepTitle, isEditorStep } from './gt-editor-steps.ts'
 
 /**
  * GameTest 步骤列表每一行的一句中文：只说「这一步在干什么」，选择器、hint、参数原文都留给右边的详情。
- * 先用场景里写的 note（AI 整理会给每步写一句），没有就按动作 + 控件文字 / 类名 / 选择器末段拼一句；
+ * 先用场景里写的 title（节点名称），再用 note（说明，AI 整理会给每步写一句），没有就按动作 + 控件文字 / 类名 / 选择器末段拼一句；
  * 认不出的动作退回动作名，不编造
  */
 export function stepTitle(def?: Record<string, unknown>, fallbackAction?: string, fallbackTarget?: string) {
@@ -15,6 +15,9 @@ export function stepTitle(def?: Record<string, unknown>, fallbackAction?: string
 }
 
 function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbackTarget?: string): string {
+  // 名称（title，GameTest 2.6.0）是专门给这一行的短句；旧脚本只有 note（说明）时用说明
+  const title = typeof def?.title === 'string' ? def.title.trim() : ''
+  if (title) return title
   const note = typeof def?.note === 'string' ? def.note.trim() : ''
   if (note) return note
   if (!def)

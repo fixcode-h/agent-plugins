@@ -18,6 +18,8 @@ export interface GtStep {
   status: 'succeeded' | 'failed' | 'skipped' | 'already' | 'pending' | string
   message?: string
   target?: string
+  /** 节点名称（GameTest 2.6.0）：很短的一句，这一行先显示它 */
+  title?: string
   note?: string
   payload?: Record<string, unknown>
   durationMs?: number
@@ -95,7 +97,14 @@ export function rowSummary(r: Pick<StepRow, 'def' | 'res'>) {
   const note = r.res?.note ?? (typeof r.def?.note === 'string' ? r.def.note : undefined)
   const params = r.def ? paramsOf(r.def) : []
   const brief = params
-    .filter(([k]) => k !== 'target' && k !== 'note' && k !== 'hint' && !(r.def?.action === 'move' && MOVE_DRAWN.has(k)))
+    .filter(
+      ([k]) =>
+        k !== 'target' &&
+        k !== 'title' &&
+        k !== 'note' &&
+        k !== 'hint' &&
+        !(r.def?.action === 'move' && MOVE_DRAWN.has(k)),
+    )
     .map(([k, v]) => `${k}=${show(v)}`)
     .join(' ')
   return {

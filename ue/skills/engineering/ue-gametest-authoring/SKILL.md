@@ -35,7 +35,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 8. **分析和改**：先对照快照点记录和日志，写出代码实际走了哪条路、和文档时序对不对（通过了也要写）。再读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
 9. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
-**从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名，报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 9 步进回归。
+**从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名（`title` 照样写短句），报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 9 步进回归。
 
 **不要**让用户去录制、去点界面；能从代码写就自己写。不知道用哪个属性区分同类对象时看 `props` 的 `score` / `suggest`；游戏开着可以 `inspect` 指着看，它直接给出引用。
 
@@ -72,30 +72,35 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
       "action": "api",
       "api": "项目.WelfareTest.ResetDaily",
       "args": { "Day": "$day" },
-      "note": "重置签到到第 N 天"
+      "title": "重置签到天数",
+      "note": "用项目接口把签到进度重置到第 N 天（参数 day），今天的奖励变成可领取；只准备状态，不走界面"
     },
-    { "id": "s2", "action": "set", "var": "gold0", "value": "=@ps.Gold" },
-    { "id": "s3", "action": "obj.call", "obj": "npc", "function": "OpenWelfare" },
+    { "id": "s2", "action": "set", "var": "gold0", "value": "=@ps.Gold", "title": "记下领取前的金币", "note": "存进 $gold0，最后对比到账金额" },
+    { "id": "s3", "action": "obj.call", "obj": "npc", "function": "OpenWelfare", "title": "打开福利界面", "note": "调 NPC 的 OpenWelfare 打开福利界面（入口不是被测的部分）" },
     {
       "id": "s4",
       "action": "click",
       "target": { "obj": "today", "part": "BtnClaim" },
-      "skipIf": { "obj": "today", "prop": "@/TxtState:text", "op": "contains", "value": "已领取" }
+      "skipIf": { "obj": "today", "prop": "@/TxtState:text", "op": "contains", "value": "已领取" },
+      "title": "点今天的领取",
+      "note": "被测操作：按玩家流程点今天那一格的领取按钮；已经领过时跳过"
     },
-    { "id": "s5", "action": "assert", "expr": "@ps.Gold >= $gold0 + 500", "note": "金币到账" },
+    { "id": "s5", "action": "assert", "expr": "@ps.Gold >= $gold0 + 500", "title": "金币到账", "note": "数据侧：玩家金币比领取前至少多 500（第 N 天的奖励）" },
     {
       "id": "s6",
       "action": "assert",
       "cond": { "obj": "today", "prop": "@/BtnClaim:enabled", "op": "is", "value": false },
-      "note": "按钮变灰"
+      "title": "领取按钮变灰",
+      "note": "界面侧：领过后按钮不能再点，防止重复领取"
     },
-    { "id": "s7", "action": "obj.close", "obj": "welfare" },
-    { "id": "s8", "action": "assert", "expr": "len(Log.Errors()) == 0", "note": "没有报错（Error、Ensure、Lua 报错）" }
+    { "id": "s7", "action": "obj.close", "obj": "welfare", "title": "关掉福利界面", "note": "按 closeRules 关，回到主界面" },
+    { "id": "s8", "action": "assert", "expr": "len(Log.Errors()) == 0", "title": "没有报错", "note": "整个过程日志里没有 Error、Ensure、Lua 报错" }
   ]
 }
 ```
 
 - **id**：每步写 `id`（字母数字下划线，场景内唯一）；报告、断点、`from` / `to` 都按它。
+- **名称和说明**：每一步（含块）都写 `title` 和 `note`。`title` 是很短的一句中文，说这一步做什么（「选第一个剧情选项」「等对白结束」「确认进入手势匹配」），画布节点、运行记录、报告、对话里的运行卡片每行先显示它，不写成接口名或动作名；`note` 写详细说明：为什么这样做、准备的是什么状态、判断的依据。`validate` 对没写的步骤报 `no_title` / `no_note` 警告，补齐再跑。`title` 要 GameTest 2.6.0 起，编辑器里的 GameTest 更旧时 `validate` 会报不认识 `title`：请用户在「UE 插件」里升级，不要删掉名称。
 - **对象引用**：`class` 按继承认，`WBP_Shop`、`WBP_Shop_C`、`/Game/UI/WBP_Shop` 都行。`in` 省略时界面在屏上找、Actor 在关卡里找、子系统直接取单例（`ident` 留空）；**组件**要写 `in: {"obj": 所属 Actor 的引用}`，列表 / 面板里的**条目**写 `in: {"obj": 界面, "part": "容器部件"}`。`ident` 顶层每项都满足才算；一项也可以是条件组 `{"any": [判断项…]}`（任一满足）/ `{"all": [...]}`（都满足），组里能再套子组，判断项和组都能写 `"not": true` 取反（GameTest 2.1.6 起；平铺够用就平铺）；同类有多个又没写够标识时默认报 `ref_ambiguous`（`many: "first"` / `"last"` / `"nearest"` 只在确实无所谓是哪个时用）。
 - **挑标识**：从 `props` 里挑 `score` 高、`distinct` 等于实例数、不会变的（Id、配置表行名、本地化键 `@:textKey`）；不用 `@:index`、位置、选中、计数、会变的文字。项目给某个类定了默认标识的，写在 `_settings.json` 的 `identRules`，照它来。
 - **比较**：`op` 按属性的 `kind` 选（`bool` 用 `is`；数字 `eq` `gt` `between`…；文字 `eq` `contains` `startsWith` `matches`，`text` 还能 `key` 比本地化键；枚举 `is` `isNot` `in`；`visibility` 还有 `visible` / `hidden`；对象 `isNull` `notNull` `classIs`；数组 `count`（配 `cmp`）`has` `empty`）。`op` 省略：bool 按真值，其余 `eq`。浮点、向量的 `eq` / `near` 带 `tol`。

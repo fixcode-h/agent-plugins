@@ -78,6 +78,7 @@ export function Inspector({
   ctx,
   onTry,
   history,
+  gtVersion,
 }: {
   doc: GtScript
   selected: GtPath[]
@@ -86,6 +87,8 @@ export function Inspector({
   onTry?: (p: GtPath) => void
   /** 这一步最近几次运行过没过（原来运行结果页步骤详情里的「最近几次」）；没有历史时返回空 */
   history?: (p: GtPath) => ReactNode
+  /** 编辑器里 GameTest 的版本（名称字段要 2.6.0 起） */
+  gtVersion?: string
 }) {
   const { ui } = h()
   if (selected.length > 1)
@@ -126,7 +129,7 @@ export function Inspector({
       <Head icon={bu.icon} tone={bu.tone} title={bu.title()} id={id} ctx={ctx} />
       <div className="ue:divide-y ue:divide-line">
         <Section>
-          <NoteField step={step} onChange={set} />
+          <NoteField step={step} onChange={set} gtVersion={gtVersion} />
           {Own && <Own key={id ?? path.join('.')} step={step} onChange={set} />}
         </Section>
         {onTry && (

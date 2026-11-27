@@ -1,11 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { isBlock, type GtStep } from '../../../../shared/gt-script/index.ts'
+import { satisfies } from '../plugins/model.ts'
 import { h, t } from '../../../host.ts'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { BlockGuards } from '../gt-guards/BlockGuards.tsx'
 import { FieldGroup, SwitchRow } from './fields/FieldGroup.tsx'
 
 /** 改一个字段：值是 undefined / 空字符串时删掉这个字段，存进文件的步骤保持短 */
+/** 步骤的名称（title）从 GameTest 2.6.0 起认，旧版遇到会报不认识的字段 */
+export const TITLE_MIN_VERSION = '2.6.0'
+
 export function patch(step: GtStep, k: string, v: unknown): GtStep {
   const out = { ...step }
   if (v === undefined || v === '') delete out[k]
@@ -84,19 +88,55 @@ export function NumberField({
   )
 }
 
-/** 说明：这一步在做什么（报告里显示），检查器最上面 */
-export function NoteField({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
+/**
+ * 名称和说明，检查器最上面（用户 2026-11-27：名称是很短的一句，画布节点、运行记录、报告、对话卡片每行先显示它；
+ * 说明是很详细的说明，所以给多行框）
+ */
+export function NoteField({
+  step,
+  onChange,
+  gtVersion,
+}: {
+  step: GtStep
+  onChange: (s: GtStep) => void
+  /** 编辑器里 GameTest 的版本：旧版不认 title，填了会报不认识的字段，提示先升级 */
+  gtVersion?: string
+}) {
+  const { ui } = h()
+  const note = typeof step.note === 'string' ? step.note : ''
+  const old = !!gtVersion && !satisfies(gtVersion.replace(/-.*$/, ''), `>=${TITLE_MIN_VERSION}`)
   return (
-    <Row label={t('说明')}>
-      <TextField step={step} k="note" onChange={onChange} placeholder={t('这一步在做什么（报告里显示）')} />
-    </Row>
+    <>
+      <Row label={t('名称')}>
+        <div className="ue:flex ue:w-full ue:flex-col ue:gap-1">
+          <TextField step={step} k="title" onChange={onChange} placeholder={t('一句话说这一步做什么')} />
+          {old && (
+            <span className="ue:text-caption ue:text-warning">
+              {t('GameTest {v} 起才认名称，现在是 {cur}：先在「UE 插件」里升级', {
+                v: TITLE_MIN_VERSION,
+                cur: gtVersion,
+              })}
+            </span>
+          )}
+        </div>
+      </Row>
+      <Row label={t('说明')}>
+        <ui.Textarea
+          rows={2}
+          className="ue:w-full ue:text-footnote"
+          placeholder={t('详细说明：为什么这样做、要注意什么')}
+          value={note}
+          onChange={(e: { target: { value: string } }) => onChange(patch(step, 'note', e.target.value || undefined))}
+        />
+      </Row>
+    </>
   )
 }
 
 /**
  * 所有步骤共用的字段（协议第 2 节开头），按用途分三组（用户 2026-11-19）：
  * 执行（失败了怎么办、选了重试才出次数、总时限）、跳过（停用、已达成就跳过 + 条件）、判定（报错算失败）。
- * 说明单独放在检查器最上面（NoteField）
+ * 名称和说明单独放在检查器最上面（NoteField）
  */
 export function CommonFields({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui } = h()

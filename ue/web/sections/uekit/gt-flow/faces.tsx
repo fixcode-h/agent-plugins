@@ -14,7 +14,7 @@ import { describeRef, identText, targetShort, targetText } from '../gt-ref/descr
 /**
  * 流程图节点上一步「长什么样」：图标、标题、标题下的一行小字（定稿效果图 1、6）。
  * 一种动作一项，登记在表里；没登记的（click、key、wait…原有动作）用步骤列表同一套图标和一句中文（stepTitle）。
- * 场景里写了 note 的，标题一律用 note（AI 整理、人写的说明比自动拼的好懂）
+ * 场景里写了 title（节点名称）的标题用它，旧脚本只有 note 时用 note（AI 整理、人写的比自动拼的好懂）
  */
 export interface StepFace {
   title: (s: GtStep) => string
@@ -133,7 +133,8 @@ export function faceOf(s: GtStep): {
   lines: FaceLine[]
 } {
   const f = table.get(s.action)
-  const note = str(s.note).trim()
+  // 名称（title）优先，旧脚本只有说明（note）时用说明
+  const note = str(s.title).trim() || str(s.note).trim()
   // 图标和色调取块 UI 注册表（gt-blocks），和列表视图、插入菜单同一张表，不在这里另配一套
   const ui = blockUi(s.action)
   const look = { icon: ui.icon, tone: TONE_TEXT[ui.tone] }

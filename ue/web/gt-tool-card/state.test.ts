@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { parseRunSub, runSub } from './link.ts'
-import { runPhase, runResult, runTarget, tallyOf } from './state.ts'
+import { liveStepLine, runPhase, runResult, runTarget, tallyOf } from './state.ts'
 
 test('跑的是什么：脚本只显示文件名（去掉 .json），标签、多个脚本、临时步骤各有写法', () => {
   assert.deepEqual(runTarget({ scenario: 'openspec/x/R1-碰杯.json' }), {
@@ -42,4 +42,18 @@ test('状态：调用中、跑着、通过、失败；别的运行的作业不�
 test('跳到 GameTest 页的子路径：脚本路径带上运行号，拆回来一样', () => {
   assert.deepEqual(parseRunSub(runSub('a/b.json', 'r9')), { path: 'a/b.json', run: 'r9' })
   assert.deepEqual(parseRunSub('a/b.json'), { path: 'a/b.json' })
+})
+
+test('跑着时的一行：写了名称先显示名称、其次说明、结果退后；没写照旧动作名 + 结果', () => {
+  assert.deepEqual(liveStepLine({ action: 'api', message: '已调 项目.Api.Pick → null', note: '选第一个剧情选项' }), {
+    title: '选第一个剧情选项',
+    detail: '已调 项目.Api.Pick → null',
+    code: false,
+  })
+  assert.equal(liveStepLine({ action: 'api', title: '选第一个选项', note: '很长的详细说明……' }).title, '选第一个选项')
+  assert.deepEqual(liveStepLine({ action: 'wait', message: '等条件成立', note: '  ' }), {
+    title: 'wait',
+    detail: '等条件成立',
+    code: true,
+  })
 })

@@ -10,7 +10,7 @@ import { loadReport, type GtJob } from '../sections/uekit/gt-run/types.ts'
 import { useExtEvents } from '../sections/uekit/ListCol.tsx'
 import { Badge, type Tone } from '../ui.tsx'
 import { gametestRoute, runSub } from './link.ts'
-import { runPhase, runResult, runTarget, tallyOf, type RunPhase, type RunTally } from './state.ts'
+import { liveStepLine, runPhase, runResult, runTarget, tallyOf, type RunPhase, type RunTally } from './state.ts'
 
 const PHASE: Record<RunPhase, { tone: Tone; label: () => string }> = {
   starting: { tone: 'run', label: () => t('启动中') },
@@ -114,20 +114,34 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
             <p className="ue:px-3 ue:py-2 ue:text-danger">{res.error}</p>
           ) : live ? (
             <ul className="ue:flex ue:flex-col ue:gap-1 ue:px-3 ue:py-2">
-              {(job?.steps ?? []).slice(-LIVE_STEPS).map((s) => (
-                <li key={s.path ?? s.index} className="ue:flex ue:min-w-0 ue:items-center ue:gap-2">
-                  <StepIcon s={s.status} />
-                  <span className="ue:shrink-0 ue:font-mono ue:text-muted">{s.action}</span>
-                  <span
-                    className={cn(
-                      'ue:min-w-0 ue:truncate',
-                      s.status === 'failed' ? 'ue:text-danger' : 'ue:text-subtle',
-                    )}
+              {(job?.steps ?? []).slice(-LIVE_STEPS).map((s) => {
+                const line = liveStepLine(s)
+                const bad = s.status === 'failed'
+                return (
+                  <li
+                    key={s.path ?? s.index}
+                    className="ue:flex ue:min-w-0 ue:items-center ue:gap-2"
+                    title={line.detail || undefined}
                   >
-                    {s.message || s.note || s.target}
-                  </span>
-                </li>
-              ))}
+                    <StepIcon s={s.status} />
+                    <span
+                      className={cn(
+                        line.code ? 'ue:shrink-0 ue:font-mono ue:text-muted' : 'ue:min-w-0 ue:truncate',
+                        !line.code && (bad ? 'ue:text-danger' : 'ue:text-fg'),
+                      )}
+                    >
+                      {line.title}
+                    </span>
+                    {line.detail && (
+                      <span
+                        className={cn('ue:min-w-0 ue:flex-1 ue:truncate', bad ? 'ue:text-danger' : 'ue:text-subtle')}
+                      >
+                        {line.detail}
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
               {!job?.steps.length && <li className="ue:text-subtle">{t('等第一步的结果…')}</li>}
             </ul>
           ) : res.runId && project ? (
