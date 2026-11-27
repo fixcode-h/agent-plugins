@@ -22,7 +22,7 @@ import { emptyRun, type FlowRunState } from '../run-state.ts'
 import { BpContext, linkedPins, type BpCtx } from './ctx.ts'
 import { addLoose, addNote, clearPositions, connect, disconnect, insertAtPin, moveNodes, updateNote } from './edit.ts'
 import { BP_EDGE_TYPES, type BpEdgeData } from './edge.tsx'
-import { bpGraph, pinOf, scopeKey, SETUP_KEY, START_KEY, TEARDOWN_KEY, type BpAt, type BpNode } from './graph.ts'
+import { bpGraph, pinOf, scopeKey, type BpAt, type BpNode } from './graph.ts'
 import { CANVAS_KEYS } from './keys.ts'
 import { AlignTools, MiniMapToggle, NodeSearch, useMiniMapPref, ZoomReadout } from './toolbar.tsx'
 import { BP_NODE_TYPES, type BpData } from './nodes.tsx'
@@ -143,19 +143,17 @@ function BpCanvas({
   )
   const edges = useMemo<RFEdge[]>(
     () =>
-      graph.edges
-        .map<RFEdge>((e) => ({
-          id: e.id,
-          source: e.from,
-          sourceHandle: e.pin,
-          target: e.to,
-          targetHandle: 'in',
-          type: 'bp',
-          selectable: false,
-          data: { edge: e },
-        }))
-        .concat(phaseEdges(byId)),
-    [graph, byId],
+      graph.edges.map<RFEdge>((e) => ({
+        id: e.id,
+        source: e.from,
+        sourceHandle: e.pin,
+        target: e.to,
+        targetHandle: 'in',
+        type: 'bp',
+        selectable: false,
+        data: { edge: e },
+      })),
+    [graph],
   )
 
   const apply = useCallback(
@@ -605,25 +603,4 @@ function Bridge({ into }: { into: { current: ReturnType<typeof useReactFlow> | n
 function edgesTarget(g: ReturnType<typeof bpGraph>, at: BpAt) {
   const e = g.edges.find((x) => pathStr(x.at.slot) === pathStr(at.slot) && x.at.index === at.index)
   return e ? g.nodes.find((n) => n.id === e.to) : undefined
-}
-
-/** 三段事件之间的示意虚线（BpPhaseEdge）：只在最外层（三个事件都画了）时有 */
-function phaseEdges(byId: Map<string, { id: string }>): RFEdge[] {
-  const pairs: [string, string, string][] = [
-    [SETUP_KEY, START_KEY, t('通过后')],
-    [START_KEY, TEARDOWN_KEY, t('不论结果')],
-  ]
-  return pairs
-    .filter(([a, b]) => byId.has(a) && byId.has(b))
-    .map(([a, b, label]) => ({
-      id: `phase:${a}`,
-      source: a,
-      sourceHandle: 'phase-out',
-      target: b,
-      targetHandle: 'phase-in',
-      type: 'phase',
-      selectable: false,
-      focusable: false,
-      data: { label },
-    })) as unknown as RFEdge[]
 }
