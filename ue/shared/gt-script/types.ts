@@ -30,6 +30,8 @@ export interface GtScript {
   guards?: GtGuard[]
   setup?: GtStep[]
   steps?: GtStep[]
+  /** 收尾段（GameTest 2.7.0）：主流程跑完、失败、第一次按停止后都执行 */
+  teardown?: GtStep[]
   [k: string]: unknown
 }
 
@@ -40,7 +42,7 @@ export interface GtScript {
 export type GtPath = (string | number)[]
 
 /** 槽的种类：列表视图按它画「否则 / 否则如果」分隔行，流程图按它分支 */
-export type SlotKind = 'steps' | 'setup' | 'do' | 'then' | 'elif' | 'else'
+export type SlotKind = 'steps' | 'setup' | 'teardown' | 'do' | 'then' | 'elif' | 'else'
 
 /** 块里的一个子步骤槽：相对块本身的键路径 */
 export interface SlotRef {

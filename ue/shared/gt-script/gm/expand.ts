@@ -133,7 +133,7 @@ function eachGmStep(doc: GtScript, visit: (s: GtStep, at: string) => GtStep): Gt
     return o.action === 'gm.run' ? visit(next as GtStep, typeof o.id === 'string' ? o.id : at) : next
   }
   const out: GtScript = { ...doc }
-  for (const k of ['setup', 'steps', 'guards'] as const) if (doc[k] !== undefined) out[k] = walk(doc[k], k) as never
+  for (const k of ['setup', 'steps', 'teardown', 'guards'] as const) if (doc[k] !== undefined) out[k] = walk(doc[k], k) as never
   return out
 }
 

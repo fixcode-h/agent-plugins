@@ -14,6 +14,8 @@ export interface ResultLike {
   index: number
   path?: string
   setup?: boolean
+  /** 收尾段的记录（GameTest 2.7.0）：path 是 teardown.N，不对到主流程的行 */
+  teardown?: boolean
 }
 
 export interface RowPlace {
@@ -61,7 +63,7 @@ export function placeRows<T extends Record<string, unknown>>(steps: T[]): (RowPl
  * 临时运行的脚本是从原场景里截出来的：从顶层第 n 步起跑的，结果路径的顶层序号加 n；只跑一步的，结果的 steps.0 换成那一步的路径
  */
 export function resultKey(r: ResultLike, base: RunBase = 0): string | undefined {
-  if (r.setup) return undefined
+  if (r.setup || r.teardown || r.path?.startsWith('teardown')) return undefined
   const path = r.path && /^steps\.\d+/.test(r.path) ? r.path : `steps.${r.index}`
   const m = /^steps\.(\d+)(.*)$/.exec(path)!
   if (typeof base === 'string') return `${base}${m[2]}`

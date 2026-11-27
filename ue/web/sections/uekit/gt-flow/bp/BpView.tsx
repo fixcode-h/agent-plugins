@@ -126,7 +126,7 @@ function BpCanvas({
         position: { x: n.x, y: n.y },
         style: {
           width:
-            n.kind === 'start' || n.kind === 'setup' || n.kind === 'entry'
+            n.kind === 'start' || n.kind === 'setup' || n.kind === 'teardown' || n.kind === 'entry'
               ? undefined
               : n.kind === 'guard'
                 ? 240

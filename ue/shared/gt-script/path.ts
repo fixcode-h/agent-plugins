@@ -92,5 +92,5 @@ export function placeOf(doc: unknown, path: GtPath): StepPlace | undefined {
   }
   if (guardDo(slot)) return { slot, index, slotKind: 'do', inGuard: true }
   const head = slot[0]
-  return { slot, index, slotKind: head === 'setup' ? 'setup' : 'steps', inGuard: false }
+  return { slot, index, slotKind: head === 'setup' || head === 'teardown' ? head : 'steps', inGuard: false }
 }

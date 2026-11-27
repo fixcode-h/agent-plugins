@@ -2,6 +2,8 @@ import type { McpResult } from '../../../sdk/server.ts'
 import { runOp } from '../ops.ts'
 import { out, str, tool } from '../toolkit.ts'
 import { gtApi, gtValidate, gtVars, gtWidgets, STRUCT_MAX } from './gt-author/tool-actions.ts'
+import { gtLibrary } from './gt-author/library.ts'
+import { scenarioRoot } from './gt-disk.ts'
 import { gtProps } from './gt-ref/tool.ts'
 import { gtVerdict } from './gt-verdict.ts'
 import { JOB_WAIT_DEFAULT_MS, waitJob } from './gt-job-wait.ts'
@@ -44,7 +46,7 @@ async function gtHistory(op: Op, a: Record<string, unknown>) {
 }
 
 /** look 能看的：原来各自一个 action 的查询，加上 gmRecent（用户最近在 GM 页点过的，转成「执行 GM」步骤） */
-const LOOK = ['status', 'actions', 'vars', 'widgets', 'api', 'props', 'scenarios', 'gmRecent'] as const
+const LOOK = ['status', 'actions', 'vars', 'widgets', 'api', 'props', 'scenarios', 'library', 'gmRecent'] as const
 
 /** 用户刚在 GM 页调过的 GM → 能直接放进脚本的 gm.run 步骤（测试页梳理 F5）；对象调用那种记录不是 GM，跳过 */
 async function gmRecent(projectId: string, a: Record<string, unknown>) {
@@ -77,6 +79,9 @@ async function look(op: Op, a: Record<string, unknown>, ctx: Parameters<typeof g
       return out(await gtProps(op, a), STRUCT_MAX)
     case 'scenarios':
       return out(await op('gt.scenarios', { query: a.query, limit: 100 }))
+    case 'library':
+      // 读磁盘：编辑器没开也能查
+      return out(await gtLibrary(await scenarioRoot(ctx.project.root), a))
     case 'gmRecent':
       return out(await gmRecent(ctx.project.id, a))
     default:
@@ -87,7 +92,7 @@ async function look(op: Op, a: Record<string, unknown>, ctx: Parameters<typeof g
 export const GT_TOOL = tool(
   'ue_gametest',
   'GameTest：在 PIE / 游戏进程里跑 UI 和玩法测试脚本（场景根下的 JSON，schemaVersion 5；对象引用 {class, in?, ident}（class 可写 lua:模块名）、部件 {obj, part}，ident 可写条件组 {any|all, not?}，属性路径 @/子控件.属性、@.属性、@#Lua字段、@:状态；有 if / loop / call / set / obj.* / api / gm.run / 守护 / 表达式，步骤可挂 hooks（执行前 / 成功后 / 失败时的 GM）；写法按技能 ue-gametest-authoring）。' +
-    'look what=…：status 场景根和连接；props 对象的属性树和推荐标识（给 class 不用开游戏）；widgets WBP 控件树；vars 变量和函数签名（scope=widget|class|subsystem|player|object|lua）；api 接口库；actions 动作；scenarios 场景；gmRecent 用户刚在 GM 页执行过的 GM（直接给 gm.run 步骤）。' +
+    'look what=…：status 场景根和连接；props 对象的属性树和推荐标识（给 class 不用开游戏）；widgets WBP 控件树；vars 变量和函数签名（scope=widget|class|subsystem|player|object|lua）；api 接口库；actions 动作；scenarios 场景；library 本项目公共库（common/ 下按功能分的子脚本，写脚本前先查、能用就 call）；gmRecent 用户刚在 GM 页执行过的 GM（直接给 gm.run 步骤）。' +
     '写测试：look 查 → 写脚本 → validate（编辑器没开时只查结构）→ run → job / report。validate 报 schema_old / path_old 时按新写法重写。' +
     'run：scenario（可带 params、from / to 步骤 id）、steps + name 或批量 tag / scenarios，马上返回编号；step 执行一步；resolve 核对引用命中几个和 skipIf；inspect 看视口某点是什么；job 等进度（最多等 45 秒）；report 报告，失败步骤的 payload.evidence 有截图、控件快照、日志、用到的对象当时的属性；history 最近结果；stop 取消。' +
     '编辑器没开时 look scenarios / report / history 读磁盘（offline: true）。跑场景文件通过的 report / job 算进完成依据。',
