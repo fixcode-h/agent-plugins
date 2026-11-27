@@ -43,6 +43,10 @@ export const recordKey = (r: PhaseRecord) =>
 /** 分级后的一行：step 为空是还没收到记录的调用（子脚本正在跑，调用那一步的记录要等它跑完才有） */
 export interface TreeRow<S> {
   step?: S
+  /** 还没跑到的顶层步骤（脚本里的定义，pendingRows 补的）：列出来但不打勾 */
+  pending?: Record<string, unknown>
+  /** 下一个要跑的（正在跑的段里第一个没跑到的） */
+  next?: boolean
   /** 调用占位行显示的名字（call 步骤的 id） */
   key: string
   depth: number
@@ -165,4 +169,45 @@ function currentPhase(records: PhaseRecord[], o: PhaseCounts): PhaseKey {
   const last = records[records.length - 1]
   if (last) return phaseOf(last)
   return PHASE_ORDER.find((p) => (o.phases?.[p]?.total ?? 1) > 0) ?? 'steps'
+}
+
+/** 顶层这一步在本段的下标：`steps.3`、`setup.0.do.1` → 3、0；子脚本里的记录（带 calls）不算 */
+function topIndex(r: PhaseRecord, phase: PhaseKey) {
+  if (r.calls?.length) return undefined
+  const m = new RegExp(`^${phase}\\.(\\d+)`).exec(r.path ?? '')
+  return m ? Number(m[1]) : undefined
+}
+
+/**
+ * 跑着时把这段还没跑到的顶层步骤补在已跑的后面（用户 2026-11-27：下一步要执行的也显示，跑完才打勾）。
+ * outline 是脚本里这段的顶层步骤；已经有记录的（块跑了一半时子步骤有记录）和正在跑的调用（占位行）都算跑到了。
+ * next：这段正在跑，第一个没跑到的就是下一步
+ */
+export function pendingRows<S extends PhaseRecord>(
+  phase: PhaseKey,
+  records: S[],
+  rows: TreeRow<S>[],
+  outline: Record<string, unknown>[] | undefined,
+  next: boolean,
+): TreeRow<S>[] {
+  if (!outline?.length) return []
+  const seen = new Set<number>()
+  for (const r of records) {
+    const i = phaseOf(r) === phase ? topIndex(r, phase) : undefined
+    if (i !== undefined) seen.add(i)
+  }
+  // 子脚本还在跑的调用：占位行的 key 是调用那一步的 id（或路径）
+  const calling = new Set(rows.filter((r) => !r.step && r.depth === 0).map((r) => r.key))
+  // 正在跑的是调用或块（最后一条是子步骤、块自己的记录还没到）时，下一步还没开始
+  const last = records.filter((r) => phaseOf(r) === phase).at(-1)
+  const busy =
+    calling.size > 0 || (!!last && (!!last.calls?.length || new RegExp(`^${phase}\\.\\d+\\.`).test(last.path ?? '')))
+  next = next && !busy
+  const out: TreeRow<S>[] = []
+  outline.forEach((def, i) => {
+    const id = typeof def.id === 'string' ? def.id : ''
+    if (seen.has(i) || calling.has(`${phase}.${i}`) || (id && calling.has(id))) return
+    out.push({ pending: def, key: id || `${phase}.${i}`, depth: 0, next: next && !out.length })
+  })
+  return out
 }

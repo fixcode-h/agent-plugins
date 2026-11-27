@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { callTree, groupPhases, outcomeOf, recordKey } from './phases.ts'
+import { callTree, groupPhases, outcomeOf, pendingRows, recordKey } from './phases.ts'
 
 const r = (o: Record<string, unknown>) => ({ index: 0, status: 'succeeded', ...o }) as never
 
@@ -93,4 +93,34 @@ test('不同段、不同子脚本的同号记录键不撞', () => {
   const b = recordKey(r({ index: 0, path: 'steps.0' }))
   const c = recordKey(r({ index: 0, path: 'steps.0', calls: ['c1'] }))
   assert.equal(new Set([a, b, c]).size, 3)
+})
+
+test('跑着时补上还没跑到的顶层步骤：已跑的不重复，正在跑的调用 / 块里时下一步不转圈', () => {
+  const outline = [
+    { id: 'c1', action: 'call' },
+    { id: 's1', action: 'click' },
+    { id: 's2', action: 'check' },
+  ]
+  // 第一步跑完：后两步没跑到，s1 是下一步
+  const done = [{ index: 0, action: 'call', status: 'succeeded', path: 'steps.0', id: 'c1', block: true }]
+  const p1 = pendingRows('steps', done, callTree(done), outline, true)
+  assert.deepEqual(
+    p1.map((r) => [r.key, !!r.next]),
+    [
+      ['s1', true],
+      ['s2', false],
+    ],
+  )
+  // 调用还在跑（只有子脚本的记录）：c1 是占位行不再补，s1 不转圈
+  const inCall = [{ index: 0, action: 'key', status: 'succeeded', path: 'steps.0', calls: ['c1'] }]
+  const p2 = pendingRows('steps', inCall, callTree(inCall), outline, true)
+  assert.deepEqual(
+    p2.map((r) => [r.key, !!r.next]),
+    [
+      ['s1', false],
+      ['s2', false],
+    ],
+  )
+  // 还没开始的段：全列出来、都不转圈
+  assert.equal(pendingRows('teardown', [], [], [{ action: 'api' }], false)[0].key, 'teardown.0')
 })

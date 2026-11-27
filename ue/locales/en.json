@@ -5231,5 +5231,7 @@
   "{n} 步全部通过": "All {n} steps passed",
   "执行后": "After",
   "没跑": "Not run",
-  "步骤": "Steps"
+  "步骤": "Steps",
+  "前面 {n} 步已跑完": "{n} earlier steps done",
+  "后面还有 {n} 步": "{n} more steps"
 }

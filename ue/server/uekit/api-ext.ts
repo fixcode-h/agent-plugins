@@ -17,6 +17,7 @@ import { libraryAction } from './gt-library/index.ts'
 import { deleteShots, ocrScenario, shotsSize } from './gt-shots.ts'
 import { insideProject, readEvidenceText, readReportFile, readScenario, scenarioAction } from './gt-files.ts'
 import { expandGmText } from './gt-gm-expand.ts'
+import { scenarioOutline } from './gt-outline.ts'
 import { configBaseline } from './forge-baseline.ts'
 import { forgeAssetExists, forgeReadConfig, forgeSaveConfig, forgeTemplates } from './forge-config-io.ts'
 import { forgeCreateConfig, forgeEnsureRoot, forgeFileAction } from './forge-files.ts'
@@ -87,6 +88,9 @@ export async function extRoute(ctx: OpCtx, route: string, b: Body, url: URL): Pr
     case 'POST ext/gt/scenario':
       // GameTest 页的步骤列表：场景文件里的每一步（没跑过的场景也要能看到）
       return { ...(await readScenario(p.root, String(b.root ?? ''), String(b.path ?? ''))) }
+    case 'POST ext/gt/outline':
+      // 对话里跑着的 GameTest 卡片：三段的顶层步骤，没跑到的也列出来（gt-outline.ts）
+      return scenarioOutline(p.root, String(b.scenario ?? ''))
     case 'POST ext/gt/report':
       // gt.report 太长时 UE 写成文件只回路径：页面要每一步的结果，从这份文件取
       return readReportFile(p.root, String(b.file ?? ''))
