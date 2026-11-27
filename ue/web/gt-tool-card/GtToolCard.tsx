@@ -5,24 +5,25 @@ import { op } from '../api.ts'
 import { h, t } from '../host.ts'
 import { mergeJobEvent } from '../sections/uekit/gt-batch.ts'
 import { RunReport } from '../sections/uekit/gt-debug/RunReport.tsx'
-import { StepIcon } from '../sections/uekit/gt-run/step-parts.tsx'
 import { loadReport, type GtJob } from '../sections/uekit/gt-run/types.ts'
 import { useExtEvents } from '../sections/uekit/ListCol.tsx'
 import { Badge, type Tone } from '../ui.tsx'
 import { gametestRoute, runSub } from './link.ts'
-import { liveStepLine, runPhase, runResult, runTarget, tallyOf, type RunPhase, type RunTally } from './state.ts'
+import { phaseProgress, runPhase, runResult, runTarget, tallyOf, type RunPhase, type RunTally } from './state.ts'
+import { LivePhases } from './LivePhases.tsx'
 
 const PHASE: Record<RunPhase, { tone: Tone; label: () => string }> = {
   starting: { tone: 'run', label: () => t('启动中') },
   running: { tone: 'run', label: () => t('运行中') },
   passed: { tone: 'ok', label: () => t('通过') },
   failed: { tone: 'danger', label: () => t('失败') },
+  blocked: { tone: 'warn', label: () => t('前置不满足') },
   error: { tone: 'danger', label: () => t('没跑起来') },
   unknown: { tone: 'muted', label: () => t('已结束') },
 }
 
-/** 跑着时展开列最近这么多步：整份结果跑完后看报告 */
-const LIVE_STEPS = 12
+/** 打开卡片时向作业要最近这么多步（之后靠推送接上）：分段显示要看得到前面几段 */
+const LIVE_STEPS = 50
 
 /**
  * 对话里 Agent 调 ue_gametest action=run 那一行下面的卡片（用户 2026-11-26：要看得出 Agent 跑了哪个脚本、跑得怎样）。
@@ -30,7 +31,7 @@ const LIVE_STEPS = 12
  * 「在 GameTest 页打开」跳到那个脚本并在右栏打开这次运行
  */
 export function GtToolCard({ args, output, running, failed, projectId }: ToolCardProps) {
-  const { cn, hooks } = h()
+  const { hooks } = h()
   const nav = hooks.useNav()
   const target = runTarget(args)
   const res = runResult(output)
@@ -67,6 +68,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
   const total = job?.planned ?? res.planned
   const done = job?.total ?? tally?.total ?? 0
   const live = phase === 'running' || phase === 'starting'
+  const progress = live ? phaseProgress(job) : undefined
   const goPage = () =>
     target.scenario &&
     nav.go({ page: 'plugin', id: 'ue', sub: 'main', msg: gametestRoute(project, runSub(target.scenario, res.runId)) })
@@ -93,7 +95,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
           <Badge tone={PHASE[phase].tone}>{PHASE[phase].label()}</Badge>
           {total !== undefined && (live || job || tally) && (
             <span className="ue:shrink-0 ue:text-subtle">
-              {live ? t('第 {n}/{m} 步', { n: done, m: total }) : t('{n} 步', { n: done || total })}
+              {progress ?? (live ? t('第 {n}/{m} 步', { n: done, m: total }) : t('{n} 步', { n: done || total }))}
               {!!(job?.failed ?? tally?.failed) && ` · ${t('失败 {n} 步', { n: job?.failed ?? tally?.failed ?? 0 })}`}
             </span>
           )}
@@ -113,37 +115,7 @@ export function GtToolCard({ args, output, running, failed, projectId }: ToolCar
           {res.error ? (
             <p className="ue:px-3 ue:py-2 ue:text-danger">{res.error}</p>
           ) : live ? (
-            <ul className="ue:flex ue:flex-col ue:gap-1 ue:px-3 ue:py-2">
-              {(job?.steps ?? []).slice(-LIVE_STEPS).map((s) => {
-                const line = liveStepLine(s)
-                const bad = s.status === 'failed'
-                return (
-                  <li
-                    key={s.path ?? s.index}
-                    className="ue:flex ue:min-w-0 ue:items-center ue:gap-2"
-                    title={line.detail || undefined}
-                  >
-                    <StepIcon s={s.status} />
-                    <span
-                      className={cn(
-                        line.code ? 'ue:shrink-0 ue:font-mono ue:text-muted' : 'ue:min-w-0 ue:truncate',
-                        !line.code && (bad ? 'ue:text-danger' : 'ue:text-fg'),
-                      )}
-                    >
-                      {line.title}
-                    </span>
-                    {line.detail && (
-                      <span
-                        className={cn('ue:min-w-0 ue:flex-1 ue:truncate', bad ? 'ue:text-danger' : 'ue:text-subtle')}
-                      >
-                        {line.detail}
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-              {!job?.steps.length && <li className="ue:text-subtle">{t('等第一步的结果…')}</li>}
-            </ul>
+            <LivePhases job={job} />
           ) : res.runId && project ? (
             <div className="ue:max-h-96 ue:overflow-auto">
               <RunReport project={project} runId={res.runId} active={false} onSelect={() => undefined} />

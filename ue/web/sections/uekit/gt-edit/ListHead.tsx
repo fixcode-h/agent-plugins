@@ -2,12 +2,20 @@ import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { slotsOf, walk, type GtScript } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 
-/** 主流程的步数：顶层几步、展开后一共几个叶子步骤（块本身不算，块里的一层层数进去；守护里的不算） */
+const PHASES = ['setup', 'steps', 'teardown'] as const
+
+/**
+ * 三段（执行前 / 执行 / 执行后）合起来的步数：顶层几步、展开后一共几个叶子步骤
+ * （块本身不算，块里的一层层数进去；守护里的不算）。各段自己的步数在段小节头上
+ */
 export function mainCounts(doc: GtScript) {
-  const top = Array.isArray(doc.steps) ? doc.steps.filter((s) => s && typeof s === 'object').length : 0
+  const top = PHASES.reduce(
+    (n, k) => n + (Array.isArray(doc[k]) ? doc[k].filter((s) => s && typeof s === 'object').length : 0),
+    0,
+  )
   let leaves = 0
   walk(doc, (e) => {
-    if (e.inGuard || e.path[0] !== 'steps') return false
+    if (e.inGuard || !(PHASES as readonly unknown[]).includes(e.path[0])) return false
     if (!slotsOf(e.step).length) leaves++
   })
   return { top, leaves }
@@ -24,7 +32,7 @@ export function foldableKeys(doc: GtScript) {
 }
 
 /**
- * 列表视图顶上的标题行（效果图 5）：「主流程 4 步 · 展开后 15 步」，右边全部折叠 / 展开。
+ * 列表视图顶上的标题行（效果图 5）：「步骤 4 步 · 展开后 15 步」（三段合计），右边全部折叠 / 展开。
  * 折叠状态归 ListView（键盘左右键也在改它），这里只给按钮
  */
 export function ListHead({
@@ -41,7 +49,7 @@ export function ListHead({
   const canFold = foldableKeys(doc).length > 0
   return (
     <div className="ue:flex ue:h-11 ue:shrink-0 ue:items-center ue:gap-2 ue:border-b ue:border-line ue:pr-2 ue:pl-4">
-      <span className="ue:text-body ue:font-semibold ue:text-fg">{t('主流程')}</span>
+      <span className="ue:text-body ue:font-semibold ue:text-fg">{t('步骤')}</span>
       <span className="ue:text-footnote ue:text-subtle ue:tabular-nums">
         {leaves !== top ? t('{n} 步 · 展开后 {m} 步', { n: top, m: leaves }) : t('{n} 步', { n: top })}
       </span>

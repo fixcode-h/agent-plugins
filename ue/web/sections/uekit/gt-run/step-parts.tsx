@@ -31,6 +31,11 @@ export interface GtStep {
   block?: boolean
   /** 附带 GM 出错只记一笔（GameTest 2.3.0）：status 是 failed，但不算这次运行失败 */
   warn?: boolean
+  id?: string
+  /** 执行后（收尾段，GameTest 2.7.0）的记录 */
+  teardown?: boolean
+  /** 在哪个 call 里跑的（GameTest 2.8.0）：外层到内层每个 call 步骤的 id */
+  calls?: string[]
 }
 
 export interface StepDef {

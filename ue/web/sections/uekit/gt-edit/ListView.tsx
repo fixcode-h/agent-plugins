@@ -20,6 +20,9 @@ import { BreakpointDot } from '../gt-debug/BreakpointDot.tsx'
 import { commandMenuItems, runKey, type CmdCtx } from './commands.ts'
 import { insertPlace, insertStep, openInsertAt, insertMenuItems } from './insert-menu.ts'
 import { foldableKeys, ListHead } from './ListHead.tsx'
+import { PHASE_ORDER } from '../gt-rows/phases.ts'
+import { PHASE_META, PhaseSectionHead } from '../gt-rows/PhaseHead.tsx'
+import { PhaseHint } from './PhaseHint.tsx'
 import type { ViewProps } from './views.ts'
 
 const INDENT = 18
@@ -37,11 +40,8 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
   const box = useRef<HTMLDivElement>(null)
   const sections = useMemo(
     () =>
-      [
-        { slot: ['setup'], kind: 'setup' as const, title: t('准备') },
-        { slot: ['steps'], kind: 'steps' as const, title: t('主流程') },
-        { slot: ['teardown'], kind: 'teardown' as const, title: t('收尾') },
-      ].map((s) => ({ ...s, rows: listRows(doc, s.slot, s.kind, collapsed) })),
+      // 三段（执行前 / 执行 / 执行后）在每个脚本里都在，空的运行时跳过（用户 2026-11-27）
+      PHASE_ORDER.map((kind) => ({ slot: [kind], kind, rows: listRows(doc, [kind], kind, collapsed) })),
     [doc, collapsed],
   )
   const stepRows = sections.flatMap((s) => s.rows).filter((r) => r.kind === 'step')
@@ -181,6 +181,8 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
     const block = slotsOf(r.step).length > 0
     const st = run?.status?.[k]
     const id = `r:${pathStr(r.path)}`
+    const named = typeof r.step.title === 'string' ? r.step.title.trim() : ''
+    const summary = ui.summary(r.step)
     return (
       <div
         key={id}
@@ -231,10 +233,18 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
         ) : null}
         <BreakpointDot k={k} inline />
         <Icon className={cn('ue:h-3.5 ue:w-3.5 ue:shrink-0', TONE_TEXT[ui.tone])} />
-        {block && <span className="ue:shrink-0 ue:font-medium ue:text-fg">{ui.title()}</span>}
-        <span className={cn('ue:min-w-0 ue:truncate', block ? 'ue:text-subtle' : 'ue:text-fg')}>
-          {ui.summary(r.step)}
-        </span>
+        {/* 写了名称（title）的先显示名称：块（如执行前的「准备环境」「前置检测」两组）替掉种类名，
+            单步（接口、调用这些摘要不看名称的）把摘要退到后面淡色显示 */}
+        {(block || named) && (
+          <span className="ue:shrink-0 ue:font-medium ue:text-fg" title={named && block ? ui.title() : undefined}>
+            {named || ui.title()}
+          </span>
+        )}
+        {(block || summary !== named) && (
+          <span className={cn('ue:min-w-0 ue:truncate', block || named ? 'ue:text-subtle' : 'ue:text-fg')}>
+            {summary}
+          </span>
+        )}
         {r.collapsed && (
           <span className="ue:shrink-0 ue:text-caption ue:text-subtle">
             {t('（收起了 {n} 步）', { n: r.hidden ?? 0 })}
@@ -313,58 +323,34 @@ export function ListView({ doc, onChange, selected, onSelect, onTry, run }: View
         className="ue:min-h-0 ue:flex-1 ue:overflow-auto ue:pb-10 ue:outline-none"
         aria-label={t('步骤列表')}
       >
-        {sections.map((s) =>
-          (s.kind === 'setup' || s.kind === 'teardown') && !s.rows.length ? null : (
-            <section key={s.kind}>
-              {/* 顶上标题行已经写了「主流程」：有准备或收尾步骤时才需要小节头分开几段 */}
-              {(s.kind !== 'steps' || sections[0].rows.length > 0 || sections[2].rows.length > 0) && (
-                <div className="ue:sticky ue:top-0 ue:z-10 ue:flex ue:h-7 ue:items-center ue:gap-2 ue:border-b ue:border-line/60 ue:bg-panel ue:px-3 ue:text-caption ue:text-subtle">
-                  {s.title}
-                  <span className="ue:tabular-nums">{s.rows.filter((r) => r.kind === 'step').length}</span>
-                </div>
+        {sections.map((s) => (
+          <section key={s.kind} data-gt-section={s.kind}>
+            <PhaseSectionHead phase={s.kind} count={endOf(s.slot)} />
+            {s.kind === 'steps' && <PhaseHint doc={doc} onChange={(d) => onChange(d)} />}
+            {s.rows.map(row)}
+            <div
+              className={cn(
+                'ue:flex ue:h-8 ue:items-center ue:gap-3 ue:px-3',
+                over === `end:${s.kind}` && 'ue:shadow-[inset_0_2px_0_var(--accent)]',
               )}
-              {s.rows.map(row)}
-              <div
-                className={cn(
-                  'ue:flex ue:h-8 ue:items-center ue:px-3',
-                  over === `end:${s.kind}` && 'ue:shadow-[inset_0_2px_0_var(--accent)]',
-                )}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setOver(`end:${s.kind}`)
-                }}
-                onDrop={() => drop(s.slot, endOf(s.slot))}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setOver(`end:${s.kind}`)
+              }}
+              onDrop={() => drop(s.slot, endOf(s.slot))}
+            >
+              {!s.rows.length && <span className="ue:text-caption ue:text-subtle">{t('没有步骤，运行时跳过')}</span>}
+              <button
+                type="button"
+                className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-sm ue:px-1 ue:text-caption ue:text-subtle ue:hover:text-fg"
+                onClick={(e) => insertAt(e, s.slot, endOf(s.slot))}
               >
-                <button
-                  type="button"
-                  className="ue:flex ue:cursor-pointer ue:items-center ue:gap-1 ue:rounded-sm ue:px-1 ue:text-caption ue:text-subtle ue:hover:text-fg"
-                  onClick={(e) => insertAt(e, s.slot, endOf(s.slot))}
-                >
-                  <Plus className="ue:h-3 ue:w-3" />
-                  {s.kind === 'setup' ? t('加准备步骤') : s.kind === 'teardown' ? t('加收尾步骤') : t('加一步')}
-                </button>
-              </div>
-            </section>
-          ),
-        )}
-        {!sections[0].rows.length && (
-          <button
-            type="button"
-            className="ue:mx-3 ue:mt-2 ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
-            onClick={(e) => insertAt(e, ['setup'], 0)}
-          >
-            {t('+ 加准备步骤（每次运行先做、不算进结果，例如开关卡、设 GM 状态）')}
-          </button>
-        )}
-        {!sections[2].rows.length && (
-          <button
-            type="button"
-            className="ue:mx-3 ue:mt-2 ue:block ue:cursor-pointer ue:text-caption ue:text-subtle ue:hover:text-fg"
-            onClick={(e) => insertAt(e, ['teardown'], 0)}
-          >
-            {t('+ 加收尾步骤（跑完、失败或停止后都会做，例如退出玩法、恢复状态）')}
-          </button>
-        )}
+                <Plus className="ue:h-3 ue:w-3" />
+                {PHASE_META[s.kind].add()}
+              </button>
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   )

@@ -146,4 +146,32 @@ const BpPendingEdge = memo(function BpPendingEdge(p: EdgeProps) {
   )
 })
 
-export const BP_EDGE_TYPES = { bp: BpEdgeView, pending: BpPendingEdge }
+/**
+ * 三段事件之间的竖向虚线：执行前 → 执行标「通过后」，执行 → 执行后标「不论结果」（用户 2026-11-27 看效果图定的），
+ * 只说明先后和「执行后总会跑」，不能点、不能断开
+ */
+export const BpPhaseEdge = memo(function BpPhaseEdge(p: EdgeProps<Edge<{ label: string }>>) {
+  const path = `M ${p.sourceX} ${p.sourceY} L ${p.targetX} ${p.targetY}`
+  return (
+    <>
+      <BaseEdge
+        id={p.id}
+        path={path}
+        style={{ stroke: 'var(--muted)', strokeWidth: 1.4, strokeDasharray: '5 5', opacity: 0.6 }}
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="ue:pointer-events-none ue:absolute ue:rounded-sm ue:px-1.5 ue:text-caption ue:text-subtle"
+          style={{
+            transform: `translate(8px, -50%) translate(${p.sourceX}px, ${(p.sourceY + p.targetY) / 2}px)`,
+            background: 'var(--canvas, transparent)',
+          }}
+        >
+          {p.data?.label}
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  )
+})
+
+export const BP_EDGE_TYPES = { bp: BpEdgeView, pending: BpPendingEdge, phase: BpPhaseEdge }

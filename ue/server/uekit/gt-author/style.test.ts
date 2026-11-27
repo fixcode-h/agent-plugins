@@ -64,6 +64,8 @@ test('一项一个节点的写法逐条报出来', async () => {
     'style_fixed_wait@s1',
     'style_inline_lua@s7',
     'style_loop_no_max@s8',
+    // 开头 7 步都在准备和检查（还加载了接口）、没开始操作
+    'style_precheck_in_steps@s1',
     'style_save_then_assert@s2',
   ])
 })
@@ -166,4 +168,28 @@ test('和公共库一样的一段提示改成 call', async () => {
   assert.equal(lib.total, 1)
   assert.equal(lib.items[0].script, 'common/地图/等加载完')
   assert.equal(lib.items[0].folder, '地图')
+})
+
+test('准备和前置检查写在执行段开头、收拾现场写在末尾：提示挪到执行前 / 执行后', async () => {
+  const scen = await root()
+  const doc = {
+    schemaVersion: 5,
+    steps: [
+      { id: 's1', action: 'wait', until: 'pie', timeoutMs: 30000 },
+      { id: 's2', action: 'api', api: `${T}.Count`, expect: { equals: 1 } },
+      { id: 's3', action: 'key', key: 'E' },
+      { id: 's4', action: 'api', api: `${T}.Spawn`, title: '退出玩法' },
+    ],
+  }
+  const w = await warn(scen, doc)
+  assert.ok(w.includes('style_precheck_in_steps@s1'), w.join(','))
+  assert.ok(w.includes('style_cleanup_in_steps@s4'), w.join(','))
+  // 已经分好三段的不报
+  const ok = await warn(scen, {
+    schemaVersion: 5,
+    setup: doc.steps.slice(0, 2),
+    steps: [doc.steps[2]],
+    teardown: [doc.steps[3]],
+  })
+  assert.ok(!ok.some((x) => x.startsWith('style_precheck') || x.startsWith('style_cleanup')), ok.join(','))
 })
