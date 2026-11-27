@@ -4,7 +4,8 @@ import type { ToolGuide } from '../../sdk/server.ts'
  * UE 工具的作用和使用时机（面板插件接口 8）：设置 →「MCP」照它显示，面板也把「什么时候用 / 不要用」补在
  * description 后面交给 Agent。单独一个文件，工具定义（tools.ts 等）不动；useWhen 写给模型看，要能直接照做。
  */
-type Guide = ToolGuide & { confirms?: boolean; irreversible?: boolean }
+/** intent：执行代码类工具，面板补中文意图参数、对话卡片显示它（面板 SDK 的 McpTool.intent） */
+type Guide = ToolGuide & { confirms?: boolean; irreversible?: boolean; intent?: boolean }
 
 const RUN = '运行时对象'
 const ASSET = '资源与蓝图'
@@ -73,6 +74,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     avoidWhen:
       '只读字段用 ue_get（functions=true 看函数），改简单字段用 ue_set（能撤回）；exec 每次都要用户确认，能用 call 就别用 exec',
     confirms: true,
+    intent: true,
     group: RUN,
   },
   ue_call: {
@@ -123,6 +125,7 @@ export const UE_GUIDES: Record<string, Guide> = {
     avoidWhen:
       '改属性、DataTable、蓝图、新建复制改名删除、编译保存、运行中游戏的读改都用对应的 ue_* 工具，多少个都一样：批量一次调用，有演练、逐项结果和编译回读，Python 没有',
     confirms: true,
+    intent: true,
     group: ASSET,
   },
   ue_log: {

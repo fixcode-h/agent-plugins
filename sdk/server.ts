@@ -202,6 +202,12 @@ export interface McpTool {
   /** 执行前会请用户确认（ctx.confirm）、做了收不回：设置页的徽标（插件接口 8），不影响执行 */
   confirms?: boolean
   irreversible?: boolean
+  /**
+   * 执行代码类工具（Lua、Python……）：面板给参数表补 intent（Agent 用中文一句话说明这段代码要做什么），
+   * 对话的工具卡片显示这句代替动作名（面板 shared/mcp-catalog/intent.ts）。插件不用自己声明这个参数，执行时忽略它即可；
+   * 旧面板不认这个字段，只是不补参数
+   */
+  intent?: boolean
   /** effect 为 edit 时：按参数算出这次要改的文件（本机路径），执行前交给工具前守卫判断；算不出返回空数组 */
   targets?: (args: Record<string, unknown>) => string[]
   /**
@@ -556,8 +562,11 @@ export type ActivateServer = (ctx: PluginServerContext) => ServerPlugin | Promis
 export const FIND_KINDS = ['symbol', 'refs', 'outline', 'members', 'include', 'text'] as const
 export type FindKind = (typeof FIND_KINDS)[number]
 
-/** 按语言分路：cpp 走 VS（UEToVS）、lua 走 IDEA（lua_code），都由插件登记；other 只有通用的路 */
-export const FIND_LANGS = ['cpp', 'lua', 'other'] as const
+/**
+ * 按目标分类分路（面板 shared/capability-router/find/categories.ts）：cpp 先走 VS（UEToVS）、lua 先走 IDEA（lua_code），都由插件登记；
+ * data（json、配置、数据、文档）只走面板；other（看不出）先走面板，没查到再问外部服务
+ */
+export const FIND_LANGS = ['cpp', 'lua', 'data', 'other'] as const
 export type FindLang = (typeof FIND_LANGS)[number]
 
 export interface FindRequest {
