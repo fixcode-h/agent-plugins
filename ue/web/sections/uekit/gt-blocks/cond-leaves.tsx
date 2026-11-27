@@ -25,7 +25,18 @@ function normWait(s: GtStep): GtStep {
 /** 换等待方式：去掉旧方式的字段，cond 给一个空条件组 */
 function switchWait(step: GtStep, mode: string): GtStep {
   const keep: GtStep = { action: 'wait' }
-  for (const k of ['id', 'note', 'onFail', 'retries', 'timeoutMs', 'skipIf', 'expectNoErrors', 'disabled', 'hint'])
+  for (const k of [
+    'id',
+    'title',
+    'note',
+    'onFail',
+    'retries',
+    'timeoutMs',
+    'skipIf',
+    'expectNoErrors',
+    'disabled',
+    'hint',
+  ])
     if (k in step) keep[k] = step[k]
   if (mode === 'cond') return { ...keep, until: 'cond', cond: { all: [] } }
   if (mode === 'seconds') return { ...keep, until: 'seconds', seconds: 1 }

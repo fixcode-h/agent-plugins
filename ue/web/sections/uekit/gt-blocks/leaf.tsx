@@ -10,7 +10,18 @@ import './fields/actions.ts'
 import { setFallbackUi, type BlockUi } from './registry.ts'
 
 /** 公共字段由外壳画，JSON 里只改动作自己的字段：去掉 id 和公共字段 */
-const COMMON = ['id', 'note', 'onFail', 'retries', 'timeoutMs', 'skipIf', 'expectNoErrors', 'disabled', 'guards']
+const COMMON = [
+  'id',
+  'title',
+  'note',
+  'onFail',
+  'retries',
+  'timeoutMs',
+  'skipIf',
+  'expectNoErrors',
+  'disabled',
+  'guards',
+]
 
 /**
  * 原有动作（click、key、type、move、wait、assert、console、gm…）的检查器：按动作字段表（fields/actions.ts）出表单，

@@ -71,3 +71,27 @@ export function runPhase(o: {
   if (o.tally) return o.tally.failed > 0 ? 'failed' : 'passed'
   return 'unknown'
 }
+
+/**
+ * 跑着时列的一步：脚本里写了 title（节点名称）或 note（说明）就用它当这一行的主文字，结果消息退到后面（用户 2026-11-27：
+ * 只显示「api 已调 项目.X → null」看不出每步在做什么，GameTest 页运行记录早就先显示 note，对话卡片要一致）。
+ * 没写 note 的照旧：动作名 + 结果消息
+ */
+export function liveStepLine(s: {
+  action?: string
+  message?: string
+  title?: string
+  note?: string
+  target?: string
+}): {
+  title: string
+  detail: string
+  /** title 是动作名（没写 note）：用等宽字 */
+  code: boolean
+} {
+  // 名称（title，GameTest 2.6.0）是专门给这一行的短句；旧脚本只有说明（note）
+  const note = s.title?.trim() || s.note?.trim()
+  const msg = (s.message || s.target || '').trim()
+  if (note) return { title: note, detail: msg, code: false }
+  return { title: s.action ?? '?', detail: msg, code: true }
+}

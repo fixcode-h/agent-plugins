@@ -96,7 +96,7 @@ export function RunReport({
                 </span>
                 <span className="ue:flex ue:min-w-0 ue:flex-1 ue:flex-col">
                   <span className={cn('ue:truncate ue:text-footnote', block ? 'ue:text-muted' : 'ue:text-fg')}>
-                    {info.path ? info.title : s.note || s.action}
+                    {info.path ? info.title : s.title || s.note || s.action}
                     {block && ` · ${t('整块')}`}
                   </span>
                   {s.status === 'failed' && s.message && (

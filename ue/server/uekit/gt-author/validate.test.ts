@@ -36,9 +36,14 @@ async function setup() {
   return { scen, lua }
 }
 
+// 没写名称 / 说明的警告（no_title / no_note）单独测：别的用例的脚本为了短都没写，不算进来
+const NAMING = new Set(['no_title', 'no_note'])
 const codes = (r: { errors: { code: string }[]; warnings: { code: string }[] }) => ({
   errors: r.errors.map((x) => x.code).sort(),
-  warnings: r.warnings.map((x) => x.code).sort(),
+  warnings: r.warnings
+    .map((x) => x.code)
+    .filter((c) => !NAMING.has(c))
+    .sort(),
 })
 
 test('一份写对了的 v5 脚本没有错误', async () => {
@@ -123,5 +128,30 @@ test('引用写了 client（GameTest 还没做）给警告，不当错误', asyn
   }
   const r = await runChecks(offlineChecks(), makeEnv(doc, 'x.json', scen, lua))
   assert.deepEqual(codes(r), { errors: [], warnings: ['not_supported', 'not_supported'] })
-  assert.deepEqual(r.warnings.map((w) => w.path).sort(), ['objects.npc', 'steps.0'])
+  assert.deepEqual(
+    r.warnings
+      .filter((w) => !NAMING.has(w.code))
+      .map((w) => w.path)
+      .sort(),
+    ['objects.npc', 'steps.0'],
+  )
+})
+
+test('每一步要写名称（title）和说明（note）：没写的合成一条警告，列出步骤', async () => {
+  const { scen, lua } = await setup()
+  const doc = {
+    kind: 'gametest-scenario',
+    schemaVersion: 5,
+    steps: [
+      { id: 's1', action: 'key', key: 'E', title: '按交互键', note: '靠近 NPC 后按 E 打开对话' },
+      { id: 's2', action: 'key', key: 'E', note: '只有说明' },
+      { id: 'g1', action: 'group', title: '收尾', do: [{ id: 's3', action: 'key', key: 'Escape' }] },
+    ],
+  }
+  const r = await runChecks(offlineChecks(), makeEnv(doc, 'x.json', scen, lua))
+  const title = r.warnings.find((w) => w.code === 'no_title')
+  const note = r.warnings.find((w) => w.code === 'no_note')
+  assert.match(String(title?.message), /s2、s3/)
+  assert.match(String(note?.message), /g1、s3/)
+  assert.ok(!r.errors.length)
 })

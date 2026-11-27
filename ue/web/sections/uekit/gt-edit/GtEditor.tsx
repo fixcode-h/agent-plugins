@@ -487,6 +487,7 @@ export function GtEditor({
                     ctx={cmdCtx}
                     onTry={onTry}
                     history={historyOf}
+                    gtVersion={gtVersion}
                   />
                 ) : (
                   <ScriptSettings doc={s.doc} onChange={(d) => apply(d)} />

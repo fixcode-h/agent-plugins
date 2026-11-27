@@ -65,6 +65,7 @@ export const actionTitle = (action: string): string => titles.get(action)?.() ??
 export const NOT_FIELDS = new Set([
   'id',
   'action',
+  'title',
   'note',
   'onFail',
   'retries',

@@ -61,7 +61,7 @@ function describe(s: Record<string, unknown>) {
   const human = humanStep(s)
   if (human) return [human, targetText(s.target)].filter(Boolean).join(' · ')
   const rest = Object.entries(s)
-    .filter(([k]) => k !== 'action' && k !== 'note' && k !== 'hint')
+    .filter(([k]) => k !== 'action' && k !== 'title' && k !== 'note' && k !== 'hint')
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
     .join(' ')
   return [targetText(s.target), s.note as string | undefined, rest].filter(Boolean).join(' · ')

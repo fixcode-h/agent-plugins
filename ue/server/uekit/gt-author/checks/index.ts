@@ -4,6 +4,7 @@ import { calls } from './calls.ts'
 import { exprs } from './exprs.ts'
 import { ids } from './ids.ts'
 import { lua } from './lua.ts'
+import { notes } from './notes.ts'
 import { refs } from './refs.ts'
 import { shape } from './shape.ts'
 import { unsupported } from './unsupported.ts'
@@ -25,6 +26,8 @@ const table: { check: Check; panelOnly?: boolean }[] = [
   { check: apis },
   { check: unsupported },
   { check: lua, panelOnly: true },
+  // UE 的 gt.validate 不查 title / note（面板这边的约定），编辑器开着时也要跑
+  { check: notes, panelOnly: true },
 ]
 
 export function registerCheck(check: Check, panelOnly = false) {
