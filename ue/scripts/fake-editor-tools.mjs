@@ -49,10 +49,17 @@ export function editorToolOps(state) {
         if (m.pie) throw new Error('PIE 已经在运行')
         m.pie = true
         m.pieMap = a.map ? resolve(a.map) : ''
-        return { running: true, ...(a.map && { map: m.pieMap }) }
+        // UELink 2.24：window 默认 viewport（选中的视口）
+        m.pieWindow = a.window ?? 'viewport'
+        return { running: true, window: m.pieWindow, ...(a.map && { map: m.pieMap }) }
       }
       if (a.action === 'stop') m.pie = false
       return { running: m.pie }
+    },
+    // GameTest 的运行设置（_settings.json）：pie_start 没写 window 时按它的 pieWindow；没装 GameTest 时报未知操作
+    'gt.config': () => {
+      if (!state.gtConfig) throw new Error('unknown op gt.config')
+      return { path: 'docs/GameTest/_settings.json', exists: true, config: state.gtConfig, settingsUiWaitTimeoutMs: 0 }
     },
     'config.files': () => ({ items: [{ name: 'Engine', file: 'Saved/Config/WindowsEditor/Engine.ini' }] }),
     'config.get': (a) => {

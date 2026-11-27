@@ -128,15 +128,18 @@ export const UE_GUIDES: Record<string, Guide> = {
   ue_log: {
     title: '日志',
     summary: '取 UE 日志的新行、列出崩溃记录、清空日志',
-    useWhen: '复现问题前后看报错和警告、排查崩溃时；用上次的 cursor 只取新行，只看这次 PIE 新出的错用 pie=true（errors 计数是整份日志的累计，别拿它判断这次有没有出错）',
+    useWhen:
+      '复现问题前后看报错和警告、排查崩溃时；用上次的 cursor 只取新行，只看这次 PIE 新出的错用 pie=true（errors 计数是整份日志的累计，别拿它判断这次有没有出错）',
     avoidWhen: 'clear 清空收不回，确实需要时才用并加 backup=true',
     irreversible: true,
     group: DIAG,
   },
   ue_screenshot: {
     title: '截图',
-    summary: '截目标视口（PIE、游戏窗口或编辑器视口）',
-    useWhen: '要确认画面、UI 表现，或者给用户看改动效果时',
+    summary: '截目标视口（PIE、游戏窗口或编辑器视口），游戏画面默认带 UMG 界面',
+    useWhen:
+      '要确认画面、UI 表现，或者给用户看改动效果时；跑游戏测试时看游戏视口长什么样也用它（默认含界面，和玩家看到的一样）',
+    avoidWhen: '截图要留进测试报告、能回放时用 ue_gametest 的 screenshot 步骤或 Screen.Shot 接口',
     group: DIAG,
   },
   ue_editor: {

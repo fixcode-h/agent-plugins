@@ -12,7 +12,7 @@ import { GtBlockersGroup } from './GtBlockersGroup.tsx'
 import { type GtMoveConfig, GtMoveSettings, tidyMove } from './GtMoveSettings.tsx'
 import { type GtSkipConfig, GtSkipSettings, readSkip, tidySkip } from './GtSkipSettings.tsx'
 import { tidyKeyRules, type GtKeyRule } from './GtKeyRules.tsx'
-import { refSupported, REF_MIN_VERSION } from './gt-ref/gate.tsx'
+import { pieWindowSupported, refSupported, REF_MIN_VERSION } from './gt-ref/gate.tsx'
 import { REF_KEYS, RefSettings, tidyRefConfig } from './gt-ref/RefSettings.tsx'
 import type { RefConfig } from './gt-ref/rules-io.ts'
 import { parseSeed, parseSetup, SETUP_PLACEHOLDER, setupText } from './gt-setup.ts'
@@ -29,6 +29,8 @@ interface GtRunConfig {
   uiStepGapMs?: number
   /** click 没写 via 时的点击方式（GameTest 1.2.0-beta.7）：code 不动鼠标（默认），pointer 真实鼠标 */
   clickVia?: 'code' | 'pointer'
+  /** pie.start 没写 window 时开在哪（GameTest 2.5.0）：viewport 选中的视口（默认），new 独立窗口 */
+  pieWindow?: 'viewport' | 'new'
   /** GameTest 1.9.0 以前：阻挡界面 */
   blockers?: GtBlockerRule[]
   /** GameTest 1.9.0 起：全局守护（取代 blockers） */
@@ -64,6 +66,7 @@ const FORM_KEYS = new Set([
   'uiWaitTimeoutMs',
   'uiStepGapMs',
   'clickVia',
+  'pieWindow',
   'blockers',
   'guards',
   'setup',
@@ -94,6 +97,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
   const [wait, setWait] = useState('')
   const [gap, setGap] = useState('')
   const [clickVia, setClickVia] = useState<'code' | 'pointer'>('code')
+  const [pieWindow, setPieWindow] = useState<'viewport' | 'new'>('viewport')
   const [rules, setRules] = useState<GtBlockerRule[]>([])
   const [setup, setSetup] = useState('')
   const [seed, setSeed] = useState('')
@@ -125,6 +129,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         setGuards(r.config.guards ?? blockersToGuards(r.config.blockers ?? []))
         setMigrated(old)
         setClickVia(r.config.clickVia ?? 'code')
+        setPieWindow(r.config.pieWindow === 'new' ? 'new' : 'viewport')
         setSetup(setupText(r.config.setup))
         setSeed(r.config.randomSeed === undefined ? '' : String(r.config.randomSeed))
         setMove(r.config.move ?? {})
@@ -168,6 +173,7 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
         ...(gapSeconds === undefined ? {} : { uiStepGapMs: Math.round(gapSeconds * 1000) }),
         // 默认就是 code：只在改成真实鼠标时写进文件，文件里不留没意义的默认值
         ...(clickVia === 'pointer' ? { clickVia } : {}),
+        ...(pieWindow === 'new' ? { pieWindow } : {}),
         // 空行不存：点了「添加」没填的不该让整份配置保存失败
         // 新版存守护、不再写 blockers（GameTest 1.9.0 起再读到 blockers 会报错）；旧版照旧存阻挡界面
         ...(guardsOn
@@ -278,6 +284,29 @@ export function GtSettings({ onClose, onOpenRules }: { onClose?: () => void; onO
             options={[
               { value: 'code', label: t('不动鼠标（默认）') },
               { value: 'pointer', label: t('真实鼠标') },
+            ]}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t('PIE 开在')}
+          desc={t('跑测试和 Agent 开 PIE 时游戏在哪运行')}
+          hint={
+            pieWindowSupported(gtVersion)
+              ? t(
+                  '选中的视口：和 UE Play 菜单勾「选中的视口」一样，在当前关卡视口里运行，不弹独立窗口。独立窗口：开一个单独的游戏窗口（分辨率按 pie.start 的 width、height）。步骤写 window 时以步骤为准；关卡视口看不见时自动改开独立窗口。',
+                )
+              : t('要 GameTest 2.5.0 才能选，旧版 PIE 总是开独立窗口：到「UE 插件」更新 GameTest 后重新编译。')
+          }
+        >
+          <ui.Select
+            size="sm"
+            className="ue:w-full"
+            value={pieWindow}
+            disabled={!pieWindowSupported(gtVersion)}
+            onChange={(e: { target: { value: string } }) => setPieWindow(e.target.value as 'viewport' | 'new')}
+            options={[
+              { value: 'viewport', label: t('选中的视口（默认）') },
+              { value: 'new', label: t('独立窗口') },
             ]}
           />
         </SettingRow>

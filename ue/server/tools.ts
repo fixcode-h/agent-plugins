@@ -523,28 +523,33 @@ const DEFS = [
   ),
   tool(
     'ue_screenshot',
-    '截目标视口（PIE / 游戏窗口，编辑器世界截编辑器视口），图片直接返回。',
-    { maxWidth: { type: 'number' }, target: TARGET },
+    '截目标视口，图片直接返回：PIE / 游戏世界截游戏视口，默认含 UMG 界面（和玩家看到的一样，PIE 开在关卡视口里也只截视口），ui=false 只要场景；编辑器世界截编辑器视口。',
+    { maxWidth: { type: 'number' }, ui: { type: 'boolean' }, target: TARGET },
     [],
     async (a, ctx) => {
-      const r = (await runOp(ctx, 'screenshot', { maxWidth: Number(a.maxWidth) || 1280 }, 20000)) as {
+      // ui：UELink 2.24 起认（截游戏视口控件，含 UMG），旧版忽略它照旧只截场景
+      const args = { maxWidth: Number(a.maxWidth) || 1280, ...(a.ui === false && { ui: false }) }
+      const r = (await runOp(ctx, 'screenshot', args, 20000)) as {
         png?: string
         width?: number
         height?: number
         world?: string
+        ui?: boolean
+        note?: string
       }
       if (!r.png) return mcpText('没有截到图', true)
+      const tail = [r.ui && '含 UMG 界面', r.note].filter(Boolean).join(' · ')
       return {
         content: [
           { type: 'image', data: r.png, mimeType: 'image/png' },
-          { type: 'text', text: `${r.width}×${r.height} · ${r.world}` },
+          { type: 'text', text: `${r.width}×${r.height} · ${r.world}${tail ? ` · ${tail}` : ''}` },
         ],
       }
     },
   ),
   tool(
     'ue_editor',
-    '编辑器控制：start_editor 启动编辑器（VS 开着这个项目时经 VS 按 F5 带调试器启动）；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；open_map 让编辑器本身换图（map 写地图名、/Game 包名或 .umap；PIE 在跑会先停掉；关卡有没保存的改动时报错列出，unsaved=save 先保存、unsaved=discard 丢掉（请用户确认）；等加载完才返回，timeoutMs 默认 120000；不要用 ue_console open + sleep）；pie_start（map 只在 PIE 里玩这张图、不动编辑器里的图和没保存的改动，测试换图优先用它；players 玩家数、netMode 为 standalone / listen / client；等 PIE 世界起来才返回）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
+    '编辑器控制：start_editor 启动编辑器（VS 开着这个项目时经 VS 按 F5 带调试器启动）；wait_ready 等编辑器可用（主窗口出来、资源扫完；面板或 VS 里启动后都用它，不要干等；timeoutMs 默认 180000、最多 600000，没就绪返回卡在哪，再调接着等）；open_map 让编辑器本身换图（map 写地图名、/Game 包名或 .umap；PIE 在跑会先停掉；关卡有没保存的改动时报错列出，unsaved=save 先保存、unsaved=discard 丢掉（请用户确认）；等加载完才返回，timeoutMs 默认 120000；不要用 ue_console open + sleep）；pie_start（map 只在 PIE 里玩这张图、不动编辑器里的图和没保存的改动，测试换图优先用它；players 玩家数、netMode 为 standalone / listen / client；window 默认 viewport 开进选中的视口，new 开独立窗口；等 PIE 世界起来才返回）、pie_stop、pie_status；livecoding 触发 Live Coding；background_start / background_stop 启停后台编辑器（编辑器没开时读资源用）；' +
       'spawn 在编辑器打开的关卡里放 Actor（class 写类名或蓝图路径，location [x,y,z]、rotation [pitch,yaw,roll]、label、level、folder 可选），destroy 删掉 actors（Actor 路径数组，ue_find kind=actor 找）。spawn / destroy 进撤销栈（ue_undo 能撤）、按结构性操作权限确认，PIE 运行中不能用，改完关卡要 ue_save 才落盘。',
     {
       action: {
@@ -568,6 +573,7 @@ const DEFS = [
       reload: { type: 'boolean' },
       players: { type: 'number' },
       netMode: { type: 'string' },
+      window: { type: 'string', enum: ['viewport', 'new'] },
       class: { type: 'string' },
       location: { type: 'array', items: { type: 'number' } },
       rotation: { type: 'array', items: { type: 'number' } },

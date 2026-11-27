@@ -5203,5 +5203,11 @@
   "失败 {n} 步": "{n} failed",
   "在 GameTest 页打开": "Open in GameTest",
   "等第一步的结果…": "Waiting for the first step…",
-  "没有这次运行的记录": "No record of this run"
+  "没有这次运行的记录": "No record of this run",
+  "PIE 开在": "Run PIE in",
+  "跑测试和 Agent 开 PIE 时游戏在哪运行": "Where the game runs when tests or the Agent start PIE",
+  "选中的视口：和 UE Play 菜单勾「选中的视口」一样，在当前关卡视口里运行，不弹独立窗口。独立窗口：开一个单独的游戏窗口（分辨率按 pie.start 的 width、height）。步骤写 window 时以步骤为准；关卡视口看不见时自动改开独立窗口。": "Selected viewport: like checking \"Selected Viewport\" in UE's Play menu, the game runs in the current level viewport without a separate window. New window: opens a standalone game window (size from pie.start width and height). A step's window field wins; if no level viewport is visible, a new window is opened instead.",
+  "要 GameTest 2.5.0 才能选，旧版 PIE 总是开独立窗口：到「UE 插件」更新 GameTest 后重新编译。": "Needs GameTest 2.5.0; older versions always open a new window. Update GameTest under \"UE plugins\" and rebuild.",
+  "选中的视口（默认）": "Selected viewport (default)",
+  "独立窗口": "New window"
 }
