@@ -201,6 +201,18 @@ export async function openMap(ctx: OpCtx, a: Record<string, unknown>) {
   }
 }
 
+/**
+ * PIE 开在哪：参数 window > GameTest 运行设置的 pieWindow（项目里一处改，Agent 开 PIE 和跑测试一致）> viewport。
+ * 没装 GameTest 或读不到设置时按 viewport
+ */
+async function pieWindow(ctx: OpCtx, a: Record<string, unknown>) {
+  if (a.window === 'new' || a.window === 'viewport') return a.window
+  const r = (await runOp(editorCtx(ctx), 'gt.config', {}).catch(() => undefined)) as
+    | { config?: { pieWindow?: string } }
+    | undefined
+  return r?.config?.pieWindow === 'new' ? 'new' : 'viewport'
+}
+
 /** ue_editor action=pie_start：开 PIE 并等 PIE 世界起来再返回，Agent 不用 sleep 再查 */
 export async function startPie(ctx: OpCtx, a: Record<string, unknown>) {
   const card = await editorCard(ctx)
@@ -211,16 +223,20 @@ export async function startPie(ctx: OpCtx, a: Record<string, unknown>) {
       `UE 里的 UELink 是 ${card.bridge}，pie_start 带 map 要 2.22.0：先 open_map 换图再 pie_start，或到 UE 页「UE 插件」更新 UELink 后重新编译`,
     )
   const logSince = await markPieLog(ctx, card.pid)
+  const window = await pieWindow(ctx, a)
   const r = await runOp(editorCtx(ctx), 'pie', {
     action: 'start',
     players: a.players ?? 1,
     netMode: a.netMode ?? 'standalone',
     ...(map && { map }),
+    // window：UELink 2.24 起认，默认 viewport（选中的视口，用户 2026-11-27 要跑测试不弹独立窗口）；旧版忽略，照旧开独立窗口
+    ...(window === 'new' && { window }),
   })
   const want = Math.min(Math.max(Number(a.players) || 1, 1), 8)
   const w = await waitInfo(card, (i) => pieWorlds(i).length >= want, clampMs(a.timeoutMs, 60000, 300000))
   const worlds = w.inst ? pieWorlds(w.inst) : []
-  const log = logSince !== undefined ? { logSince, logHint: '只看这次 PIE 之后的日志：ue_log action=tail pie=true' } : {}
+  const log =
+    logSince !== undefined ? { logSince, logHint: '只看这次 PIE 之后的日志：ue_log action=tail pie=true' } : {}
   if (!w.ok)
     return {
       ...r,

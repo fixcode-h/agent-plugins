@@ -1,7 +1,7 @@
 {
   "id": "ue",
   "name": "UE",
-  "version": "0.66.1",
+  "version": "0.68.0",
   "icon": "gamepad",
   "description": "按项目连接正在运行的 Unreal Engine（5.4 及以上）：控制台、GM、按类和名字找 Actor 等运行时对象、读改运行时属性、DataTable 和资源（编辑器没开也能读）、日志和截图；资源的摘要、引用关系、新建复制改名删除，蓝图的变量、组件和图表读写与编译，资源的版本差异（每一版改了哪些属性、组件、节点）；对话里点 .uasset 直接弹窗看数据表、属性和蓝图；装了 UnLua 的项目还能搜 Lua 实例、看改 Lua 字段、执行 Lua；Agent 也能用这些操作排查、调数值和改蓝图；项目里装了 UEKit 的 AssetForge、GameTest 扩展时，还能在 UE 页管配置驱动的资产、跑和录制游戏测试。",
   "author": "fixcode-h",
@@ -370,7 +370,7 @@
   "skillGuide": {
     "ue-runtime-debug": "在正在运行的 UE 里排查 Bug、看和改运行时数值、跑 GM、读 DataTable 和资源时（配合 ue_* 工具）",
     "ue-asset-authoring": "读懂或修改 UE 的蓝图和资源时：看图表和引用关系、按操作列表改蓝图并编译、新建复制改名删除资源（配合 ue_asset、ue_blueprint）",
-    "ue-gametest-authoring": "给 UE 功能写、校验、跑和维护 GameTest 回放测试时：从项目代码直接写 v3 脚本（查 vars / widgets / api → 写 → validate → run → 改 → 进回归），把录制整理成带循环、分支、守护的流程，写项目 C++ / Lua 测试接口",
+    "ue-gametest-authoring": "给 UE 功能写、校验、跑和维护 GameTest 回放测试时：先按正常游戏流程排前置清单并补齐配置，再从项目代码直接写 v5 脚本（look 查 → 写 → validate → 打快照点 → run → 看日志和快照分析代码 → 改 → 进回归），把录制整理成带循环、分支、守护的流程，写项目 C++ / Lua 测试接口",
     "ue-cpp-engine-api": "写或改调用 UE 引擎 API 的 C++（新调用引擎函数、override 引擎虚函数、加 include 和 Build.cs 依赖、兼容几个引擎版本）之前，以及编译报不是成员、找不到标识符、参数不对、链接找不到符号时：按项目用的引擎版本查真实签名再写（配合面板 find 的 members、symbol、include）",
     "ue-perf-analysis": "排查 UE 的卡顿、帧率低、内存高和内存泄漏，或者分析 trace、CSV Profiler、memreport 文件时（配合 ue_perf、ue_capture；trace 先 diagnose 再下钻，方向多时并行派子任务）"
   },
@@ -404,11 +404,11 @@
       "category": "测试",
       "agent": {
         "name": "游戏测试",
-        "description": "给 UE 功能写回放测试并维护回归：读项目代码查能用的变量、控件和接口，写 GameTest 脚本、校验、在 PIE 里跑，失败时给出证据并判断是功能 bug 还是脚本问题，通过的放进回归集",
+        "description": "给 UE 功能写回放测试并维护回归：先按正常游戏流程排出要用到的配置并补齐，再读项目代码查能用的变量、控件和接口，写 GameTest 脚本、校验、在 PIE 里按正常流程跑，用日志和 Lua 快照点分析代码走得对不对，失败时给出证据并判断是功能 bug、配置缺失还是脚本问题，通过的放进回归集",
         "icon": "test",
         "model": "@high",
         "skills": ["ue-gametest-authoring", "ue-runtime-debug"],
-        "instructions": "你是 UE 项目的游戏测试工程师，按 ue-gametest-authoring 技能工作：查（ue_gametest vars / widgets / api，读项目代码）→ 写 v3 脚本 → validate → run → 看报告修改 → 进回归。\n\n- 不让用户录制或手动点界面；选择器、字段路径、接口名都从工具返回里抄，不编。\n- 准备状态用项目接口或 GM，被测的操作走界面，检查同时看数据和界面。缺接口时在项目接口文件夹里加（Lua 或 C++，照技能里的示例），说明加了什么。\n- 脚本写在场景根下（ue_gametest status 看位置），通过后放进 regression/<模块>/ 并打 regression 标签。\n- 失败时读 payload.evidence、payload.cond、日志，判断是功能 bug 还是脚本问题；功能 bug 给出证据（步骤 id、实际值、日志行、截图路径）交给用户或开发角色，不自己改功能代码，除非用户要求。\n- 不用 disabled、onFail: continue、放宽断言来让测试通过；跑不过就如实报告。\n- 交付：脚本路径、验证了什么、validate 和 run 的结果、跑了几次。工具报错原样告诉用户。"
+        "instructions": "你是 UE 项目的游戏测试工程师，按 ue-gametest-authoring 技能工作：排正常流程和前置清单 → 补齐缺的配置 → 查（ue_gametest look，读项目代码）→ 写 v5 脚本 → validate → 打快照点 → run → 看报告、日志和快照点分析 → 修改 → 进回归。\n\n- 先补前置再测：被测链路要用的配置（NPC 配置、NPC 状态蓝图、对话 / 剧情和选项按钮、引导、表格行）缺了就补齐、导表、重开 PIE；不在运行时改配置凑数，不跳过入口，不把「缺配置」当成直接调玩法函数的理由。\n- 按正常游戏流程测：准备状态（生成 NPC、传送、道具、进度）用项目接口或 GM，被测链路上的每一步（按交互键、点对话选项、点按钮）走输入和界面，检查同时看数据和界面。项目接口只做准备状态和只读查询，不调被测链路上的函数、不在回调里替玩家操作；确实没有界面的步骤才调门面函数，并在结果里标明。缺接口时在项目接口文件夹里加（Lua 或 C++，照技能里的示例），说明加了什么。\n- 用日志和快照点分析代码：跑之前在关键函数上打 ue_lua snap 快照点（C++ 用 VS 日志断点），跑完对照命中记录和 ue_log 写出代码实际走了哪条路、和模块文档的时序对不对；跑完撤掉自己加的快照点和断点。\n- 不让用户录制或手动点界面；选择器、字段路径、接口名都从工具返回里抄，不编。\n- 脚本写在场景根下（ue_gametest look what=status 看位置），通过后放进 regression/<模块>/ 并打 regression 标签。\n- 失败时读 payload.evidence、payload.cond、日志和快照点，判断是功能 bug、配置缺失还是脚本问题；功能 bug 给出证据（步骤 id、实际值、快照点记录、日志行、截图路径）交给用户或开发角色，不自己改功能代码，除非用户要求。\n- 不用 disabled、onFail: continue、放宽断言来让测试通过；跑不过就如实报告。\n- 交付：补了哪些配置、脚本路径、验证了什么、代码分析结论、validate 和 run 的结果、跑了几次。工具报错原样告诉用户。"
       }
     },
     {
@@ -605,7 +605,7 @@
     {
       "key": "ue-ingame-test",
       "name": "UE 游戏内测试",
-      "description": "定测试点并选地图（弹窗确认，默认当前打开的地图）→ 准备编辑器和 PIE → 写 GameTest 脚本并跑，没过就修（最多 3 轮）→ 通过的进回归；开不了编辑器时登记延期",
+      "description": "定测试点、排前置清单并选地图（弹窗确认，默认当前打开的地图）→ 补齐缺的前置配置（NPC、对话剧情、表格行、蓝图）→ 准备编辑器和 PIE → 按正常游戏流程写 GameTest 脚本并跑，用日志和 Lua 快照点分析代码走得对不对，没过就修（最多 3 轮）→ 通过的进回归；开不了编辑器或前置补不了时登记延期",
       "category": "测试",
       "when": "UE 项目的改动编译通过后，要在游戏里验证功能（写 GameTest 脚本、跑、修、进回归）时；「UE 项目」工作流合回并编译通过、有能在游戏里操作到的改动时接着起它",
       "notFor": "还没编译的改动（先编译）；只查一个数值或调一次函数（直接用 ue_get / ue_call）；性能问题（用 UE 性能分析）；不是 UE 的项目",
@@ -627,7 +627,7 @@
         ["ue-gametest", "定测试点和地图、准备环境、写和跑脚本、判断失败原因、整理回归"],
         ["developer", "功能 bug 时按测试证据修代码"]
       ],
-      "document": "## 适用\nUE 项目的改动编译通过后，在游戏里验证功能：定测试点 → 选地图 → 准备编辑器和 PIE → 写 GameTest 脚本（可以用 GM、对象引用、项目接口准备状态）→ 跑 → 没过就修 → 通过的进回归。\n\n## 约定\n- 开头弹一次窗让你选在哪张地图上测，默认是编辑器当前打开的地图；之后不再逐步确认。\n- 这个工作流自带「自己写和跑游戏内测试（GameTest / GM）」和「在 UE 里执行 Lua 代码」的授权，运行里跑 GameTest、执行 GM、开 PIE、执行 Lua 不弹授权卡（对话里留一行记录）。\n- 直接在父对话的目录里跑（不开独立分支）：UE 编辑器读的是项目目录，独立分支里的脚本和代码它看不到。\n- 不跑引擎的 Automation RunTests / Gauntlet。\n- 脚本先写进场景根的 agent/<日期>-<功能>/ 草稿目录，跑通过才搬进 regression/<模块>/，标签写 [<模块>, \"regression\", \"agent\"]。\n- 没通过时先分清是功能 bug 还是脚本写错：脚本写错就改脚本（每轮最多改 5 次）；功能 bug 派「开发」按证据修代码，修完热重载或重新编译再跑。「写脚本并跑」最多验收 3 轮，还不过就停下，由父对话问你怎么办。\n- 不用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过；跑不过就如实报告。\n- 编辑器开不了（没编译、启动失败、你正在玩别的地图）时不硬来：脚本照样写好并离线校验，登记成延期验证，报告里写清缺什么、怎么补跑。\n- 推送、合并由父对话决定。",
+      "document": "## 适用\nUE 项目的改动编译通过后，在游戏里验证功能：定测试点 → 排前置清单、选地图 → 补齐缺的前置配置 → 准备编辑器和 PIE → 按正常游戏流程写 GameTest 脚本 → 跑 → 用日志和 Lua 快照点分析代码 → 没过就修 → 通过的进回归。\n\n## 约定\n- 开头弹一次窗让你选在哪张地图上测（默认是编辑器当前打开的地图），并确认前置清单里要补的配置；之后不再逐步确认。\n- **先补前置，再测**：从玩家能做的第一步开始顺着正常游戏流程排出要用到的配置（地图、NPC 配置、NPC 状态蓝图、对话 / 剧情、选项按钮、引导、表格行），缺的先补齐、导表、重开 PIE 再测；不在运行时改配置凑数，也不跳过入口那一段。\n- **按正常游戏流程测**：被测链路上的每一步（走近或传送到 NPC 旁、按交互键、点对话选项、点界面按钮）都走输入和界面；项目接口和 GM 只准备状态和只读查询，不替玩家调被测链路上的函数。\n- **用日志和快照点分析代码**：跑之前在关键函数上打 Lua 快照点（C++ 用 VS 断点），跑完对照日志和快照写出每个测试点代码实际走了哪条路、对不对。\n- 这个工作流自带「自己写和跑游戏内测试（GameTest / GM）」和「在 UE 里执行 Lua 代码」的授权，运行里跑 GameTest、执行 GM、开 PIE、执行 Lua 不弹授权卡（对话里留一行记录）。\n- 直接在父对话的目录里跑（不开独立分支）：UE 编辑器读的是项目目录，独立分支里的脚本和代码它看不到。\n- 不跑引擎的 Automation RunTests / Gauntlet。\n- 脚本先写进场景根的 agent/<日期>-<功能>/ 草稿目录，跑通过才搬进 regression/<模块>/，标签写 [<模块>, \"regression\", \"agent\"]。\n- 没通过时先分清是功能 bug 还是脚本写错：脚本写错就改脚本（每轮最多改 5 次）；功能 bug 派「开发」按证据修代码，修完热重载或重新编译再跑。「写脚本并跑」最多验收 3 轮，还不过就停下，由父对话问你怎么办。\n- 不用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过；跑不过就如实报告。\n- 编辑器开不了（没编译、启动失败、你正在玩别的地图）时不硬来：脚本照样写好并离线校验，登记成延期验证，报告里写清缺什么、怎么补跑。\n- 推送、合并由父对话决定。",
       "flows": [
         {
           "id": "main",
@@ -635,18 +635,25 @@
           "nodes": [
             {
               "id": "scope",
-              "title": "定测试点和地图",
+              "title": "定测试点、前置和地图",
               "agent": "ue-gametest",
               "tier": "medium",
               "confirm": true,
-              "instructions": "1. 弄清这次要测什么：读上面「输入」里的需求、改动清单和父对话写的测试点；没给改动清单时看版本控制里这次的改动（Git 看 diff，P4 看 opened）。每个测试点写成一句「做了什么之后，应该看到什么」，再写打算怎么测（准备状态用项目接口还是 GM、被测的操作走哪个界面、检查哪些数据和界面）。只测这次改动影响到的，不铺开测整个模块。\n2. 定地图：先看文档根的 CONTEXT.md 有没有「地图与主模块」对照（哪张图加载哪个主模块 / 玩法），有就按改动所在的主模块挑图；ue_status 看编辑器开着没有，开着时编辑器世界（type=editor）的 map 就是当前打开的地图；没开时读 Config/DefaultEngine.ini 的 EditorStartupMap / GameDefaultMap。对照里没有、这次查清了某张图对应哪个主模块时，补进 CONTEXT.md 的「地图与主模块」一节（一行一张图：地图包名、主模块、怎么查到的），下次不用再翻 Lua 摸一遍。\n3. 用 submit_report 交阶段报告：summary 写要测几个点、在哪张地图上测；decisions 第一项 Q1「在哪张地图上测」，选项把当前打开的地图放第一个并选它（pick），其余写项目默认地图、和这次改动有关的地图（最多 4 个，地图写 /Game/... 的长路径）；details 写测试点清单。用户要别的地图时会在退回意见里写地图名，按它改。"
+              "instructions": "1. 弄清这次要测什么：读上面「输入」里的需求、改动清单和父对话写的测试点；没给改动清单时看版本控制里这次的改动（Git 看 diff，P4 看 opened），读模块文档里的接入时序。每个测试点写成一句「玩家做了什么之后，应该看到什么」。只测这次改动影响到的，不铺开测整个模块。\n2. 按正常游戏流程排步骤：从玩家能做的第一步开始（进地图、走近或传送到 NPC 旁、按交互键、看对话、点选项、进玩法、结算、退出），写出被测链路上每一步走的输入或界面、触发哪个函数或事件。只有「准备状态」（等级、道具、进度、传送到附近、生成 NPC）用 GM 或项目接口；链路上的函数（开始玩法、选择、结算这类）不直接调。\n3. 排前置清单：顺着上面的步骤，列出每一步要用到的配置和资源——NPC 配置（功能 NPC 表、玩法表的行）、NPC 状态蓝图 / 交互组件、对话或剧情（E 类对话、剧情实例、选项按钮节点）、引导、地图里的点位、要用的 GM。每一项去查有没有、字段对不对（装了表格插件用 table.list / table.query / table.schema 按主键查；资源用 ue_asset / ue_find；Lua 配置读 TableData），写成「项 / 在哪 / 现状（有、缺、字段不对）/ 打算怎么补」。缺的照同类已有配置仿写，写清仿的是哪一条。\n4. 定地图：先看文档根的 CONTEXT.md 有没有「地图与主模块」对照（哪张图加载哪个主模块 / 玩法），有就按改动所在的主模块挑图；ue_status 看编辑器开着没有，开着时编辑器世界（type=editor）的 map 就是当前打开的地图；没开时读 Config/DefaultEngine.ini 的 EditorStartupMap / GameDefaultMap。对照里没有、这次查清了某张图对应哪个主模块时，补进 CONTEXT.md 的「地图与主模块」一节（一行一张图：地图包名、主模块、怎么查到的），下次不用再翻 Lua 摸一遍。\n5. 用 submit_report 交阶段报告：summary 写要测几个点、在哪张地图上测、前置缺几项；decisions 第一项 Q1「在哪张地图上测」，选项把当前打开的地图放第一个并选它（pick），其余写项目默认地图、和这次改动有关的地图（最多 4 个，地图写 /Game/... 的长路径）；前置有缺项时第二项 Q2「缺的前置配置怎么办」，第一个选项「按清单补齐后按正常流程测」并选它，其余可以写「只测不依赖它的点，缺的登记延期」；**不要**给「运行时临时改配置」「跳过入口直接调玩法函数」这类选项。要策划定的数值（奖励、概率、文案）写进对应选项让用户填。details 写测试点清单、正常流程步骤和前置清单。用户要别的地图时会在退回意见里写地图名，按它改。"
+            },
+            {
+              "id": "prep",
+              "title": "补前置配置",
+              "agent": "ue-gametest",
+              "tier": "medium",
+              "instructions": "按上一步确认的前置清单把缺的配置补齐，让被测链路能从入口按正常游戏流程走到底。\n- 表格：装了表格插件时用 table.schema 看列的类型和枚举，再用 table.edit 加行或改格子（上一步用户已确认补这些，直接改；不要用 openpyxl 整本重写）；要新建整张表（例如一条新的剧情实例）时，复制一份同类已有的表改名，再用 table.edit 改内容。改完 table.check 核对引用和主键。\n- 对话 / 剧情：照同类已有的那条仿写节点（开始、对白、选项按钮、结束），选项的顺序和代码里认的序号对上（读代码确认，例如接受是第几个选项）。\n- 资源、蓝图（NPC 状态蓝图、交互组件、点位）：用 ue_asset / ue_blueprint 改，ue_compile 编译通过再保存。\n- 导表：项目要导表的（Excel → TableData / Lua 表），跑项目的导表命令（CONTEXT.md、项目工具里找；找不到交 fail 写明要用户怎么导）。PIE 开着时导完要 pie_stop，下一步重开 PIE 才读到新表。\n- 每改一项都看工具返回，不要猜；P4 项目改文件前先签出。只改清单里的项，不顺手改玩法代码；补的过程中发现代码和文档对不上，写进结果，交给下一步验证。\n用 submit_verdict 交结论：清单里的项都补好（或本来就有）交 pass，details 逐项写改了哪个文件 / 哪一行、仿的是哪一条、导表结果；有补不了的（缺资源、要策划定数值、导表失败）交 fail，blockers 写缺什么、用户怎么补。"
             },
             {
               "id": "env",
               "title": "准备环境",
               "agent": "ue-gametest",
               "tier": "medium",
-              "instructions": "按上一步确认的地图把编辑器和 PIE 准备好，每一步看工具返回的状态，不要猜：\n- ue_status 看进程。改了 C++、编辑器是改动之前启动的（ue_status 提示二进制比源码旧）时先 request_build 申请编译，等结果推回来；编译失败就交 fail。\n- 没有编辑器进程：ue_editor action=start_editor，再 wait_ready 等它可用（不要 sleep 干等）。只有后台编辑器（不开窗口的那种）时它跑不了界面测试：先 background_stop 再 start_editor。\n- 编辑器开着、PIE 没开：ue_editor action=pie_start map=<确认的地图> 开 PIE（只在 PIE 里玩这张图，编辑器里的图不动；等 PIE 世界起来才返回，不要 sleep）。返回的 logSince 之后的日志就是这次 PIE 的，查报错用 ue_log action=tail pie=true。\n- PIE 里出过错（脚本报错、主模块取不到）先 pie_stop 再重开，不要在坏掉的会话上接着查。\n- PIE 已经在跑：地图和确认的一样就直接用；不一样说明用户可能正在玩，不要关掉它，交 fail 写明。\n- 启动失败、wait_ready 超时、项目没接入 UE 页：交 fail，原样写出报错。\n用 submit_verdict 交结论：编辑器和 PIE 都在确认的地图上准备好了交 pass，并写明 PIE 是不是这次开的；准备不了交 fail，blockers 写缺什么。"
+              "instructions": "按上一步确认的地图把编辑器和 PIE 准备好，每一步看工具返回的状态，不要猜：\n- ue_status 看进程。改了 C++、编辑器是改动之前启动的（ue_status 提示二进制比源码旧）时先 request_build 申请编译，等结果推回来；编译失败就交 fail。\n- 没有编辑器进程：ue_editor action=start_editor，再 wait_ready 等它可用（不要 sleep 干等）。只有后台编辑器（不开窗口的那种）时它跑不了界面测试：先 background_stop 再 start_editor。\n- 编辑器开着、PIE 没开：ue_editor action=pie_start map=<确认的地图> 开 PIE（只在 PIE 里玩这张图，编辑器里的图不动；等 PIE 世界起来才返回，不要 sleep）。返回的 logSince 之后的日志就是这次 PIE 的，查报错用 ue_log action=tail pie=true。\n- PIE 里出过错（脚本报错、主模块取不到）先 pie_stop 再重开，不要在坏掉的会话上接着查。\n- 上一步补过配置、导过表：PIE 开着就先 pie_stop 再重开，拿到新表；开好后用 ue_get / ue_lua 读一下补的那几行（例如 NPC 配置、剧情 ID）确认已经生效。\n- PIE 已经在跑：地图和确认的一样就直接用；不一样说明用户可能正在玩，不要关掉它，交 fail 写明。\n- 启动失败、wait_ready 超时、项目没接入 UE 页：交 fail，原样写出报错。\n用 submit_verdict 交结论：编辑器和 PIE 都在确认的地图上准备好了交 pass，并写明 PIE 是不是这次开的；准备不了交 fail，blockers 写缺什么。"
             },
             {
               "id": "test",
@@ -655,26 +662,28 @@
               "tier": "high",
               "review": "verify",
               "maxRounds": 3,
-              "instructions": "按 ue-gametest-authoring 技能写 v5 脚本并跑。\n- 先 ue_gametest look what=status 看场景根，look what=scenarios 找能复用的 common/ 子脚本；类名、部件名、属性路径、接口名都从 look 的返回里抄，不编。缺项目接口时在 GameTestApi 里加（这算代码改动，写进结果）。\n- 每个测试点一份脚本，放进场景根下的 agent/<今天的日期>-<功能>/，tags 写 [<模块>, \"regression\", \"agent\"]；脚本里不写 pie.start（上一步已经开好），params 里记一个 map（默认值写确认的地图）。\n- validate 全部通过后 run（多份用 scenarios 批量）→ job → report。\n- 没过时先判断原因（技能里「失败了怎么判断」那张表）：脚本写错就改脚本再跑，这一轮里最多改 5 次；功能 bug 用 spawn_agents 派「开发」，把证据（步骤 id、实际值、日志行、截图路径）和要修的现象交给它，修完：只改了 Lua 用 ue_lua action=reload 热重载；只改了 C++ 函数体用 ue_editor action=livecoding；改了头文件、反射或 Build.cs 要 request_build 完整编译，编译通过后 start_editor + wait_ready 重开编辑器、再按地图开 PIE。然后再跑。\n- 结果里逐个列：测试点、脚本路径、最后一次运行的结论和 runId、改了哪些代码（谁改的、为什么）、还没过的和原因。"
+              "instructions": "按 ue-gametest-authoring 技能写 v5 脚本并跑，**按正常游戏流程**走被测链路。\n- 先 ue_gametest look what=status 看场景根，look what=scenarios 找能复用的 common/ 子脚本；类名、部件名、属性路径、接口名都从 look 的返回里抄，不编。\n- 脚本照第一步排的正常流程步骤写：准备状态（生成 NPC、传送到附近、发道具、设进度）用 GM 或项目接口；链路上的每一步走输入和界面（key 按交互键、click 对话选项和按钮、等界面出现）；检查同时看数据和界面。项目接口只做准备状态和只读查询：**不许**在接口里调被测链路上的函数（开始玩法、选择、结算），也不许在事件回调里替玩家操作。某一步确实没有界面可点（界面还没做）时才调门面函数，并在结果里标明「这一步跳过了界面层」和原因。缺接口时在 GameTestApi 里加（这算代码改动，写进结果）。\n- 跑之前打快照点：按第一步写的「每一步触发哪个函数」，在关键函数和分支（入口、状态切换、判定、结算）上用 ue_lua action=snap 加快照点（file + line，hits 给够），C++ 用 ue_vs_breakpoints 的日志断点（message）。跑完 ue_lua action=snap id=… 看命中记录（局部变量、调用栈），ue_log action=tail pie=true 看这次的日志。\n- 每份脚本放进场景根下的 agent/<今天的日期>-<功能>/，tags 写 [<模块>, \"regression\", \"agent\"]；脚本里不写 pie.start（上一步已经开好），params 里记一个 map（默认值写确认的地图）。\n- validate 全部通过后 run（多份用 scenarios 批量）→ job（工具里会等到跑完或进度有变化才返回，不用自己反复调）→ report。\n- 没过时先判断原因（技能里「失败了怎么判断」那张表），再对照快照点和日志看代码实际走到哪一步、哪个值不对：脚本写错就改脚本再跑，这一轮里最多改 5 次；前置配置不对就补配置（同上一步的做法）再重开 PIE；功能 bug 用 spawn_agents 派「开发」，把证据（步骤 id、实际值、快照点记录、日志行、截图路径）和要修的现象交给它，修完：只改了 Lua 用 ue_lua action=reload 热重载；只改了 C++ 函数体用 ue_editor action=livecoding；改了头文件、反射或 Build.cs 要 request_build 完整编译，编译通过后 start_editor + wait_ready 重开编辑器、再按地图开 PIE。然后再跑。\n- 跑完撤掉自己加的快照点（ue_lua action=snap remove=true）和 VS 断点。\n- 结果里逐个列：测试点、脚本路径、走了哪些界面操作（有跳过界面层的写明）、最后一次运行的结论和 runId、**代码分析**（快照点 / 日志看到的实际调用顺序和关键值，和模块文档的时序对不对，不对的写现象和证据）、改了哪些代码或配置（谁改的、为什么）、还没过的和原因。"
             },
             {
               "id": "regress",
               "title": "进回归",
               "agent": "ue-gametest",
               "tier": "low",
-              "instructions": "把上一步跑通过的脚本从 agent/ 草稿目录搬进场景根的 regression/<模块>/（同名已存在时先看是不是同一个测试，是就覆盖并在结果里说明，不是就换个名字），标签保持 [<模块>, \"regression\", \"agent\"]；P4 项目先 p4 add。PIE 是这次开的就 ue_editor action=pie_stop 停掉，编辑器留着。最后写一份报告：测了哪些点、在哪张地图、每份脚本的路径和结论（带 runId，用户能在 UE 页「游戏测试」里打开看截图和每步结果）、修了哪些代码、还有哪些没测到。"
+              "instructions": "把上一步跑通过的脚本从 agent/ 草稿目录搬进场景根的 regression/<模块>/（同名已存在时先看是不是同一个测试，是就覆盖并在结果里说明，不是就换个名字），标签保持 [<模块>, \"regression\", \"agent\"]；P4 项目先 p4 add。PIE 是这次开的就 ue_editor action=pie_stop 停掉，编辑器留着。最后写一份报告：测了哪些点、在哪张地图、每份脚本的路径和结论（带 runId，用户能在 UE 页「游戏测试」里打开看截图和每步结果）、补了哪些前置配置、修了哪些代码、代码分析的结论（和文档时序对不对）、还有哪些没测到。"
             },
             {
               "id": "defer",
               "title": "登记延期验证",
               "agent": "ue-gametest",
               "tier": "medium",
-              "instructions": "编辑器或 PIE 准备不了，这次不跑。仍然按 ue-gametest-authoring 技能把每个测试点的脚本写好，放进场景根下的 agent/<今天的日期>-<功能>/，tags 写 [<模块>, \"regression\", \"agent\"]，用 ue_gametest action=validate 离线校验（返回 offline: true 时只查了结构）。报告里写清：为什么没跑（上一步的原因）、写了哪些脚本、要补跑时怎么做（开好编辑器后在 UE 页「游戏测试」里打开 agent/ 下这个文件夹点运行，或者让父对话再起一次这个工作流），这些都算「待用户完成」的延期验证。"
+              "instructions": "编辑器或 PIE 准备不了、或者前置配置补不了，这次不跑（只有不依赖缺项的测试点能跑时，也照样登记，写清哪些点能跑）。仍然按 ue-gametest-authoring 技能把每个测试点的脚本写好，放进场景根下的 agent/<今天的日期>-<功能>/，tags 写 [<模块>, \"regression\", \"agent\"]，用 ue_gametest action=validate 离线校验（返回 offline: true 时只查了结构）。报告里写清：为什么没跑（上一步的原因；缺前置的逐项写缺哪张表的哪一行、哪个资源，用户怎么补）、写了哪些脚本、要补跑时怎么做（开好编辑器后在 UE 页「游戏测试」里打开 agent/ 下这个文件夹点运行，或者让父对话再起一次这个工作流），这些都算「待用户完成」的延期验证。"
             }
           ],
           "edges": [
             ["start", "scope"],
-            ["scope", "env"],
+            ["scope", "prep"],
+            ["prep", "env", "pass"],
+            ["prep", "defer", "fail"],
             ["env", "test", "pass"],
             ["env", "defer", "fail"],
             ["test", "regress"],
@@ -692,7 +701,7 @@
               "title": "核对结果",
               "agent": "ue-gametest",
               "tier": "medium",
-              "instructions": "上面「输入」是「写脚本并跑」这一轮的结果。不看它说过了没有，自己重新跑一遍：把它列出的脚本用 ue_gametest action=run scenarios=[...] 批量跑，job 等到结束，report 取结果。用 submit_verdict 交结论：每份脚本都通过才交 pass；有没过的交 fail，blockers 每条写脚本路径、失败的步骤 id、实际值和日志行或截图路径，并判断是功能 bug 还是脚本写错，免得下一轮改错地方。检查脚本有没有用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过，有就交 fail。"
+              "instructions": "上面「输入」是「写脚本并跑」这一轮的结果。不看它说过了没有，自己重新跑一遍：把它列出的脚本用 ue_gametest action=run scenarios=[...] 批量跑，job 等到结束，report 取结果。用 submit_verdict 交结论：每份脚本都通过才交 pass；有没过的交 fail，blockers 每条写脚本路径、失败的步骤 id、实际值和日志行或截图路径，并判断是功能 bug 还是脚本写错，免得下一轮改错地方。检查脚本有没有用 disabled、onFail: continue、放宽断言、many: \"first\" 让测试通过，有就交 fail。再查是不是按正常游戏流程测的：读脚本和它用到的项目接口（GameTestApi 里的文件），链路上的步骤应该是 key / click / 等界面；接口里调了被测链路上的函数（开始玩法、选择、结算）、在事件回调里替玩家操作、运行时改配置凑数的，又没在结果里标明「跳过了界面层」和原因，交 fail 并写清是哪一步。结果里没有代码分析（快照点或日志看到的实际调用顺序）的，也在 blockers 里提出来。"
             }
           ],
           "edges": [

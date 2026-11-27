@@ -10,6 +10,8 @@ export const SCRIPT_MIN_VERSION = '2.1.0'
 
 const atLeast = (v: string | undefined, min: string) => !!v && satisfies(v.replace(/-.*$/, ''), `>=${min}`)
 export const refSupported = (gameTestVersion?: string) => atLeast(gameTestVersion, REF_MIN_VERSION)
+/** GameTest 2.5.0 起运行设置认 pieWindow（PIE 开在选中的视口 / 独立窗口），旧版 pie.start 只开独立窗口 */
+export const pieWindowSupported = (gameTestVersion?: string) => atLeast(gameTestVersion, '2.5.0')
 
 /** 文件里原本写的 schemaVersion（打开时数据层会整理，所以从原文读，不从整理后的 doc 读） */
 export function rawSchemaVersion(text: string): number {

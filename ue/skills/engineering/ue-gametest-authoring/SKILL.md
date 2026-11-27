@@ -18,22 +18,24 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **部件**：落在对象里某个控件上时 `{"obj": "shop", "part": "BtnBuy"}`，嵌套 WBP 用 `.`（`Header.BtnClose`）。
 - **判断**：`{"obj": "shop", "prop": "@/TxtTitle:text", "op": "contains", "value": "杂货铺"}`。属性路径从 `@`（对象自己）或 `@item`（列表条目的数据对象）出发，每段一个符号：`/名字` 子控件或 Actor 组件（只在属性前面）、`.名字` 反射属性、`.名字()` 取值函数（GameTest 2.1.6 起括号里能写常量参数 `.GetCount(1001)`）、`#名字` Lua 字段、`:名字` 算出的状态（只在最后：`:exists` `:onScreen` `:shown` `:enabled` `:text` `:count` `:selected` `:checked`…）、`[0]` / `["键"]` 下标。例：`@/Header/TxtTitle.Text`、`@.ShopId`、`@#shopName`、`@/ShopComp.Goods[0].Id`、`@:onScreen`、`@item#cfgId`。
 
-## 流程：查 → 写 → 校验 → 跑 → 改 → 进回归
+## 流程：排流程和前置 → 补配置 → 查 → 写 → 打点 → 校验 → 跑 → 分析和改 → 进回归
 
 0. **授权卡**：UE 项目的验证默认到编译为止，引擎的 Automation RunTests 不跑（面板会拦）。普通对话里第一次 `run` / `step`、执行或保存 GM、开 PIE 时，工具会弹授权卡请用户确认（拒绝 / 允许一次 / 本对话不再询问），**不用自己先问**；查（`look`）、写脚本、`validate` 不弹。用户拒绝了就到编译为止，不要换 `ue_lua` / `ue_console` / `ue_call` 绕过去做同样的事。在「UE 游戏内测试」工作流里跑时工作流自带这个授权，不弹卡。
-1. **弄清要测什么**：一句话写下「做了什么之后，应该看到什么」。读改动的代码（C++、蓝图名、Lua），找到入口界面、点击处理、改的数据在哪。
-2. **查**（不开游戏也行）：
+1. **弄清要测什么**：一句话写下「玩家做了什么之后，应该看到什么」。读改动的代码（C++、蓝图名、Lua）和模块文档的接入时序，找到入口界面、点击处理、改的数据在哪。
+2. **排正常流程和前置清单，缺的先补**：见下面「先补前置，再按正常流程测」。配置不齐时测出来的结果没有意义，先补齐、导表、重开 PIE 再往下写。
+3. **查**（不开游戏也行）：
    - `ue_gametest action=look what=widgets asset=/Game/UI/WBP_Bag`：WBP 的控件树，部件名就是这里的控件名；列表、格子标 `container`。
    - `action=look what=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
    - `action=look what=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
    - `action=look what=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
-3. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再走界面操作，最后用对象判断或表达式检查。见下面「写法」。
-4. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
-5. **跑**：`action=run scenario=…`（可带 `params`），`job` 看进度，`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。
-6. **改**：读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
-7. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
+4. **写**：先准备状态（`api` / `obj.call` 调项目接口、GM），`set` 记下初值，再按正常游戏流程走输入和界面操作，最后用对象判断或表达式检查。见下面「写法」。
+5. **打快照点**：跑之前在被测链路的关键函数上加 Lua 快照点或 C++ 日志断点，见「用日志和快照点分析代码」。
+6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
+7. **跑**：`action=run scenario=…`（可带 `params`），`job` 等进度（工具里等到跑完、有步骤失败或约 45 秒才返回，不用自己反复调；还在跑就再调一次），`report` 取报告。只想从某一步跑：`from` / `to` 写步骤 id。拿不准引用命中几个：游戏开着时 `action=resolve refs=[{"ref": "shop"}]`。
+8. **分析和改**：先对照快照点记录和日志，写出代码实际走了哪条路、和文档时序对不对（通过了也要写）。再读失败步骤的 `payload.evidence`（截图、控件快照、前后 50 行日志）、`payload.cond`（条件每一项的实际值）、`payload.ref`（引用挑中了谁、按什么挑的、候选的标识值）。先判断是**功能 bug**还是**脚本写错**（见「失败了怎么判断」），功能 bug 告诉用户、按要求改代码；脚本问题改脚本再跑。
+9. **进回归**：通过后放进 `regression/<模块>/`，`tags` 写上模块名、`regression` 和 `agent`（标明是 Agent 写的，场景库里显示「Agent 编写」），以后 `run tag=regression` 批量回归。交付时说清：脚本路径、验证了什么、跑了几次、结果。
 
-**从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名，报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 7 步进回归。
+**从 OpenSpec 规范写**（工作流里 acceptance 标了 GameTest 的 Scenario）：一个 Scenario 一份脚本，放场景根 `openspec/<change>/<Rn>-<场景短名>.json`，`tags` 写 `openspec`、`<change>`、`agent`；GIVEN 写成准备状态（`api` / `obj.call` / GM / `set`），WHEN 写成操作，THEN 每条至少一个判断；第一步 `note` 写需求和 Scenario 名，报告能对回规范。规范没写清的值先 `look` 查，查不到写进 `params` 并注明是猜的。通过后按上面第 9 步进回归。
 
 **不要**让用户去录制、去点界面；能从代码写就自己写。不知道用哪个属性区分同类对象时看 `props` 的 `score` / `suggest`；游戏开着可以 `inspect` 指着看，它直接给出引用。
 
@@ -109,10 +111,17 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 只认 v5，读到旧脚本报 `schema_old`（「旧格式不再支持，请按新写法重写」），旧的路径写法（`@self.X`、`@部件.X`、`@lua.X`、开头 `:状态`）报 `path_old` 并给出新写法，`_settings.json` 里的 `itemKeys` / `objectKeys` / `blockers` 报 `settings_old`。**不做迁移**，也不要只改版本号：按上面的写法重写，`props` 给的 `prop` 就是新写法，重写完 `validate` + `run`。
 
+## 先补前置，再按正常流程测
+
+1. **排正常流程**：从玩家能做的第一步写起——进地图、走近或传送到 NPC 旁、按交互键、看对话、点选项按钮、进玩法、操作、结算、退出。每一步写清走哪个输入或界面、会触发哪个函数或事件（读代码确认）。
+2. **排前置清单**：顺着这些步骤列出要用到的配置和资源：NPC 配置（功能 NPC 表、玩法表的行）、NPC 状态蓝图 / 交互组件、对话或剧情（例如 E 类对话、剧情实例、选项按钮节点）、引导、地图点位、要用的 GM。每项去查有没有、字段对不对：表格用 `table.list` / `table.query` / `table.schema` 按主键查，资源用 `ue_asset` / `ue_find`，导出的 Lua 表读 TableData。
+3. **补齐**：缺的照同类已有的一条仿写（写清仿的是哪条）。表格用 `table.edit` 加行改格子（新表复制同类表再改），改完 `table.check`；资源、蓝图用 `ue_asset` / `ue_blueprint`，编译通过再保存；要导表的跑项目的导表命令，然后重开 PIE，用 `ue_get` / `ue_lua` 读一下确认新配置已生效。要策划定的数值（奖励、概率、文案）问用户，不自己编。
+4. **不绕过**：缺配置时不在运行时临时把配置指向别的行、不跳过入口直接调玩法函数、不把这一段登记延期了事——那样测到的不是玩家会走的那条路。真补不了（缺美术资源、要服务端）才登记延期，写清缺哪张表的哪一行、用户怎么补。
+
 ## 什么时候调函数、什么时候走界面
 
-- **准备状态**（等级、道具、任务进度、存档、时间）：用项目接口或 GM，不要走一长串界面去凑。测试的是后面那段界面流程。
-- **被测的操作本身**：走界面（`click`、`key`、`type`、`drag`），这样才测到按钮绑定、界面刷新、Lua 回调。
+- **准备状态**（等级、道具、任务进度、存档、时间、生成 NPC、传送到附近）：用项目接口或 GM，不要走一长串界面去凑。测试的是后面那段玩家流程。
+- **被测的操作本身**：按正常游戏流程走输入和界面（`key` 按交互键、`click` 对话选项和按钮、`type`、`drag`），这样才测到交互触发、对话选项、按钮绑定、界面刷新、Lua 回调。被测链路上的函数（开始玩法、选择、结算这类）**不直接调**，也不在项目接口的事件回调里替玩家操作。某一步确实还没有界面（界面没做）时才调门面函数，并在报告里写明「这一步跳过了界面层」和原因。
 - **检查结果**：两头都看——数据（`@ps.Gold`、子系统里的值、项目接口的只读查询）和界面（文字、数量、红点是否消失）。只看界面会漏数据没存，只看数据会漏界面没刷新。
 - 项目里还没有合适的接口：在项目接口文件夹里加一个（下面的示例），别用 `ue_lua` / 控制台临时拼一段代码塞进脚本。
 
@@ -122,7 +131,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 - **Lua**：Lua 脚本根下 `GameTestApi` 文件夹（默认）里的模块，**模块函数**（`function M.Fn`，不是 `M:Fn`）就是接口，名字 `项目.<模块名>.<函数名>`。参数、返回照 EmmyLua 注释，`---@readonly` 的算只读（能当条件）。示例：[reference/lua-api-example.lua](reference/lua-api-example.lua)。
 - **C++**：`Source/**/GameTestApi` 下蓝图函数库的 `static BlueprintCallable` 函数，`BlueprintPure` 算只读，`WorldContext` 自动填。示例：[reference/cpp-api-example.h](reference/cpp-api-example.h)。
-- 接口只做「准备状态」和「查询」，**逻辑写在接口里，脚本只做编排**。参数只用能构造的类型（整数、浮点、布尔、字符串、枚举、简单结构体、数组）；对象参数传引用（`objects` 里的名字或 `$var`）。
+- 接口只做「准备状态」和「只读查询」，**逻辑写在接口里，脚本只做编排**。不在接口里调被测链路上的函数、不订阅事件替玩家操作（例如收到「可以出招」就同帧选一个）、不在运行时改配置表的值；这些都会让测试绕过玩家真正走的那条路。参数只用能构造的类型（整数、浮点、布尔、字符串、枚举、简单结构体、数组）；对象参数传引用（`objects` 里的名字或 `$var`）。
 - 写完 Lua 接口跑一次 `action=look what=api query=<模块名>`，面板会重扫并写进场景根 `_api.json`；`validate` 认得 `_api.json` 里的名字。
 - 用户的 UnLua 是二次开发版：Lua 里取游戏对象、调 C++ 的写法照项目里已有代码抄，不要套官方 UnLua 的 API。
 
@@ -143,6 +152,15 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - **随机结果**（抽卡、掉落）：开头 `api Random.Seed`，或用接口把结果固定；检查只看「数量对、类型在范围内」，不比具体值。
 - **多端**（服务器 + 客户端）：同步属性在服务器读改（引用写 `client: "server"`），界面在客户端看。
 
+## 用日志和快照点分析代码
+
+只看事件数对不对，测不出代码走的路对不对。每次跑都要对照代码：
+
+1. **跑之前打点**：按「排正常流程」里写的「每一步触发哪个函数」，在入口、状态切换、判定、结算这些关键函数和分支上加 Lua 快照点：`ue_lua action=snap file=<文件或模块名> line=<行> hits=<次数>`（不暂停游戏，命中时记局部变量和调用栈）。C++ 用 `ue_vs_breakpoints action=add` 带 `message` 的日志断点（不停下），要停下看现场再用普通断点（见 ue-runtime-debug 技能）。
+2. **跑完看记录**：`ue_lua action=snap id=<快照点>` 看每次命中的局部变量和调用栈，`ue_log action=tail pie=true` 看这次 PIE 的日志（Lua 报错、Warning、项目自己打的日志）。
+3. **写结论**：每个测试点写「实际调用顺序 + 关键值」和模块文档的时序比对：对的写「符合」，不对的写现象、快照点或日志原文，判断是功能 bug 还是配置问题。没命中的快照点说明那段代码没走到，要查前一步为什么没触发。
+4. **收尾**：撤掉自己加的快照点（`ue_lua action=snap remove=true`）和 VS 断点，别留给用户。
+
 ## 失败了怎么判断
 
 | 现象                                               | 多半是                               | 怎么改                                                                                                     |
@@ -155,7 +173,8 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 | 条件时成时不成                                     | 界面刚打开数据还没刷                 | 加大 `settleMs`；反面判断只在所在界面已在屏上时才算                                                        |
 | 被引导、公告挡住                                   | 缺守护                               | 加守护，不要加 `wait seconds`                                                                              |
 | `close_failed`                                     | `how` 里的方式都没关掉               | 看 `payload.close` 每种方式的结果，换一种或在 `closeRules` 定好                                            |
-| 断言实际值不对、日志里有 Error / Lua 报错          | 功能 bug                             | 给用户看证据（步骤、实际值、日志行、截图），说明判断                                                       |
+| 断言实际值不对、日志里有 Error / Lua 报错          | 功能 bug                             | 给用户看证据（步骤、实际值、快照点记录、日志行、截图），说明判断                                           |
+| 交互没反应、对话没出现、选项点了不进玩法           | 前置配置缺失或不对                   | 回头查前置清单那几项（表格行、剧情、状态蓝图），补齐、导表、重开 PIE 再跑                                  |
 
 报告里每一条结论都要有证据：哪一步、实际值、日志行或截图路径。不确定是 bug 还是脚本问题时说清楚还要确认什么。
 
@@ -186,6 +205,7 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 - 不改别人录的段、别人写的脚本的行为（只在整理、修复时改，并说明改了什么）；不删别人的回归脚本。
 - 不用 `disabled`、`onFail: continue`、放宽断言、删掉检查、改成 `many: "first"` 来让失败「通过」。跑不过就报告。
 - 不用 `ue_lua` / 控制台把逻辑塞进脚本绕过接口库；不用表达式调会改状态的函数。
+- 不在接口或脚本里直接调被测链路上的函数、替玩家操作、运行时改配置来绕开缺的前置配置；缺什么先补什么。
 - 不写固定等待（`wait seconds`）代替条件；`click` 本身会等部件可点。
 - 不写 v3 的选择器字符串（`WBP_X:Root/Btn`、`List[Data.Id=1]>Btn`）、`invoke`、`find`、`widget.close` / `widget.call`、`text(sel)` 这类按选择器的函数，都不认。
 - 不编类名、部件名、属性路径、接口名：都从 `widgets` / `props` / `vars` / `api` 的返回里抄。

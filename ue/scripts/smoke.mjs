@@ -468,9 +468,18 @@ try {
   assert.equal(JSON.parse(text(pieLog)).lines.length, fresh, text(pieLog))
   assert.equal(bridge.state.map.package, '/Game/Maps/Arena')
   assert.ok(!(await call('ue_editor', { action: 'open_map', map: '/Game/Maps/Town' }, yes)).isError)
+  // 没装 GameTest（读不到运行设置）时默认开进选中的视口
+  assert.equal(bridge.state.map.pieWindow, 'viewport')
+  // GameTest 运行设置 pieWindow=new：Agent 开 PIE 也跟着开独立窗口；参数 window 优先
+  bridge.state.gtConfig = { pieWindow: 'new' }
   assert.ok(!(await call('ue_editor', { action: 'pie_start' }, yes)).isError)
   assert.equal(bridge.state.map.package, '/Game/Maps/Town')
   assert.equal(bridge.state.map.pie, true)
+  assert.equal(bridge.state.map.pieWindow, 'new')
+  assert.ok(!(await call('ue_editor', { action: 'pie_stop' }, yes)).isError)
+  assert.ok(!(await call('ue_editor', { action: 'pie_start', window: 'viewport' }, yes)).isError)
+  assert.equal(bridge.state.map.pieWindow, 'viewport')
+  bridge.state.gtConfig = undefined
   const redir = await api('POST', '/p/p1/tools/redirectors', { path: '/Game/Old' })
   assert.equal(redir.items.length, 1)
   const fixed = await api('POST', '/p/p1/tools/redirectors/fix', { path: '/Game/Old' })
