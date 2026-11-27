@@ -14,6 +14,13 @@ class FViewport;
 /** 截一个视口的图：缩到 MaxWidth 以内，PNG 转 base64 写进 Out（png、width、height） */
 UELINKCORE_API bool AgentPanelCaptureViewport(FViewport* VP, int32 MaxWidth, TSharedPtr<FJsonObject>& Out, FString& Error);
 
+/**
+ * 2.24：截游戏世界（PIE、游戏进程）的画面。bUi 为真时截游戏视口控件（Slate 截图，含 UMG 界面，和玩家看到的一样，
+ * PIE 开在选中的视口里时也只截视口、不截编辑器界面），Out 多 ui=true；截不了（Slate 没起来、窗口最小化）时退回只读场景像素。
+ * bUi 为假只读视口的场景像素（不含 UMG，2.23 及以前的行为）
+ */
+UELINKCORE_API bool AgentPanelCaptureGameView(UWorld* World, int32 MaxWidth, bool bUi, TSharedPtr<FJsonObject>& Out, FString& Error);
+
 namespace AgentPanel
 {
 	UELINKCORE_API FString Str(const TSharedPtr<FJsonObject>& Args, const TCHAR* Key, const FString& Default = FString());

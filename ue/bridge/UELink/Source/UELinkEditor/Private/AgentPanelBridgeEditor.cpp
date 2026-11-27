@@ -319,6 +319,19 @@ static void RegisterEditorOps()
 			Settings->SetPlayNetMode(Net == TEXT("listen") ? EPlayNetMode::PIE_ListenServer : Net == TEXT("client") ? EPlayNetMode::PIE_Client : EPlayNetMode::PIE_Standalone);
 			Params.EditorPlaySettings = Settings;
 			Params.WorldType = EPlaySessionWorldType::PlayInEditor;
+			// 2.24：window=viewport（默认）开进选中的视口，new 开独立窗口；找不到可用的关卡视口时退回新窗口并说明
+			const FString Window = Str(A, TEXT("window"), TEXT("viewport"));
+			if (Window != TEXT("viewport") && Window != TEXT("new"))
+			{
+				Error = TEXT("window 只能是 viewport（选中的视口，默认）或 new（独立窗口）");
+				return false;
+			}
+			const bool bInViewport = Window == TEXT("viewport") && AgentPanelEd::PieIntoSelectedViewport(Params);
+			Out->SetStringField(TEXT("window"), bInViewport ? TEXT("viewport") : TEXT("new"));
+			if (Window == TEXT("viewport") && !bInViewport)
+			{
+				Out->SetStringField(TEXT("note"), TEXT("没找到看得见的关卡视口（关卡编辑器页签关着或编辑器最小化），PIE 开在了独立窗口"));
+			}
 			GEditor->RequestPlaySession(Params);
 		}
 		else if (Action == TEXT("stop"))
@@ -382,9 +395,11 @@ static void RegisterEditorOps()
 				}
 			}
 		}
-		else if (UGameViewportClient* VC = World->GetGameViewport())
+		else
 		{
-			VP = VC->Viewport;
+			// 2.24：PIE / 游戏世界默认截含 UMG 的游戏视口（UELinkCore 的 AgentPanelCaptureGameView），ui=false 只要场景
+			Out->SetStringField(TEXT("world"), FAgentPanelBridge::WorldId(World));
+			return AgentPanelCaptureGameView(World, Int(A, TEXT("maxWidth"), 1280), Bool(A, TEXT("ui"), true), Out, Error);
 		}
 		Out->SetStringField(TEXT("world"), FAgentPanelBridge::WorldId(World));
 		return AgentPanelCaptureViewport(VP, Int(A, TEXT("maxWidth"), 1280), Out, Error);

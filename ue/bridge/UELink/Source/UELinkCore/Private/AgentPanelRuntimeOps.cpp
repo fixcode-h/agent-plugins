@@ -41,6 +41,8 @@
 #include "UObject/UnrealType.h"
 #include "UObject/UObjectIterator.h"
 #include "UnrealClient.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Widgets/SViewport.h"
 
 using namespace AgentPanel;
 
@@ -205,15 +207,56 @@ namespace
 		O->SetArrayField(TEXT("params"), ParamsOf(F));
 		return O;
 	}
-
-	FViewport* GameViewport(UWorld* World)
-	{
-		UGameViewportClient* VC = World ? World->GetGameViewport() : nullptr;
-		return VC ? VC->Viewport : nullptr;
-	}
 }
 
 /** 截一个视口的图：缩到 MaxWidth 以内，PNG 转 base64（编辑器模块截编辑器视口时也用） */
+namespace
+{
+	/** 缩到 MaxWidth 以内、PNG 转 base64 写进 Out（视口像素和 Slate 截图共用） */
+	void EncodeShot(TArray<FColor>& Pixels, FIntPoint Size, int32 MaxWidth, TSharedPtr<FJsonObject>& Out)
+	{
+		for (FColor& C : Pixels)
+		{
+			C.A = 255;
+		}
+		if (MaxWidth > 0 && Size.X > MaxWidth)
+		{
+			const int32 W = MaxWidth;
+			const int32 H = FMath::Max(1, Size.Y * MaxWidth / Size.X);
+			TArray<FColor> Small;
+			FImageUtils::ImageResize(Size.X, Size.Y, Pixels, W, H, Small, false);
+			Pixels = MoveTemp(Small);
+			Size = FIntPoint(W, H);
+		}
+		TArray64<uint8> Png;
+		FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
+		Out->SetStringField(TEXT("png"), FBase64::Encode(Png.GetData(), (uint32)Png.Num()));
+		Out->SetNumberField(TEXT("width"), Size.X);
+		Out->SetNumberField(TEXT("height"), Size.Y);
+	}
+}
+
+bool AgentPanelCaptureGameView(UWorld* World, int32 MaxWidth, bool bUi, TSharedPtr<FJsonObject>& Out, FString& Error)
+{
+	UGameViewportClient* VC = World ? World->GetGameViewport() : nullptr;
+	if (bUi && VC && FSlateApplication::IsInitialized())
+	{
+		// 截视口控件而不是整个窗口：PIE 开在选中的视口里时窗口是编辑器主窗口。TakeScreenshot 给控件时按控件区域裁
+		const TSharedPtr<SViewport> Widget = VC->GetGameViewportWidget();
+		TArray<FColor> Pixels;
+		FIntVector Size = FIntVector::ZeroValue;
+		if (Widget.IsValid() && FSlateApplication::Get().TakeScreenshot(StaticCastSharedRef<SWidget>(Widget.ToSharedRef()), Pixels, Size)
+			&& Pixels.Num() > 0 && Size.X > 0 && Size.Y > 0)
+		{
+			EncodeShot(Pixels, FIntPoint(Size.X, Size.Y), MaxWidth, Out);
+			Out->SetBoolField(TEXT("ui"), true);
+			return true;
+		}
+		Out->SetStringField(TEXT("note"), TEXT("截不到含界面的画面（窗口最小化或没在绘制），只截了场景，没有 UMG"));
+	}
+	return AgentPanelCaptureViewport(VC ? VC->Viewport : nullptr, MaxWidth, Out, Error);
+}
+
 bool AgentPanelCaptureViewport(FViewport* VP, int32 MaxWidth, TSharedPtr<FJsonObject>& Out, FString& Error)
 {
 	if (!VP)
@@ -227,25 +270,7 @@ bool AgentPanelCaptureViewport(FViewport* VP, int32 MaxWidth, TSharedPtr<FJsonOb
 		Error = TEXT("读不到视口像素（窗口可能最小化了）");
 		return false;
 	}
-	FIntPoint Size = VP->GetSizeXY();
-	for (FColor& C : Pixels)
-	{
-		C.A = 255;
-	}
-	if (MaxWidth > 0 && Size.X > MaxWidth)
-	{
-		const int32 W = MaxWidth;
-		const int32 H = FMath::Max(1, Size.Y * MaxWidth / Size.X);
-		TArray<FColor> Small;
-		FImageUtils::ImageResize(Size.X, Size.Y, Pixels, W, H, Small, false);
-		Pixels = MoveTemp(Small);
-		Size = FIntPoint(W, H);
-	}
-	TArray64<uint8> Png;
-	FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
-	Out->SetStringField(TEXT("png"), FBase64::Encode(Png.GetData(), (uint32)Png.Num()));
-	Out->SetNumberField(TEXT("width"), Size.X);
-	Out->SetNumberField(TEXT("height"), Size.Y);
+	EncodeShot(Pixels, VP->GetSizeXY(), MaxWidth, Out);
 	return true;
 }
 
@@ -1426,7 +1451,8 @@ void FAgentPanelBridge::RegisterRuntimeOps()
 			return false;
 		}
 		Out->SetStringField(TEXT("world"), WorldId(World));
-		return AgentPanelCaptureViewport(GameViewport(World), Int(A, TEXT("maxWidth"), 1280), Out, Error);
+		// 2.24：默认截含 UMG 的游戏视口（玩家看到的样子），ui=false 只要场景
+		return AgentPanelCaptureGameView(World, Int(A, TEXT("maxWidth"), 1280), Bool(A, TEXT("ui"), true), Out, Error);
 	});
 
 	// ---------- Lua（项目里有 UnLua 才编进来，见 AgentPanelLua.cpp） ----------

@@ -14,6 +14,7 @@ class UEdGraphNode;
 class UEdGraphPin;
 class UPackage;
 struct FEdGraphPinType;
+struct FRequestPlaySessionParams;
 
 namespace AgentPanelEd
 {
@@ -133,4 +134,11 @@ namespace AgentPanelEd
 	void RegisterEditorReadyOps();
 	void StartEditorReady();
 	void StopEditorReady();
+
+	/**
+	 * 2.24（UELinkPieViewport.cpp）：PIE 开进「选中的视口」——关卡编辑器当前活动的关卡视口，和工具栏 Play 菜单里
+	 * 勾「选中的视口」一样。找不到看得见的关卡视口（关卡编辑器页签被关了、编辑器最小化）时不改 Params 并返回 false，
+	 * 调用方照旧开新窗口并在回包里说明
+	 */
+	bool PieIntoSelectedViewport(FRequestPlaySessionParams& Params);
 }
