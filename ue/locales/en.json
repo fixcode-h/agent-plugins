@@ -5218,8 +5218,6 @@
   "挪到执行前": "Move to Before",
   "末尾 {n} 步是在收拾现场：放到「执行后」，失败、按停止也会做": "The last {n} steps clean up: move them to After so they also run after a failure or stop",
   "挪到执行后": "Move to After",
-  "通过后": "If passed",
-  "不论结果": "Always",
   "把环境准备好、确认前置条件都在；这里失败算「前置不满足」，不算测试失败": "Get the environment ready and check preconditions; a failure here means Preconditions not met, not a test failure",
   "加执行前步骤": "Add Before step",
   "按正常游戏流程操作并检查结果，决定这次通过还是失败": "Play through the normal game flow and check results; decides pass or fail",

@@ -193,19 +193,6 @@ export const BpEventNode = memo(function BpEventNode({ data }: Props) {
     >
       <NodeTile icon={Icon} tone={tone} round />
       {label}
-      {/* 三段之间的竖向虚线（只是示意先后，不能连、不能拖）挂在这两个点上 */}
-      {phase && (
-        <>
-          <Handle id="phase-in" type="target" position={Position.Top} isConnectable={false} className="ue:!opacity-0" />
-          <Handle
-            id="phase-out"
-            type="source"
-            position={Position.Bottom}
-            isConnectable={false}
-            className="ue:!opacity-0"
-          />
-        </>
-      )}
       {n.outs[0] && <OutPin node={n.id} pin={n.outs[0]} top={HEAD_MID} />}
     </div>
   )
