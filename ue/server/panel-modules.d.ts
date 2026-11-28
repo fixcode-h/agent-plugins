@@ -76,6 +76,21 @@ declare module '@panel/web/src/components/ui/switch' {
   }): ReactElement
 }
 
+/** 网页：表单里的代码框（面板 web/src/components/ui/code-field.tsx，2026-11-28 加的）：GameTest 的 Lua 代码节点、函数库用 */
+declare module '@panel/web/src/components/ui/code-field' {
+  import type { ReactElement } from 'react'
+  export function CodeField(p: {
+    value: string
+    onChange: (v: string) => void
+    lang: string
+    height?: number
+    onSave?: () => void
+    label?: string
+    placeholder?: string
+    className?: string
+  }): ReactElement
+}
+
 /** 服务端：文件的版本记录和取某一版的字节（面板 server/exec/vcs-history.ts，表格插件也用）；资源页「版本差异」用 */
 declare module '@panel/server/exec/vcs-history' {
   export interface FileRev {

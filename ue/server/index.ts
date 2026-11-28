@@ -23,6 +23,7 @@ import { ueTextifier } from './textify.ts'
 import { ueToolDefs, ueTools } from './tools.ts'
 import { UE_SUMMARY } from './tool-guides.ts'
 import { c, setCtx, t } from './util.ts'
+import { TEST_LUA_HOOKS, testLuaDeny } from './uekit/gt-luafn/guard.ts'
 import { detectUe, enableRegisteredOnce, ueReady } from './capability.ts'
 import { engineFacts } from './engine-facts.ts'
 import { ueIndexRoots } from './file-index-roots.ts'
@@ -89,6 +90,8 @@ const activate: ActivateServer = async (ctx) => {
   await enableRegisteredOnce().catch((e: Error) => ctx.log.warn('UE：打开已接入项目失败', { error: e.message }))
   return {
     fetch: handle,
+    // 清单 hooks 里没写 script 的钩子：拦新建测试 Lua 文件（uekit/gt-luafn/guard.ts）
+    hook: (id, input) => (TEST_LUA_HOOKS.includes(id) ? testLuaDeny(input) : undefined),
 
     async tools(run) {
       // 设计文档 3.6：只认 Agent 模式（项目里执行）的对话，聊天和设计模式不挂。

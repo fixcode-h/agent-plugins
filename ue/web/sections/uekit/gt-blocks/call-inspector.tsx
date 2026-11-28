@@ -114,7 +114,7 @@ const objIn = (v: unknown): GtRefLike | undefined =>
  * 按函数定义列参数（协议 game-test-script 4.4）：普通参数按类型转（数字、布尔、像 JSON 的按 JSON），
  * 对象参数只能是运行时找得回来的：脚本里的对象写 `{"$obj": 名}`、`$变量` 原样；新抓的对象先存进脚本「对象」再引用
  */
-function ParamForm({
+export function ParamForm({
   params,
   values,
   onChange,

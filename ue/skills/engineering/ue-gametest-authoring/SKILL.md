@@ -1,6 +1,6 @@
 ---
 name: ue-gametest-authoring
-description: 给 UE 功能写、校验、跑和维护 GameTest 回放测试（v5 脚本：对象引用 + 部件、对象判断、块、表达式、守护、obj.* / api 调函数、项目 C++ / Lua 接口）。验证刚改的玩法或界面、复现用户说的操作、把录制整理成带循环和分支的流程、补回归测试时使用；不用等用户录制，从项目代码直接写。
+description: 给 UE 功能写、校验、跑和维护 GameTest 回放测试（v5 脚本：对象引用 + 部件、对象判断、块、表达式、守护、执行 GM、对象调用、节点内 Lua 和函数库）。验证刚改的玩法或界面、复现用户说的操作、把录制整理成带循环和分支的流程、补回归测试时使用；不用等用户录制，从项目代码直接写。
 user-invocable: true
 ---
 
@@ -28,7 +28,8 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
    - `ue_gametest action=look what=widgets asset=/Game/UI/WBP_Bag`：WBP 的控件树，部件名就是这里的控件名；列表、格子标 `container`。
    - `action=look what=props class=WBP_Shop`：对象的属性树，按「自己（C++ → 蓝图 → Lua）/ 各部件 / 条目数据 / 算出状态」分组，每项给能直接写进脚本的 `prop`、`kind`（决定能用哪些 `op`，见 `opsByKind`）和 `score`（当标识的推荐分）；游戏开着时给 `target={"obj": …}` 或 `object=…`，还带此刻的值、`distinct`（同类几个实例里有几种值）和 `suggest`（能区分同类实例的最少属性组合）。界面绑了 Lua 时加 `module=UI.Shop.ShopPanel`，`---@field` 声明的字段也会列出来。
    - `action=look what=vars scope=widget target={"obj": "shop"}`：字段和只读函数的签名；`scope=subsystem name=QuestSubsystem`、`scope=player which=ps`、`scope=lua module=Game.Quest.QuestMgr`、`scope=object object=<引用>` 同理。
-   - `action=look what=api query=任务`：接口库。自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…）加项目接口（`项目.…`）。只读的（`readOnly`）能写进条件和表达式。
+   - `action=look what=api query=任务`：自带接口（`Object.*`、`Widget.*`、`Player.*`、`Log.*`…），只读的（`readOnly`）能写进条件和表达式；`luaFns` 是面板的 Lua 函数库（脚本函数节点能调的）。项目测试接口（`项目.…`）GameTest 2.9.0 起不认了。
+   - `ue_gm action=list source=custom`：项目的自定义 GM、对象列表（对象调用能直接用的对象和它们的函数）。
 4. **写**：按三段写——执行前（`setup`）准备环境、检查前置，执行（`steps`）按正常游戏流程走输入和界面操作、最后用对象判断或表达式检查，执行后（`teardown`）收拾现场。见下面「写法」，**写之前读「三段怎么分」「写紧凑」「公共库」「收尾段，能连着重复跑」四节**。
 5. **打快照点**：跑之前在被测链路的关键函数上加 Lua 快照点或 C++ 日志断点，见「用日志和快照点分析代码」。
 6. **校验**：`action=validate scenario=…`（或 `script=` 整份 JSON）。错误按步骤 `id` 和错误码返回，全部改掉再跑。`style_*` 警告是写法建议（固定等待、存变量只为断言、连着几步检查、和别的脚本重复的开头、和公共库一样的一段、长脚本不分段、塞 Lua 代码、循环没上限、`style_precheck_in_steps` 准备和前置检查写进了执行段、`style_cleanup_in_steps` 收尾写进了执行段）：照提示改掉；确实不该改的在交付时写明理由。返回 `offline: true` 说明编辑器没开、只查了结构：部件名、函数、属性类型要开着编辑器再校验一次。
@@ -70,14 +71,27 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
   "steps": [
     {
       "id": "s1",
-      "action": "api",
-      "api": "项目.WelfareTest.ResetDaily",
-      "args": { "Day": "$day" },
+      "action": "gm.run",
+      "gm": { "kind": "custom", "name": "welfare-reset-day", "args": { "Day": "$day" } },
       "title": "重置签到天数",
-      "note": "用项目接口把签到进度重置到第 N 天（参数 day），今天的奖励变成可领取；只准备状态，不走界面"
+      "note": "用 GM 把签到进度重置到第 N 天（参数 day），今天的奖励变成可领取；只准备状态，不走界面"
     },
-    { "id": "s2", "action": "set", "var": "gold0", "value": "=@ps.Gold", "title": "记下领取前的金币", "note": "存进 $gold0，最后对比到账金额" },
-    { "id": "s3", "action": "obj.call", "obj": "npc", "function": "OpenWelfare", "title": "打开福利界面", "note": "调 NPC 的 OpenWelfare 打开福利界面（入口不是被测的部分）" },
+    {
+      "id": "s2",
+      "action": "set",
+      "var": "gold0",
+      "value": "=@ps.Gold",
+      "title": "记下领取前的金币",
+      "note": "存进 $gold0，最后对比到账金额"
+    },
+    {
+      "id": "s3",
+      "action": "obj.call",
+      "obj": "npc",
+      "function": "OpenWelfare",
+      "title": "打开福利界面",
+      "note": "调 NPC 的 OpenWelfare 打开福利界面（入口不是被测的部分）"
+    },
     {
       "id": "s4",
       "action": "click",
@@ -86,7 +100,13 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
       "title": "点今天的领取",
       "note": "被测操作：按玩家流程点今天那一格的领取按钮；已经领过时跳过"
     },
-    { "id": "s5", "action": "assert", "expr": "@ps.Gold >= $gold0 + 500", "title": "金币到账", "note": "数据侧：玩家金币比领取前至少多 500（第 N 天的奖励）" },
+    {
+      "id": "s5",
+      "action": "assert",
+      "expr": "@ps.Gold >= $gold0 + 500",
+      "title": "金币到账",
+      "note": "数据侧：玩家金币比领取前至少多 500（第 N 天的奖励）"
+    },
     {
       "id": "s6",
       "action": "assert",
@@ -94,8 +114,20 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
       "title": "领取按钮变灰",
       "note": "界面侧：领过后按钮不能再点，防止重复领取"
     },
-    { "id": "s7", "action": "obj.close", "obj": "welfare", "title": "关掉福利界面", "note": "按 closeRules 关，回到主界面" },
-    { "id": "s8", "action": "assert", "expr": "len(Log.Errors()) == 0", "title": "没有报错", "note": "整个过程日志里没有 Error、Ensure、Lua 报错" }
+    {
+      "id": "s7",
+      "action": "obj.close",
+      "obj": "welfare",
+      "title": "关掉福利界面",
+      "note": "按 closeRules 关，回到主界面"
+    },
+    {
+      "id": "s8",
+      "action": "assert",
+      "expr": "len(Log.Errors()) == 0",
+      "title": "没有报错",
+      "note": "整个过程日志里没有 Error、Ensure、Lua 报错"
+    }
   ]
 }
 ```
@@ -130,9 +162,21 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 ```json
 [
-  { "id": "s1", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "GuideRequired" }, "expect": { "equals": 1 } },
+  {
+    "id": "s1",
+    "action": "api",
+    "api": "项目.XxxTest.EventCount",
+    "args": { "name": "GuideRequired" },
+    "expect": { "equals": 1 }
+  },
   { "id": "s2", "action": "api", "api": "项目.XxxTest.GetState", "expect": { "equals": 4 } },
-  { "id": "s3", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "RoundStarted" }, "expect": { "equals": 0 } },
+  {
+    "id": "s3",
+    "action": "api",
+    "api": "项目.XxxTest.EventCount",
+    "args": { "name": "RoundStarted" },
+    "expect": { "equals": 0 }
+  },
   { "id": "s4", "action": "wait", "until": "seconds", "seconds": 3 },
   { "id": "s5", "action": "api", "api": "项目.XxxTest.EventCount", "args": { "name": "RoundSettled" }, "saveAs": "n" },
   { "id": "s6", "action": "assert", "expr": "$n >= 2" },
@@ -145,20 +189,36 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 ```json
 [
   {
-    "id": "s1", "action": "assert", "title": "进入等待引导",
+    "id": "s1",
+    "action": "assert",
+    "title": "进入等待引导",
     "note": "开始玩法后应先停在等引导：引导请求恰好一次、状态是 AwaitGuide、还没开第一回合",
-    "cond": { "all": [
-      { "api": "项目.XxxTest.EventCount", "args": { "name": "GuideRequired" }, "equals": 1 },
-      { "api": "项目.XxxTest.GetStateName", "equals": "AwaitGuide" },
-      { "api": "项目.XxxTest.EventCount", "args": { "name": "RoundStarted" }, "equals": 0 }
-    ] }
+    "cond": {
+      "all": [
+        { "api": "项目.XxxTest.EventCount", "args": { "name": "GuideRequired" }, "equals": 1 },
+        { "api": "项目.XxxTest.GetStateName", "equals": "AwaitGuide" },
+        { "api": "项目.XxxTest.EventCount", "args": { "name": "RoundStarted" }, "equals": 0 }
+      ]
+    }
   },
   {
-    "id": "s2", "action": "wait", "until": "cond", "timeoutMs": 15000, "title": "等第 2 回合结算",
+    "id": "s2",
+    "action": "wait",
+    "until": "cond",
+    "timeoutMs": 15000,
+    "title": "等第 2 回合结算",
     "note": "按回合号等，不按累计事件数，免得第 1 回合的结算被算进来",
     "cond": { "expr": "项目.XxxTest.RoundResult(2) != ''" }
   },
-  { "id": "s3", "action": "api", "api": "项目.XxxTest.RoundResult", "args": { "round": 2 }, "expect": { "equals": "Win" }, "title": "第 2 回合判赢", "note": "第 2 回合出了相同的手势，应判 Win" }
+  {
+    "id": "s3",
+    "action": "api",
+    "api": "项目.XxxTest.RoundResult",
+    "args": { "round": 2 },
+    "expect": { "equals": "Win" },
+    "title": "第 2 回合判赢",
+    "note": "第 2 回合出了相同的手势，应判 Win"
+  }
 ]
 ```
 
@@ -176,11 +236,11 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 每份脚本固定三段，编辑页和流程图上三个事件节点一直在，哪段没步骤运行时就跳过：
 
-| 段 | 字段 | 放什么 | 不放什么 | 失败算什么 |
-| --- | --- | --- | --- | --- |
-| 执行前 | `setup` | 等环境就绪（PIE、登录、进地图，进地图用公共库 `common/地图/…`）、加载测试接口；**只读**的前置检测（配置、模板、剧情、道具在不在） | 被测玩法的操作；改配置、改存档去绕过入口 | **前置不满足**（`outcome: "blocked"`）：测试没开始，执行段不跑，执行后照常跑 |
-| 执行 | `steps` | 按正常游戏流程操作，用「等到」条件等状态，最后检查结果 | 只是准备或检查前置的步骤 | 失败 |
-| 执行后 | `teardown` | 退出玩法、关界面、恢复状态 | 结果检查 | 只记警告 |
+| 段     | 字段       | 放什么                                                                                                                              | 不放什么                                 | 失败算什么                                                                   |
+| ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| 执行前 | `setup`    | 等环境就绪（PIE、登录、进地图，进地图用公共库 `common/地图/…`）、用 GM 准备状态；**只读**的前置检测（配置、模板、剧情、道具在不在） | 被测玩法的操作；改配置、改存档去绕过入口 | **前置不满足**（`outcome: "blocked"`）：测试没开始，执行段不跑，执行后照常跑 |
+| 执行   | `steps`    | 按正常游戏流程操作，用「等到」条件等状态，最后检查结果                                                                              | 只是准备或检查前置的步骤                 | 失败                                                                         |
+| 执行后 | `teardown` | 退出玩法、关界面、恢复状态                                                                                                          | 结果检查                                 | 只记警告                                                                     |
 
 - 执行前写两个 `group`：`title` 分别是「准备环境」「前置检测」；前置检测里全是 `assert` 或只读接口带 `expect`，每条 `title` 写查的是什么（「查前置剧情」）。只有一两步时可以不分组。
 - 前置清单（工作流 scope / prep 节点列的）每一项都要在「前置检测」里有一条，下次缺配置直接报「前置不满足：查前置剧情」。
@@ -193,20 +253,42 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 {
   "schemaVersion": 5,
   "setup": [
-    { "id": "prep", "action": "group", "title": "准备环境", "do": [
-      { "id": "p1", "action": "api", "title": "加载测试接口", "api": "Gm.Lua", "args": { "code": "require('GameTestApi/ClinkGlasses')" } },
-      { "id": "p2", "action": "call", "title": "进入地图", "script": "common/地图/进入地图" }
-    ] },
-    { "id": "check", "action": "group", "title": "前置检测", "do": [
-      { "id": "c1", "action": "assert", "title": "查碰杯配置和 NPC 模板", "cond": { "all": [
-        { "api": "项目.ClinkGlassesTestApi.ClinkConfigExists", "equals": true },
-        { "api": "项目.ClinkGlassesTestApi.NPCTemplateExists", "equals": true }
-      ] } },
-      { "id": "c2", "action": "assert", "title": "查前置剧情", "cond": { "api": "项目.ClinkGlassesTestApi.ScenarioExists", "args": { "id": 990001 }, "equals": true } }
-    ] }
+    {
+      "id": "prep",
+      "action": "group",
+      "title": "准备环境",
+      "do": [
+        { "id": "p1", "action": "gm.run", "title": "开启碰杯玩法", "gm": { "kind": "custom", "name": "clink-enable" } },
+        { "id": "p2", "action": "call", "title": "进入地图", "script": "common/地图/进入地图" }
+      ]
+    },
+    {
+      "id": "check",
+      "action": "group",
+      "title": "前置检测",
+      "do": [
+        {
+          "id": "c1",
+          "action": "assert",
+          "title": "查碰杯配置和 NPC 模板",
+          "cond": {
+            "all": [
+              { "api": "项目.ClinkGlassesTestApi.ClinkConfigExists", "equals": true },
+              { "api": "项目.ClinkGlassesTestApi.NPCTemplateExists", "equals": true }
+            ]
+          }
+        },
+        {
+          "id": "c2",
+          "action": "assert",
+          "title": "查前置剧情",
+          "cond": { "api": "项目.ClinkGlassesTestApi.ScenarioExists", "args": { "id": 990001 }, "equals": true }
+        }
+      ]
+    }
   ],
-  "steps": [ "… 走近 NPC 按 E、等进引导、选手势、等结算、检查奖励 …" ],
-  "teardown": [ "… 退出玩法、等回到空闲 …" ]
+  "steps": ["… 走近 NPC 按 E、等进引导、选手势、等结算、检查奖励 …"],
+  "teardown": ["… 退出玩法、等回到空闲 …"]
 }
 ```
 
@@ -231,19 +313,54 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 ## 什么时候调函数、什么时候走界面
 
-- **准备状态**（等级、道具、任务进度、存档、时间、生成 NPC、传送到附近）：用项目接口或 GM，不要走一长串界面去凑。测试的是后面那段玩家流程。
-- **被测的操作本身**：按正常游戏流程走输入和界面（`key` 按交互键、`click` 对话选项和按钮、`type`、`drag`），这样才测到交互触发、对话选项、按钮绑定、界面刷新、Lua 回调。被测链路上的函数（开始玩法、选择、结算这类）**不直接调**，也不在项目接口的事件回调里替玩家操作。某一步确实还没有界面（界面没做）时才调门面函数，并在报告里写明「这一步跳过了界面层」和原因。
-- **检查结果**：两头都看——数据（`@ps.Gold`、子系统里的值、项目接口的只读查询）和界面（文字、数量、红点是否消失）。只看界面会漏数据没存，只看数据会漏界面没刷新。
-- 项目里还没有合适的接口：在项目接口文件夹里加一个（下面的示例），别用 `ue_lua` / 控制台临时拼一段代码塞进脚本。
+- **被测的操作本身：模拟玩家真实操作**。按玩家实际怎么玩走输入和界面（`key` 按交互键、`click` 对话选项和按钮、`type`、`drag`），这样才测到交互触发、对话选项、按钮绑定、界面刷新、Lua 回调。被测链路上的函数（开始玩法、选择、结算这类）**不直接调**，也不在事件回调里替玩家操作。
+- **只有两种情况直接调对外接口**：暂时还没有对应的配置（配置补不了、真没界面），或者依赖别人的功能还没接入——这时调我方模块对外暴露的接口，模拟别的系统调用我方模块，并在报告里写明「这一步跳过了界面层」和原因。
+- **准备状态**（等级、道具、任务进度、存档、时间、生成 NPC、传送到附近）和**只读查询**，按这个顺序选，前一种做得到就不用后一种：
+  1. **执行 GM**（`gm.run`）：项目已有的 GM（C++ / Lua / 自定义 GM / 宏）。
+  2. **对象调用**（`obj.do`）：GM 页对象列表里的对象（或脚本里的对象），调它上面**项目实际的业务接口**（C++ 函数、蓝图函数、Lua 表上的函数）、读写字段。
+  3. **自己写 Lua**：Lua 代码节点（`lua`）或面板的 Lua 函数库（`luafn`）。
+- **检查结果**：两头都看——数据（`@ps.Gold`、子系统里的值、对象调用读到的字段）和界面（文字、数量、红点是否消失）。只看界面会漏数据没存，只看数据会漏界面没刷新。
 
-## 项目接口
+## 不往游戏项目里加测试代码（硬规则）
 
-接口按文件夹认（GameTest 设置 →「接口库」可以改文件夹，存在场景根 `_settings.json` 的 `api`）：
+- **不建 .lua 文件**：不许在项目里加 `GameTestApi/…`、`XxxTestApi.lua` 这类测试用的 Lua，也不存成 .lua 文件；面板会拦。Lua 只写在 Lua 代码节点或函数库里，存在 JSON 里。
+- **不为测试写 C++ 接口**：测试调项目实际的业务 C++ 接口，不新加 `GameTestApi` 蓝图函数库。GameTest 2.9.0 起不再认 `项目.…` 接口，用到 validate 报 `api_missing`。
+- 以前留下的 `GameTestApi/` 目录：validate 会提醒，把用得着的函数搬进函数库后删掉（删项目文件前先问用户）。
 
-- **Lua**：Lua 脚本根下 `GameTestApi` 文件夹（默认）里的模块，**模块函数**（`function M.Fn`，不是 `M:Fn`）就是接口，名字 `项目.<模块名>.<函数名>`。参数、返回照 EmmyLua 注释，`---@readonly` 的算只读（能当条件）。示例：[reference/lua-api-example.lua](reference/lua-api-example.lua)。
-- **C++**：`Source/**/GameTestApi` 下蓝图函数库的 `static BlueprintCallable` 函数，`BlueprintPure` 算只读，`WorldContext` 自动填。示例：[reference/cpp-api-example.h](reference/cpp-api-example.h)。
-- 接口只做「准备状态」和「只读查询」，**逻辑写在接口里，脚本只做编排**。不在接口里调被测链路上的函数、不订阅事件替玩家操作（例如收到「可以出招」就同帧选一个）、不在运行时改配置表的值；这些都会让测试绕过玩家真正走的那条路。参数只用能构造的类型（整数、浮点、布尔、字符串、枚举、简单结构体、数组）；对象参数传引用（`objects` 里的名字或 `$var`）。
-- 写完 Lua 接口跑一次 `action=look what=api query=<模块名>`，面板会重扫并写进场景根 `_api.json`；`validate` 认得 `_api.json` 里的名字。
+## 对象调用（`obj.do`，GameTest 2.9.0）
+
+```json
+{
+  "id": "bag",
+  "action": "obj.do",
+  "obj": "BagMgr",
+  "title": "发两件测试道具",
+  "ops": [
+    { "kind": "call", "function": "AddItem", "args": { "ItemId": "$itemId", "Count": 2 }, "saveAs": "added" },
+    { "kind": "get", "prop": "@.ItemCount", "saveAs": "count0" },
+    { "kind": "set", "prop": "@.bAutoSort", "value": false }
+  ]
+}
+```
+
+- `obj` 是脚本 `objects` 里的名字、对象库里的对象（GM 页「对象列表」，`ue_gm action=list source=custom` 能看到）或前面「找对象」存的 `$变量`。函数名、参数名、字段路径从 `look what=vars` / `look what=props` 的返回里抄。
+- 参数写常量、`$变量`、`= 表达式`；对象参数写 `{"$obj": "对象名"}`。`call` 的 `expect` 照 `obj.call` 写。
+- 面板存盘、运行前把 `ops` 展开成 `run`（`obj.call` / `set` / `obj.set`），**`run` 不要手写**。整份传 `validate script=` 时面板先展开再查。
+- 一个对象上要连着调几个函数时用它；只调一个也可以直接写 `obj.call`。
+
+## 自己写 Lua（`lua` / `luafn`，GameTest 2.9.0）
+
+GM 和对象调用都做不到时才写。代码存在脚本 JSON 或函数库 JSON 里，绝不落成 .lua 文件。
+
+```json
+{ "id": "q1", "action": "lua", "title": "取任务状态", "args": { "questId": "$questId" },
+  "code": "local Quest = require('Game.Quest.QuestMgr')\nreturn Quest.GetState(questId)", "saveAs": "state" }
+{ "id": "q2", "action": "luafn", "fn": "任务.完成到", "args": { "questId": "$questId", "step": 3 } }
+```
+
+- **Lua 代码节点**（`lua`）：`code` 写一段 Lua，可以是表达式或语句（最后 `return`）；`args` 每项在外层求值后成为代码里的同名局部变量；可以 `require` 项目已有模块。返回值转成 JSON 存 `saveAs`，`expect` 对它判断；`gt.log(...)` 写输出、`gt.fail(消息)` 让这一步失败；默认 2 秒超时（`timeoutMs` 最多 10 秒）。
+- **函数库**（`luafn`）：面板的 Lua 函数库存在文档根的 `AgentPanel/UE/gametest-lua.json`（`look what=api` 的 `luaFns` 给出路径和已有函数）：`{"kind": "gametest-lua", "version": 1, "fns": [{"name": "库.名字", "params": ["a", "b"], "body": "return …", "note": "做什么、返回什么"}]}`。一组普通函数，**不许有类结构**（`setmetatable`、`__index`、`class(…)`、`function A:b()`），不许写文件。几份脚本都要用的 Lua 才放函数库，只用一次的写在节点里。直接改这个 JSON 加函数，改完 `validate`。
+- `luafn` 的 `args` 按参数名给；Lua 代码节点里调函数库写 `fn["库.名字"](…)`。存盘、运行前面板把用到的函数写进步骤的 `lib`，**`lib` 不要手写**。
 - 用户的 UnLua 是二次开发版：Lua 里取游戏对象、调 C++ 的写法照项目里已有代码抄，不要套官方 UnLua 的 API。
 
 ## 用项目的 GM（GameTest 2.3.0）
@@ -254,13 +371,13 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 ## 结合真实工作的写法
 
-- **刚改的界面功能**（例：背包加了「一键出售」）：`api` 发几件可售道具 → 记 `$gold0` 和背包列表的 `@:count` → 打开背包、点一键出售、确认 → `assert` 金币涨了、`@:count` 少了、`Log.Errors` 为空。
-- **Lua 逻辑改动**（例：任务追踪改了排序）：`vars scope=lua module=…` 找存数据的表 → 用 Lua 接口造几条不同状态的任务 → 打开追踪栏 → `loop each: {"obj": "tracker", "part": "List"}` 逐条检查（条目在 `$item`，读 `prop($item, "@item#questId")`），`assert expr` 比较相邻两条。
+- **刚改的界面功能**（例：背包加了「一键出售」）：执行 GM 或对象调用发几件可售道具 → 记 `$gold0` 和背包列表的 `@:count` → 打开背包、点一键出售、确认 → `assert` 金币涨了、`@:count` 少了、`Log.Errors` 为空。
+- **Lua 逻辑改动**（例：任务追踪改了排序）：`vars scope=lua module=…` 找存数据的表 → 用 GM 或对象调用造几条不同状态的任务（都没有时写 Lua 代码节点）→ 打开追踪栏 → `loop each: {"obj": "tracker", "part": "List"}` 逐条检查（条目在 `$item`，读 `prop($item, "@item#questId")`），`assert expr` 比较相邻两条。
 - **引导、弹窗打断**：写全局守护，`when` 用 `@:onScreen` 的对象判断，`do` 调 `common/翻完引导` 或 `obj.close`；主流程照常写，不为它加分支。
 - **翻页数不固定**：`loop until` + `max`，条件挑「最后一页才出现 / 才可点」的部件状态或 Lua 字段（`@#isLast`），别写死次数。
 - **列表里找某一条**：写条目引用 `{"class": 条目类, "in": {"obj": 界面, "part": "List"}, "ident": [{"prop": "@item.ItemId", "op": "eq", "value": 1001}]}`，不按第几个找；字段从 `props`（条目类、条目数据那一组）里挑。
 - **切地图、加载**：`api Wait.Loading` 或 `obj.wait` / `wait until=cond`，不写固定秒数。
-- **随机结果**（抽卡、掉落）：开头 `api Random.Seed`，或用接口把结果固定；检查只看「数量对、类型在范围内」，不比具体值。
+- **随机结果**（抽卡、掉落）：开头 `api Random.Seed`，或用 GM / 对象调用把结果固定；检查只看「数量对、类型在范围内」，不比具体值。
 - **多端**（服务器 + 客户端）：同步属性在服务器读改（引用写 `client: "server"`），界面在客户端看。
 
 ## 用日志和快照点分析代码
@@ -315,8 +432,8 @@ GameTest 是项目 `Plugins/` 里的 UEKit 扩展，在 PIE 或游戏进程里�
 
 - 不改别人录的段、别人写的脚本的行为（只在整理、修复时改，并说明改了什么）；不删别人的回归脚本。
 - 不用 `disabled`、`onFail: continue`、放宽断言、删掉检查、改成 `many: "first"` 来让失败「通过」。跑不过就报告。
-- 不用 `ue_lua` / 控制台把逻辑塞进脚本绕过接口库；不用表达式调会改状态的函数。
-- 不在接口或脚本里直接调被测链路上的函数、替玩家操作、运行时改配置来绕开缺的前置配置；缺什么先补什么。
+- 不往游戏项目里加测试 Lua 文件、不为测试写 C++ 接口；不用 `ue_lua` / 控制台临时拼代码代替脚本里的节点；不用表达式调会改状态的函数。
+- 不在对象调用、Lua 或脚本里直接调被测链路上的函数、替玩家操作、运行时改配置来绕开缺的前置配置；缺什么先补什么。
 - 不写固定等待（`wait seconds`）代替条件；`click` 本身会等部件可点。
 - 不把准备环境、前置检查写进执行段（`steps`），前置检测不过时不在脚本里绕过去。
 - 不把同一时刻的几项检查拆成一项一个节点，不把准备步骤复制粘贴进每份脚本（提进公共库或 `setup`）。

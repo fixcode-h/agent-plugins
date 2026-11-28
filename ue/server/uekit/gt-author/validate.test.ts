@@ -25,13 +25,6 @@ async function setup() {
   )
   await writeFile(path.join(scen, 'a.json'), JSON.stringify({ steps: [{ action: 'call', script: 'b' }] }))
   await writeFile(path.join(scen, 'b.json'), JSON.stringify({ steps: [{ action: 'call', script: 'a' }] }))
-  await writeFile(
-    path.join(scen, '_api.json'),
-    JSON.stringify({
-      lua: { items: [{ name: '项目.QuestApi.Accept' }] },
-      renamed: { '项目.QuestApi.Old': '项目.QuestApi.Accept' },
-    }),
-  )
   await writeFile(path.join(lua, 'Game', 'Guide', 'GuideMgr.lua'), 'local M = {}\nM.curStep = 1\nreturn M\n')
   return { scen, lua }
 }
@@ -60,7 +53,7 @@ test('一份写对了的 v5 脚本没有错误', async () => {
       },
     ],
     steps: [
-      { id: 's1', action: 'api', api: '项目.QuestApi.Accept', args: { questId: 1203 }, saveAs: 'ok' },
+      { id: 's1', action: 'set', var: 'ok', value: true },
       { id: 's2', action: 'set', var: 'gold0', value: '=@ps.Gold' },
       {
         id: 'loop1',
@@ -88,7 +81,6 @@ test('常见写错的地方都按错误码报出来', async () => {
       { action: 'call', script: 'a' },
       { action: 'set', var: 'x', value: '=$y + (1' },
       { action: 'assert', expr: 'foo(1) > 0' },
-      { action: 'api', api: '项目.QuestApi.Old' },
       { action: 'api', api: '项目.QuestApi.Nope' },
       { action: 'clik', target: { obj: { class: 'WBP' }, part: 'Btn' } },
       { action: 'assert', expr: '@luaMod.Game.Guide.GuideMgr.nope == 1' },
@@ -105,7 +97,6 @@ test('常见写错的地方都按错误码报出来', async () => {
     'call_cycle',
     'expr_syntax',
     'fn_missing',
-    'api_renamed',
     'api_missing',
   ])
     assert.ok(c.errors.includes(code), `少了 ${code}：${JSON.stringify(c)}`)

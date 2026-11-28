@@ -26,7 +26,7 @@ import { OcrSettings } from '../../../OcrSettings.tsx'
 import { SettingGroup, SettingRow, SettingsLayout, type SettingsNavSection } from '../../../SettingRows.tsx'
 import { Badge, ErrorText, PageHead } from '../../../ui.tsx'
 import { GtSettings } from '../GtSettings.tsx'
-import { GtApiSettings } from '../gt-author/GtApiSettings.tsx'
+import { GtLuaFnSettings } from '../gt-luafn/GtLuaFnSettings.tsx'
 import { ShortcutList } from '../gt-edit/ShortcutList.tsx'
 
 /**
@@ -123,7 +123,7 @@ function settingsNav(): Record<SettingsPlugin, SettingsNavSection[]> {
           { id: 'guards', label: t('全局守护'), icon: ShieldX },
         ],
       },
-      { title: t('编写 · 这个项目'), items: [{ id: 'api', label: t('接口库'), icon: Library }] },
+      { title: t('编写 · 这个项目'), items: [{ id: 'luafn', label: t('Lua 函数库'), icon: Library }] },
       {
         title: t('编写 · 所有项目共用'),
         items: [
@@ -212,7 +212,7 @@ export function PluginSettings({ name }: { name: SettingsPlugin }) {
           <>
             {/* 运行设置占左边菜单的前六页，一直挂着（换页不丢没保存的改动），只画当前那一组 */}
             <GtSettings />
-            <GtApiSettings />
+            <GtLuaFnSettings />
             <SettingGroup page="live" title={t('连着游戏编辑')} aside={t('所有项目共用')} flush>
               <PanelParams groups={['GameTest 连着游戏']} />
             </SettingGroup>

@@ -8,7 +8,7 @@ import {
   type GtScript,
 } from '../../../../shared/gt-script/index.ts'
 import { absorbLibDrops } from '../../../../shared/obj-lib/link.ts'
-import type { ExpandIssue } from '../../../../shared/gt-script/gm/expand.ts'
+import type { ExpandIssue } from '../../../../shared/gt-script/gm/expand.ts' // 各展开器的 issue 同一个形状
 import { ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 
@@ -129,7 +129,7 @@ export function useScript(o: { project: string; root: string; path: string }): S
         text,
         expectText: base,
       })
-      // 「执行 GM」由面板按 GM 库展开后才写盘（server/uekit/gt-gm-expand.ts）：写进去的和发出去的不一样时按写进去的更新，
+      // 「执行 GM」由面板按 GM 库展开后才写盘（server/uekit/gt-expand/）：写进去的和发出去的不一样时按写进去的更新，
       // 不然下次存盘的 expectText 对不上、检查器里「会执行」也是旧的
       const written = typeof r.text === 'string' ? r.text : text
       if (written !== text) {
@@ -143,7 +143,7 @@ export function useScript(o: { project: string; root: string; path: string }): S
       setBase(written)
       if (r.gmIssues?.length)
         h().toast.error(
-          t('存好了，但有 {n} 处「执行 GM」展开不了：{m}', {
+          t('存好了，但有 {n} 处节点展开不了（执行 GM、对象调用、函数库）：{m}', {
             n: r.gmIssues.length,
             m: r.gmIssues
               .slice(0, 3)

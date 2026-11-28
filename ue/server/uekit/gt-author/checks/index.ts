@@ -4,6 +4,7 @@ import { calls } from './calls.ts'
 import { exprs } from './exprs.ts'
 import { ids } from './ids.ts'
 import { lua } from './lua.ts'
+import { luacode } from './luacode.ts'
 import { notes } from './notes.ts'
 import { refs } from './refs.ts'
 import { shape } from './shape.ts'
@@ -27,6 +28,8 @@ const table: { check: Check; panelOnly?: boolean }[] = [
   { check: apis },
   { check: unsupported },
   { check: lua, panelOnly: true },
+  // 函数库、项目里的旧测试接口目录在面板这边，UE 的 gt.validate 看不到
+  { check: luacode, panelOnly: true },
   // UE 的 gt.validate 不查 title / note（面板这边的约定），编辑器开着时也要跑
   { check: notes, panelOnly: true },
   // 写法建议只看脚本本身，编辑器开着时 UE 的 gt.validate 不查这些

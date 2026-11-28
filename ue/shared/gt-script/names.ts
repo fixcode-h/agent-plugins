@@ -16,6 +16,9 @@ export function scriptNames(doc: GtScript): { name: string; from: 'param' | 'var
   walk(doc, (e) => {
     if (e.step.action === 'set') add(e.step.var, 'set')
     add(e.step.saveAs, 'saveAs')
+    // 对象调用：每一项各自存返回值、读到的字段（run 是生成的，不在遍历里）
+    if (e.step.action === 'obj.do' && Array.isArray(e.step.ops))
+      for (const op of e.step.ops as { saveAs?: unknown }[]) add(op?.saveAs, 'saveAs')
     if (e.step.action === 'loop') {
       add('index', 'loop')
       if ('each' in e.step || 'in' in e.step) add(typeof e.step.as === 'string' ? e.step.as : 'item', 'loop')
