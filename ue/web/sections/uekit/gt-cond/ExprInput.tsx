@@ -28,7 +28,7 @@ interface Item {
 
 const ICON = { var: DollarSign, src: AtSign, fn: FunctionSquare, api: Plug }
 const MAX = 12
-/** 超过这么多字提示改写成项目接口（定稿第 3 节）：表达式里堆逻辑没法调试、没法复用 */
+/** 超过这么多字提示改写成 Lua 代码节点或函数库函数（定稿第 3 节，2.9.0 起不用项目接口）：表达式里堆逻辑没法调试、没法复用 */
 const LONG_EXPR = 200
 
 /**
@@ -194,7 +194,7 @@ export function ExprInput({
         <span className="ue:flex ue:items-start ue:gap-1 ue:text-caption ue:text-warning">
           <Lightbulb className="ue:mt-px ue:h-3 ue:w-3 ue:shrink-0" />
           <span>
-            {t('表达式超过 {n} 字：写成项目接口（接口库里加一个 Lua 或蓝图函数）再在这里调用，更好维护和调试', {
+            {t('表达式超过 {n} 字：改写成 Lua 代码节点或函数库函数，更好维护和调试', {
               n: LONG_EXPR,
             })}
           </span>

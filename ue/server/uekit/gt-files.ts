@@ -138,7 +138,7 @@ async function saveScript(
   } catch (e) {
     throw new BridgeError(t('不是合法的 JSON：{p}（{e}）', { p: rel, e: (e as Error).message }))
   }
-  // 「执行 GM」按 GM 库重新展开（gt-gm-expand.ts）：写进文件的是展开后的，网页按回包的 text 更新
+  // 「执行 GM」按 GM 库重新展开（gt-expand/，对象调用、函数库也在这里）：写进文件的是展开后的，网页按回包的 text 更新
   const { text, issues } = expand ? await expand(given) : { text: given, issues: [] }
   const now = await readFile(abs, 'utf8').then(
     (x) => x.replace(/^\uFEFF/, ''),

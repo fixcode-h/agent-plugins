@@ -18,6 +18,9 @@ const INTERACT = new Set([
   'ability.input',
   'obj.call',
   'obj.set',
+  'obj.do',
+  'lua',
+  'luafn',
 ])
 /** 准备环境、只读检查：可以放执行前的 */
 const PREP = new Set([

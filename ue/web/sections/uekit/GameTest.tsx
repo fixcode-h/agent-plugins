@@ -87,6 +87,9 @@ export function GameTest() {
   const { busy, run } = useAction()
   const installed = state?.extensions?.some((x) => x.name === 'GameTest')
   const live = (state?.instances ?? []).some((i) => i.kind === 'editor' && i.online)
+  // 编辑器还在、只是卡住了（断点、加载、长帧，服务端按 PID 判的 busy）：不算断开，作业、录制状态留着，
+  // 恢复后推送接着来（设计稿「GameTest常用UE工具与卡住断开区分」2.3）。live 只管「现在能不能发请求」
+  const present = (state?.instances ?? []).some((i) => i.kind === 'editor' && (i.online || !!i.busy))
   const gtVersion = state?.extensions?.find((x) => x.name === 'GameTest')?.version
   const [list, setList] = useState<ScenarioList>()
   const [runs, setRuns] = useState<GtRunSummary[]>([])
@@ -149,9 +152,11 @@ export function GameTest() {
     if (!installed) return
     reload()
     if (!live) {
-      // 编辑器关了：作业、录制状态跟着清掉（推送断了，留着会一直显示运行中）
-      setJob(undefined)
-      setRec(undefined)
+      // 编辑器关了：作业、录制状态跟着清掉（推送断了，留着会一直显示运行中）；只是卡住时留着，恢复后下面会重拉一次
+      if (!present) {
+        setJob(undefined)
+        setRec(undefined)
+      }
       return
     }
     void op<GtJob>(project.id, 'gt.job', { steps: 200 })
@@ -170,7 +175,7 @@ export function GameTest() {
         .catch(() => undefined)
     // 换项目、编辑器起来或关掉时重拉（数据换成 UE 的或磁盘的）；reload 每次渲染都是新函数
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id, installed, live])
+  }, [project.id, installed, live, present])
 
   // 面板连没连上 UE 的推送通道（服务端 uekit/stream.ts 推的 link 事件）：断着时录到的步骤、计时都到不了页面
   const [linked, setLinked] = useState<boolean>()

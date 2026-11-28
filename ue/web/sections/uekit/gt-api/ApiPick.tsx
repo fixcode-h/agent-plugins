@@ -44,7 +44,7 @@ export function ApiPick({
       suggest={suggest}
       inputClassName="ue:font-mono"
       placeholder={t('接口名，例如 Widget.IsShown')}
-      empty={apis.length ? undefined : t('还没有接口清单：编辑器开着时从 GameTest 取，项目接口在接口库页扫描')}
+      empty={apis.length ? undefined : t('还没有接口清单：编辑器开着时从 GameTest 取')}
     />
   )
 }

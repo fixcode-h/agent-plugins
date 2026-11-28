@@ -17,6 +17,8 @@ export const busyOf = (s: ProjectState | undefined) =>
 export function busyWhat(i: Instance) {
   const b = i.busy
   if (!b) return ''
+  // 心跳说整个进程停住（UELink 2.25）：日志尾巴是停住前的旧内容，不按它猜「在加载」
+  if (b.state === 'frozen') return t('整个进程停住了，多半停在调试器断点上')
   const d = b.detail ?? ''
   switch (b.kind) {
     case 'map':
@@ -34,7 +36,8 @@ export function busyWhat(i: Instance) {
     case 'save':
       return d ? t('在保存 {d}', { d }) : t('在保存资源')
     default:
-      return t('可能在加载')
+      // 心跳回了、日志里又认不出在做什么：游戏线程卡住，进程还在
+      return b.state === 'gameThread' ? t('游戏线程卡住了，进程还在') : t('可能在加载')
   }
 }
 

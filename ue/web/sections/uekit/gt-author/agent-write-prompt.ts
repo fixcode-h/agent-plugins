@@ -23,7 +23,7 @@ export function agentWritePrompt(x: AgentWriteInput) {
     x.refs.trim() ? `参考：${x.refs.trim()}` : '',
     '',
     `- 脚本写在 ${where} 下（v3 格式，每步有 id、中文 title（很短的节点名称）和 note（详细说明）），tags 里加 "agent" 标明是 Agent 写的。`,
-    '- 按技能的流程来：先读相关代码，用 ue_gametest action=look 的 what=vars / widgets / api 查能用的变量、控件和接口；缺准备状态用的接口就在项目接口文件夹里加（Lua 或 C++），说明加了什么。',
+    '- 按技能的流程来：先读相关代码，用 ue_gametest action=look 的 what=vars / widgets / api 查能用的变量、控件和接口；准备状态先用执行 GM，再用对象调用调项目实际的业务接口，都不行才写 Lua 代码节点或函数库函数；不往项目里加测试 .lua 文件、不为测试写 C++ 接口。',
     '- 写完先 validate，有错改到没有；编辑器开着时 run，看 report，失败时判断是功能 bug 还是脚本问题。',
     '- 不要让我去录制或手动点界面。通过后告诉我脚本路径、验证了什么、跑了几次，并问我要不要放进 regression/。',
   ]

@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react'
-import { busyOf, busyWhat } from '../../busy/busy.tsx'
+import { busyOf, busySec, busyWhat } from '../../busy/busy.tsx'
 import { useUe } from '../../ctx.tsx'
 import { h, t } from '../../host.ts'
 
@@ -19,9 +19,10 @@ export function GtOfflineBar() {
       <Info className="ue:h-3.5 ue:w-3.5 ue:shrink-0 ue:text-subtle" />
       <span className="ue:min-w-0 ue:flex-1 ue:text-subtle">
         {busy
-          ? t('编辑器正忙（{what}）：场景、历史和上次的报告照常能看、能改；录制、运行、核对选择器等它回应后再用', {
-              what: busyWhat(busy),
-            })
+          ? t(
+              '编辑器卡住了（{s} 秒没回应，{what}）：不是断开，正在跑的测试、录制等它恢复后接着走；这段时间场景照常能看、能改',
+              { s: busySec(busy), what: busyWhat(busy) },
+            )
           : t('项目里还没装桥接插件：场景照常能看、能改；录制、运行要先装好它')}
       </span>
       {!busy && (

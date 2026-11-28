@@ -116,7 +116,7 @@ registerFields('set', [
 ])
 
 registerFields('key', [
-  f('key', () => t('键'), 'mono', { placeholder: () => t('UE 键名：W、SpaceBar、LeftMouseButton…') }),
+  f('key', () => t('键'), 'key', { placeholder: () => t('UE 键名：W、SpaceBar、LeftMouseButton…') }),
   f('phase', () => t('怎么按'), 'select', {
     options: opts(['', () => t('按一下（默认）')], ['press', () => t('按下不松')], ['release', () => t('松开')]),
   }),
@@ -166,7 +166,7 @@ registerFields('widget.remove', [target()])
 registerFields('stack.push', [target(), f('class', () => t('界面类'), 'mono')])
 registerFields('stack.pop', [target()])
 registerFields('pie.start', [
-  f('map', () => t('地图'), 'mono', { placeholder: () => t('不填用编辑器当前地图') }),
+  f('map', () => t('地图'), 'map', { placeholder: () => t('不填用编辑器当前地图') }),
   f('width', () => t('宽'), 'number', { unit: () => t('像素') }),
   f('height', () => t('高'), 'number', { unit: () => t('像素') }),
   f('netMode', () => t('网络'), 'select', {
@@ -175,7 +175,13 @@ registerFields('pie.start', [
   f('players', () => t('玩家窗口'), 'number', { when: (s) => s.netMode === 'listenServer' }),
 ])
 registerFields('pie.stop', [])
-registerFields('level.load', [f('map', () => t('地图'), 'mono')])
+registerFields('level.load', [
+  f('map', () => t('地图'), 'map'),
+  // GameTest 2.9.0：走 UELink editor.map，不弹保存对话框；没保存的改动按这里处理
+  f('unsaved', () => t('没存的改动'), 'select', {
+    options: opts(['', () => t('这一步失败，列出没保存的')], ['discard', () => t('丢掉改动再打开')]),
+  }),
+])
 registerFields('editor.ensure', [
   f('assetsLoaded', () => t('等资源加载完'), 'switch'),
   f('noModal', () => t('等没有弹窗'), 'switch'),

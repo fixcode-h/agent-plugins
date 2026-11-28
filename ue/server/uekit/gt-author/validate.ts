@@ -7,6 +7,8 @@ import { readApiFile } from './api-file.ts'
 import { offlineChecks, panelOnlyChecks } from './checks/index.ts'
 import type { Check, CheckEnv, Issue } from './checks/types.ts'
 import { luaRoot } from './lua-files.ts'
+import { expandDoc } from '../gt-expand/index.ts'
+import { readLuaFns } from '../gt-luafn/store.ts'
 import type { Op } from './tool-actions.ts'
 import { flatSteps } from './walk.ts'
 
@@ -45,7 +47,8 @@ async function loadInput(projectRoot: string, scen: string, a: Obj) {
       }
     return { error: 'script 要是场景 JSON 对象' }
   }
-  if (typeof a.scenario !== 'string' || !a.scenario) return { error: '给 scenario（相对场景根的路径）或 script（整份 JSON）' }
+  if (typeof a.scenario !== 'string' || !a.scenario)
+    return { error: '给 scenario（相对场景根的路径）或 script（整份 JSON）' }
   const rel = /\.json$/i.test(a.scenario) ? a.scenario : `${a.scenario}.json`
   const f = scenarioFile(projectRoot, scen, rel)
   const text = await readFile(f.abs, 'utf8').catch(() => undefined)
@@ -65,7 +68,13 @@ async function loadInput(projectRoot: string, scen: string, a: Obj) {
   }
 }
 
-export function makeEnv(doc: Obj, self: string, scen: string, luaRootAbs: string): CheckEnv {
+export function makeEnv(
+  doc: Obj,
+  self: string,
+  scen: string,
+  luaRootAbs: string,
+  luaFns?: CheckEnv['luaFns'],
+): CheckEnv {
   const scripts = new Map<string, Promise<Obj | undefined>>()
   let api: Promise<Obj> | undefined
   return {
@@ -75,7 +84,10 @@ export function makeEnv(doc: Obj, self: string, scen: string, luaRootAbs: string
     self,
     luaRoot: luaRootAbs,
     loadScript: (rel) => {
-      const key = rel.replace(/\\/g, '/').replace(/\.json$/i, '').toLowerCase()
+      const key = rel
+        .replace(/\\/g, '/')
+        .replace(/\.json$/i, '')
+        .toLowerCase()
       if (!scripts.has(key)) {
         const abs = path.resolve(scen, `${rel.replace(/\.json$/i, '')}.json`)
         const r = path.relative(scen, abs)
@@ -84,6 +96,7 @@ export function makeEnv(doc: Obj, self: string, scen: string, luaRootAbs: string
       return scripts.get(key)!
     },
     api: () => (api ??= readApiFile(scen)),
+    ...(luaFns ? { luaFns } : {}),
   }
 }
 
@@ -94,7 +107,12 @@ export async function runChecks(checks: Check[], env: CheckEnv) {
       all.push(...(await c.run(env)))
     } catch (e) {
       // 一项检查自己出错不拖垮整份校验：记一条警告，说明这一项没查成
-      all.push({ path: '', code: 'internal', message: `检查 ${c.name} 出错：${(e as Error).message}`, level: 'warning' })
+      all.push({
+        path: '',
+        code: 'internal',
+        message: `检查 ${c.name} 出错：${(e as Error).message}`,
+        level: 'warning',
+      })
     }
   }
   const strip = ({ level: _l, ...x }: Issue) => x
@@ -114,9 +132,18 @@ export async function validateScript(op: Op, a: Obj, ctx: OpCtx, online: boolean
   const input = await loadInput(ctx.project.root, scen, a)
   if ('error' in input) return { error: input.error }
   if ('result' in input) return input.result
-  const env = makeEnv(input.doc, input.self, scen, luaRoot(ctx.project))
+  let fns: ReturnType<typeof readLuaFns> | undefined
+  const env = makeEnv(
+    input.doc,
+    input.self,
+    scen,
+    luaRoot(ctx.project),
+    async () => (await (fns ??= readLuaFns(ctx.project))).store,
+  )
   if (online) {
-    const args = a.script !== undefined ? { script: input.doc } : { scenario: a.scenario }
+    // 整份传进来的脚本还没展开过（对象调用的 run、脚本函数的 lib 是存盘时生成的）：先展开再交给 UE 查
+    const script = a.script !== undefined ? (await expandDoc(ctx.project, input.doc as never)).doc : undefined
+    const args = script !== undefined ? { script } : { scenario: a.scenario }
     let res: Obj | undefined
     try {
       res = await op('gt.validate', { ...args, deep: a.deep !== false }, 120000)

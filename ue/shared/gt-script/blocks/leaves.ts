@@ -37,6 +37,32 @@ export const gmRun: BlockDef = {
   make: () => ({ action: 'gm.run', gm: { kind: 'custom', name: '' } }),
 }
 
+/**
+ * 对象调用（GameTest 2.9.0 的 obj.do）：一个对象上依次调几个函数、读写几个字段，ops 给人改，
+ * run 由面板存盘 / 运行前按 ops 生成（objdo/expand.ts）。和执行 GM 一样是一个节点，run 不当子步骤槽
+ */
+export const objDo: BlockDef = {
+  action: 'obj.do',
+  idPrefix: 'do',
+  make: () => ({ action: 'obj.do', obj: '', ops: [] }),
+}
+
+/** Lua 代码节点（GameTest 2.9.0）：代码存在脚本里，不落成 .lua 文件；args 当代码里的局部变量 */
+export const luaCode: BlockDef = {
+  action: 'lua',
+  idPrefix: 'lua',
+  conds: (s) => (s.expect ? expectCond() : []),
+  make: () => ({ action: 'lua', code: '', args: {} }),
+}
+
+/** 脚本函数节点（GameTest 2.9.0）：调面板函数库里的一个函数，lib 由面板存盘 / 运行前写进来（luafn/inject.ts） */
+export const luaFn: BlockDef = {
+  action: 'luafn',
+  idPrefix: 'lua',
+  conds: (s) => (s.expect ? expectCond() : []),
+  make: () => ({ action: 'luafn', fn: '', args: {} }),
+}
+
 export const breakBlock: BlockDef = { action: 'break', idPrefix: 's', make: () => ({ action: 'break' }) }
 export const continueBlock: BlockDef = { action: 'continue', idPrefix: 's', make: () => ({ action: 'continue' }) }
 export const returnBlock: BlockDef = { action: 'return', idPrefix: 's', make: () => ({ action: 'return' }) }

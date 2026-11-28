@@ -1,7 +1,8 @@
 import type { OpCtx } from '../../ops.ts'
 import { liveCards } from '../../instances.ts'
 import { scenarioRoot } from '../gt-disk.ts'
-import { readApiFile, writeLuaApi } from './api-file.ts'
+import { readApiFile } from './api-file.ts'
+import { readLuaFns } from '../gt-luafn/store.ts'
 import { luaRoot } from './lua-files.ts'
 import { luaGroup, mergeLuaGroups, type VarGroup } from './lua-vars.ts'
 import { validateScript } from './validate.ts'
@@ -121,13 +122,24 @@ export async function gtWidgets(op: Op, a: A, ctx: OpCtx) {
 }
 
 /**
- * 接口库：先把 Lua 接口扫一遍写进 _api.json（没变不写），编辑器开着时由 gt.api 统一列（自带 + C++ + Lua），
- * 编辑器没开时只能从 _api.json 列项目接口，自带接口说明要编辑器
+ * 接口库：编辑器开着时由 gt.api 列 GameTest 自带接口；项目测试接口 2.9.0 起不认了（用户 2026-11-28），不再扫 Lua。
+ * 一起带上面板的 Lua 函数库（脚本函数节点 luafn 能调的），编辑器没开时也能看
  */
 export async function gtApi(op: Op, a: A, ctx: OpCtx) {
   const scen = await scenarioRoot(ctx.project.root)
-  const lua = await writeLuaApi(scen, luaRoot(ctx.project)).catch((e: Error) => ({ error: e.message }))
-  const scanNote = 'error' in lua ? { luaScanError: lua.error } : lua.missing ? { luaMissingFolders: lua.missing } : {}
+  const lib = await readLuaFns(ctx.project)
+  const q = typeof a.query === 'string' ? a.query.toLowerCase() : ''
+  const fns = lib.store.fns
+    .filter((f) => !q || f.name.toLowerCase().includes(q) || (f.note ?? '').toLowerCase().includes(q))
+    .slice(0, 60)
+    .map((f) => ({ name: f.name, params: f.params, ...(f.note ? { note: f.note } : {}) }))
+  const luaFns = {
+    file: lib.file,
+    total: lib.store.fns.length,
+    items: fns,
+    ...(lib.error ? { error: lib.error } : {}),
+    how: '调用：{"action":"luafn","fn":"库.名字","args":{参数名:值}}；在 Lua 代码节点里写 fn["库.名字"](…)。加函数直接改这个 JSON（fns: [{name, params, body, note}]，不许有类结构），改完 validate',
+  }
   const args = {
     ...Object.fromEntries(
       ['query', 'category', 'src', 'readOnly'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]]),
@@ -135,11 +147,8 @@ export async function gtApi(op: Op, a: A, ctx: OpCtx) {
     offset: num(a.offset, 0),
     limit: Math.min(num(a.limit, 60), 200),
   }
-  if (await editorOpen(ctx)) {
-    if (a.rescan === true) await tryOp(op, 'gt.api.scan', {}, 120000)
-    return { ...(await tryOp(op, 'gt.api', args)), ...scanNote }
-  }
-  return { ...offlineApi(await readApiFile(scen), args), ...scanNote, offline: true }
+  if (await editorOpen(ctx)) return { ...(await tryOp(op, 'gt.api', args)), luaFns }
+  return { ...offlineApi(await readApiFile(scen), args), luaFns, offline: true }
 }
 
 /** 编辑器没开：从 _api.json 列项目接口，筛选和分页照 gt.api 的参数 */
@@ -166,7 +175,7 @@ export function offlineApi(doc: A, a: A) {
     total: hit.length,
     hasMore: offset + limit < hit.length,
     ...(offset + limit < hit.length ? { nextOffset: offset + limit } : {}),
-    note: '编辑器没开：只列 _api.json 里的项目接口；自带接口（Object.* / Widget.* …）的清单要编辑器开着才能取',
+    note: '编辑器没开：自带接口（Object.* / Widget.* …）的清单要编辑器开着才能取。这里列的是 _api.json 里旧的项目测试接口，GameTest 2.9.0 起不认了，不要再用：改用执行 GM、对象调用，或 luaFns 里的函数库',
   }
 }
 

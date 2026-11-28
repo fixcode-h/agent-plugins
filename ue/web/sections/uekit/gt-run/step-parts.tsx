@@ -23,6 +23,8 @@ export interface GtStep {
   note?: string
   payload?: Record<string, unknown>
   durationMs?: number
+  /** 这一步被打断的时间（GameTest 2.9.0：断点、长加载、模态框，一帧超过 2 秒的部分），不算进 durationMs 和超时 */
+  pausedMs?: number
   /** 运行配置里的前置步骤（GameTest 1.2.5）：index 是它在前置步骤里的序号，不对应场景的步骤 */
   setup?: boolean
   /** GameTest 1.9.0 起：步骤路径（steps.1.do.0），块里的步骤 index 只是所在槽里的序号，按它对行 */

@@ -8,14 +8,19 @@ import { useLaunch } from '../launch.ts'
 import { LaunchButton } from '../launch-progress/LaunchButton.tsx'
 import { openMenuAt } from '@panel/web/src/components/ui/item-menu'
 import { kindLabel, useTargetInfo, worldLabel } from '../ui.tsx'
+import { busyLine } from '../busy/busy.tsx'
 
-/** 三态：游戏在跑（PIE 或独立游戏进程）/ 编辑器连着但游戏没开 / UE 没在运行 */
-export type ConnState = 'game' | 'editor' | 'off'
+/**
+ * 四态：游戏在跑（PIE 或独立游戏进程）/ 编辑器连着但游戏没开 / 卡住（进程活着、几秒没回应：断点、加载、长帧）/ UE 没在运行。
+ * 卡住不是断开（设计稿「GameTest常用UE工具与卡住断开区分」第 2 节）：不给「启动编辑器」，也不给「开始 PIE」（卡住时世界列表是空的，PIE 可能正在跑）
+ */
+export type ConnState = 'game' | 'editor' | 'stuck' | 'off'
 
 /** 按 UE 页的目标算现在是哪一态：GM、对象调用、测试这些「要游戏在跑」的页面共用 */
 export function useConnState(): { state: ConnState; label: string } {
   const { inst, world } = useTargetInfo()
   if (!inst) return { state: 'off', label: t('UE 没在运行') }
+  if (!inst.online && inst.busy) return { state: 'stuck', label: t('卡住 · {l}', { l: busyLine(inst) }) }
   const pie = inst.worlds.find((w) => w.type === 'PIE')
   if (inst.kind !== 'editor')
     return { state: 'game', label: t('游戏运行中 · {k} {pid}', { k: inst.kind, pid: inst.pid }) }
@@ -102,7 +107,13 @@ export function ConnPillView({
         <span
           className={cn(
             'ue:h-1.5 ue:w-1.5 ue:shrink-0 ue:rounded-full',
-            state === 'game' ? 'ue:bg-success' : state === 'editor' ? 'ue:bg-warning' : 'ue:bg-subtle',
+            state === 'game'
+              ? 'ue:bg-success'
+              : state === 'editor'
+                ? 'ue:bg-warning'
+                : state === 'stuck'
+                  ? 'ue:animate-pulse ue:bg-run'
+                  : 'ue:bg-subtle',
           )}
         />
         <span className="ue:truncate">{label}</span>
@@ -134,6 +145,12 @@ export function ConnPillSpecimen() {
         onPick={noop}
       />
       <ConnPillView state="editor" label={t('编辑器已连接 · 游戏没运行')} onPie={noop} launch={{ start: noop }} />
+      <ConnPillView
+        state="stuck"
+        label={t('卡住 · {l}', { l: t('{s} 秒没回应 · {what}', { s: 23, what: t('可能在加载') }) })}
+        onPie={noop}
+        launch={{ start: noop }}
+      />
       <ConnPillView state="off" label={t('UE 没在运行')} onPie={noop} launch={{ start: noop }} />
     </div>
   )

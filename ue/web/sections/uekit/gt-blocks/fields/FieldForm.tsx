@@ -10,6 +10,7 @@ import { itemsOf } from '../../gt-ref/pick/data.ts'
 import { PropPickField } from '../../gt-ref/PropPickField.tsx'
 import { NumberField, patch, Row, TextField } from '../parts.tsx'
 import { NOT_FIELDS, type FieldDef } from './registry.ts'
+import { KeyField, MapField } from './suggest-fields.tsx'
 
 /** 一个字段的控件（按 FieldDef.kind） */
 function Control({ def, step, onChange }: { def: FieldDef; step: GtStep; onChange: (s: GtStep) => void }) {
@@ -61,6 +62,17 @@ function Control({ def, step, onChange }: { def: FieldDef; step: GtStep; onChang
           value={cur}
           options={all}
           onChange={(e: { target: { value: string } }) => set(e.target.value || undefined)}
+        />
+      )
+    }
+    case 'map':
+    case 'key': {
+      const Field = def.kind === 'map' ? MapField : KeyField
+      return (
+        <Field
+          value={typeof v === 'string' ? v : ''}
+          placeholder={ph}
+          onChange={(x) => set(x.trim() ? x : undefined)}
         />
       )
     }

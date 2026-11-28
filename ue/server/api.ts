@@ -37,6 +37,7 @@ import {
   type LocalState,
 } from './store.ts'
 import { tableBase } from './gm-custom/table-base.ts'
+import { readLuaFns, writeLuaFns } from './uekit/gt-luafn/store.ts'
 import { followGm } from './gm-custom/watch.ts'
 import { runCustom } from './gm-custom/run.ts'
 import type { InstallMode, Target, UeProject } from './types.ts'
@@ -243,6 +244,14 @@ export async function handle(req: Request): Promise<Response> {
         const g = await readGm(project)
         return json({ objects: g.objects, objFolders: g.objFolders, file: objLibFile(project) })
       }
+      case 'GET gtlua': {
+        // GameTest 的 Lua 函数库（uekit/gt-luafn/store.ts）：和 GM 库一起盯，外面改了推 gm 事件
+        void followGm(project)
+        const r = await readLuaFns(project)
+        return json({ ...r.store, file: r.file, ...(r.error ? { error: r.error } : {}) })
+      }
+      case 'POST gtlua':
+        return json(await writeLuaFns(project, b))
       case 'POST objlib': {
         const lib = await writeObjLib(project, b as Parameters<typeof writeObjLib>[1])
         c().pages?.push(GM_EVENT, { project: project.id })

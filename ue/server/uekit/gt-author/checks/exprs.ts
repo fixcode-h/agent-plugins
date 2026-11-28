@@ -19,7 +19,7 @@ const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.i
 
 const WHY: Record<ExprError['code'], string> = {
   empty: '是空的',
-  too_long: '超过 1000 字，写成项目接口更好维护',
+  too_long: '超过 1000 字：写成 Lua 代码节点（action=lua）或函数库函数（luafn）更好维护',
   bad_char: '有不认识的字符',
   unterminated_string: '字符串没有收尾的引号',
   unexpected: '这里不该出现',
@@ -58,7 +58,13 @@ function checkOne(s: StepRef, text: string, where: string, out: Issue[]) {
   const refs = refsOf(r.ast)
   for (const src of refs.sources)
     if (!(VALUE_SOURCES as readonly string[]).includes(src))
-      out.push(issue(s, 'path_missing', `${where}：没有 @${src} 这种来源（能用 ${VALUE_SOURCES.map((x) => '@' + x).join(' ')}）`))
+      out.push(
+        issue(
+          s,
+          'path_missing',
+          `${where}：没有 @${src} 这种来源（能用 ${VALUE_SOURCES.map((x) => '@' + x).join(' ')}）`,
+        ),
+      )
   for (const c of refs.calls) {
     if (c.onSource || c.name.includes('.')) continue // 对象上的只读函数、接口：要编辑器认
     if (c.name in REMOVED_EXPR_FUNCTIONS) continue // v3 按选择器读控件的函数：refs 检查报 expr_removed
@@ -66,7 +72,9 @@ function checkOne(s: StepRef, text: string, where: string, out: Issue[]) {
     if (!fn) out.push(issue(s, 'fn_missing', `${where}：没有内置函数 ${c.name}`))
   }
   for (const b of refs.bareIds)
-    out.push(issue(s, 'expr_type', `${where}：${b.name} 单独出现，变量要写成 $${b.name}，代码变量写 @来源.路径`, 'warning'))
+    out.push(
+      issue(s, 'expr_type', `${where}：${b.name} 单独出现，变量要写成 $${b.name}，代码变量写 @来源.路径`, 'warning'),
+    )
 }
 
 export const exprs: Check = {

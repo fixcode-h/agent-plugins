@@ -2,7 +2,8 @@ import { ownFields } from '../walk.ts'
 import { issue, type Check, type Issue } from './types.ts'
 
 /**
- * 项目接口（`项目.` 开头）在不在 _api.json 里、是不是改了名。自带接口（Object.* / Widget.* …）的清单在编辑器里，离线不查
+ * 项目接口（`项目.` 开头）GameTest 2.9.0 起不认（用户 2026-11-28：不许为测试专门写接口）：用到就报错、说改用什么。
+ * 自带接口（Object.* / Widget.* …）的清单在编辑器里，离线不查
  */
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -29,24 +30,19 @@ export function projectApis(api: Obj) {
 
 export const apis: Check = {
   name: 'apis',
-  summary: '项目接口（项目.…）在 _api.json 里、没有改名',
+  summary: '不再用项目接口（项目.…，GameTest 2.9.0 起不认）',
   async run(env) {
     const out: Issue[] = []
-    let lib: ReturnType<typeof projectApis> | undefined
     for (const s of env.steps)
       for (const name of apiNames(ownFields(s.step))) {
         if (!name.startsWith('项目.')) continue
-        lib ??= projectApis(await env.api())
-        if (lib.names.has(name)) continue
-        const to = lib.renamed[name]
+        // 用户 2026-11-28：不许为测试专门写接口，测试调项目实际的业务接口
         out.push(
-          to
-            ? issue(s, 'api_renamed', `接口 ${name} 改名了，改用 ${to}`)
-            : issue(
-                s,
-                'api_missing',
-                `接口库里没有 ${name}：ue_gametest action=look what=api 看有哪些（C++ 接口要编辑器扫过才在 _api.json 里）`,
-              ),
+          issue(
+            s,
+            'api_missing',
+            `${name} 是项目测试接口，GameTest 2.9.0 起不认了：有 GM 用「执行 GM」（gm.run），业务对象上的函数用「对象调用」（obj.do），都不行再写 Lua 代码节点（lua）或函数库（luafn）`,
+          ),
         )
       }
     return out

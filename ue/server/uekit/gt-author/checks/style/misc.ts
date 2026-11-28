@@ -15,7 +15,7 @@ export const inlineLua: StyleRule = {
             issue(
               r,
               'style_inline_lua',
-              '脚本里直接写 Lua 代码：把这段逻辑写成项目接口（GameTestApi 里的模块函数）再用 api 调；要执行项目已有的 GM 用 gm.run',
+              '用 api Gm.Lua 拼 Lua 代码：要执行项目已有的 GM 用 gm.run，调业务对象上的函数用 obj.do（对象调用），都不行写 Lua 代码节点（action=lua），几份脚本都要用的放函数库（luafn）',
               'warning',
             ),
           )

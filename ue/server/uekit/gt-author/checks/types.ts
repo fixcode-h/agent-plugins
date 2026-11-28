@@ -1,3 +1,5 @@
+import type { LuaFnStore } from '../../../../shared/gt-script/luafn/schema.ts'
+
 /**
  * 离线校验（编辑器没开时的 ue_gametest action=validate）的扩展点：一种检查一个文件，注册进 checks/index.ts 的表。
  * 主流程（validate.ts）只遍历注册表，不按检查名写分支（用户 2026-11-18：模块化、方便扩展）。
@@ -34,6 +36,8 @@ export interface CheckEnv {
   loadScript: (rel: string) => Promise<Record<string, unknown> | undefined>
   /** 场景根 _api.json（读不到是空对象） */
   api: () => Promise<Record<string, unknown>>
+  /** GameTest 的 Lua 函数库（AgentPanel/UE/gametest-lua.json）；单测、样例校验不给时当空的 */
+  luaFns?: () => Promise<LuaFnStore>
 }
 
 export interface Check {
@@ -43,7 +47,12 @@ export interface Check {
   run: (env: CheckEnv) => Issue[] | Promise<Issue[]>
 }
 
-export const issue = (s: StepRef | undefined, code: string, message: string, level: Issue['level'] = 'error'): Issue => ({
+export const issue = (
+  s: StepRef | undefined,
+  code: string,
+  message: string,
+  level: Issue['level'] = 'error',
+): Issue => ({
   ...(s && typeof s.step.id === 'string' ? { id: s.step.id } : {}),
   path: s?.path ?? '',
   code,

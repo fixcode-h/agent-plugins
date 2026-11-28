@@ -93,7 +93,12 @@ registerPaletteCell({ id: 'loop', label: () => t('循环'), groups: () => [t('�
 registerPaletteCell({ id: 'wait', label: () => t('等到'), ids: ['wait-cond', 'wait-ms'], order: 60 })
 registerPaletteCell({ id: 'assert', label: () => t('检查'), ids: ['assert'], order: 70 })
 registerPaletteCell({ id: 'set', label: () => t('设变量'), groups: () => [t('数据')], order: 80 })
-registerPaletteCell({ id: 'invoke', label: () => t('调函数'), ids: ['obj.call'], groups: () => [t('调用')], order: 90 })
+// 调接口的顺序按用户 2026-11-28 定的优先级：有 GM 用「执行 GM」→ 现有接口用「对象调用」→ 最后才「自己写 Lua」。
+// 拖进画布后检查器自己弹出选择（执行 GM 弹 GM 列表，对象调用先选对象再点「+ 添加」）
+registerPaletteCell({ id: 'gm', label: () => t('执行 GM'), ids: ['gm.run'], order: 85 })
+registerPaletteCell({ id: 'objdo', label: () => t('对象调用'), ids: ['obj.do'], order: 86 })
+registerPaletteCell({ id: 'invoke', label: () => t('调函数'), ids: ['obj.call', 'api'], order: 90 })
+registerPaletteCell({ id: 'lua', label: () => t('自己写 Lua'), groups: () => [t('自己写 Lua')], order: 95 })
 registerPaletteCell({
   id: 'guard',
   label: () => t('守护'),

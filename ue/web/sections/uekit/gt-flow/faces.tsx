@@ -138,7 +138,11 @@ export function faceOf(s: GtStep): {
   // 图标和色调取块 UI 注册表（gt-blocks），和列表视图、插入菜单同一张表，不在这里另配一套
   const ui = blockUi(s.action)
   const look = { icon: ui.icon, tone: TONE_TEXT[ui.tone] }
-  if (!f) return { ...look, title: note || stepTitle(s), sub: sel(s.target), lines: [] }
+  if (!f) {
+    // 没配外观、stepTitle 也只认得动作名的块（对象调用、Lua 代码…）用块注册表里的一句话摘要，不在画布上露出 obj.do 这种内部名
+    const plain = stepTitle(s)
+    return { ...look, title: note || (plain === s.action ? ui.summary(s) : plain), sub: sel(s.target), lines: [] }
+  }
   const lines = f.lines?.(s) ?? []
   // 只有一项条件、标题里已经写了它（没写 note）时，内容区不再重复一遍
   const dup = !note && lines.length === 1

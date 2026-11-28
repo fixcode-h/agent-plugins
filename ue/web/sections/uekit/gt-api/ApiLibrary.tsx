@@ -1,6 +1,5 @@
-import { ChevronDown, ChevronRight, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { ppost } from '../../../api.ts'
 import { h, t } from '../../../host.ts'
 import { SearchBox } from '@panel/web/src/components/ui/search-box'
 import { rejectedOfFile, sigOf, useApis, type ApiItem, type ApiRejected } from './model.ts'
@@ -19,7 +18,7 @@ const whyText = (why: string) =>
 /**
  * 接口库（定稿 9.8、效果图 9）：脚本里「调接口」能用的全部接口，按来源和分类列出。
  * 自带的要编辑器开着才列得出（GameTest 给）；项目的 C++ 接口由 GameTest 扫，存 _api.json，编辑器没开也看得到；
- * Lua 接口由面板扫场景设置里指定的文件夹（默认 GameTestApi），按 EmmyLua 注释认参数。没收进来的单独列出原因
+ * 项目接口（_api.json）GameTest 2.9.0 起不认了，面板也不再扫；还留着的照样列出来，提示迁走。没收进来的单独列出原因
  */
 export function ApiLibrary({
   project,
@@ -38,7 +37,6 @@ export function ApiLibrary({
   const [q, setQ] = useState('')
   const [folded, setFolded] = useState<Record<string, boolean>>({})
   const [showRejected, setShowRejected] = useState(false)
-  const [scanning, setScanning] = useState(false)
   const rejected = rejectedOfFile(apis.file)
   const low = q.trim().toLowerCase()
   const groups = useMemo(() => {
@@ -58,28 +56,6 @@ export function ApiLibrary({
   }, [apis.items, src, low])
   const count = (s: Src) => apis.items.filter((x) => x.src === s).length
 
-  const scan = async () => {
-    setScanning(true)
-    try {
-      const r = await ppost<{ luaScan: { items: number; written?: boolean } }>(project, 'ext/gt/api', {
-        root,
-        action: 'scan',
-      })
-      const n = r.luaScan.items
-      h().toast.success(
-        r.luaScan.written
-          ? t('扫到 {n} 个 Lua 接口，已写进 _api.json', { n })
-          : t('扫到 {n} 个 Lua 接口，和上次一样', { n }),
-      )
-      apis.reload()
-    } catch (e) {
-      h().toast.error((e as Error).message)
-    } finally {
-      setScanning(false)
-    }
-  }
-
-  const folders = apis.file?.doc.lua?.folders
   return (
     <ui.Modal
       open
@@ -87,22 +63,11 @@ export function ApiLibrary({
       onOpenChange={(o: boolean) => !o && onClose()}
       title={t('接口库')}
       description={t(
-        '脚本里「调接口」能用的接口：自带的、项目 C++ 里标了的、Lua 接口文件夹里的。只读的可以用在条件里。',
+        '脚本里「调接口」能用的 GameTest 自带接口，只读的可以用在条件里。项目测试接口（GameTestApi）从 GameTest 2.9.0 起不再用：改用执行 GM、对象调用或 Lua 代码节点。',
       )}
       footer={
         <>
-          <span className="ue:mr-auto ue:truncate ue:text-footnote ue:text-subtle">
-            {apis.file?.path}
-            {folders?.length ? ` · ${t('Lua 文件夹：{f}', { f: folders.join('、') })}` : ''}
-          </span>
-          <ui.Button variant="secondary" disabled={scanning || !root} onClick={() => void scan()}>
-            {scanning ? (
-              <Loader2 className="ue:h-3.5 ue:w-3.5 ue:animate-spin" />
-            ) : (
-              <RefreshCw className="ue:h-3.5 ue:w-3.5" />
-            )}
-            {t('重扫 Lua 接口')}
-          </ui.Button>
+          <span className="ue:mr-auto ue:truncate ue:text-footnote ue:text-subtle">{apis.file?.path}</span>
           <ui.Button onClick={onClose}>{t('关闭')}</ui.Button>
         </>
       }
@@ -124,7 +89,9 @@ export function ApiLibrary({
         </div>
         {(!live || apis.error) && (
           <p className="ue:border-b ue:border-line ue:px-3 ue:py-1.5 ue:text-caption ue:text-warning">
-            {live ? apis.error : t('编辑器没开：只列得出 _api.json 里存着的项目接口，自带接口要编辑器开着')}
+            {live
+              ? apis.error
+              : t('编辑器没开：自带接口要编辑器开着才列得出（这里只有 _api.json 里旧的项目接口，2.9.0 起不再用）')}
           </p>
         )}
         <div className="ue:min-h-0 ue:flex-1 ue:overflow-auto">

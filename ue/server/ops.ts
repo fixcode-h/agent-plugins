@@ -24,7 +24,7 @@ import type { Actor, HistoryItem, Target, UeProject } from './types.ts'
 import { c, t } from './util.ts'
 import { wildcard } from '@panel/shared/text-match/index'
 import { gameFileOf, p4EditFiles, p4SavePlan, type P4Stale } from './p4-checkout.ts'
-import { expandInline, refreshGmBeforeRun } from './uekit/gt-gm-expand.ts'
+import { expandInline, refreshBeforeRun } from './uekit/gt-expand/index.ts'
 import { vcsCmd } from './vcs.ts'
 import { offlineFirst } from './uasset/route.ts'
 import { primeNativeDefaults } from './uasset/defaults/prime.ts'
@@ -569,8 +569,8 @@ export async function runOp(
     }
   }
   await checkPerms(ctx, op, kind, args)
-  // 「执行 GM」节点：跑场景前按 GM 库重新展开（GM 库在上次存盘后改过也跟上）
-  if (op === 'gt.run') await refreshGmBeforeRun(ctx.project, args)
+  // 执行 GM、对象调用、脚本函数：跑场景前按 GM 库、函数库重新展开（库在上次存盘后改过也跟上）
+  if (op === 'gt.run') await refreshBeforeRun(ctx.project, args)
   await expandInline(ctx.project, op, args)
   // 文件夹树：自己挑进程，没有编辑器或桥接旧时扫磁盘；不进 ASSET_OPS，免得为列目录启动后台编辑器（asset-folders.ts）
   if (op === 'assets.children') return { ...(await assetChildren(ctx, args, timeoutMs)) }

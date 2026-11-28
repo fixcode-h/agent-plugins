@@ -129,6 +129,8 @@ export interface WebHost {
      * 插件自己的设置页用，和设置 →「插件参数」改的是同一份值。2026-11-17 加的，旧面板没有：用之前先判断有没有
      */
     PluginParams?: Loose
+    /** 表单里的代码框（2026-11-28 加的，旧面板没有：用之前先判断有没有）：{ value, onChange, lang, height?, placeholder?, label? }，高亮和文件弹窗同一套；也能从开放模块 web/src/components/ui/code-field 引 */
+    CodeField?: Loose
     /**
      * 分区导航（2026-11-18 加的，旧面板没有：用之前先判断有没有）：图标轨 SectionRail { items, current, onPick, top?, bottom? }、
      * 轨上的按钮 RailAction { icon, label, onClick, on?, dot? }、二级面板 SidePanel { title, onCollapse?, children }、

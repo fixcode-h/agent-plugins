@@ -1,5 +1,6 @@
 import { gtNames, mergeArgs, stepOf } from '../../gm/custom.ts'
 import type { GmMacroStep, GmStore } from '../../gm/schema.ts'
+import { mapAction } from '../expand/map-action.ts'
 import type { GtScript, GtStep } from '../types.ts'
 
 /**
@@ -121,21 +122,8 @@ export interface ExpandIssue {
   message: string
 }
 
-/** gm.run 可能出现的地方：主流程、前置、守护的 do、块里的槽、附带 GM 的每组 */
-function eachGmStep(doc: GtScript, visit: (s: GtStep, at: string) => GtStep): GtScript {
-  const walk = (v: unknown, at: string): unknown => {
-    if (Array.isArray(v)) return v.map((x, i) => walk(x, `${at}.${i}`))
-    if (!v || typeof v !== 'object') return v
-    const o = v as Record<string, unknown>
-    // gm.run 的 run 是生成的，不往里找（宏展开出来的不会再有 gm.run）
-    const next: Record<string, unknown> = {}
-    for (const [k, x] of Object.entries(o)) next[k] = o.action === 'gm.run' && k === 'run' ? x : walk(x, `${at}.${k}`)
-    return o.action === 'gm.run' ? visit(next as GtStep, typeof o.id === 'string' ? o.id : at) : next
-  }
-  const out: GtScript = { ...doc }
-  for (const k of ['setup', 'steps', 'teardown', 'guards'] as const) if (doc[k] !== undefined) out[k] = walk(doc[k], k) as never
-  return out
-}
+/** gm.run 可能出现的地方：主流程、前置、守护的 do、块里的槽、附带 GM 的每组（和对象调用、函数库同一个遍历） */
+const eachGmStep = (doc: GtScript, visit: (s: GtStep, at: string) => GtStep) => mapAction(doc, 'gm.run', visit)
 
 /**
  * 整个脚本：每个 gm.run 按 GM 库重新生成 run；自定义 GM 用到的对象拷进 objects（同名同规则复用，同名不同规则加 _2），
