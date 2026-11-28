@@ -3,25 +3,35 @@ import type { GtStep } from '../../../../shared/gt-script/index.ts'
 import { h, t } from '../../../host.ts'
 import { stepTitle } from '../gt-step-title.ts'
 import { LeafInspector } from './leaf.tsx'
-import { registerBlockUi, type InsertItem } from './registry.ts'
+import { MapField } from './fields/suggest-fields.tsx'
+import { Row } from './parts.tsx'
+import { registerApiUi, registerBlockUi, type InsertItem } from './registry.ts'
 
 /**
- * 打开地图（设计稿「GameTest常用UE工具与卡住断开区分」3.2）：一个节点两种方式，检查器里切——
- * 编辑器里打开（level.load，PIE 之前换起始地图）/ 用这张图开 PIE（pie.start map）。
- * 切方式只换 action、保留地图，其余字段按各自的动作表（fields/actions.ts）出。
- * 游戏里切图（玩家点按钮进关卡）走点击 + 等新地图起来，要 GameTest 新的判断来源，二期做
+ * 打开地图（设计稿「GameTest常用UE工具与卡住断开区分」3.2）：一个节点三种方式，检查器里切——
+ * 编辑器里打开（level.load，PIE 之前换起始地图）/ 用这张图开 PIE（pie.start map）/
+ * 游戏里切图（PIE 或游戏进程里，调接口 World.Open，GameTest 等到新地图加载完）。
+ * 切方式只换动作、保留地图，其余字段按各自的动作表（fields/actions.ts）出
  */
-const MODES = ['level.load', 'pie.start'] as const
+type Mode = 'level.load' | 'pie.start' | 'game'
+const GAME_API = 'World.Open'
+
+const modeOf = (s: GtStep): Mode =>
+  s.action === 'pie.start' ? 'pie.start' : s.action === 'api' ? 'game' : 'level.load'
+
+const argsOf = (s: GtStep) => (s.args && typeof s.args === 'object' ? (s.args as Record<string, unknown>) : {})
+const mapOf = (s: GtStep) => String((modeOf(s) === 'game' ? argsOf(s).map : s.map) ?? '')
 
 function MapOpenInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { ui } = h()
-  const cur = step.action === 'pie.start' ? 'pie.start' : 'level.load'
-  const swap = (a: string) => {
-    if (a === cur) return
-    // 只带地图过去：PIE 的窗口、网络这些字段 level.load 不认，留着会报未知字段
-    const next: GtStep = { action: a }
-    for (const k of ['id', 'title', 'note', 'onFail', 'retries', 'timeoutMs', 'skipIf', 'disabled', 'map'])
+  const cur = modeOf(step)
+  const swap = (m: string) => {
+    if (m === cur) return
+    // 只带地图和公共字段过去：PIE 的窗口、网络这些字段 level.load 不认，留着会报未知字段
+    const next: GtStep = m === 'game' ? { action: 'api', api: GAME_API, args: { map: mapOf(step) } } : { action: m }
+    for (const k of ['id', 'title', 'note', 'onFail', 'retries', 'timeoutMs', 'skipIf', 'disabled'])
       if (step[k] !== undefined) next[k] = step[k]
+    if (m !== 'game' && mapOf(step)) next.map = mapOf(step)
     onChange(next)
   }
   return (
@@ -32,14 +42,34 @@ function MapOpenInspector({ step, onChange }: { step: GtStep; onChange: (s: GtSt
         value={cur}
         onChange={swap}
         options={[
-          { id: MODES[0], label: t('编辑器里打开') },
-          { id: MODES[1], label: t('用这张图开 PIE') },
+          { id: 'level.load', label: t('编辑器里打开') },
+          { id: 'pie.start', label: t('用这张图开 PIE') },
+          { id: 'game', label: t('游戏里切图') },
         ]}
       />
-      <LeafInspector step={step} onChange={onChange} />
+      {cur === 'game' ? (
+        <>
+          <Row label={t('地图')}>
+            <MapField value={mapOf(step)} onChange={(v) => onChange({ ...step, args: { ...argsOf(step), map: v } })} />
+          </Row>
+          <p className="ue:text-footnote ue:text-subtle">
+            {t(
+              '在正在玩的游戏里（PIE 或游戏进程）切到这张图，等新地图加载完再往下走；要按真实玩家操作进关卡时，改用点击按钮再等地图',
+            )}
+          </p>
+        </>
+      ) : (
+        <LeafInspector step={step} onChange={onChange} />
+      )}
     </div>
   )
 }
+
+registerApiUi(GAME_API, {
+  // 和列表、流程图节点同一句（gt-step-title.ts 的 api World.Open）
+  summary: (s) => stepTitle(s),
+  Inspector: MapOpenInspector,
+})
 
 const item = (id: string, label: () => string, hint: () => string, make: () => GtStep): InsertItem => ({
   id: `map-${id}`,
@@ -64,7 +94,7 @@ registerBlockUi(
     item(
       'map',
       () => t('打开地图'),
-      () => t('在编辑器里打开一张地图，或直接用它开 PIE'),
+      () => t('在编辑器里打开一张地图、用它开 PIE，或在游戏里切过去'),
       () => ({ action: 'level.load', map: '' }),
     ),
   ],

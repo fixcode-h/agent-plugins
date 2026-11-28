@@ -5,10 +5,16 @@ import { ApiPick, ArgsEdit } from '../gt-api/ApiPick.tsx'
 import { CondEditor } from '../gt-cond/CondEditor.tsx'
 import { useEditCtx } from '../gt-edit/ctx.ts'
 import { Row, TextField } from './parts.tsx'
-import { registerBlockUi } from './registry.ts'
+import { apiUi, registerBlockUi } from './registry.ts'
 
 /** 调接口：接口库里的接口（自带的和项目的），参数按接口给，返回值存变量、可以检查 */
 function ApiInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
+  const own = apiUi(step.api)
+  if (own) return <own.Inspector step={step} onChange={onChange} />
+  return <GenericApiInspector step={step} onChange={onChange} />
+}
+
+function GenericApiInspector({ step, onChange }: { step: GtStep; onChange: (s: GtStep) => void }) {
   const { apis } = useEditCtx()
   const api = apis.find((a) => a.name === step.api)
   return (
@@ -40,6 +46,8 @@ registerBlockUi(
     icon: Plug,
     tone: 'warning',
     summary: (s) => {
+      const own = apiUi(s.api)?.summary
+      if (own) return own(s)
       const args = s.args && typeof s.args === 'object' ? Object.values(s.args).map((v) => JSON.stringify(v)) : []
       return `${String(s.api ?? '')}(${args.join(', ')})${s.saveAs ? ` → $${String(s.saveAs)}` : ''}`
     },

@@ -38,12 +38,27 @@ export async function waitJob(read: () => Promise<JobRec>, o: WaitOpts): Promise
   const start = now()
   let job = await read()
   const first = mark(job)
+  // 跑着的时候编辑器卡住（加载、断点）：gt.job 读不到不算作业没了，接着等它恢复；
+  // GameTest 2.9 起卡住的时间不算步骤超时，恢复后作业照常往下走（用户 2026-11-28：卡住被当成断开）
+  let stuck = ''
   while (job.busy === true && mark(job) === first && now() - start < waitMs) {
     await sleep(interval)
-    job = await read()
+    try {
+      job = await read()
+      stuck = ''
+    } catch (e) {
+      stuck = (e as Error).message
+    }
   }
   if (job.busy !== true || waitMs === 0) return job
   const waited = Math.round((now() - start) / 1000)
+  if (stuck)
+    return {
+      ...job,
+      stillRunning: true,
+      stuck,
+      hint: `编辑器暂时没回应（见 stuck），作业还在、不是断开：恢复后接着跑，再调一次 job 接着等，不要重跑或重启`,
+    }
   return {
     ...job,
     stillRunning: true,

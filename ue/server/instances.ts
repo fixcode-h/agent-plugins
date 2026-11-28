@@ -1,5 +1,6 @@
 import { readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { probeAlive } from './busy/alive.ts'
 import { markBusy, markDown, markOnline } from './busy/state.ts'
 import { checkReused, knownReused } from './editor-close/proc-start.ts'
 import type { Instance, Target, World } from './types.ts'
@@ -23,6 +24,8 @@ export interface Card {
   startedAt: string
   /** 推送通道端口（只有编辑器进程有，UEKit docs/protocol.md 第 1、3 节） */
   stream?: number
+  /** 心跳端口（UELink 2.25 起，busy/alive.ts）：游戏线程卡住时也会回，用来分清卡住和停住 */
+  alivePort?: number
   features?: string[]
   /** 这个进程里实际加载了的 UELink 扩展（AssetForge、GameTest） */
   extensions?: { name: string; version: string }[]
@@ -100,6 +103,22 @@ export async function rpc(card: Card, op: string, args: Record<string, unknown> 
     // UE 停在 VS 断点时整个进程冻住：直接说停在哪、先 continue，别让 Agent 以为卡死了去重启（vs-debug/break-note.ts）
     const paused = card.project ? await vsBreakNote(rootOfCard(card.project), card.project) : undefined
     if (paused) throw new BridgeError(paused)
+    const timedOut = err.name === 'TimeoutError' || err.message === 'fetch failed'
+    // 心跳分清是游戏线程卡住还是整个进程停住，告诉 Agent 该等还是该去继续调试器，别当成断开去重启（UELink 2.25）
+    const alive = timedOut ? await probeAlive(card.alivePort) : undefined
+    if (alive?.state === 'gameThread')
+      throw new BridgeError(
+        t(
+          'UE 进程 {pid} 的游戏线程卡住了（{s} 秒没走一帧，可能在加载、死循环或弹着对话框）：进程还在，不是断开，不要重启；等一会儿再调，或看 ue_log 最后几行在做什么',
+          { pid: card.pid, s: Math.round(alive.tickAgoMs / 1000) },
+        ),
+      )
+    if (alive?.state === 'frozen')
+      throw new BridgeError(
+        t('UE 进程 {pid} 整个停住了（连心跳都不回，多半停在调试器断点上）：在 VS / IDE 里继续运行后再调，不要重启', {
+          pid: card.pid,
+        }),
+      )
     throw new BridgeError(
       // fetch failed：游戏线程卡住时排队的连接满了被拒绝，进程活着就和超时一样是在忙（见 info）
       err.name === 'TimeoutError' || err.message === 'fetch failed'
@@ -179,12 +198,19 @@ export async function info(card: Card): Promise<Instance> {
     // 连接直接失败（fetch failed：ECONNREFUSED / ECONNRESET）也一样：UE 的 HTTP 服务在游戏线程上接新连接，
     // 卡住时排队的连接满了 Windows 直接拒绝。进程还活着（liveCards 按 PID 筛过）就当忙，
     // 不判成连不上（用户 2026-11-17：启动卡在某处一会儿，目标卡显示「1 个进程连不上」「fetch failed」）
-    if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.message === 'fetch failed')
+    if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.message === 'fetch failed') {
+      const alive = await probeAlive(card.alivePort)
+      const since = markBusy(card.pid)
       return {
         ...base,
-        busy: { since: markBusy(card.pid) },
+        busy: {
+          // 游戏线程上次走一帧的时间比面板第一次没等到回应更准（面板几秒才问一次）
+          since: alive?.state === 'gameThread' ? Math.min(since, Date.now() - alive.tickAgoMs) : since,
+          state: alive?.state,
+        },
         error: t('UE 进程 {pid} 暂时没有回应（可能在加载），忙完会自动连上', { pid: card.pid }),
       }
+    }
     markDown(card.pid)
     return { ...base, error: err.message }
   }

@@ -161,7 +161,15 @@ export interface Instance {
    * 进程活着、名片在，但 /info 几秒没回应（游戏线程卡在同步加载、编译着色器、断点里）：不是断开，等它忙完会自己回来。
    * since 是第一次没回应的时间（毫秒时间戳）；kind / detail / line 是从日志尾部认出的在忙什么，quietSec 是日志多久没动
    */
-  busy?: { since: number; kind?: string; detail?: string; line?: string; quietSec?: number }
+  busy?: {
+    since: number
+    kind?: string
+    detail?: string
+    line?: string
+    quietSec?: number
+    /** 心跳（UELink 2.25，busy/alive.ts）：gameThread = 游戏线程卡住、进程在；frozen = 整个进程停住（断点）；没有 = 旧 UELink，不知道 */
+    state?: 'gameThread' | 'frozen'
+  }
   /** 编辑器可用了没有（UELink 2.7 起）：false 表示连上了但还在启动（主窗口没出来、在扫资源）；旧 UELink 和非编辑器进程没有 */
   ready?: boolean
   error?: string

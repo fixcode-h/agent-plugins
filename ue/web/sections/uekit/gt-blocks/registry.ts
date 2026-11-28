@@ -32,6 +32,23 @@ export interface InsertItem {
   make: () => GtStep
 }
 
+/**
+ * 某个接口专用的检查器和一句话（api 步骤按 api 名对上）：比如 World.Open 归「打开地图」节点（map-open.tsx），
+ * 在接口节点里也按打开地图的样子编辑、能切回编辑器里打开。没登记的接口用通用的接口检查器
+ */
+export interface ApiUi {
+  summary?: (step: GtStep) => string
+  Inspector: NonNullable<BlockUi['Inspector']>
+}
+
+const apiTable = new Map<string, ApiUi>()
+
+export function registerApiUi(api: string, ui: ApiUi) {
+  apiTable.set(api, ui)
+}
+
+export const apiUi = (api: unknown) => (typeof api === 'string' ? apiTable.get(api) : undefined)
+
 const table = new Map<string, BlockUi>()
 const inserts: InsertItem[] = []
 

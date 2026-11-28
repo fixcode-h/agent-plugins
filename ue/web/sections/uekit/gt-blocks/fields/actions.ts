@@ -175,7 +175,13 @@ registerFields('pie.start', [
   f('players', () => t('玩家窗口'), 'number', { when: (s) => s.netMode === 'listenServer' }),
 ])
 registerFields('pie.stop', [])
-registerFields('level.load', [f('map', () => t('地图'), 'map')])
+registerFields('level.load', [
+  f('map', () => t('地图'), 'map'),
+  // GameTest 2.9.0：走 UELink editor.map，不弹保存对话框；没保存的改动按这里处理
+  f('unsaved', () => t('没存的改动'), 'select', {
+    options: opts(['', () => t('这一步失败，列出没保存的')], ['discard', () => t('丢掉改动再打开')]),
+  }),
+])
 registerFields('editor.ensure', [
   f('assetsLoaded', () => t('等资源加载完'), 'switch'),
   f('noModal', () => t('等没有弹窗'), 'switch'),

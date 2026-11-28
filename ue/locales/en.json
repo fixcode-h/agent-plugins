@@ -5301,7 +5301,20 @@
   "编辑器里打开": "Open in editor",
   "用这张图开 PIE": "Start PIE on this map",
   "打开地图（还没选）": "Open map (not chosen yet)",
-  "在编辑器里打开一张地图，或直接用它开 PIE": "Open a map in the editor, or start PIE on it directly",
   "在编辑器里开始玩（可选地图、窗口大小、多人）": "Play in the editor (optional map, window size, multiplayer)",
-  "打开地图 {m}": "Open map {m}"
+  "打开地图 {m}": "Open map {m}",
+  "UE 进程 {pid} 的游戏线程卡住了（{s} 秒没走一帧，可能在加载、死循环或弹着对话框）：进程还在，不是断开，不要重启；等一会儿再调，或看 ue_log 最后几行在做什么": "The game thread of UE process {pid} is stuck (no frame for {s} s; it may be loading, in an infinite loop or showing a dialog). The process is still alive and not disconnected, so do not restart it; call again in a while, or check the last lines of ue_log to see what it is doing",
+  "UE 进程 {pid} 整个停住了（连心跳都不回，多半停在调试器断点上）：在 VS / IDE 里继续运行后再调，不要重启": "UE process {pid} is completely halted (not even the heartbeat answers, most likely stopped at a debugger breakpoint). Continue it in VS / the IDE and call again; do not restart it",
+  "整个进程停住了，多半停在调试器断点上": "the whole process is halted, most likely at a debugger breakpoint",
+  "游戏线程卡住了，进程还在": "the game thread is stuck, the process is still alive",
+  "没存的改动": "Unsaved changes",
+  "这一步失败，列出没保存的": "Fail this step and list them",
+  "丢掉改动再打开": "Discard them and open",
+  "游戏里切图": "Switch in game",
+  "在正在玩的游戏里（PIE 或游戏进程）切到这张图，等新地图加载完再往下走；要按真实玩家操作进关卡时，改用点击按钮再等地图": "Switch the running game (PIE or a game process) to this map and continue once it has loaded. To enter a level the way a player would, click the button and then wait for the map instead",
+  "游戏里切到 {m}": "Switch to {m} in game",
+  "游戏里切图（还没选）": "Switch map in game (none chosen)",
+  "在编辑器里打开一张地图、用它开 PIE，或在游戏里切过去": "Open a map in the editor, start PIE with it, or switch to it in game",
+  "这一步中途被打断了 {d}（断点、长加载或对话框），这段时间不算用时和超时": "This step was interrupted for {d} (breakpoint, long load or dialog); that time does not count toward duration or timeouts",
+  "停了 {d}": "paused {d}"
 }

@@ -94,6 +94,15 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
       return t('退出 PIE')
     case 'level.load':
       return s('map') ? t('打开地图 {m}', { m: lastPart(s('map')) }) : t('打开地图（还没选）')
+    case 'api': {
+      // 游戏里切图（打开地图节点的第三种方式，map-open.tsx）：别的接口按接口节点自己的摘要
+      const m =
+        def.api === 'World.Open' && def.args && typeof def.args === 'object'
+          ? (def.args as { map?: unknown }).map
+          : undefined
+      if (def.api !== 'World.Open') return a
+      return typeof m === 'string' && m ? t('游戏里切到 {m}', { m: lastPart(m) }) : t('游戏里切图（还没选）')
+    }
     case 'widget.add':
       return t('打开界面 {c}', { c: lastPart(s('class')) })
     case 'widget.remove':

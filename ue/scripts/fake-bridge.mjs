@@ -1,6 +1,7 @@
 // 假的桥接（冒烟测试用）：在本进程里起一个 HTTP 服务，协议和 UE 里的 UELink（原 AgentPanelBridge）一样（GET /info、POST /rpc、令牌头），
 // 在 <项目>/Saved/UELink/instances/<PID>.json 写名片。只实现冒烟测试用到的几个操作，状态放在内存里。
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { startFakeHeartbeat } from './fake-heartbeat.mjs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { makeCsv, makeMemReport } from './perf-fixtures.mjs'
@@ -13,11 +14,12 @@ import { traceOps } from './fake-trace.mjs'
  * extraOps：再挂几个操作（截图脚本给 AssetForge 之类的扩展用）；extensions：名片和 /info 里报的扩展（UEKit 的 AssetForge、GameTest）；
  * bridge：名片上的桥接版本（默认 1.0.0，冒烟测试按它测旧桥接的提示；看 trace 视图要 1.5.0 以上，Lua 那层按 2.9.0 的接口）；
  * features：名片上的能力名（bp.layout 这类不是操作的能力只在名片上）；
+ * heartbeat：起心跳端口（名片 alivePort，fake-heartbeat.mjs）；
  * worlds：/info 报的世界（默认编辑器 + 一个 PIE；只给编辑器世界就是「编辑器开着、游戏没运行」）
  */
 export async function startFakeBridge(
   root,
-  { kind = 'editor', extraOps = {}, extensions, bridge = '1.0.0', features, worlds } = {},
+  { kind = 'editor', extraOps = {}, extensions, bridge = '1.0.0', features, worlds, heartbeat = false } = {},
 ) {
   const token = 'fake-token'
   const state = {
@@ -834,6 +836,7 @@ export async function startFakeBridge(
   const dir = path.join(root, 'Saved', 'UELink', 'instances')
   mkdirSync(dir, { recursive: true })
   const card = path.join(dir, `${process.pid}.json`)
+  const alivePort = heartbeat ? await startFakeHeartbeat() : undefined
   writeFileSync(
     card,
     JSON.stringify({
@@ -846,6 +849,7 @@ export async function startFakeBridge(
       project: root,
       ...(extensions ? { extensions } : {}),
       ...(features ? { features } : {}),
+      ...(alivePort ? { alivePort } : {}),
       startedAt: new Date().toISOString(),
     }),
   )

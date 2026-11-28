@@ -161,7 +161,17 @@ function ReportRow({
             </span>
           )}
         </span>
-        <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">{ms(s.durationMs)}</span>
+        <span className="ue:shrink-0 ue:font-mono ue:text-caption ue:text-subtle">
+          {ms(s.durationMs)}
+          {!!s.pausedMs && (
+            <span
+              className="ue:ml-1.5 ue:text-run"
+              title={t('这一步中途被打断了 {d}（断点、长加载或对话框），这段时间不算用时和超时', { d: ms(s.pausedMs) })}
+            >
+              {t('停了 {d}', { d: ms(s.pausedMs) })}
+            </span>
+          )}
+        </span>
       </button>
       <ReportValues project={project} payload={s.payload} />
     </li>
