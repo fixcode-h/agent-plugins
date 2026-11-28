@@ -93,7 +93,7 @@ function titleOf(def?: Record<string, unknown>, fallbackAction?: string, fallbac
     case 'pie.stop':
       return t('退出 PIE')
     case 'level.load':
-      return t('加载关卡 {m}', { m: lastPart(s('map')) })
+      return s('map') ? t('打开地图 {m}', { m: lastPart(s('map')) }) : t('打开地图（还没选）')
     case 'widget.add':
       return t('打开界面 {c}', { c: lastPart(s('class')) })
     case 'widget.remove':

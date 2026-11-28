@@ -5,6 +5,7 @@ import { blockUi, TONE_TEXT, type InsertItem } from '../../gt-blocks/index.ts'
 import { GT_STEPS_MIME } from '../../gt-flow/dnd.ts'
 import { insertPlace, insertStep } from '../insert-menu.ts'
 import { cellItems, cellLook, cellMatches, paletteCells, TONE_SOFT, type PaletteCell } from './palette.ts'
+import './palette-ue.ts'
 
 /**
  * 节点格子（UE 页二级栏「节点」页签，编辑器用 portal 画进去）：两列小卡片。点一下插到选中步骤后面（一格多项时从格子下沿弹菜单选），

@@ -28,6 +28,10 @@ export type FieldKind =
   | 'value'
   /** 几个数字一组：[x, y] / [x, y, z]，dims 是个数 */
   | 'vec'
+  /** 地图包路径：能从本地资源索引里搜关卡 */
+  | 'map'
+  /** UE 键名：键盘、鼠标、手柄的常用键能直接挑 */
+  | 'key'
 
 export interface FieldDef {
   k: string

@@ -16,6 +16,8 @@ import './control.tsx'
 import './obj-ops.tsx'
 import './cond-leaves.tsx'
 import './leaf-items.ts'
+import './map-open.tsx'
+import './leaf-items-ue.ts'
 
 export { blockUi, insertItems, TONE_BAR, TONE_TEXT, type BlockTone, type BlockUi, type InsertItem } from './registry.ts'
 export { CommonFields, NoteField } from './parts.tsx'
